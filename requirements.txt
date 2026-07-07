@@ -1,0 +1,8 @@
+pydantic>=2.6
+pandas>=2.1
+streamlit>=1.31
+# Live Claude synthesis (integration point; off by default — see pipeguard.synthesis)
+anthropic>=0.40
+python-dotenv>=1.0
+# Dev
+pytest>=8.0
