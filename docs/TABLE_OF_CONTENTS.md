@@ -61,6 +61,7 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 ## Data (the artifacts and their lineage)
 | Doc | Status | Purpose |
 |---|---|---|
+| [data/strategy.md](data/strategy.md) | ✅ | Data strategy: sourcing, origin labels, real/synthetic tracks |
 | [data/schemas.md](data/schemas.md) | 📝 | Artifact contracts: fields, types, missing-semantics |
 | [data/qc_metrics.md](data/qc_metrics.md) | 📝 | QC metric set and gate thresholds |
 | [data/provenance.md](data/provenance.md) | 📝 | I/O lineage model and ledger format |

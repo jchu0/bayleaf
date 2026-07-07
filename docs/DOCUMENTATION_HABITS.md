@@ -67,14 +67,18 @@ doc owns one question.
 
 ## Style
 
-- Plain language. Short sections. Tables and checklists where they earn their place.
-- No filler. If a sentence doesn't change what a reader would do, cut it.
-- Mark unknowns explicitly, and distinguish **Fact**, **Assumption**, **Decision**,
-  and **TODO** where confusion is likely.
-- Examples small and real (a single sample bundle, not a synthetic wall of JSON).
-- Don't over-document features that don't exist yet — a wishlist line is enough.
-- Diagrams: default to **Mermaid** (renders in GitHub, diffs cleanly); upgrade a
-  hero or demo diagram to hand-crafted **SVG** when the flow deserves the clarity.
+1. Plain language. Short sections. Tables and checklists where they earn their place.
+2. No filler. If a sentence doesn't change what a reader would do, cut it.
+3. Mark unknowns explicitly, and distinguish **Fact**, **Assumption**, **Decision**,
+   and **TODO** where confusion is likely.
+4. Examples small and real (a single sample bundle, not a synthetic wall of JSON).
+5. Don't over-document features that don't exist yet — a wishlist line is enough.
+6. Diagrams: default to **Mermaid** (renders in GitHub, diffs cleanly); upgrade a
+   hero or demo diagram to hand-crafted **SVG** when the flow deserves the clarity.
+7. Use **numbered or lettered lists**, not plain bullets, for anything referenceable,
+   so items have short stable identifiers for feedback.
+8. **Crosslink related sources** — fill the Related field and link inline references
+   (docs, ADRs, code) so navigation is one click. This is a requirement, not a nicety.
 
 ## Templates and consistency
 
