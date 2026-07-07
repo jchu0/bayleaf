@@ -1,0 +1,46 @@
+# Task & Progress Tracker
+
+| Field | Value |
+|---|---|
+| **Status** | Active |
+| **Last updated** | 2026-07-07 (MST) |
+| **Purpose** | Track phases and tasks, and flag parallel-safe work so non-blocking items can run concurrently (including handoff to background agents). |
+
+## How to use
+
+- **Statuses:** `todo` · `in-progress` · `blocked` · `done`.
+- **Parallel-safe** = no unfinished dependency and an isolated area of the repo;
+  safe to run concurrently or hand to a background agent.
+- Keep this current in the same change as the work. It is the shared board across
+  sessions — read it (with the [table of contents](../TABLE_OF_CONTENTS.md)) at
+  session start to see what is claimable.
+
+## Roadmap (phases)
+
+| Phase | Focus | State |
+|---|---|---|
+| 0 | Foundation & hygiene (uv, mypy, ruff, hooks) | todo |
+| 1 | Design capture + provenance/event seam | in-progress |
+| 2 | Persistence + real QC data | todo |
+| 3 | Scoped agents + real confidence | todo |
+| 4 | Cloud & IaC | wishlist |
+
+## Task board
+
+| ID | Task | Phase | Status | Parallel-safe | Depends on |
+|---|---|---|---|---|---|
+| T-001 | Documentation workflow + ADRs 0001–0007 | 1 | done | — | — |
+| T-002 | `data/qc_metrics.md` (grounded in fastp/MultiQC/mosdepth fields) | 1 | todo | yes | — |
+| T-003 | `reference/domain-primer.md` + `reference/glossary.md` | 1 | todo | yes | — |
+| T-004 | `requirements/{functional,nonfunctional,constraints}.md` | 1 | todo | yes | — |
+| T-005 | `design/architecture.md` + system-view docs (context, components, data-flow, interfaces, storage, workflows, deployment) | 1 | todo | partial | T-002 |
+| T-006 | `design/configuration.md` (profiles) | 1 | todo | yes | — |
+| T-007 | `design/structure.md` (repo + data map) | 1 | todo | yes | — |
+| T-008 | `data/{schemas,provenance,licensing}.md` | 1 | todo | yes | — |
+| T-009 | `quality/{evaluation,risks}.md` + `demo/demo_plan.md` | 1 | todo | yes | T-002 |
+| T-010 | ADR-pending: issue-taxonomy, corpora, ticketing/API, tooling | 1 | todo | yes | — |
+| T-011 | Fresh production-framed `README.md` | 1 | todo | no | T-005 |
+| T-012 | Phase 0 tooling: uv + `pyproject.toml` single source, mypy/ruff, hooks | 0 | todo | no | — |
+| T-013 | GIAB HG002 subset fetch script + synthetic perturbation generator | 2 | todo | partial | T-002, T-008 |
+| T-014 | Event bus + provenance ledger | 1/2 | todo | no | ADR-0002 |
+| T-015 | QC-triage agent + notify port (Slack) | 3 | todo | no | T-014 |

@@ -1,17 +1,28 @@
 <!--
 TEMPLATE: general document. Copy into the target path, delete this comment block,
-and fill every <...>. Keep sections short; delete any that don't apply.
-Style and marker legend: docs/DOCUMENTATION_HABITS.md.
+and fill every <...>. Prefer short sections and tables over long prose.
+Style + marker legend: docs/DOCUMENTATION_HABITS.md.
 -->
 
 # <Title>
 
-- **Status:** draft <!-- draft | active | superseded -->
-- **Last updated:** <YYYY-MM-DD> (MST)
-- **Audience:** <bioinformatics | software | clinical | all>
-- **Related:** <links to ADRs / docs, or "none">
+| Field | Value |
+|---|---|
+| **Status** | Draft <!-- Draft / Active / Superseded --> |
+| **Last updated** | <YYYY-MM-DD> (MST) |
+| **Audience** | <bioinformatics / software / clinical / all> |
+| **Related** | <links to ADRs / docs, or "none"> |
+
+## Overview
+
+<One or two sentences: what this document covers and who needs it.>
 
 ## <Section>
 
-<Content. Where it aids clarity, mark a statement with **Fact:**, **Assumption:**,
-**Decision:**, or **TODO:** so readers can tell them apart.>
+<Content. Break into short sections; use tables and checklists where they earn
+their place.>
+
+---
+
+*Marker legend — distinguish claim types where confusion is likely:*
+**Fact** · **Assumption** · **Decision** · **TODO**.

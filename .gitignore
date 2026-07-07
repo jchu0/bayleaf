@@ -47,8 +47,15 @@ outputs/
 node_modules/
 .next/
 
-# IDE / editor
+# IDE / editor — JetBrains (IntelliJ IDEA Ultimate, PyCharm, etc.)
 .idea/
+*.iml
+*.ipr
+*.iws
+.idea_modules/
+out/
+cmake-build-*/
+# VS Code
 .vscode/
 *.swp
 

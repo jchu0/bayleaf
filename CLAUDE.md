@@ -7,11 +7,12 @@ this repo — do not assume any global rules apply here.
 ## Start here (every session)
 
 - Read [docs/TABLE_OF_CONTENTS.md](docs/TABLE_OF_CONTENTS.md) first to see what
-  exists, then load **only** the files relevant to the task. Do not bulk-load the
-  repo into context.
+  exists, then load **only** the files relevant to the task — *unless the task
+  genuinely needs broad context*, in which case bulk-load deliberately.
+- Check [docs/planning/tasks.md](docs/planning/tasks.md) for claimable / parallel-safe work.
 - Follow [docs/DOCUMENTATION_HABITS.md](docs/DOCUMENTATION_HABITS.md) for anything
   documentation-related.
-- The `why` behind the architecture lives in [docs/design/decisions/](docs/design/decisions/).
+- The `why` behind the architecture lives in the ADRs at [docs/adr/](docs/adr/).
 
 ## Commands
 
@@ -116,5 +117,6 @@ PYTHONPATH=src python -c "from pipeguard import run_gate_from_dir; \
 
 ## Git conventions
 
-Incremental, self-contained commits; short title + descriptive body. No AI
-attribution lines in commit messages.
+Incremental, self-contained commits; short title + descriptive body. End commit
+messages made with Claude Code with a `Co-Authored-By: Claude Opus 4.8
+<noreply@anthropic.com>` trailer.

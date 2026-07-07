@@ -21,7 +21,7 @@ obvious — for a teammate, a judge, a future maintainer, or a fresh Claude sess
 1. **Explain why before what.** The reasoning behind a choice outlasts the code
    that implements it. Lead with intent; the mechanism is secondary.
 2. **Keep decisions visible.** Every load-bearing choice becomes an ADR
-   (`docs/design/decisions/`) — one decision per file, with the alternatives we
+   (`docs/adr/`) — one decision per file, with the alternatives we
    rejected and why.
 3. **Document assumptions and boundaries.** State what we assume to be true and
    where a component's responsibility ends. Silent assumptions are future bugs.
@@ -54,7 +54,7 @@ doc owns one question.
 | `docs/design/architecture.md` | system shape, components, data flow, external services, tradeoffs |
 | `docs/design/configuration.md` | the config layer and deployment/agent profiles |
 | `docs/design/structure.md` | repo + data layout, and the doc-to-code map |
-| `docs/design/decisions/` | important decisions, alternatives, consequences (one per file) |
+| `docs/adr/` | important decisions, alternatives, consequences (one per file) |
 | `docs/data/schemas.md` | artifact contracts: required/optional fields, types, missing-semantics |
 | `docs/data/qc_metrics.md` | the QC metric set and gate thresholds |
 | `docs/data/provenance.md` | the I/O lineage model and ledger format |

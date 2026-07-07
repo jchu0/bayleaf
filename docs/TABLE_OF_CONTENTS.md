@@ -1,14 +1,22 @@
 # Documentation — Table of Contents
 
-- **Status:** active
-- **Last updated:** 2026-07-07 (MST)
-- **Audience:** all (contributors and Claude Code)
+| Field | Value |
+|---|---|
+| **Status** | Active |
+| **Last updated** | 2026-07-07 (MST) |
+| **Audience** | all (contributors and Claude Code) |
 
 **Start here.** This index is the map of what exists. Read it first, then open
-only the files relevant to your task — do not load the whole repo into context.
-Working conventions are in [DOCUMENTATION_HABITS.md](DOCUMENTATION_HABITS.md).
+only the files relevant to your task — bulk-load only when the task genuinely
+needs broad context. Conventions: [DOCUMENTATION_HABITS.md](DOCUMENTATION_HABITS.md).
+Claimable work: [planning/tasks.md](planning/tasks.md).
 
 Status legend: ✅ written · 🚧 in progress · 📝 planned.
+
+## Planning
+| Doc | Status | Purpose |
+|---|---|---|
+| [planning/tasks.md](planning/tasks.md) | ✅ | Phases + task board with parallel-safe flags |
 
 ## Reference (learn the domain)
 | Doc | Status | Purpose |
@@ -19,17 +27,36 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 ## Requirements (what the system must do)
 | Doc | Status | Purpose |
 |---|---|---|
-| [requirements/functional.md](requirements/functional.md) | 📝 | Capabilities the system must provide |
-| [requirements/nonfunctional.md](requirements/nonfunctional.md) | 📝 | Reliability, provenance, security, performance |
-| [requirements/scope-and-wishlist.md](requirements/scope-and-wishlist.md) | 📝 | In-scope, wishlist, and out-of-scope with rationale |
+| [requirements/functional.md](requirements/functional.md) | 📝 | Capabilities (REQ-F-NNN) |
+| [requirements/nonfunctional.md](requirements/nonfunctional.md) | 📝 | Reliability, provenance, security, performance (REQ-NF-NNN) |
+| [requirements/constraints.md](requirements/constraints.md) | 📝 | Timeline, budget, licensing, domain-safety (REQ-C-NNN) |
 
 ## Design (how it is built)
 | Doc | Status | Purpose |
 |---|---|---|
-| [design/architecture.md](design/architecture.md) | 📝 | System shape, components, data flow, event model, tradeoffs |
+| [design/architecture.md](design/architecture.md) | 📝 | System shape overview, event model, major tradeoffs |
+| [design/system-context.md](design/system-context.md) | 📝 | System context: external actors and systems |
+| [design/components.md](design/components.md) | 📝 | Components and their responsibilities |
+| [design/data-flow.md](design/data-flow.md) | 📝 | How data moves through the gates |
+| [design/interfaces.md](design/interfaces.md) | 📝 | Ports, adapters, and the read API |
+| [design/storage.md](design/storage.md) | 📝 | Stores, ledgers, and corpora |
+| [design/workflows.md](design/workflows.md) | 📝 | Key runtime workflows (gate, triage, HITL) |
+| [design/deployment.md](design/deployment.md) | 📝 | Deployment topologies (local / Slurm / cloud) |
 | [design/configuration.md](design/configuration.md) | 📝 | Config layer + deployment/agent profiles |
-| [design/structure.md](design/structure.md) | 📝 | Repo + data layout, doc-to-code map |
-| [design/decisions/](design/decisions/) | ✅ | Architecture Decision Records (one per file) |
+| [design/structure.md](design/structure.md) | 📝 | Repo + data layout |
+
+## Decision records (ADR)
+One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
+
+| ADR | Title |
+|---|---|
+| [ADR-0001](adr/ADR-0001-deterministic-gate-advisory-ai.md) | Deterministic gate, advisory AI |
+| [ADR-0002](adr/ADR-0002-event-driven-core-provenance-ledger.md) | Event-driven core with a provenance ledger |
+| [ADR-0003](adr/ADR-0003-deployment-agnostic-ports.md) | Deployment-agnostic ports & adapters |
+| [ADR-0004](adr/ADR-0004-vcf-first-giab-substrate.md) | VCF-first inputs on a GIAB substrate |
+| [ADR-0005](adr/ADR-0005-config-layer-and-profiles.md) | Config layer and deployment/agent profiles |
+| [ADR-0006](adr/ADR-0006-ai-off-by-default-fallback.md) | AI off by default with a deterministic fallback |
+| [ADR-0007](adr/ADR-0007-ml-ready-structured-outputs.md) | ML-ready structured outputs |
 
 ## Data (the artifacts and their lineage)
 | Doc | Status | Purpose |
@@ -57,16 +84,6 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 | [_templates/](_templates/) | ✅ | Skeletons — check before creating any new doc |
 | [journal/](journal/) | ✅ | Dated raw session logs, distilled into the docs above |
 
-## Decisions index
-| ADR | Title |
-|---|---|
-| [0001](design/decisions/0001-deterministic-gate-advisory-ai.md) | Deterministic gate, advisory AI |
-| [0002](design/decisions/0002-event-driven-core-provenance-ledger.md) | Event-driven core with a provenance ledger |
-| [0003](design/decisions/0003-deployment-agnostic-ports.md) | Deployment-agnostic ports & adapters |
-| [0004](design/decisions/0004-vcf-first-giab-substrate.md) | VCF-first inputs on a GIAB substrate |
-| [0005](design/decisions/0005-config-layer-and-profiles.md) | Config layer and deployment/agent profiles |
-| [0006](design/decisions/0006-ai-off-by-default-fallback.md) | AI off by default with a deterministic fallback |
-
 ## Doc-to-code map
 Which doc to open for a given part of the system.
 
@@ -78,4 +95,5 @@ Which doc to open for a given part of the system.
 | the event bus / ledger (planned) | `data/provenance.md`, ADR-0002 |
 | the config layer / profiles (planned) | `design/configuration.md`, ADR-0005 |
 | the synthesizer / agents | ADR-0001, ADR-0006 |
-| anything: "why is it this way?" | `design/decisions/` |
+| any machine output / log format | ADR-0007, `data/schemas.md` |
+| anything: "why is it this way?" | `adr/` |

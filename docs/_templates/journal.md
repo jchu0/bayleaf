@@ -1,22 +1,32 @@
 <!--
 TEMPLATE: session journal. Copy to docs/journal/YYYY-MM-DD-<topic>.md.
-A raw working log that gets distilled into canonical docs (ADRs, requirements)
-at session end. The journal stays as the dated archive — it is NOT the source
-of truth. Delete this comment block.
+A raw working log that is distilled into canonical docs (ADRs, requirements) at
+session end. The journal stays as the dated archive — it is NOT the source of
+truth. Delete this comment block.
 -->
 
 # Journal — <YYYY-MM-DD> (MST) — <topic>
 
-- **Focus:** <what this session set out to do>
+| Field | Value |
+|---|---|
+| **Focus** | <what this session set out to do> |
+| **Participants** | <people / tools> |
+| **Outcome** | <one line> |
 
-## What happened
-<Notes, chronological or thematic. Capture the reasoning, not just outcomes.>
+## Discussion
 
-## Decisions made
-<One bullet each; link the ADR it became, or mark "ADR pending".>
+<Notes by theme. Capture the reasoning, not just the outcomes.>
 
-## Open questions / TODO
-<Unresolved items.>
+## Decisions
+
+| Decision | Distilled to |
+|---|---|
+| <decision> | <ADR-NNNN / doc / "pending"> |
+
+## Open questions & TODO
+
+- <item>
 
 ## Distilled into
-<Which canonical docs this entry fed.>
+
+- <canonical docs this entry fed>
