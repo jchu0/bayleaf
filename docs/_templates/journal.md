@@ -21,7 +21,7 @@ truth. Delete this comment block.
 
 | Decision | Distilled to |
 |---|---|
-| <decision> | <ADR-NNNN / doc / "pending"> |
+| <decision> | <[ADR-NNNN](../adr/ADR-NNNN-slug.md) / linked doc / "pending"> |
 
 ## Open questions & TODO
 
@@ -29,4 +29,4 @@ truth. Delete this comment block.
 
 ## Distilled into
 
-- <canonical docs this entry fed>
+- <canonical docs this entry fed — link each file>

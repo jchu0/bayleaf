@@ -87,13 +87,13 @@ this pass. `archive/session-1` keeps the untouched originals (local only).
 
 | Decision | Distilled to |
 |---|---|
-| Deterministic gate, advisory AI | ADR-0001 |
-| Event-driven core + provenance ledger | ADR-0002 |
-| Deployment-agnostic ports; Nextflow portability | ADR-0003 |
-| VCF-first on GIAB HG002; dual real+synthetic data | ADR-0004 |
-| Config layer + profiles | ADR-0005 |
-| AI off by default + deterministic fallback | ADR-0006 |
-| ML-ready structured outputs | ADR-0007 |
+| Deterministic gate, advisory AI | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) |
+| Event-driven core + provenance ledger | [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) |
+| Deployment-agnostic ports; Nextflow portability | [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) |
+| VCF-first on GIAB HG002; dual real+synthetic data | [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) |
+| Config layer + profiles | [ADR-0005](../adr/ADR-0005-config-layer-and-profiles.md) |
+| AI off by default + deterministic fallback | [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) |
+| ML-ready structured outputs | [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) |
 | Issue taxonomy + signature suppress/escalate | pending |
 | Two corpora (knowledge + experience) as JSON/JSONL | pending |
 | Ticketing = cards + notify ports + read API | pending |
@@ -118,7 +118,6 @@ this pass. `archive/session-1` keeps the untouched originals (local only).
 
 ## Distilled into
 
-- ADRs 0001–0007 (`docs/adr/`).
-- `CLAUDE.md`, `docs/DOCUMENTATION_HABITS.md`, `docs/TABLE_OF_CONTENTS.md`,
-  `docs/_templates/`, `docs/planning/tasks.md`.
+- [`docs/adr/`](../adr/) — ADRs 0001–0007.
+- [`CLAUDE.md`](../../CLAUDE.md) · [`DOCUMENTATION_HABITS.md`](../DOCUMENTATION_HABITS.md) · [`TABLE_OF_CONTENTS.md`](../TABLE_OF_CONTENTS.md) · [`_templates/`](../_templates/) · [`planning/tasks.md`](../planning/tasks.md).
 - Pending decisions above remain to be distilled into ADRs next pass.

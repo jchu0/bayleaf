@@ -1,8 +1,10 @@
 # Documentation Habits
 
-- **Status:** active
-- **Last updated:** 2026-07-07 (MST)
-- **Audience:** all (contributors and Claude Code)
+| Field | Value |
+|---|---|
+| **Status** | Active |
+| **Last updated** | 2026-07-07 (MST) |
+| **Audience** | all (contributors and Claude Code) |
 
 How this repository documents engineering work. The aim is narrow and practical:
 keep the project easy to understand, review, demo, and safely extend — and fight
@@ -80,6 +82,10 @@ Consistency is what keeps a new session from drifting. Before creating a doc:
 
 1. Look in `docs/_templates/` for a matching template and follow it.
 2. If no template fits, **create the template first**, then the doc.
+
+Every doc opens with the **metadata table** from its template (status,
+last-updated in MST, audience/related) — that table is the house standard, and
+every new doc must include it.
 
 This is also a CLAUDE.md rule, so it holds across sessions.
 
