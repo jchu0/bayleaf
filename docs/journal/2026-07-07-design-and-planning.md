@@ -94,10 +94,11 @@ this pass. `archive/session-1` keeps the untouched originals (local only).
 | Config layer + profiles | [ADR-0005](../adr/ADR-0005-config-layer-and-profiles.md) |
 | AI off by default + deterministic fallback | [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) |
 | ML-ready structured outputs | [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) |
-| Issue taxonomy + signature suppress/escalate | pending |
-| Two corpora (knowledge + experience) as JSON/JSONL | pending |
-| Ticketing = cards + notify ports + read API | pending |
-| pyproject/uv single source; mypy/ruff; hook tiers | pending (Phase 0) |
+| Issue taxonomy + signature suppress/escalate | [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md) |
+| Two corpora (knowledge + experience) as JSON/JSONL | [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) |
+| Ticketing = cards + notify ports + read API | [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
+| pyproject/uv single source; mypy/ruff; hook tiers | [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md) |
+| Agent scoping + per-agent model tiering | [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) |
 | Documentation workflow (templates, ToC, tracker, naming) | this pass |
 
 ## Open questions & TODO
@@ -118,6 +119,6 @@ this pass. `archive/session-1` keeps the untouched originals (local only).
 
 ## Distilled into
 
-- [`docs/adr/`](../adr/) — ADRs 0001–0007.
+- [`docs/adr/`](../adr/) — ADRs 0001–0012.
 - [`CLAUDE.md`](../../CLAUDE.md) · [`DOCUMENTATION_HABITS.md`](../DOCUMENTATION_HABITS.md) · [`TABLE_OF_CONTENTS.md`](../TABLE_OF_CONTENTS.md) · [`_templates/`](../_templates/) · [`planning/tasks.md`](../planning/tasks.md).
-- Pending decisions above remain to be distilled into ADRs next pass.
+- [`requirements/scope-and-wishlist.md`](../requirements/scope-and-wishlist.md) · [`data/strategy.md`](../data/strategy.md).

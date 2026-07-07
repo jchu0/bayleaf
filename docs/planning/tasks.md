@@ -52,7 +52,7 @@ estimates — adjusted as we go.
 | T-007 | `design/structure.md` (repo + data map) | 1 | todo | yes | — |
 | T-008 | `data/{schemas,provenance,licensing}.md` | 1 | todo | yes | — |
 | T-009 | `quality/{evaluation,risks}.md` + `demo/demo_plan.md` | 1 | todo | yes | T-002 |
-| T-010 | ADR-pending: issue-taxonomy, corpora, ticketing/API, tooling | 1 | todo | yes | — |
+| T-010 | ADR-pending → ADR-0008–0012 (issue-taxonomy, corpora, ticketing/API, tooling, agent-scoping) | 1 | done | yes | — |
 | T-011 | Fresh production-framed `README.md` | 1 | todo | no | T-005 |
 | T-012 | Phase 0 tooling: uv + `pyproject.toml` single source, mypy/ruff, hooks | 0 | todo | no | — |
 | T-013 | GIAB HG002 subset fetch script + synthetic perturbation generator | 2 | todo | partial | T-002, T-008 |

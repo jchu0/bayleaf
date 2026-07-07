@@ -27,6 +27,7 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 ## Requirements (what the system must do)
 | Doc | Status | Purpose |
 |---|---|---|
+| [requirements/scope-and-wishlist.md](requirements/scope-and-wishlist.md) | ✅ | In-scope, wishlist (with readiness), out-of-scope |
 | [requirements/functional.md](requirements/functional.md) | 📝 | Capabilities (REQ-F-NNN) |
 | [requirements/nonfunctional.md](requirements/nonfunctional.md) | 📝 | Reliability, provenance, security, performance (REQ-NF-NNN) |
 | [requirements/constraints.md](requirements/constraints.md) | 📝 | Timeline, budget, licensing, domain-safety (REQ-C-NNN) |
@@ -57,6 +58,11 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [ADR-0005](adr/ADR-0005-config-layer-and-profiles.md) | Config layer and deployment/agent profiles |
 | [ADR-0006](adr/ADR-0006-ai-off-by-default-fallback.md) | AI off by default with a deterministic fallback |
 | [ADR-0007](adr/ADR-0007-ml-ready-structured-outputs.md) | ML-ready structured outputs |
+| [ADR-0008](adr/ADR-0008-issue-taxonomy-suppression-escalation.md) | Issue taxonomy, suppression, escalation |
+| [ADR-0009](adr/ADR-0009-corpora-retrieval-upskilling.md) | Knowledge + experience corpora, retrieval upskilling |
+| [ADR-0010](adr/ADR-0010-ticketing-notify-read-api.md) | Ticketing: cards, notify ports, read API |
+| [ADR-0011](adr/ADR-0011-tooling-and-reproducibility.md) | Tooling and reproducibility |
+| [ADR-0012](adr/ADR-0012-agent-scoping-model-tiering.md) | Agent scoping and per-agent model tiering |
 
 ## Data (the artifacts and their lineage)
 | Doc | Status | Purpose |
