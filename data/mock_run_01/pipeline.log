@@ -1,0 +1,8 @@
+2026-07-07T02:14:03Z [INFO] bclconvert: run RUN-2026-07-07-A demultiplexing started (5 samples)
+2026-07-07T02:41:52Z [INFO] bclconvert: demultiplexing complete; 92.0% of reads assigned to a sample
+2026-07-07T02:41:53Z [WARN] bclconvert: sample S4 observed index2 AGGCGAAG does not match declared index2 GGCTCTGA; possible index misassignment
+2026-07-07T02:42:10Z [INFO] fastqc: per-sample QC started
+2026-07-07T03:05:44Z [INFO] fastqc: S1 S2 S3 passed all modules
+2026-07-07T03:05:45Z [WARN] fastqc: S5 flagged Per base sequence quality (borderline Q30) and low mean coverage
+2026-07-07T03:20:11Z [INFO] align: BWA-MEM alignment complete for S1 S2 S3 S4 S5
+2026-07-07T03:41:59Z [INFO] pipeline: run RUN-2026-07-07-A reached decision gate; 5 samples awaiting operator review

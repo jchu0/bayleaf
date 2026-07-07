@@ -1,0 +1,6 @@
+sample_id,subject_id,tissue,library_prep,submitted_by
+S1,SUBJ-1001,blood,TruSeq DNA PCR-Free,a.rivera
+S2,SUBJ-1002,blood,TruSeq DNA PCR-Free,a.rivera
+S3,SUBJ-1003,saliva,Nextera DNA Flex,k.osei
+S4,,tumor,TruSeq DNA PCR-Free,k.osei
+S5,SUBJ-1005,FFPE tumor,TruSeq DNA PCR-Free,m.chen
