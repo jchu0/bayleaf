@@ -45,6 +45,7 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 | [design/deployment.md](design/deployment.md) | 📝 | Deployment topologies (local / Slurm / cloud) |
 | [design/configuration.md](design/configuration.md) | 📝 | Config layer + deployment/agent profiles |
 | [design/structure.md](design/structure.md) | 📝 | Repo + data layout |
+| [design/frontend-design-brief.md](design/frontend-design-brief.md) | ✅ | Carry-over brief for the UI design session |
 
 ## Decision records (ADR)
 One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
