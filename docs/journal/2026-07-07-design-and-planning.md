@@ -40,7 +40,10 @@ ledger, **not** fine-tuning.
 **Issue handling.** Every issue gets a category + stable signature; a user can
 acknowledge/suppress an issue class (with expiry/review) so they are never
 re-prompted for a known-accepted condition — kills the "throw a person at it as
-glue" anti-pattern. Recurring signatures escalate to the repair agent.
+glue" anti-pattern. Escalation triggers at ~3 recurrences of a signature and is
+human-gated (likely tiered dashboard access / RBAC). Support both class-level
+fixes and per-instance "see-one/fix-one" approvals — never blind auto-apply. This
+feeds the error-logging and resolution corpora.
 
 **Corpora.** Two, behind one retrieval interface: curated **knowledge corpus**
 (tool docs, QC-metric definitions, failure signatures, runbook) and an append-only
@@ -63,7 +66,9 @@ granular.
 **Tooling / hygiene.** `pyproject.toml` as the sole dependency source; **uv**;
 **mypy** + **ruff**; hook tiers (pre-commit: ruff/secret-scan/mypy; pre-push:
 pytest; batch: full eval + pip-audit). Coding standards: type hints everywhere,
-meaningful docstrings, why-comments, typed env config.
+meaningful docstrings, why-comments, typed env config. Use Nextflow's own
+container/image system (Docker/Singularity/conda per process, nf-core containers,
+Seqera Wave/Fusion) rather than a custom image layer.
 
 **Documentation workflow.** "Necessary" (not minimal) stack in folders; ADRs
 renamed to `docs/adr/ADR-NNNN-*` so the ID survives a move; requirement IDs
@@ -74,8 +79,9 @@ distillation; a **task tracker** (`docs/planning/tasks.md`) with parallel-safe
 flags. Templates and the journal reformatted to a professional/tabular style.
 
 **Git attribution.** Removed the "no AI attribution" rule; adding
-`Co-Authored-By: Claude` going forward. Retroactive attribution of past commits
-(history rewrite + force-push) is pending maintainer confirmation.
+`Co-Authored-By: Claude` going forward. Retroactive backfill approved (option B):
+all commits on `main` get the trailer via history rewrite + force-push, executed
+this pass. `archive/session-1` keeps the untouched originals (local only).
 
 ## Decisions
 
@@ -99,8 +105,10 @@ flags. Templates and the journal reformatted to a professional/tabular style.
 - **QC metrics** need a dedicated `data/qc_metrics.md`, grounded in real
   fastp/MultiQC/mosdepth fields (panel depth targets, uniformity, reads-PF,
   barcode/index metrics, contamination, variant-support). Top priority next batch.
-- Retroactive commit attribution: co-author trailer vs author change; rewrite +
-  force-push yes/no. (maintainer to confirm)
+- **Schema design** (records for the ledgers, corpora, and cards) is a dedicated
+  upcoming discussion before `data/schemas.md` is written.
+- Fine-tuning (LoRA on an open-weight model) is a future possibility; for now,
+  structure and capture only (ADR-0007).
 - System-view docs to add next: context, components, data-flow, interfaces,
   storage, workflows, deployment (design/).
 - Wishlist parked for `scope-and-wishlist.md`: pgvector read-clustering /

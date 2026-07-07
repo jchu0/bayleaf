@@ -71,6 +71,8 @@ doc owns one question.
   and **TODO** where confusion is likely.
 - Examples small and real (a single sample bundle, not a synthetic wall of JSON).
 - Don't over-document features that don't exist yet — a wishlist line is enough.
+- Diagrams: default to **Mermaid** (renders in GitHub, diffs cleanly); upgrade a
+  hero or demo diagram to hand-crafted **SVG** when the flow deserves the clarity.
 
 ## Templates and consistency
 

@@ -4,7 +4,21 @@
 |---|---|
 | **Status** | Active |
 | **Last updated** | 2026-07-07 (MST) |
-| **Purpose** | Track phases and tasks, and flag parallel-safe work so non-blocking items can run concurrently (including handoff to background agents). |
+| **Purpose** | Top-layer session input (read alongside the ToC): tracks development, timeline, and flags parallel-safe work so non-blocking items can fan out to background agents. |
+
+## Timeline
+
+Due **Mon Jul 13, 2026, 6:00 pm MST** (9:00 pm ET). Day buckets, not hour
+estimates — adjusted as we go.
+
+| Day (MST) | Bucket | Focus |
+|---|---|---|
+| Tue Jul 7 | Design / research | Concept lock, docs, ADRs, Phase 0 |
+| Wed–Thu Jul 8–9 | Build | Provenance/event seam, real-QC ingest, AI layer, dashboard |
+| Fri Jul 10 | Harden | Eval vs truth data, error handling, security, doc refresh |
+| Sat Jul 11 | Demo | Demo plan, one-pager/deck, UI states |
+| Sun Jul 12 | Flex | Overflow, agent #2, risks, dry run |
+| Mon Jul 13 | Buffer / submit | Final checks; submit before 6 pm |
 
 ## How to use
 

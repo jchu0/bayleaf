@@ -6,10 +6,12 @@ this repo — do not assume any global rules apply here.
 
 ## Start here (every session)
 
-- Read [docs/TABLE_OF_CONTENTS.md](docs/TABLE_OF_CONTENTS.md) first to see what
-  exists, then load **only** the files relevant to the task — *unless the task
-  genuinely needs broad context*, in which case bulk-load deliberately.
-- Check [docs/planning/tasks.md](docs/planning/tasks.md) for claimable / parallel-safe work.
+- **Two top-layer inputs — read both at session start:**
+  - [docs/TABLE_OF_CONTENTS.md](docs/TABLE_OF_CONTENTS.md) — the map of what exists.
+  - [docs/planning/tasks.md](docs/planning/tasks.md) — development state, timeline,
+    and which work is parallel-safe (fan out subagents for non-blocking tasks).
+- Load **only** the files relevant to the task — *unless the task genuinely needs
+  broad context*, in which case bulk-load deliberately.
 - Follow [docs/DOCUMENTATION_HABITS.md](docs/DOCUMENTATION_HABITS.md) for anything
   documentation-related.
 - The `why` behind the architecture lives in the ADRs at [docs/adr/](docs/adr/).
