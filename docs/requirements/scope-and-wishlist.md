@@ -35,9 +35,18 @@ are blocked on unbuilt core seams, not on research.
 | 6 | NLP variant-miner (PubMed/PMC + ClinVar) | **High** | corpus + review flow | "Candidate variants for expert curation", never auto-actionable |
 | 7 | RNA-seq modality | Med | new pipeline + gate | Extension beyond the germline DNA panel |
 | 8 | Fine-tuning (LoRA on an open-weight model) | High | experience-ledger scale | Future; for now capture structured data only (ADR-0007) |
+| 9 | No-code pipeline runner (schema-driven form + optional LLM NL layer) | Low | command API + frontend | **No model** — nf-core `nextflow_schema.json` → form; NL via LLM + structured output |
+| 10 | Pipeline canvas — stage/DAG view + per-run data-I/O drill-down | Low–med | frontend + provenance ledger | Read-only; visualizes provenance; a lean version may land in the MVP dashboard |
+| 11 | Visual pipeline builder — compose tools + snap-in agents (± RNA-seq) | **High** | canvas + config + agents | North-star; nearly its own product |
+| 12 | In-app user feedback on the system | Low | frontend | Product-refinement telemetry to guide iteration |
+| 13 | Data-platform connectors (Box, Drive, OneDrive, S3, DNAnexus, Databricks, Snowflake, BigQuery, Redshift) | Low–med each | artifact-store port | Adapters; breadth work |
+| 14 | Configurable de-identification module (HIPAA / PHI) | Med | connectors + policy | **Prerequisite** for any real patient-data integration; the demo stays public/synthetic |
 
 ## Out of scope
 
 1. Any **clinical / diagnostic / therapeutic** decision-making — this is a research/demo tool with production intent, not a clinical system.
 2. Building or modifying the upstream **clinical pipeline** — we sit on top of it.
 3. Licensed data sources (e.g. HGMD) — open sources only (GIAB, gnomAD, ClinVar).
+4. Real patient data (PHI) during the hackathon — public/synthetic only. A configurable
+   **de-identification module** (wishlist #14) is a prerequisite for any future PHI
+   integration under HIPAA and data-use agreements.
