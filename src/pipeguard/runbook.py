@@ -1,0 +1,73 @@
+"""The runbook: operator-configurable thresholds and gate policy.
+
+In a real deployment this would be a versioned YAML the lab owns. Keeping it as
+a typed object here makes the rule engine's decisions fully traceable ("held
+because Q30 84.1 < gate 85.0") and lets the UI show *which rule* fired.
+"""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+
+class QCThreshold(BaseModel):
+    """A one-sided QC gate with a borderline band.
+
+    A value past `hard_fail` is a CRITICAL finding; a value within
+    `borderline_band` (relative) of the gate is a WARN (borderline) finding.
+    `higher_is_better` flips the comparison direction for metrics like
+    duplication rate where lower is better.
+    """
+
+    metric: str
+    label: str
+    gate: float
+    hard_fail: float
+    higher_is_better: bool = True
+    borderline_band: float = 0.03  # within 3% (relative) of the gate -> borderline
+    unit: str = ""
+
+
+class Runbook(BaseModel):
+    run_id_field: str = "run_id"
+    require_metadata_fields: list[str] = Field(
+        default_factory=lambda: ["subject_id", "tissue", "library_prep", "submitted_by"]
+    )
+    qc_thresholds: list[QCThreshold] = Field(
+        default_factory=lambda: [
+            QCThreshold(metric="q30", label="Q30", gate=85.0, hard_fail=75.0, unit="%"),
+            QCThreshold(
+                metric="pct_reads_identified",
+                label="% reads identified",
+                gate=70.0,
+                hard_fail=50.0,
+                unit="%",
+            ),
+            QCThreshold(
+                metric="mean_coverage",
+                label="Mean coverage",
+                gate=30.0,
+                hard_fail=15.0,
+                unit="x",
+            ),
+            QCThreshold(metric="cluster_pf", label="Cluster PF", gate=80.0, hard_fail=60.0, unit="%"),
+            QCThreshold(
+                metric="dup_rate",
+                label="Duplication rate",
+                gate=30.0,
+                hard_fail=50.0,
+                higher_is_better=False,
+                unit="%",
+            ),
+        ]
+    )
+    # Log substrings that indicate a failed pipeline step for a given sample.
+    log_failure_markers: list[str] = Field(
+        default_factory=lambda: ["ERROR", "FAILED", "exit code 1", "segmentation fault"]
+    )
+
+    def threshold_for(self, metric: str) -> QCThreshold | None:
+        return next((t for t in self.qc_thresholds if t.metric == metric), None)
+
+
+DEFAULT_RUNBOOK = Runbook()
