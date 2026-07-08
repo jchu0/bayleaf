@@ -19,6 +19,7 @@ from pipeguard.models import (
     SourceKind,
 )
 from pipeguard.parsers import parse_sample_sheet
+from pipeguard.provenance import EventLedger, EventType
 from pipeguard.rules import _evaluate_metric
 from pipeguard.synthesis import StubSynthesizer, aggregate_verdict
 
@@ -185,3 +186,38 @@ def test_qc_evidence_tagged_as_metric(findings):
     """QC metric evidence carries the METRIC source_kind for the trust layer."""
     q30 = next(f for f in findings["S5"] if f.rule_id == "QC-Q30")
     assert all(e.source_kind is SourceKind.METRIC for e in q30.evidence)
+
+
+def test_ledger_captures_gate_event_trail():
+    """run_gate emits a bracketed provenance trail into the ledger (ADR-0002)."""
+    ledger = EventLedger()
+    cards = run_gate(load_run(DATA), synthesizer=StubSynthesizer(), ledger=ledger)
+    types = [e.event_type for e in ledger.events]
+    assert types[0] is EventType.ANALYSIS_RUN_STARTED
+    assert types[-1] is EventType.ANALYSIS_RUN_COMPLETED
+    assert len(ledger.by_type(EventType.VERDICT_DECIDED)) == len(cards)  # one per sample
+    emitted = ledger.by_type(EventType.FINDING_EMITTED)
+    assert any(e.sample_id == "S4" for e in emitted)  # S4's findings are logged
+    assert all(e.outputs and e.outputs[0].content_hash for e in emitted)  # with hashes
+
+
+def test_cards_anchored_to_one_analysis_run():
+    """Every card is anchored to the single AnalysisRun for the execution."""
+    ledger = EventLedger()
+    cards = run_gate(load_run(DATA), synthesizer=StubSynthesizer(), ledger=ledger)
+    started = ledger.by_type(EventType.ANALYSIS_RUN_STARTED)
+    assert len(started) == 1
+    arun_id = started[0].analysis_run_id
+    assert arun_id and all(c.analysis_run_id == arun_id for c in cards)
+
+
+def test_ledger_persists_jsonl(tmp_path: Path):
+    """A file-backed ledger writes one JSON line per event (authoritative record)."""
+    import json
+
+    path = tmp_path / "ledger.jsonl"
+    ledger = EventLedger(path=path)
+    run_gate(load_run(DATA), synthesizer=StubSynthesizer(), ledger=ledger)
+    lines = path.read_text().strip().splitlines()
+    assert len(lines) == len(ledger.events)
+    assert json.loads(lines[0])["event_type"] == "analysis_run.started"

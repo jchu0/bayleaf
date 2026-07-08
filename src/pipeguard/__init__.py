@@ -10,11 +10,21 @@ from .models import (
     DecisionCard,
     Evidence,
     Finding,
+    Gate,
+    GateResult,
     RunArtifacts,
     Severity,
+    SourceKind,
     Verdict,
 )
 from .parsers import load_run
+from .provenance import (
+    AnalysisRun,
+    EntityRef,
+    EventLedger,
+    EventType,
+    ProvenanceEvent,
+)
 from .rules import evaluate_run, evaluate_sample
 from .runbook import DEFAULT_RUNBOOK, Runbook
 
@@ -22,13 +32,21 @@ __version__ = "0.1.0"
 
 __all__ = [
     "DEFAULT_RUNBOOK",
+    "AnalysisRun",
     "Category",
     "DecisionCard",
+    "EntityRef",
+    "EventLedger",
+    "EventType",
     "Evidence",
     "Finding",
+    "Gate",
+    "GateResult",
+    "ProvenanceEvent",
     "RunArtifacts",
     "Runbook",
     "Severity",
+    "SourceKind",
     "Verdict",
     "evaluate_run",
     "evaluate_sample",
