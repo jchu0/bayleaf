@@ -68,3 +68,35 @@ settings, and data-platform integrations. Keep to the core flow above.
 
 **Deliverable.** Wireframes/mockups for screens 1–5, a simple color + component
 system, and the key states (loading / empty / error).
+
+## Additions since v1 — incorporate in the next iteration
+
+Decisions made after the initial brief (see ADR-0013 and `data/qc_metrics.md`):
+
+1. **Three-gate model + preflight/intake gate.** The gate is three checkpoints:
+   **preflight/intake** (before processing) → **QC gate** → **variant gate**. Add an
+   intake view — run-level sequencing QC (e.g. `% PhiX aligned > 90%` = "didn't
+   sequence it") + a **manual override** to admit a genuinely-sparse sample. Label
+   which gate each finding/verdict came from.
+2. **Verdict philosophy — surface, don't prescribe.** The tool surfaces evidence + a
+   recommendation; the human decides. **RERUN is for operational/file-system failures**
+   (network, missing files, race conditions), **not** data quality — a low-coverage
+   sample is a **HOLD**. Surface **depth vs breadth/coverage as distinct signals**.
+3. **Richer QC evidence.** The evidence table carries the full metric set, grouped by
+   gate: **breadth/callability** (% target ≥ 20×, callable-region gaps),
+   **contamination** (FREEMIX), **sex/identity** concordance, **variant-level**
+   (DP/GQ/allele balance, gnomAD AF, ClinVar) — not just Q30/coverage.
+4. **Recurring-issue escalation.** In the review queue: a signature recurring ~3×
+   **escalates to a pipeline-repair agent (#2)**. Support **class-level fix** *and*
+   per-instance **"see-one / fix-one"** approvals (beyond suppress). Keep the
+   reviewer-vs-approver (RBAC) gating.
+5. **Sample-type-aware.** Sample type (whole blood / saliva) shapes QC expectations
+   (saliva → more off-target microbial content → looser mapping/on-target/yield;
+   contamination FREEMIX unchanged). Surface it and note where thresholds vary by it.
+6. **Config, not read-only.** Runbook thresholds should be **operator-adjustable**
+   (a config surface), keyed on **assay × sample type** — not merely displayed.
+7. **Confidence stays omitted** until it's grounded (fastp/MultiQC-derived later) —
+   design's call to leave it out is correct; don't add a meaningless heuristic bar.
+8. **(Light) monitoring view.** A run-throughput / verdict-over-time surface serves
+   the monitoring focus (system telemetry via Prometheus arrives with the backend).
+

@@ -45,7 +45,8 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 | [design/deployment.md](design/deployment.md) | 📝 | Deployment topologies (local / Slurm / cloud) |
 | [design/configuration.md](design/configuration.md) | 📝 | Config layer + deployment/agent profiles |
 | [design/structure.md](design/structure.md) | 📝 | Repo + data layout |
-| [design/frontend-design-brief.md](design/frontend-design-brief.md) | ✅ | Carry-over brief for the UI design session |
+| [design/frontend/frontend-design-brief.md](design/frontend/frontend-design-brief.md) | ✅ | UI design brief (+ v2 additions) for the design session |
+| [design/frontend/](design/frontend/) | ✅ | Frontend prototype (`PipeGuard.html`) + design README |
 
 ## Decision records (ADR)
 One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
