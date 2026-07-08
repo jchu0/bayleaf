@@ -30,7 +30,9 @@ export function EvidenceTable({ findings }: { findings: Finding[] }) {
                   <span className="font-mono text-xs">{e.source}</span>
                   <SourceKindChip kind={e.source_kind} />
                 </td>
-                <td className="py-2 pr-3 font-mono text-xs">{e.value ?? '—'}</td>
+                <td className="py-2 pr-3 font-mono text-xs">
+                  <Observed value={e.value} expected={e.expected} />
+                </td>
                 <td className="py-2 pr-3 font-mono text-xs text-ink-dim">
                   {e.expected ?? e.threshold ?? '—'}
                 </td>
@@ -49,4 +51,25 @@ function SourceKindChip({ kind }: { kind: string }) {
       {kind}
     </span>
   )
+}
+
+// For barcode-like values (i7-i5), highlight the segment(s) that differ from the
+// declared index in red — a self-explanatory view of an index swap.
+function Observed({ value, expected }: { value: string | null; expected: string | null }) {
+  if (!value) return <>—</>
+  if (expected && value.includes('-') && expected.includes('-')) {
+    const observed = value.split('-')
+    const declared = expected.split('-')
+    return (
+      <>
+        {observed.map((seg, i) => (
+          <span key={i}>
+            {i > 0 ? '-' : ''}
+            <span className={seg !== declared[i] ? 'font-semibold text-escalate' : ''}>{seg}</span>
+          </span>
+        ))}
+      </>
+    )
+  }
+  return <>{value}</>
 }
