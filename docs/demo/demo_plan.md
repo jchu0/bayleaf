@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-08 (MST) |
 | **Audience** | presenter / judges |
-| **Related** | [architecture.md](../design/architecture.md), [provenance.md](../data/provenance.md), [qc_metrics.md](../data/qc_metrics.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
+| **Related** | [run-of-show.md](run-of-show.md) (timed live script), [one-pager.md](one-pager.md) (judge summary), [architecture.md](../design/architecture.md), [provenance.md](../data/provenance.md), [qc_metrics.md](../data/qc_metrics.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
 
 ## The narrative (60 seconds)
 
