@@ -7,6 +7,7 @@ normalized against it. ADDITIVE — not yet on the parser/rules critical path.
 
 from __future__ import annotations
 
+from .mapping import metric_values_for
 from .registry import (
     MetricDirection,
     MetricEntry,
@@ -25,4 +26,5 @@ __all__ = [
     "UnknownMetricError",
     "ValueType",
     "default_registry",
+    "metric_values_for",
 ]
