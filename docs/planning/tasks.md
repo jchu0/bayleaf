@@ -70,4 +70,4 @@ estimates — adjusted as we go.
 | T-022 | React screens ✅: run overview · decision cards · triage · provenance · monitoring · settings · review queue · intake/preflight (all prototype screens built) | Port | done | partial | T-021 |
 | T-023 | SQLite persistence: Repository port + event→row projector + rebuild-db (ADR-0002/0003) | 2 | done | no | T-014 |
 | T-024 | Metric registry as code (`metrics/`; registry.yaml + typed loader + `MetricValue` + normalization, per metric_registry.md) — additive slice ✅ | 2 | done | partial | T-008 |
-| T-025 | Wire the metric registry into the critical path (parsers emit `MetricValue`s; runbook keys on `our_key`) — deferred structural change, needs sign-off | 2 | todo | no | T-024 |
+| T-025 | Metric registry on the critical path ✅ (step-by-step): QCMetrics→MetricValue mapping (`metrics/mapping.py`) → runbook keys on `our_key` in canonical decimals + units contract in schemas.md → rules gate on `normalized_value` (verdicts byte-identical; display renders back to raw units via `registry.denormalize`) | 2 | done | no | T-024 |
