@@ -219,6 +219,11 @@ class DecisionCard(BaseModel):
     rule engine. `rationale`/`next_steps` are narration (stub today, Claude when
     enabled). `confidence` is intentionally omitted until it is grounded (T-019)
     — a meaningless heuristic bar would misrepresent certainty.
+
+    `metric_values` surfaces the registry-normalized QC numbers the gate already
+    computed (T-025) so they are API/frontend-visible and ML-ready (ADR-0007). Like
+    `run_id`, they are contextual metadata: excluded from `content_hash` so the card's
+    identity stays tied to the decision, not the evidence carried alongside it.
     """
 
     sample_id: str
@@ -240,6 +245,11 @@ class DecisionCard(BaseModel):
         None,
         description="Human run id the card belongs to (e.g. mock_run_01); contextual, "
         "not part of content_hash",
+    )
+    metric_values: list[MetricValue] = Field(
+        default_factory=list,
+        description="Registry-normalized QC metrics for this sample (T-025); contextual "
+        "ML/audit metadata (ADR-0007) — like run_id, NOT part of content_hash",
     )
     schema_version: int = SCHEMA_VERSION
     created_at: datetime = Field(default_factory=utc_now)
@@ -277,7 +287,12 @@ class DecisionCard(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def content_hash(self) -> str:
-        """Stable identity of the card (over its narration + finding hashes)."""
+        """Stable identity of the card (over its narration + finding hashes).
+
+        Deliberately over an explicit key set: `run_id` and `metric_values` are
+        contextual metadata (not the decision) and are omitted so the identity stays
+        byte-identical whether or not they are attached.
+        """
         return _content_hash(
             {
                 "sample_id": self.sample_id,
@@ -414,3 +429,11 @@ class RunArtifacts(BaseModel):
         for d in self.demux:
             seen.setdefault(d.sample_id, None)
         return list(seen)
+
+
+# `DecisionCard.metric_values` forward-references `MetricValue`, which is defined *below*
+# `DecisionCard`. With `from __future__ import annotations` the annotation is a string, so
+# pydantic cannot resolve it at class-definition time; rebuild once here — now that
+# `MetricValue` is in the module namespace — to finalize the schema explicitly rather than
+# relying on lazy auto-rebuild.
+DecisionCard.model_rebuild()
