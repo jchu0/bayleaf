@@ -20,5 +20,24 @@ labelled in-band by a `pipeguard-synthetic` line in its `pipeline.log`. `mock_ru
 is hand-authored and never regenerated. See
 [`docs/data/strategy.md`](../docs/data/strategy.md) for origin labels.
 
+## `real-giab` — fetched, never committed
+
+Real GIAB HG002 truth data (origin `real-giab`) lands in **`data/real-giab/`**,
+which is **git-ignored** (see `.gitignore`). The bytes are never committed; the
+reproducible record is the committed accession manifest + fetch script:
+
+| Committed record | Fetched into `data/real-giab/` (git-ignored) |
+|---|---|
+| [`scripts/giab_hg002_manifest.json`](../scripts/giab_hg002_manifest.json) — exact GIAB v4.2.1 URLs + published md5s | HG002 GRCh38 v4.2.1 truth VCF (+`.tbi`), high-confidence BED, and (opt-in) a panel-region reads slice |
+| [`scripts/fetch_giab_hg002.py`](../scripts/fetch_giab_hg002.py) — idempotent, checksum-verifying fetcher | — |
+
+Run it (needs network; the reads slice also needs the separate genomics
+toolchain — see [`scripts/README.md`](../scripts/README.md)):
+
+```bash
+python scripts/fetch_giab_hg002.py --dry-run       # print the plan, download nothing
+python scripts/fetch_giab_hg002.py                 # fetch the small truth artifacts
+```
+
 Do **not** commit raw reads or large artifacts — commit accessions + a fetch
 script instead (see `.gitignore` and the data strategy).
