@@ -53,8 +53,8 @@ edge cases.
 | Mean/median coverage (per-modality) | mosdepth / Picard | panel 100–500×, WES ~100×, WGS ~30× | HOLD |
 | Callable floor / gaps in reportable regions | mosdepth per-base | 0 gaps; else describe + fill | HOLD (+ Sanger) |
 | Uniformity (fold-80) | Picard `FOLD_80_BASE_PENALTY` | < 2 (ROT) | HOLD |
-| Contamination | VerifyBamID2 `FREEMIX` | > 3% fail (GE); band 1.5–3% | ESCALATE |
-| Sex / identity concordance | peddy / plink | match reported | ESCALATE |
+| Sample identity / swap | **NGSCheckMate** (sarek germline: `ngscheckmate_matched.txt`) + sex-vs-coverage | concordant; no swap | ESCALATE |
+| Contamination (optional) | VerifyBamID2 `FREEMIX` — **extra step, not sarek-default** | > 3% fail (GE); band 1.5–3% | ESCALATE |
 
 ## Gate 3 — Variant gate (output; caller-aware)
 

@@ -1,0 +1,134 @@
+# nf-core / Nextflow Conventions → PipeGuard Schema
+
+| Field | Value |
+|---|---|
+| **Status** | Active |
+| **Last updated** | 2026-07-07 (MST) |
+| **Audience** | bioinformatics / software |
+| **Related** | [schemas.md](schemas.md) (the records we derive), [qc_metrics.md](qc_metrics.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) |
+
+## Framing
+
+nf-core schemas validate a pipeline's **inputs** ("will it run?"); a decision-gate
+validates a pipeline's **outputs** ("should we trust the result?"). We **adopt the
+vocabulary** for interoperability and **diverge on semantics** (thresholds, verdicts,
+integrity). Reference pipeline: nf-core/sarek (germline DNA panel).
+
+## 1. Sample sheet → `Sample`
+
+sarek `assets/schema_input.json` columns: `patient` (subject/individual, **required**),
+`sample` (biological sample, **required**), `sex` (`XX|XY|NA`), `status` (`0`=normal /
+`1`=tumor), `lane`, `fastq_1/2`, plus re-entry columns (`bam/cram`, `vcf`,
+`variantcaller`, `contamination`). Row constraints: `required:[patient,sample]`,
+`uniqueEntries:[patient,sample,lane]`. nf-schema validates via `nextflow_schema.json`
+→ `assets/schema_input.json` (Draft-2020-12), each column carrying `type`/`format`/
+`pattern`/`meta:[...]`/`errorMessage`.
+
+- **ADOPT:** `patient` (= our `subject_key`), `sample`, `sex`, `status`, `lane`,
+  `num_lanes` as typed `Sample` fields; adopt per-field `errorMessage` for intake validation.
+- **DIVERGE:** nf-schema checks input *shape*; the gate also needs sample-sheet-vs-reality
+  mismatch + missing-metadata detection. For germline panel, `status`≈always 0; `sex`
+  is high-value (drives sex-chromosome coverage + swap checks).
+
+## 2. The `meta` map
+
+Channels carry `[meta, files]`; modules use `meta.id` for `tag`/`prefix`. **Only
+`meta.id` and `meta.single_end` are nf-core-guaranteed keys** — everything else is
+pipeline-local. sarek's meta adds `sample, patient, sex, status, lane, num_lanes`.
+
+- **ADOPT:** model `Sample` as "the meta map, typed and persisted"; `meta.id` = join key.
+- **DIVERGE:** do **not** parse `meta` at runtime assuming keys exist — reconstruct
+  `Sample` from the **samplesheet + csv recap** (§6), which are stable contracts.
+
+## 3. Version & provenance capture → `AnalysisRun` manifest
+
+Per-process `versions.yml` (nested `{"proc": {tool: version}}`). Run-level
+`pipeline_info/`: `software_versions.yml` (merged), `params_<ts>.json` (resolved config
+— the full surface), `execution_trace_<ts>.txt` (per-task hash/status/exit/realtime/
+peak_rss), `execution_report/timeline/dag`, `manifest_<ts>.bco.json` (BioCompute Object).
+
+- **ADOPT — this is `AnalysisRun` almost verbatim:** `tool_versions` (from
+  `software_versions.yml`), `params_hash` (from `params_<ts>.json`, for reproducibility
+  diffing), `pipeline_name/version`, `nextflow_version`, `session_id`, git `commit`.
+  **`execution_trace.txt` status/exit is a far better pipeline-failure signal than a
+  log-substring scan** — use it for the `PIPELINE` / operational-RERUN rules.
+- **DIVERGE:** flatten the version map for **comparison** (`tool → version`) + keep
+  `params_hash`, so we can diff "same reference/aligner/thresholds as the validated baseline?"
+
+## 4. MultiQC → `MetricValue` + a metric registry
+
+`multiqc_data/multiqc_data.json` keys: `report_general_stats_data` (`{sample: {metric:
+value}}`), `report_saved_raw_data` (`{"multiqc_<module>": {sample: {metric: value}}}`),
+**`report_data_sources`** (`{Module: {section: {sample: source_file}}}` — the provenance
+bridge), `report_general_stats_headers`.
+
+Concrete keys (module → key): **fastp** `after_filtering_q30_rate`,
+`filtering_result_passed_filter_reads`, `pct_duplication`, `pct_surviving`, `pct_adapter`;
+**FastQC** `percent_duplicates`, `percent_gc`, `total_sequences`; **mosdepth**
+`median_coverage`, `mean_coverage`, `{N}_x_pc` (% ≥ N×); **Picard CollectHsMetrics
+(panel — directly relevant)** `MEAN_TARGET_COVERAGE`, `PCT_TARGET_BASES_30X`,
+`FOLD_ENRICHMENT`, `PCT_SELECTED_BASES`, `AT_DROPOUT`/`GC_DROPOUT`, `ZERO_CVG_TARGETS_PCT`;
+MarkDuplicates `PERCENT_DUPLICATION`.
+
+- **ADOPT:** `MetricValue(sample_id, metric_key, value, unit, module, source_file)`
+  mirrors `report_general_stats_data`; `report_data_sources` populates `Evidence.source`
+  + locator **for free** (real file pointer per metric).
+- **DIVERGE — validates the registry decision (P6):** MultiQC keys are **version/module
+  unstable** (e.g. fastp `after_filtering_q30_rate` reading zero, MultiQC issue #936). Pin
+  a canonical registry `our_key → {module, json_key, source_file, unit}` rather than
+  trusting General-Stats column names. This also replaces the fixed `QCMetrics` columns.
+
+## 5. `nextflow_schema.json` → `RunbookProfile` shape
+
+Structure: `$schema` Draft-2020-12, params stay flat but grouped via `$defs` + `allOf`;
+each param supports `type/default/description/enum/pattern/minimum/maximum/format/
+fa_icon/help_text/hidden/errorMessage`. The one schema drives CLI validation, the web
+launcher **form**, and `--help`.
+
+- **ADOPT:** model `RunbookProfile` on this shape — grouped, typed, self-documenting
+  thresholds → **auto-generated config forms** (Streamlit now, React later). Persist the
+  resolved profile like `params_<ts>.json`; every `DecisionCard` cites its exact version.
+- **DIVERGE:** JSON-Schema `minimum`/`maximum` is a hard boolean; the gate needs the
+  **three-way HOLD/RERUN/PROCEED** (`gate`/`hard_fail`/`borderline_band`/`higher_is_better`).
+  Borrow the envelope; keep gate keywords first-class.
+
+## 6. sarek germline outputs → `ArtifactRef`
+
+`csv/*.csv` recaps (`mapped.csv`, `markduplicates.csv`, `recalibrated.csv`,
+`variantcalled.csv` — `patient,sample,...,path`) are machine-readable manifests. Reports:
+`reports/{fastqc,fastp,mosdepth,markduplicates,samtools,bcftools,vcftools,ngscheckmate}/`.
+Coverage → `mosdepth.summary.txt` (`total`/`total_region` row). **Contamination/identity:
+sarek germline uses NGSCheckMate (`ngscheckmate_matched.txt`) for swap/relatedness +
+sex-vs-coverage; GATK `CalculateContamination` (`*.contamination.table`) is somatic-only.**
+Naming grammar: `<sample>.<caller>[.<stage>].<ext>`.
+
+- **ADOPT:** parse the `csv/*.csv` recaps directly (not tree-globbing);
+  `ArtifactRef(path, kind, sample_id, patient_id, caller, stage, checksum, size)` with
+  `kind ∈ {fastq, recal_cram, recal_table, mosdepth_summary, fastp_json, markdup_metrics,
+  samtools_stats, vcf, gvcf, filtered_vcf, joint_vcf, ngscheckmate, multiqc_json,
+  versions_yml, params_json, execution_trace}`.
+- **DIVERGE:** nf-core has **no artifact registry** (provenance implicit in paths) — add
+  explicit `ArtifactRef` with `checksum`/`kind` so a `Finding` cites "computed from *this*
+  file at *this* hash." Recaps list only primary files; parse `reports/` by naming grammar.
+
+## Mapping summary
+
+| PipeGuard record | nf-core source of truth | Key fields |
+|---|---|---|
+| `Sample` | samplesheet cols + meta | `patient`(=subject_key), `sample`, `sex`, `status`, `lane`, `num_lanes` |
+| `ArtifactRef` | `csv/*.csv` recaps + `reports/` grammar | `path`, `kind`, `sample_id`, `patient_id`, `caller`, `stage`, `checksum` |
+| `MetricValue` | `multiqc_data.json` general-stats / raw-data / sources | `sample_id`, `metric_key`, `value`, `unit`, `module`, `source_file` |
+| `AnalysisRun` manifest | `pipeline_info/` (versions, params, trace) | `pipeline_version`, `nextflow_version`, `params_hash`, `tool_versions`, `session_id`, `commit` |
+| `RunbookProfile` | `nextflow_schema.json` `$defs`/keywords | grouped typed thresholds + `gate`/`hard_fail`/`borderline_band`/`higher_is_better` |
+
+## Takeaways
+
+1. Adopt vocabulary, not the validation *stance* (inputs vs outputs).
+2. `Sample` ← samplesheet + csv recap, not the runtime meta map (only `id`/`single_end` guaranteed).
+3. `MetricValue` mirrors `report_general_stats_data`, but **pin a canonical metric registry** (keys drift).
+4. `AnalysisRun` is `pipeline_info/` typed; `execution_trace.txt` status/exit replaces the log-substring failure scan.
+5. `ArtifactRef` ingests the `csv/*.csv` recaps + adds `checksum`/`kind` for gate-grade provenance.
+6. `RunbookProfile` borrows the form-generating schema shape but keeps the three-way gate keywords.
+7. **Panel-specific:** prefer Picard **CollectHsMetrics** over WGS metrics; use **NGSCheckMate** + sex-vs-coverage as the germline contamination/mix-up signals (`CalculateContamination` is somatic-only in sarek).
+
+Primary sources: [sarek usage](https://nf-co.re/sarek/latest/docs/usage) · [sarek output](https://nf-co.re/sarek/latest/docs/output) · [schema_input.json](https://github.com/nf-core/sarek/blob/master/assets/schema_input.json) · [nextflow_schema.json](https://github.com/nf-core/sarek/blob/master/nextflow_schema.json) · [meta-map](https://nf-co.re/docs/developing/components/meta-map) · [module guidelines](https://nf-co.re/docs/guidelines/components/modules) · [nf-schema spec](https://nextflow-io.github.io/nf-schema/latest/nextflow_schema/nextflow_schema_specification/) · [MultiQC reports](https://github.com/MultiQC/MultiQC/blob/main/docs/markdown/reports/reports.md) · [MultiQC scripts](https://docs.seqera.io/multiqc/usage/scripts)

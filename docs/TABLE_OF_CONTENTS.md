@@ -75,6 +75,7 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [data/qc_metrics.md](data/qc_metrics.md) | ✅ | QC metric set and gate thresholds (the decided runbook) |
 | [data/qc_metrics-sources.md](data/qc_metrics-sources.md) | ✅ | Grounded reference: verified field names + cited thresholds |
 | [data/qc_metrics-rare-disease.md](data/qc_metrics-rare-disease.md) | ✅ | Rare-disease gold standards: depth/breadth, cancer/pathogen comparison, tool licenses |
+| [data/nf-core-conventions.md](data/nf-core-conventions.md) | ✅ | nf-core/sarek conventions → schema records (sample sheet, versions, MultiQC, artifacts) |
 | [data/provenance.md](data/provenance.md) | 📝 | I/O lineage model and ledger format |
 | [data/licensing.md](data/licensing.md) | 📝 | Per-tool licenses in the stack |
 
