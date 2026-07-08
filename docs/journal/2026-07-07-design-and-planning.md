@@ -100,6 +100,9 @@ this pass. `archive/session-1` keeps the untouched originals (local only).
 | pyproject/uv single source; mypy/ruff; hook tiers | [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md) |
 | Agent scoping + per-agent model tiering | [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) |
 | Documentation workflow (templates, ToC, tracker, naming) | this pass |
+| Gate architecture + surface-and-decide verdict policy | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md) |
+| QC runbook (breadth-first, per-assay, cited) | [qc_metrics.md](../data/qc_metrics.md) (+ grounding: qc_metrics-sources / -rare-disease / nf-core-conventions) |
+| Data schema + metric registry (records, events, persistence) | [schemas.md](../data/schemas.md) · [metric_registry.md](../data/metric_registry.md) |
 
 ## Open questions & TODO
 

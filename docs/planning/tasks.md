@@ -51,7 +51,7 @@ estimates — adjusted as we go.
 | T-005 | `design/architecture.md` + system-view docs (context, components, data-flow, interfaces, storage, workflows, deployment) | 1 | todo | partial | T-002 |
 | T-006 | `design/configuration.md` (profiles) | 1 | todo | yes | — |
 | T-007 | `design/structure.md` (repo + data map) | 1 | todo | yes | — |
-| T-008 | `data/{schemas,provenance,licensing}.md` | 1 | todo | yes | — |
+| T-008 | `data/{provenance,licensing}.md` (schemas.md + metric_registry.md ✅) | 1 | in-progress | yes | — |
 | T-009 | `quality/{evaluation,risks}.md` + `demo/demo_plan.md` | 1 | todo | yes | T-002 |
 | T-010 | ADR-pending → ADR-0008–0012 (issue-taxonomy, corpora, ticketing/API, tooling, agent-scoping) | 1 | done | yes | — |
 | T-011 | Fresh production-framed `README.md` | 1 | todo | no | T-005 |
