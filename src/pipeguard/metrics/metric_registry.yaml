@@ -1,0 +1,336 @@
+# PipeGuard metric registry — the canonical metric vocabulary (docs/data/metric_registry.md).
+#
+# WHY this file exists: it is the stable layer *above* drifting MultiQC/tool keys. A
+# `MetricValue` records an observed number; this registry defines what that number
+# *means* (its canonical unit, direction, and source contract). `aliases[]` shields a
+# gate from MultiQC key renames — a key change maps back to the same `our_key` instead
+# of silently dropping a metric.
+#
+# WHY it lives in-package (src/pipeguard/metrics/): it ships inside the wheel so
+# `importlib.resources` loads it in a non-editable install — the same pattern as the
+# triage knowledge corpus (pyproject `[tool.setuptools.package-data]`).
+#
+# Seeded from the "Seed registry" table in docs/data/metric_registry.md. This is an
+# ADDITIVE artifact: parsers/rules/runbook do NOT consume it yet (deferred — needs
+# maintainer sign-off on the critical-path rewire). `metric_registry_version` bumps
+# deliberately and is pinned on every AnalysisRun.
+#
+# NOTE on units and the MultiQC pct trap (metric_registry.md rule 3): a `pct_*`-named
+# key does NOT tell you the scale. fastp/Picard raw fields are fractions (0-1) while the
+# same logical metric arriving via MultiQC general-stats is a percent (0-100). So each
+# entry declares `raw_units_allowed` and normalization keys on the *caller-supplied*
+# raw_unit, never on the field name. `qc.breadth_20x` below is the canonical example:
+# Picard `PCT_TARGET_BASES_20X` is a fraction, mosdepth-via-MultiQC `20_x_pc` is a percent.
+
+metric_registry_version: 1
+
+metrics:
+  preflight.phix_aligned:
+    display_name: PhiX aligned
+    gate: preflight
+    category: run_qc
+    canonical_unit: percent
+    value_type: float
+    direction: higher_is_better
+    source:
+      module: sav_interop
+      source_file: InterOp
+      raw_field: PhiX Aligned
+    raw_units_allowed: [percent]
+    parser: sav_interop
+    parser_version: null
+    aliases: [phix_aligned]
+
+  qc.q30:
+    display_name: Q30 (post-filter)
+    gate: qc
+    category: base_quality
+    canonical_unit: fraction
+    value_type: float
+    direction: higher_is_better
+    source:
+      module: fastp
+      source_file: fastp.json
+      json_path: summary.after_filtering.q30_rate
+      raw_field: after_filtering_q30_rate
+    raw_units_allowed: [fraction, percent]
+    parser: fastp_json
+    parser_version: null
+    aliases: [q30_rate, percent_q30]
+
+  qc.reads_passing_filter:
+    display_name: Reads passing filter
+    gate: qc
+    category: yield
+    canonical_unit: fraction
+    value_type: float
+    direction: higher_is_better
+    source:
+      module: fastp
+      source_file: fastp.json
+      raw_field: pct_surviving
+    raw_units_allowed: [fraction, percent]
+    parser: fastp_json
+    parser_version: null
+    aliases: [filtering_result_passed_filter_reads]
+
+  qc.duplication:
+    display_name: Duplication rate
+    gate: qc
+    category: duplication
+    canonical_unit: fraction
+    value_type: float
+    direction: lower_is_better
+    source:
+      module: picard_markduplicates
+      source_file: markdup_metrics
+      raw_field: PERCENT_DUPLICATION
+    # Picard PERCENT_DUPLICATION is a fraction (0-1) despite the name; the
+    # MultiQC-surfaced pct_duplication / percent_duplicates variants are percents.
+    raw_units_allowed: [fraction, percent]
+    parser: picard_markdup
+    parser_version: null
+    aliases: [pct_duplication, percent_duplicates]
+
+  qc.pct_mapped:
+    display_name: Mapped reads
+    gate: qc
+    category: alignment
+    canonical_unit: fraction
+    value_type: float
+    direction: higher_is_better
+    source:
+      module: samtools
+      source_file: samtools_flagstat
+      raw_field: mapped_passed_pct
+    raw_units_allowed: [fraction, percent]
+    parser: samtools_flagstat
+    parser_version: null
+    aliases: [reads_mapped_percent]
+
+  qc.on_target:
+    display_name: On-target rate
+    gate: qc
+    category: enrichment
+    canonical_unit: fraction
+    value_type: float
+    direction: higher_is_better
+    source:
+      module: picard_collecthsmetrics
+      source_file: hs_metrics
+      raw_field: PCT_SELECTED_BASES
+    raw_units_allowed: [fraction, percent]
+    parser: picard_hsmetrics
+    parser_version: null
+    aliases: [pct_selected_bases]
+
+  qc.mean_target_coverage:
+    display_name: Mean target coverage
+    gate: qc
+    category: coverage
+    canonical_unit: x
+    value_type: float
+    direction: higher_is_better
+    source:
+      module: picard_collecthsmetrics
+      source_file: hs_metrics
+      raw_field: MEAN_TARGET_COVERAGE
+    raw_units_allowed: [x]
+    parser: picard_hsmetrics
+    parser_version: null
+    aliases: [mean_coverage]
+
+  qc.breadth_20x:
+    display_name: Breadth of coverage (>= 20x)
+    gate: qc
+    category: coverage
+    canonical_unit: fraction
+    value_type: float
+    direction: higher_is_better
+    source:
+      module: picard_collecthsmetrics
+      source_file: hs_metrics
+      raw_field: PCT_TARGET_BASES_20X
+    # The canonical pct trap: Picard PCT_TARGET_BASES_20X is a fraction, but the same
+    # metric via mosdepth/MultiQC (`20_x_pc`) is a percent — hence both units allowed.
+    raw_units_allowed: [fraction, percent]
+    parser: picard_hsmetrics
+    parser_version: null
+    aliases: [20_x_pc]
+
+  qc.breadth_30x:
+    display_name: Breadth of coverage (>= 30x)
+    gate: qc
+    category: coverage
+    canonical_unit: fraction
+    value_type: float
+    direction: higher_is_better
+    source:
+      module: picard_collecthsmetrics
+      source_file: hs_metrics
+      raw_field: PCT_TARGET_BASES_30X
+    raw_units_allowed: [fraction, percent]
+    parser: picard_hsmetrics
+    parser_version: null
+    aliases: [30_x_pc]
+
+  qc.zero_cov_targets:
+    display_name: Zero-coverage targets
+    gate: qc
+    category: coverage
+    canonical_unit: fraction
+    value_type: float
+    direction: lower_is_better
+    source:
+      module: picard_collecthsmetrics
+      source_file: hs_metrics
+      raw_field: ZERO_CVG_TARGETS_PCT
+    raw_units_allowed: [fraction, percent]
+    parser: picard_hsmetrics
+    parser_version: null
+    aliases: [zero_cvg_targets_pct]
+
+  qc.fold_enrichment:
+    display_name: Fold enrichment
+    gate: qc
+    category: enrichment
+    canonical_unit: ratio
+    value_type: float
+    direction: target_band
+    source:
+      module: picard_collecthsmetrics
+      source_file: hs_metrics
+      raw_field: FOLD_ENRICHMENT
+    raw_units_allowed: [ratio]
+    parser: picard_hsmetrics
+    parser_version: null
+    aliases: [fold_enrichment]
+
+  qc.fold_80:
+    display_name: Fold-80 base penalty
+    gate: qc
+    category: uniformity
+    canonical_unit: ratio
+    value_type: float
+    direction: lower_is_better
+    source:
+      module: picard_collecthsmetrics
+      source_file: hs_metrics
+      raw_field: FOLD_80_BASE_PENALTY
+    raw_units_allowed: [ratio]
+    parser: picard_hsmetrics
+    parser_version: null
+    aliases: [fold_80_base_penalty]
+
+  identity.ngscheckmate_match:
+    display_name: NGSCheckMate identity match
+    gate: qc
+    category: identity
+    canonical_unit: bool
+    value_type: bool
+    direction: higher_is_better
+    source:
+      module: ngscheckmate
+      source_file: ngscheckmate_matched.txt
+      raw_field: matched
+    raw_units_allowed: [bool]
+    parser: ngscheckmate
+    parser_version: null
+    aliases: [ngscheckmate_matched]
+
+  identity.sex_concordance:
+    display_name: Sex concordance
+    gate: qc
+    category: identity
+    canonical_unit: bool
+    value_type: bool
+    direction: higher_is_better
+    source:
+      module: mosdepth
+      source_file: mosdepth_summary
+      raw_field: sex_concordant
+    raw_units_allowed: [bool]
+    parser: sex_check
+    parser_version: null
+    aliases: [sex_concordant]
+
+  contamination.freemix:
+    display_name: Contamination (FREEMIX)
+    gate: qc
+    category: contamination
+    canonical_unit: fraction
+    value_type: float
+    direction: lower_is_better
+    # Optional / non-sarek-default: verifybamid2 is not in the sarek default profile.
+    source:
+      module: verifybamid2
+      source_file: selfSM
+      raw_field: FREEMIX
+    raw_units_allowed: [fraction]
+    parser: verifybamid2
+    parser_version: null
+    aliases: [freemix]
+
+  variant.dp:
+    display_name: Genotype depth (DP)
+    gate: variant
+    category: depth
+    canonical_unit: x
+    value_type: int
+    direction: higher_is_better
+    source:
+      module: vcf
+      source_file: vcf
+      raw_field: FORMAT/DP
+    raw_units_allowed: [x]
+    parser: vcf_format
+    parser_version: null
+    aliases: [dp]
+
+  variant.gq:
+    display_name: Genotype quality (GQ)
+    gate: variant
+    category: genotype_quality
+    canonical_unit: phred
+    value_type: int
+    direction: higher_is_better
+    source:
+      module: vcf
+      source_file: vcf
+      raw_field: FORMAT/GQ
+    raw_units_allowed: [phred]
+    parser: vcf_format
+    parser_version: null
+    aliases: [gq]
+
+  variant.allele_balance:
+    display_name: Allele balance
+    gate: variant
+    category: genotype_quality
+    canonical_unit: fraction
+    value_type: float
+    direction: target_band
+    source:
+      module: vcf
+      source_file: vcf
+      raw_field: FORMAT/AD
+    raw_units_allowed: [fraction]
+    parser: vcf_allele_balance
+    parser_version: null
+    aliases: [ab, allele_balance]
+
+  variant.titv:
+    display_name: Ts/Tv ratio
+    gate: variant
+    category: sanity
+    canonical_unit: ratio
+    value_type: float
+    direction: target_band
+    source:
+      module: bcftools
+      source_file: bcftools_stats
+      raw_field: ts/tv
+    raw_units_allowed: [ratio]
+    parser: bcftools_stats
+    parser_version: null
+    aliases: [ts_tv, titv]
