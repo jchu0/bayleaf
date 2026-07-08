@@ -39,7 +39,7 @@ SEVERITY_ICON = {"critical": "🔴", "warn": "🟠", "info": "🔵"}
 st.set_page_config(page_title="PipeGuard — Decision Gate", page_icon="🧬", layout="wide")
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False)  # type: ignore[untyped-decorator]
 def _load(run_dir: str) -> RunArtifacts:
     return load_run(run_dir)
 
@@ -53,7 +53,9 @@ def _verdict_badge(verdict: str) -> str:
 
 
 def _render_card(card: DecisionCard) -> None:
-    emoji, color, label = VERDICT_STYLE.get(card.verdict.value, ("⚪", "#57606a", card.verdict.value))
+    emoji, _color, label = VERDICT_STYLE.get(
+        card.verdict.value, ("⚪", "#57606a", card.verdict.value)
+    )
     open_by_default = card.is_actionable
     header = f"{emoji}  {card.sample_id} — {label.upper()}  ·  {card.headline}"
 
@@ -106,7 +108,9 @@ def main() -> None:
     # --- Sidebar: run selection + synthesizer status ---
     with st.sidebar:
         st.header("Run")
-        runs = sorted(p.name for p in DATA_ROOT.iterdir() if p.is_dir()) if DATA_ROOT.exists() else []
+        runs = (
+            sorted(p.name for p in DATA_ROOT.iterdir() if p.is_dir()) if DATA_ROOT.exists() else []
+        )
         default_idx = runs.index("mock_run_01") if "mock_run_01" in runs else 0
         run_name = st.selectbox("Sequencing run", runs, index=default_idx) if runs else None
 
@@ -128,14 +132,14 @@ def main() -> None:
     cards = run_gate(artifacts, synthesizer=synth)
 
     # --- Summary strip ---
-    counts = {k: 0 for k in VERDICT_STYLE}
+    counts = dict.fromkeys(VERDICT_STYLE, 0)
     for c in cards:
         counts[c.verdict.value] = counts.get(c.verdict.value, 0) + 1
 
     st.subheader(f"Run `{artifacts.run_id}` — {len(cards)} samples")
     cols = st.columns(5)
     cols[0].metric("Samples", len(cards))
-    for col, verdict in zip(cols[1:], ("proceed", "hold", "rerun", "escalate")):
+    for col, verdict in zip(cols[1:], ("proceed", "hold", "rerun", "escalate"), strict=True):
         emoji, _, label = VERDICT_STYLE[verdict]
         col.metric(f"{emoji} {label}", counts.get(verdict, 0))
 

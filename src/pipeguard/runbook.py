@@ -50,7 +50,9 @@ class Runbook(BaseModel):
                 hard_fail=15.0,
                 unit="x",
             ),
-            QCThreshold(metric="cluster_pf", label="Cluster PF", gate=80.0, hard_fail=60.0, unit="%"),
+            QCThreshold(
+                metric="cluster_pf", label="Cluster PF", gate=80.0, hard_fail=60.0, unit="%"
+            ),
             QCThreshold(
                 metric="dup_rate",
                 label="Duplication rate",

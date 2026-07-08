@@ -144,7 +144,12 @@ def _check_metadata(sid: str, meta: Sample | None, runbook: Runbook) -> Finding 
             f"Incomplete provenance metadata blocks downstream traceability."
         ),
         evidence=[
-            Evidence(source="sample_metadata.csv", locator=f"sample_id={sid}", value=f, expected="present")
+            Evidence(
+                source="sample_metadata.csv",
+                locator=f"sample_id={sid}",
+                value=f,
+                expected="present",
+            )
             for f in missing
         ],
         suggested_verdict=Verdict.HOLD,
@@ -159,7 +164,11 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, value: float | None) -> F
             severity=Severity.WARN,
             title=f"{threshold.label} is missing",
             detail=f"No {threshold.label} value was reported for {sid}.",
-            evidence=[Evidence(source="qc_metrics.csv", locator=f"{sid}.{threshold.metric}", value="missing")],
+            evidence=[
+                Evidence(
+                    source="qc_metrics.csv", locator=f"{sid}.{threshold.metric}", value="missing"
+                )
+            ],
             suggested_verdict=Verdict.HOLD,
         )
 
@@ -223,7 +232,10 @@ def _check_log(sid: str, log_lines: list[str], runbook: Runbook) -> Finding | No
         severity=Severity.CRITICAL,
         title="Pipeline logged a failure for this sample",
         detail=f"The run log contains {len(hits)} failure marker(s) referencing {sid}.",
-        evidence=[Evidence(source="pipeline.log", locator="matched line", value=line.strip()) for line in hits[:5]],
+        evidence=[
+            Evidence(source="pipeline.log", locator="matched line", value=line.strip())
+            for line in hits[:5]
+        ],
         suggested_verdict=Verdict.RERUN,
     )
 

@@ -5,9 +5,9 @@ from .claude import ClaudeSynthesizer
 from .stub import StubSynthesizer
 
 __all__ = [
-    "Synthesizer",
-    "StubSynthesizer",
     "ClaudeSynthesizer",
+    "StubSynthesizer",
+    "Synthesizer",
     "aggregate_verdict",
     "derive_confidence",
 ]

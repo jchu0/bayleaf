@@ -50,7 +50,9 @@ class Evidence(BaseModel):
     source: str = Field(..., description="Artifact the evidence came from, e.g. 'SampleSheet.csv'")
     locator: str | None = Field(None, description="Row/field/line pointer within the source")
     value: str | None = Field(None, description="The observed value or excerpt")
-    expected: str | None = Field(None, description="The expected value or threshold, when applicable")
+    expected: str | None = Field(
+        None, description="The expected value or threshold, when applicable"
+    )
 
 
 class Finding(BaseModel):
@@ -84,7 +86,9 @@ class DecisionCard(BaseModel):
     rationale: str
     next_steps: list[str] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
-    generated_by: str = Field("stub", description="'stub' or 'claude' — provenance of the narration")
+    generated_by: str = Field(
+        "stub", description="'stub' or 'claude' — provenance of the narration"
+    )
 
     @property
     def is_actionable(self) -> bool:

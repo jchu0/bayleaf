@@ -16,6 +16,7 @@ gate is supposed to catch.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -111,7 +112,9 @@ def parse_sample_sheet(path: Path) -> list[SampleSheetEntry]:
     entries: list[SampleSheetEntry] = []
     for raw in block[1:]:
         cells = [c.strip() for c in raw.split(",")]
-        record = dict(zip(header_cols, cells))
+        # Tolerant zip: a row with fewer/more cells than the header is a data
+        # signal handled downstream (missing sample_id -> skip), not a crash.
+        record = dict(zip(header_cols, cells, strict=False))
         sample_id = _clean(record.get("sample_id"))
         if sample_id is None:
             continue
@@ -176,7 +179,7 @@ def parse_log(path: Path) -> list[str]:
     return [line for line in path.read_text().splitlines() if line.strip()]
 
 
-def _first_present(columns: object, candidates: list[str]) -> str | None:
+def _first_present(columns: Iterable[str], candidates: list[str]) -> str | None:
     cols = list(columns)
     return next((c for c in candidates if c in cols), None)
 

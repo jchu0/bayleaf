@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Any
 
 from ..models import DecisionCard, Finding, RunArtifacts
 from .base import Synthesizer, aggregate_verdict, derive_confidence
@@ -66,14 +67,14 @@ class ClaudeSynthesizer:
         self._fallback = StubSynthesizer()
         self._client = None  # created lazily on first use
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         if self._client is None:
             import anthropic  # lazy: package works without anthropic installed
 
             self._client = anthropic.Anthropic()  # resolves credentials from env
         return self._client
 
-    def _sample_context(self, sample_id: str, artifacts: RunArtifacts) -> dict:
+    def _sample_context(self, sample_id: str, artifacts: RunArtifacts) -> dict[str, Any]:
         """A compact, model-friendly snapshot of one sample's raw artifacts."""
         meta = next((s for s in artifacts.samples if s.sample_id == sample_id), None)
         sheet = next((e for e in artifacts.sample_sheet if e.sample_id == sample_id), None)

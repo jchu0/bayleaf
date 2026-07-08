@@ -14,13 +14,47 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Feature extras, installed on demand. app = the Streamlit demo view;
+# claude = live synthesis (OFF by default — see pipeguard.synthesis).
 app = ["streamlit>=1.31"]
 claude = ["anthropic>=0.40", "python-dotenv>=1.0"]
-dev = ["pytest>=8.0"]
+
+[dependency-groups]
+# Dev toolchain (PEP 735; installed by default on `uv sync`).
+dev = [
+    "pytest>=8.0",
+    "mypy>=1.11",
+    "ruff>=0.6",
+    "pre-commit>=3.8",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+# No pythonpath shim — the package is installed editable via `uv sync`.
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pipeguard"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src", "app"]
+strict = true
+plugins = ["pydantic.mypy"]
+
+# Third-party libs — treat as opaque at the boundary (don't type-check their
+# internals; their bundled stubs also assume a newer target than our 3.10 floor).
+[[tool.mypy.overrides]]
+module = ["streamlit.*", "anthropic.*", "pandas.*", "numpy.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
