@@ -33,6 +33,11 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# Ship the curated triage knowledge corpus (ADR-0009) inside the wheel so
+# importlib.resources can load it in a non-editable install.
+pipeguard = ["triage/knowledge/*.jsonl"]
+
 [tool.pytest.ini_options]
 # `pipeguard` is imported from the editable install (no src shim). "." puts the
 # repo root on the path so tests can import the top-level app-layer packages

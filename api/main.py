@@ -18,9 +18,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate
+from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
 from pipeguard.models import DecisionCard
 from pipeguard.provenance import ProvenanceEvent
+from pipeguard.triage import TriageNote
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
@@ -107,6 +108,25 @@ def get_card(run_id: str, sample_id: str) -> DecisionCard:
     if card is None:
         raise HTTPException(status_code=404, detail=f"Unknown sample '{sample_id}'")
     return card
+
+
+@app.get("/api/runs/{run_id}/cards/{sample_id}/triage")
+def get_card_triage(run_id: str, sample_id: str) -> TriageNote:
+    """Advisory QC-triage note for a flagged sample (ADR-0009); 404 if clean/unknown.
+
+    Read-only and OFF the deterministic critical path (ADR-0001): the note suggests a
+    likely cause + next action and cites the corpus, but never sets a verdict. Uses the
+    offline stub agent by default (set PIPEGUARD_TRIAGE_AGENT=claude to go live).
+    """
+    card = next((c for c in _evaluate(run_id).cards if c.sample_id == sample_id), None)
+    if card is None:
+        raise HTTPException(status_code=404, detail=f"Unknown sample '{sample_id}'")
+    note = triage_card(card)
+    if note is None:
+        raise HTTPException(
+            status_code=404, detail=f"Sample '{sample_id}' is clean; no triage note"
+        )
+    return note
 
 
 @app.get("/api/config")
