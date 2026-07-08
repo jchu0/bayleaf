@@ -73,6 +73,23 @@ class SourceKind(str, Enum):
     HUMAN_NOTE = "human_note"
 
 
+class CanonicalUnit(str, Enum):
+    """The unit a metric is normalized *to* (metric_registry.md `canonical_unit`).
+
+    Defined here, next to the other core-vocabulary enums, because it is part of the
+    `MetricValue` contract. The metric registry (`pipeguard.metrics`) is the authority
+    on which unit each `our_key` normalizes to; this enum is just the closed set.
+    """
+
+    FRACTION = "fraction"  # 0-1
+    PERCENT = "percent"  # 0-100
+    X = "x"  # fold coverage (e.g. 150x)
+    RATIO = "ratio"  # dimensionless ratio (fold-enrichment, Ts/Tv)
+    PHRED = "phred"  # phred-scaled quality
+    COUNT = "count"  # integer count
+    BOOL = "bool"  # 0/1 truth value
+
+
 # Which gate owns each category (ADR-0013 three-gate model). Provenance (barcode /
 # index integrity), intake metadata, and pipeline/operational failures are caught at
 # preflight; QC metrics and sample identity/swap (NGSCheckMate) are the QC gate;
@@ -289,6 +306,68 @@ class QCMetrics(BaseModel):
     mean_coverage: float | None = None
     dup_rate: float | None = None
     cluster_pf: float | None = None
+
+
+class MetricValue(BaseModel):
+    """One observed metric, normalized against the metric registry (schemas.md #6).
+
+    A `MetricValue` is a *fact*: the raw number a tool emitted (`raw_value` in
+    `raw_unit`) plus its value in the registry's `canonical_unit` (`normalized_value`).
+    It is treated as immutable — hence `frozen` and a `content_hash` identity.
+
+    Self-containment (ADR-0007): `canonical_unit` and `metric_registry_version` are
+    *snapshotted onto the record*, not dereferenced from the registry at read time, so
+    a ledger row is standalone-interpretable for ML/audit without loading the registry
+    that produced it. The registry (`pipeguard.metrics`) is what *computes*
+    `normalized_value` at observe-time — this model only stores the result, which is why
+    it round-trips cleanly through `model_dump(mode="json")` with no registry present.
+
+    ADDITIVE: parsers/rules do not emit these yet (deferred critical-path rewire). The
+    intended constructor is `MetricRegistry.observe(...)`, which validates `metric_key`
+    against the controlled vocabulary and fills the normalized/snapshot fields.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(default_factory=lambda: new_id("metric"))
+    sample_id: str
+    metric_key: str = Field(..., description="Registry `our_key` (controlled vocabulary)")
+    gate: Gate
+    raw_value: float = Field(..., description="Value as the tool emitted it, in `raw_unit`")
+    raw_unit: str = Field(..., description="Unit of `raw_value` (e.g. percent, fraction, x)")
+    normalized_value: float = Field(..., description="`raw_value` converted to `canonical_unit`")
+    # Snapshotted from the registry for standalone readability (ADR-0007):
+    canonical_unit: CanonicalUnit
+    metric_registry_version: int
+    analysis_run_id: str | None = None
+    source_artifact_id: str | None = Field(None, description="Artifact the value was parsed from")
+    source_field: str | None = Field(None, description="Exact field/column within the source")
+    source_locator: str | None = Field(None, description="Row/line/path pointer within the source")
+    parser_version: str | None = None
+    schema_version: int = SCHEMA_VERSION
+    created_at: datetime = Field(default_factory=utc_now)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def content_hash(self) -> str:
+        """Stable identity over the observation (excludes `id`/`created_at`)."""
+        return _content_hash(
+            {
+                "sample_id": self.sample_id,
+                "metric_key": self.metric_key,
+                "gate": self.gate.value,
+                "raw_value": self.raw_value,
+                "raw_unit": self.raw_unit,
+                "normalized_value": self.normalized_value,
+                "canonical_unit": self.canonical_unit.value,
+                "metric_registry_version": self.metric_registry_version,
+                "analysis_run_id": self.analysis_run_id,
+                "source_artifact_id": self.source_artifact_id,
+                "source_field": self.source_field,
+                "source_locator": self.source_locator,
+                "parser_version": self.parser_version,
+            }
+        )
 
 
 class SampleSheetEntry(BaseModel):

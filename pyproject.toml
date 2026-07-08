@@ -11,6 +11,10 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.6",
     "pandas>=2.1",
+    # Loads the versioned metric_registry.yaml (pipeguard.metrics). Already present
+    # transitively via the toolchain; declared directly so the core's dependency on
+    # it is explicit and pinned for a reproducible demo rather than incidental.
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -28,15 +32,20 @@ dev = [
     "ruff>=0.6",
     "pre-commit>=3.8",
     "pip-audit>=2.7", # batch-tier dependency vulnerability scan (`make audit`)
+    # Real stubs for pyyaml (it ships no py.typed). Preferred over a mypy override so
+    # the registry loader's yaml calls stay type-checked under strict mypy — the same
+    # reasoning that keeps `anthropic` off the override list.
+    "types-PyYAML>=6.0",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-# Ship the curated triage knowledge corpus (ADR-0009) inside the wheel so
-# importlib.resources can load it in a non-editable install.
-pipeguard = ["triage/knowledge/*.jsonl"]
+# Ship the curated triage knowledge corpus (ADR-0009) and the versioned metric
+# registry inside the wheel so importlib.resources can load them in a non-editable
+# install.
+pipeguard = ["triage/knowledge/*.jsonl", "metrics/*.yaml"]
 
 [tool.pytest.ini_options]
 # `pipeguard` is imported from the editable install (no src shim). "." puts the
