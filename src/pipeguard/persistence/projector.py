@@ -9,10 +9,10 @@ function of the ledger*:
 
 Only the current event vocabulary is projected (`analysis_run.started/completed`,
 `sample.registered`, `finding.emitted`, `verdict.decided`); reserved event types
-(`run.registered`, `artifact.ingested`, `metric.parsed`, ticket/resolution) are
-still recorded verbatim in `provenance_events` — they gain projected rows when
-their producers land in Phase 2. Nothing is invented: a row carries only what the
-event snapshotted.
+(`run.registered`, `artifact.ingested`, `metric.parsed`, `notification.emitted`,
+ticket/resolution) are still recorded verbatim in `provenance_events` — they gain
+projected rows when their producers land in Phase 2. Nothing is invented: a row
+carries only what the event snapshotted.
 """
 
 from __future__ import annotations
