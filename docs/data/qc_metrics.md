@@ -84,6 +84,17 @@ Out of gate scope (no dedicated caller — wishlist). But the coverage-uniformit
 allele-balance signals above let the QC-triage agent make **advisory** CNV/dropout or
 mosaic-suggestive observations (agent depth) — without asserting a call.
 
+## Sample type
+
+Thresholds are also **sample-type-aware** (scope: **whole blood**, **saliva**).
+Saliva carries oral-microbiome DNA, so vs. blood it typically shows **lower
+human-mapped %, lower on-target rate, and lower/variable human yield** — loosen the
+mapping / on-target / yield gates for saliva. This is **microbial** content, *not*
+cross-sample human contamination: VerifyBamID2 `FREEMIX` (SNP-based, human–human) is
+largely unaffected, so the contamination gate is unchanged. `sample_type` is a
+first-class metadata field (feeds the record schema); a runbook profile keys on
+**assay × sample type**.
+
 ## Platform matrix — Illumina % ≥ Q30 (vendor RUO spec, not a clinical gate)
 
 | Platform | Read length → expected % ≥ Q30 |
@@ -97,7 +108,8 @@ The Q30 gate = the platform × read-length expected value, operator-adjustable.
 
 ## Config model & test-data validation
 
-Thresholds live in an operator-owned runbook **profile** (per assay). We ship two:
+Thresholds live in an operator-owned runbook **profile** keyed on **assay × sample
+type** (whole blood / saliva). We ship two:
 1. A **guideline-default profile** — the cited defaults above.
 2. A concrete **test-data profile** tuned to our GIAB HG002 panel-subset — **pending
    [T-017](../planning/tasks.md)** (fetch a small real FASTQ→BAM). This gives the gate

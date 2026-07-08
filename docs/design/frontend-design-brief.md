@@ -39,7 +39,7 @@ future: a bench scientist who runs pipelines without the terminal.)
 2. **Decision card (per sample) — the hero.** Verdict badge, one-line headline,
    short rationale, recommended next steps, a **cited-evidence table**
    (source file · value · expected), and a **confidence indicator labeled as a
-   heuristic** (not a probability). Reads as "here's the call, and exactly why."
+   heuristic** (not a probability), plus the **sample type** (whole blood / saliva). Reads as "here's the call, and exactly why." QC expectations are sample-type-aware — saliva carries more off-target microbial content than blood.
 3. **Review queue (human-in-the-loop).** Cards-as-tickets with status
    (open → in-review → resolved); actions to **acknowledge/suppress an issue class**
    (so it stops re-prompting), **escalate**, and resolve; a hint at tiered access
