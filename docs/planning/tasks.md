@@ -62,3 +62,4 @@ estimates — adjusted as we go.
 | T-016 | Data strategy doc + label mock_run_01 origin | 1 | done | yes | — |
 | T-017 | Small real test FASTQ→BAM data (panel-region subset) for coverage/contam gates | 2 | todo | partial | T-002 |
 | T-018 | Frontend design brief + clickable prototype (`design/frontend/`) | 1 | done | yes | — |
+| T-019 | Align confidence to "omit until grounded" (models.py `confidence` → Optional/None, drop demo Confidence tile, update README:32/:105) — part of the models→schemas.md rework | 1 | todo | no | T-008 |
