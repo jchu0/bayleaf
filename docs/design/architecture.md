@@ -61,6 +61,13 @@ Every finding and verdict is labelled with the gate it came from:
 4. **Delivery layers (thin, over the core).** `app/` Streamlit (offline demo / fallback);
    `api/` FastAPI read-API (the production seam); `frontend/` React (run overview → decision
    cards + triage → provenance → monitoring/settings).
+5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
+   turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
+   notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
+   the cited observed-vs-expected evidence. Like every other seam it **formats what the gate
+   decided, never a verdict** (ADR-0001): stub-first ($0, in-memory), Slack adapter off by
+   default, live post armed only by `PIPEGUARD_SLACK_LIVE`, and every send recorded as a
+   `notification.emitted` ledger event. `python -m pipeguard.notify <run_dir>` is the CLI.
 
 ## Data flow
 
@@ -83,6 +90,7 @@ triage agent is invoked on demand per flagged card and never re-enters the verdi
 |---|---|---|
 | Synthesizer (narration) | `PIPEGUARD_SYNTHESIZER=stub\|claude` | stub ($0) |
 | Triage agent | `PIPEGUARD_TRIAGE_AGENT=stub\|claude` | stub ($0) |
+| Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack`; `PIPEGUARD_SLACK_LIVE=1` to arm the live post | stub ($0, no network) |
 | Repository (persistence) | `Repository` port; SqliteRepository built → Postgres later | SQLite + JSONL |
 | Deployment | ports & adapters; Nextflow compute portability (ADR-0003) | local |
 

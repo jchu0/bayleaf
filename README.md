@@ -102,8 +102,10 @@ lives in the [ADRs](docs/adr/).
    offline demo/fallback), `api/` FastAPI read-API (the production seam,
    [ADR-0010](docs/adr/ADR-0010-ticketing-notify-read-api.md)), `frontend/` React
    consuming the API ([ADR-0014](docs/adr/ADR-0014-productionization-fastapi-react.md)).
-   An outbound `notify/` port (stub-first; Slack adapter scaffolded, live send gated
-   behind sign-off) rounds out the ticketing seam.
+   An outbound `notify/` port turns each *actionable* card into a per-verdict, evidence-cited
+   notification — stub-first ($0); the Slack adapter's live post is opt-in via
+   `PIPEGUARD_SLACK_LIVE` and every send is recorded as a `notification.emitted` ledger event
+   (`python -m pipeguard.notify <run_dir>`).
 
 ### Swappable seams (the flex points)
 
@@ -111,7 +113,7 @@ lives in the [ADRs](docs/adr/).
 |---|---|---|
 | Synthesizer (narration) | `PIPEGUARD_SYNTHESIZER=stub\|claude` | `stub` ($0) |
 | Triage agent (advice) | `PIPEGUARD_TRIAGE_AGENT=stub\|claude` | `stub` ($0) |
-| Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack` | `stub` (no network) |
+| Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack`; `PIPEGUARD_SLACK_LIVE=1` to arm live send | `stub` (no network) |
 | Repository (persistence) | `Repository` port; SqliteRepository → Postgres later | SQLite + JSONL |
 
 ---
@@ -210,7 +212,7 @@ src/pipeguard/            # framework-agnostic core (no UI dependency)
   provenance.py           # append-only EventLedger (in-memory + JSONL)
   persistence/            # Repository port + event→row projector + SqliteRepository + rebuild-db
   metrics/                # versioned canonical metric vocabulary (registry.yaml + loader)
-  notify/                 # outbound notify port (stub | Slack adapter, live send gated)
+  notify/                 # outbound notify port (stub | Slack; per-verdict, evidence-cited; opt-in live send)
   synthetic/              # synthetic failure-mode run generator (mock_run_02/03)
 app/streamlit_app.py      # thin offline dashboard over the core (the fallback demo)
 api/main.py               # FastAPI read-API (health, runs, cards, triage, config)

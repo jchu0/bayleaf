@@ -29,6 +29,8 @@ addition that needs real sarek data (see [nf-core-conventions](nf-core-conventio
 
 1. **Emitted today** by `run_gate`: `analysis_run.started` → per sample
    (`sample.registered`, `finding.emitted`, `verdict.decided`) → `analysis_run.completed`.
+   When a `notifier` is wired (off by default), one `notification.emitted` per actionable
+   card follows completion — auditing the outbound side effect (ADR-0010).
 2. **Reserved** (emitted as their producers land): `run.registered`,
    `artifact.ingested`, `metric.parsed` (Phase 2 ingest), `ticket.actioned`,
    `resolution.recorded` (ticketing phase).

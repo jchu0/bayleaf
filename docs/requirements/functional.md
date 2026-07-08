@@ -70,6 +70,13 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    or overrides a verdict/confidence and is not on the deterministic path; its output
    is labelled advisory. *Trace:* [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
    ADR-0012.
+3. **REQ-F-022 — Outbound notify.** For each *actionable* card (HOLD/RERUN/ESCALATE;
+   clean cards are skipped), the system can emit a per-verdict, evidence-cited notification
+   through a swappable notify port (stub-first, $0; Slack adapter). It **formats what the
+   gate decided, never a verdict** (ADR-0001); the live Slack post is opt-in via
+   `PIPEGUARD_SLACK_LIVE`, degrades to the stub on any error, and is recorded as a
+   `notification.emitted` ledger event. *Trace:* [architecture.md](../design/architecture.md)
+   §Outbound notify seam, [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md).
 
 ## Provenance & persistence (ADR-0002/0003)
 
@@ -120,8 +127,9 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
 
 ## Notes / deferred
 
-1. **Slack notify port** for the triage/review flow is deferred *(wishlist,
-   [tasks T-015b](../planning/tasks.md))*.
+1. **Slack notify port** is built + verified (REQ-F-022, T-015b); **additional adapters**
+   (Jira / Teams / Discord) and wiring notify into the read-API/ticketing flow remain
+   *(wishlist)*.
 2. **Variant gate** (REQ-F-013) is Phase 2 and depends on real variant-level data.
 
 ---
