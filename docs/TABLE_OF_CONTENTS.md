@@ -35,7 +35,7 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 ## Design (how it is built)
 | Doc | Status | Purpose |
 |---|---|---|
-| [design/architecture.md](design/architecture.md) | 📝 | System shape overview, event model, major tradeoffs |
+| [design/architecture.md](design/architecture.md) | ✅ | System shape: three gates, component map, data flow, invariants, seams |
 | [design/system-context.md](design/system-context.md) | 📝 | System context: external actors and systems |
 | [design/components.md](design/components.md) | 📝 | Components and their responsibilities |
 | [design/data-flow.md](design/data-flow.md) | 📝 | How data moves through the gates |
