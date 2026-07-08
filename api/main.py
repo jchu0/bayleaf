@@ -4,7 +4,7 @@ Framework boundary: this wraps `pipeguard`; the core has no FastAPI import (CLAU
 architecture guardrail 1). The React frontend consumes these endpoints. Read-only for
 now — write actions (ticket transitions, notify) arrive with the ticketing phase.
 
-Run:  uv run uvicorn api.main:app --reload --port 8000
+Run:  uv run uvicorn api.main:app --reload --port 8010
 """
 
 from __future__ import annotations
