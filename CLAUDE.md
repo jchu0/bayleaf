@@ -126,7 +126,7 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only
    event trail (analysis_run.started → per-sample findings/verdict → completed) into an
    `EventLedger` (in-memory + JSONL); the event log is authoritative, the DB a
-   rebuildable projection (Phase 2).
+   rebuildable projection via `persistence/` — SqliteRepository + `rebuild-db` (ADR-0003).
 3. **Swappable AI, OFF by default.** Synthesizer via `PIPEGUARD_SYNTHESIZER=stub|claude`;
    advisory QC-triage agent (`triage/`, ADR-0009/0012) via `PIPEGUARD_TRIAGE_AGENT=stub|claude`
    — both stub-first ($0), import `anthropic` lazily, and fall back to the stub on any
