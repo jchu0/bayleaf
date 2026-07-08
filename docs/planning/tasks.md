@@ -57,10 +57,10 @@ estimates — adjusted as we go.
 | T-010 | ADRs 0008–0014 (issue-taxonomy, corpora, ticketing/API, tooling, agent-scoping, gate-architecture, productionization) | 1 | done | yes | — |
 | T-011 | Fresh production-framed `README.md` (committed; architecture.md now exists — final polish/demo-prep remains) | 1 | in-progress | no | T-005 |
 | T-012 | Phase 0 tooling: uv + `pyproject.toml` single source, mypy/ruff, hooks (batch full-eval → Phase 2/T-009) | 0 | done | no | — |
-| T-013 | Synthetic run generator ✅ (`pipeguard.synthetic`; mock_run_02/03, all 4 verdicts); GIAB HG002 subset fetch script remains | 2 | in-progress | partial | T-002, T-008 |
+| T-013 | Synthetic run generator ✅ (`pipeguard.synthetic`) + GIAB HG002 subset fetch script ✅ (`scripts/fetch_giab_hg002.py`, accessions manifest; real fetch needs the genomics toolchain → T-017) | 2 | done | partial | T-002, T-008 |
 | T-014 | Event bus + provenance ledger (in-memory + JSONL; DB projection → T-023 ✅) | 1 | done | no | ADR-0002 |
 | T-015 | QC-triage agent (advisory, stub-first, corpus + retrieval, /triage API) | 3 | done | no | T-014 |
-| T-015b | Slack notify port for the triage/review flow (deferred from T-015) | 3 | todo | no | T-015 |
+| T-015b | Outbound notify port ✅ (`notify/`; stub-first, Slack adapter, actionable-only policy, ADR-0010 §2) — live Slack send + run_gate/API wiring deferred (needs sign-off) | 3 | done | no | T-015 |
 | T-016 | Data strategy doc + label mock_run_01 origin | 1 | done | yes | — |
 | T-017 | Small real test FASTQ→BAM data (panel-region subset) for coverage/contam gates | 2 | todo | partial | T-002 |
 | T-018 | Frontend design brief + clickable prototype (`design/frontend/`) | 1 | done | yes | — |
@@ -69,3 +69,5 @@ estimates — adjusted as we go.
 | T-021 | React frontend scaffold + design tokens (`frontend/`; Vite + Tailwind, ADR-0014) | Port | done | no | T-020 |
 | T-022 | React screens: run overview · decision cards · triage · provenance · monitoring · settings ✅; intake/review-queue remain (backend-blocked) | Port | in-progress | partial | T-021 |
 | T-023 | SQLite persistence: Repository port + event→row projector + rebuild-db (ADR-0002/0003) | 2 | done | no | T-014 |
+| T-024 | Metric registry as code (`metrics/`; registry.yaml + typed loader + `MetricValue` + normalization, per metric_registry.md) — additive slice ✅ | 2 | done | partial | T-008 |
+| T-025 | Wire the metric registry into the critical path (parsers emit `MetricValue`s; runbook keys on `our_key`) — deferred structural change, needs sign-off | 2 | todo | no | T-024 |

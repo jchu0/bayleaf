@@ -110,7 +110,10 @@ Which doc to open for a given part of the system.
 | `src/pipeguard/` overall | [`design/architecture.md`](design/architecture.md) (+ ADR-0002, ADR-0013) |
 | `models.py`, `parsers.py` (artifact I/O) | `data/schemas.md` |
 | `runbook.py`, `rules.py` (QC gate) | `data/qc_metrics.md` |
-| the event bus / ledger (planned) | `data/provenance.md`, ADR-0002 |
+| `metrics/` (registry + `MetricValue`) | `data/metric_registry.md`, `data/schemas.md` |
+| `notify/` (outbound notify port) | ADR-0010, ADR-0001 (advisory, never decides) |
+| `scripts/fetch_giab_hg002.py` (real data) | `scripts/README.md`, `data/strategy.md`, `data/licensing.md` |
+| the event bus / ledger | `data/provenance.md`, ADR-0002 |
 | the config layer / profiles | ADR-0005 + [`architecture.md`](design/architecture.md) §Swappable seams |
 | the synthesizer / agents | ADR-0001, ADR-0006 |
 | any machine output / log format | ADR-0007, `data/schemas.md` |
