@@ -50,9 +50,10 @@ _STUB_CHANNEL = "stub"
 _UNCONFIGURED_CHANNEL = "unconfigured"
 
 # The single, documented safety switch for the live Slack post. Kept a plain `bool`
-# (NOT typing.Final/Literal) on purpose: as a Literal[False] mypy would prove the send
-# branch unreachable and `warn_unreachable` (strict) would then flag it. Flipping this on
-# is a deliberate, maintainer-gated act — see SlackNotifier.notify.
+# (NOT typing.Final/Literal[False]) on purpose: a Literal[False] would let mypy treat the
+# guarded live-send block as unreachable and skip type-checking it, and the tests flip
+# this to True (monkeypatch) to exercise that block. Flipping it on for real is a
+# deliberate, maintainer-gated act — see SlackNotifier.notify.
 _LIVE_SEND_ENABLED: bool = False
 
 # A conservative disclaimer on every notification: this is a research/demo QC aid, and the

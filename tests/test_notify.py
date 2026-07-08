@@ -7,6 +7,7 @@ skips clean cards, the payload is deterministic, the port NEVER touches the verd
 sending. The (deferred) live-send seam is exercised with a fake client — never the wire.
 """
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -155,6 +156,13 @@ def test_slack_env_path_degrades_and_does_not_send(cards, monkeypatch):
     """PIPEGUARD_NOTIFIER=slack end-to-end via the public entry point never delivers."""
     monkeypatch.setenv("PIPEGUARD_NOTIFIER", "slack")
     monkeypatch.delenv("PIPEGUARD_SLACK_BOT_TOKEN", raising=False)
+
+    # Spy: with the guard at its shipped default, the client seam must never be reached
+    # (proves "no socket", not just "result looks like a stub").
+    def _fail_if_called(self):
+        raise AssertionError("_get_client must not be called on the default (guard-off) path")
+
+    monkeypatch.setattr(SlackNotifier, "_get_client", _fail_if_called)
     result = notify_card(cards["S4"])
     assert result.delivered is False
     assert result.adapter == "stub"  # degraded, not sent
@@ -182,10 +190,14 @@ def test_slack_live_seam_falls_back_to_stub_on_error(cards, monkeypatch):
 
 
 def test_slack_live_seam_missing_client_lib_falls_back_to_stub(cards, monkeypatch):
-    """Guard on but slack_sdk absent (it is not a dependency): lazy import → fallback."""
+    """Guard on but slack_sdk absent: the lazy import raises ImportError → stub fallback."""
     monkeypatch.setattr(notify_mod, "_LIVE_SEND_ENABLED", True)
-    # No monkeypatch of _get_client: the real lazy `import slack_sdk` raises ImportError
-    # (slack_sdk is intentionally not installed), which must degrade to the stub.
+    # Force `import slack_sdk` to fail regardless of the developer's environment (a None
+    # entry in sys.modules makes the import raise ImportError) and drop any token — so this
+    # test can NEVER build a real client or touch the wire, even on a machine that happens
+    # to have slack_sdk installed with a token in a local .env.
+    monkeypatch.setitem(sys.modules, "slack_sdk", None)
+    monkeypatch.delenv("PIPEGUARD_SLACK_BOT_TOKEN", raising=False)
     result = SlackNotifier().notify(cards["S4"])
     assert result.adapter == "stub" and result.delivered is False
 
@@ -226,7 +238,15 @@ def test_slack_never_sends_by_default_even_with_creds(cards, monkeypatch):
     """The default guard (_LIVE_SEND_ENABLED=False) suppresses sending even if creds exist."""
     monkeypatch.setenv("PIPEGUARD_SLACK_BOT_TOKEN", "xoxb-not-a-real-token")
     monkeypatch.setenv("PIPEGUARD_SLACK_CHANNEL", "C0EXAMPLE")
+    agent = SlackNotifier()
+
+    # Spy: the client seam must never be touched on the shipped default path, even with
+    # creds present — this directly proves "no send", not just a stub-shaped result.
+    def _fail_if_called():
+        raise AssertionError("_get_client must not be called when _LIVE_SEND_ENABLED is False")
+
+    monkeypatch.setattr(agent, "_get_client", _fail_if_called)
     # Guard is NOT flipped here — this asserts the shipped default never delivers.
-    result = SlackNotifier().notify(cards["S4"])
+    result = agent.notify(cards["S4"])
     assert result.delivered is False
     assert result.adapter == "stub"
