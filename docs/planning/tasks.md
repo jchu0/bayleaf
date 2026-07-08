@@ -60,14 +60,14 @@ estimates — adjusted as we go.
 | T-013 | Synthetic run generator ✅ (`pipeguard.synthetic`) + GIAB HG002 subset fetch script ✅ (`scripts/fetch_giab_hg002.py`, accessions manifest; real fetch needs the genomics toolchain → T-017) | 2 | done | partial | T-002, T-008 |
 | T-014 | Event bus + provenance ledger (in-memory + JSONL; DB projection → T-023 ✅) | 1 | done | no | ADR-0002 |
 | T-015 | QC-triage agent (advisory, stub-first, corpus + retrieval, /triage API) | 3 | done | no | T-014 |
-| T-015b | Outbound notify port ✅ (`notify/`; stub-first, Slack adapter, actionable-only policy, ADR-0010 §2) — live Slack send + run_gate/API wiring deferred (needs sign-off) | 3 | done | no | T-015 |
+| T-015b | Outbound notify port ✅ + wired into `run_gate` as an optional off-by-default hook (`notifier=`; `NOTIFICATION_EMITTED` events; Streamlit stub outbox) ✅ — live Slack send pending a bot token/webhook | 3 | done | no | T-015 |
 | T-016 | Data strategy doc + label mock_run_01 origin | 1 | done | yes | — |
-| T-017 | Small real test FASTQ→BAM data (panel-region subset) for coverage/contam gates | 2 | todo | partial | T-002 |
+| T-017 | Real GIAB HG002 panel data: fetch validated end-to-end on a bioconda env (`conda create -n hackathon -c conda-forge -c bioconda samtools bcftools htslib`; truth VCF + 470-record panel VCF + 70,996-read panel BAM slice via `samtools -X`); running the slice through the QC gate (coverage/contam) remains | 2 | in-progress | partial | T-002 |
 | T-018 | Frontend design brief + clickable prototype (`design/frontend/`) | 1 | done | yes | — |
 | T-019 | Align confidence to "omit until grounded" (models.py `confidence` → Optional/None, drop demo Confidence tile, update README:32/:105) — part of the models→schemas.md rework | 1 | done | no | T-008 |
 | T-020 | FastAPI read-API over the core (`api/`; production seam, ADR-0010/0014) | Port | done | no | — |
 | T-021 | React frontend scaffold + design tokens (`frontend/`; Vite + Tailwind, ADR-0014) | Port | done | no | T-020 |
-| T-022 | React screens: run overview · decision cards · triage · provenance · monitoring · settings ✅; intake/review-queue remain (backend-blocked) | Port | in-progress | partial | T-021 |
+| T-022 | React screens ✅: run overview · decision cards · triage · provenance · monitoring · settings · review queue · intake/preflight (all prototype screens built) | Port | done | partial | T-021 |
 | T-023 | SQLite persistence: Repository port + event→row projector + rebuild-db (ADR-0002/0003) | 2 | done | no | T-014 |
 | T-024 | Metric registry as code (`metrics/`; registry.yaml + typed loader + `MetricValue` + normalization, per metric_registry.md) — additive slice ✅ | 2 | done | partial | T-008 |
 | T-025 | Wire the metric registry into the critical path (parsers emit `MetricValue`s; runbook keys on `our_key`) — deferred structural change, needs sign-off | 2 | todo | no | T-024 |
