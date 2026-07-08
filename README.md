@@ -88,7 +88,9 @@ lives in the [ADRs](docs/adr/).
    build a tolerant, typed `RunArtifacts` bundle (a missing field is a *signal*, not a
    crash); `rules` is the trust anchor (cited, immutable `Finding`s); `models` is the
    pydantic data contract; `runbook` holds operator-configurable QC policy; `metrics/`
-   is a versioned, canonical metric vocabulary over MultiQC-style keys.
+   is a versioned canonical metric registry the QC gate **normalizes each metric through
+   before gating** — one canonical-decimal representation, so a source-unit change can't
+   silently move a verdict (the units contract; [ADR-0015](docs/adr/ADR-0015-layered-data-contract.md)).
 2. **Provenance seam (`provenance.py`, [ADR-0002](docs/adr/ADR-0002-event-driven-core-provenance-ledger.md))** —
    `run_gate` emits an append-only event trail (analysis_run.started → per-sample
    findings/verdict → completed) into an `EventLedger` (in-memory + JSONL). The **event
@@ -114,6 +116,7 @@ lives in the [ADRs](docs/adr/).
 | Synthesizer (narration) | `PIPEGUARD_SYNTHESIZER=stub\|claude` | `stub` ($0) |
 | Triage agent (advice) | `PIPEGUARD_TRIAGE_AGENT=stub\|claude` | `stub` ($0) |
 | Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack`; `PIPEGUARD_SLACK_LIVE=1` to arm live send | `stub` (no network) |
+| Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — absorb a new tool key / unit without touching `rules` | canonical decimals; on the critical path |
 | Repository (persistence) | `Repository` port; SqliteRepository → Postgres later | SQLite + JSONL |
 
 ---
