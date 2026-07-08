@@ -83,3 +83,11 @@ plugins = ["pydantic.mypy"]
 module = ["streamlit.*", "pandas.*", "numpy.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
+
+# slack_sdk is deliberately NOT a dependency (not even an optional extra): the Slack
+# notify path lazy-imports it, and the live send is out of scope / disabled (ADR-0010
+# §2, task T-015b). Until live send is signed off and the dep is added, mypy cannot
+# resolve it — treat it as opaque at that single deferred boundary.
+[[tool.mypy.overrides]]
+module = ["slack_sdk.*"]
+ignore_missing_imports = true
