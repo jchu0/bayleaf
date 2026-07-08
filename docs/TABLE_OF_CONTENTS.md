@@ -103,7 +103,7 @@ Which doc to open for a given part of the system.
 
 | If you're touching… | Read… |
 |---|---|
-| `src/pipeguard/` overall | `design/architecture.md` |
+| `src/pipeguard/` overall | `design/architecture.md` *(planned)* → until written: ADR-0002 + ADR-0013 |
 | `models.py`, `parsers.py` (artifact I/O) | `data/schemas.md` |
 | `runbook.py`, `rules.py` (QC gate) | `data/qc_metrics.md` |
 | the event bus / ledger (planned) | `data/provenance.md`, ADR-0002 |

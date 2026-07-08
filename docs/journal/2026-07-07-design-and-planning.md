@@ -4,7 +4,7 @@
 |---|---|
 | **Focus** | Step back from session-1 implementation; lock the concept, architecture, tech stack, and documentation workflow before further build. |
 | **Participants** | James Hu, Claude Code |
-| **Outcome** | Concept locked; documentation workflow stood up and tested on itself; 7 ADRs recorded. |
+| **Outcome** | Concept locked; documentation workflow stood up and tested on itself; 13 ADRs recorded (0001–0013). |
 
 ## Discussion
 
@@ -30,7 +30,7 @@ HealthOmics. Cloud broker, LocalStack, Terraform, AWS are wishlist.
 **Product thesis (maintainer's words).** The AI layer is a cross-layer
 **triage/observability accelerant that cuts diagnosis time** — replacing "comb the
 logs ad nauseam." It reduces friction; it does not replace tooling. Deterministic
-tools/rules are the gates (QC gate, variant gate); AI advises at each.
+tools/rules are the gates (preflight, QC gate, variant gate — the three-gate model was formalized later this pass in ADR-0013); AI advises at each.
 
 **Agents.** Build **one deep** agent (QC-triage), not many shallow — it proves the
 pattern. Agent #2 = pipeline-repair, for recurring/systemic issues. All agents
@@ -122,6 +122,8 @@ this pass. `archive/session-1` keeps the untouched originals (local only).
 
 ## Distilled into
 
-- [`docs/adr/`](../adr/) — ADRs 0001–0012.
+- [`docs/adr/`](../adr/) — ADRs 0001–0013.
 - [`CLAUDE.md`](../../CLAUDE.md) · [`DOCUMENTATION_HABITS.md`](../DOCUMENTATION_HABITS.md) · [`TABLE_OF_CONTENTS.md`](../TABLE_OF_CONTENTS.md) · [`_templates/`](../_templates/) · [`planning/tasks.md`](../planning/tasks.md).
 - [`requirements/scope-and-wishlist.md`](../requirements/scope-and-wishlist.md) · [`data/strategy.md`](../data/strategy.md).
+- [`data/qc_metrics.md`](../data/qc_metrics.md) (+ `-sources`, `-rare-disease`, `nf-core-conventions`) · [`data/schemas.md`](../data/schemas.md) · [`data/metric_registry.md`](../data/metric_registry.md).
+- [`design/frontend/frontend-design-brief.md`](../design/frontend/frontend-design-brief.md) + the `PipeGuard.html` prototype.

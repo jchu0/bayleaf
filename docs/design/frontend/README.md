@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Prototype (clickable mockup) |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-07 (MST) |
 | **Audience** | design / frontend |
-| **Related** | [frontend-design-brief.md](../frontend-design-brief.md) · [README.md](../../../README.md) |
+| **Related** | [frontend-design-brief.md](frontend-design-brief.md) · [README.md](../../../README.md) |
 
 ## What this is
 
