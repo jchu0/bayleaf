@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+/* Design tokens (from the prototype's design system, docs/design/frontend/README.md).
+   Tailwind v4 @theme turns these into utilities: bg-surface, text-escalate, font-mono, … */
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+
+  /* Verdict semantics: proceed=green · hold=amber · rerun=orange · escalate=red */
+  --color-proceed: #2ea043;
+  --color-hold: #d4a72c;
+  --color-rerun: #e16f24;
+  --color-escalate: #f85149;
+
+  /* Dark operator surface */
+  --color-surface: #0d1117;
+  --color-surface-2: #161b22;
+  --color-border: #30363d;
+  --color-ink: #e6edf3;
+  --color-ink-dim: #8b949e;
+}
+
+:root {
+  color-scheme: dark;
+  font-family: var(--font-sans);
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
