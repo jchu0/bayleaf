@@ -37,6 +37,30 @@ export type GateResult = {
   finding_rule_ids: string[]
 }
 
+// The unit a metric is normalized *to* (registry canonical_unit). Consumers read
+// `normalized_value`, which is always in this unit — never `raw_value`.
+export type CanonicalUnit = 'fraction' | 'percent' | 'x' | 'ratio' | 'phred' | 'count' | 'bool'
+
+// One registry-normalized QC metric (schemas.md #6). Self-contained: `canonical_unit` +
+// `metric_registry_version` are snapshotted onto the record (ADR-0007).
+export type MetricValue = {
+  id: string
+  sample_id: string
+  metric_key: string
+  gate: Gate
+  raw_value: number
+  raw_unit: string
+  normalized_value: number
+  canonical_unit: CanonicalUnit
+  metric_registry_version: number
+  analysis_run_id: string | null
+  source_artifact_id: string | null
+  source_field: string | null
+  source_locator: string | null
+  parser_version: string | null
+  content_hash: string
+}
+
 export type DecisionCard = {
   sample_id: string
   verdict: Verdict
@@ -47,6 +71,9 @@ export type DecisionCard = {
   findings: Finding[]
   generated_by: string
   analysis_run_id: string | null
+  // Registry-normalized QC metrics for this sample (T-025). Optional: absent on samples
+  // with no QC row, and a full metrics panel is not yet built (types-only for now).
+  metric_values?: MetricValue[]
   gate_results: GateResult[]
   content_hash: string
 }

@@ -31,6 +31,10 @@ def test_run_detail_serializes_cards_events_and_computed_fields():
     assert s4["confidence"] is None  # T-019: omitted until grounded
     assert s4["content_hash"]  # computed field serializes
     assert any(g["gate"] == "preflight" for g in s4["gate_results"])  # corrected gate
+    # Registry-normalized QC metrics flow through the response model (T-025 step 4).
+    s5 = next(c for c in d["cards"] if c["sample_id"] == "S5")
+    q30 = next(m for m in s5["metric_values"] if m["metric_key"] == "qc.q30")
+    assert q30["normalized_value"] == 0.841 and q30["canonical_unit"] == "fraction"
 
 
 def test_card_endpoint_and_404s():

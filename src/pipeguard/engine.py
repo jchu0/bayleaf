@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 
 from .identifiers import utc_now
+from .metrics import metric_values_for
 from .models import RULE_PACK_VERSION, DecisionCard, RunArtifacts
 from .notify import NotifyPort, NotifyStatus
 from .parsers import load_run
@@ -96,6 +97,9 @@ def run_gate(
     )
 
     findings_by_sample = evaluate_run(artifacts, runbook)
+    # Look up each sample's QC once so the card can carry the registry-normalized numbers
+    # the gate already computed (T-025). Reuses `metric_values_for` — the single mapping.
+    qc_by_sample = {q.sample_id: q for q in artifacts.qc}
     cards: list[DecisionCard] = []
     for sample_id, findings in findings_by_sample.items():
         ledger.emit(
@@ -133,6 +137,13 @@ def run_gate(
         card = synthesizer.synthesize(sample_id, findings, artifacts)
         card.analysis_run_id = arun.id
         card.run_id = artifacts.run_id
+        # Surface the registry-normalized QC metrics (T-025) on the card so they are
+        # API/frontend-visible and ML-ready (ADR-0007). Additive, contextual metadata:
+        # off the deterministic path and NOT in content_hash, so verdicts stay identical.
+        # A sample with no QC row leaves the default empty list (missing = a signal).
+        qc = qc_by_sample.get(sample_id)
+        if qc is not None:
+            card.metric_values = metric_values_for(qc, analysis_run_id=arun.id)
         ledger.emit(
             ProvenanceEvent(
                 event_type=EventType.VERDICT_DECIDED,

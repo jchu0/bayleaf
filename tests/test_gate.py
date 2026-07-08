@@ -4,6 +4,7 @@ These run fully offline (no API). They pin the demo scenario so a regression in
 the rule engine is caught before it reaches the dashboard.
 """
 
+import math
 from pathlib import Path
 
 import pytest
@@ -287,3 +288,39 @@ def test_card_content_hash_is_stable_and_distinct():
     cards = {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}
     assert len(cards["S4"].content_hash) == 64
     assert cards["S4"].content_hash != cards["S5"].content_hash
+
+
+def test_card_carries_registry_normalized_metric_values():
+    """The gate surfaces the registry-normalized QC metrics on the card (T-025 step 4).
+
+    S5's raw QC row (q30=84.1%, mean_coverage=29.2x, ...) is normalized through the
+    registry — percent rates become fractions; coverage stays x — and attached, each
+    anchored to the same AnalysisRun as the card.
+    """
+    cards = {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}
+    s5 = cards["S5"]
+    by_key = {mv.metric_key: mv for mv in s5.metric_values}
+    assert math.isclose(by_key["qc.q30"].normalized_value, 0.841)  # 84.1% -> fraction
+    assert math.isclose(by_key["qc.mean_target_coverage"].normalized_value, 29.2)  # x stays x
+    assert by_key["qc.duplication"].raw_value == 22.6  # raw kept alongside for audit
+    assert all(mv.analysis_run_id == s5.analysis_run_id for mv in s5.metric_values)
+
+
+def test_metric_values_are_not_in_content_hash():
+    """metric_values is contextual metadata (like run_id) — NOT part of card identity.
+
+    Proves the demo stays byte-identical: attaching or clearing metric_values must not
+    move the content_hash the pinned tests (16 events / verdicts / hashes) depend on.
+    """
+    s5 = {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}["S5"]
+    assert s5.metric_values  # populated on this run
+    assert s5.content_hash == s5.model_copy(update={"metric_values": []}).content_hash
+
+
+def test_card_metric_values_round_trip_json():
+    """metric_values survives model_dump(mode='json') — API/ML serialization (ADR-0007)."""
+    s5 = {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}["S5"]
+    dumped = s5.model_dump(mode="json")
+    by_key = {mv["metric_key"]: mv for mv in dumped["metric_values"]}
+    assert by_key["qc.q30"]["normalized_value"] == 0.841
+    assert by_key["qc.q30"]["canonical_unit"] == "fraction"
