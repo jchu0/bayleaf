@@ -20,6 +20,7 @@ be usable the moment that wiring lands.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from enum import Enum
 from functools import lru_cache
 from importlib.resources import files
@@ -106,12 +107,15 @@ class MetricEntry(BaseModel):
 # canonical, e.g. `x` -> `x`) are handled before this table, so it only holds the real
 # scale changes. This is intentionally a *closed* set: an unlisted pair raises rather
 # than guessing, so a mis-declared unit surfaces as an error instead of a silent 100x.
-_CONVERSIONS: dict[tuple[str, str], float] = {
+# Conversions divide/multiply by exactly 100 (not `* 0.01`) so the normalized value —
+# which is snapshotted into MetricValue.content_hash — is the clean decimal the spec
+# states (`95.0` percent -> `0.95`, not `0.9500000000000001`).
+_CONVERSIONS: dict[tuple[str, str], Callable[[float], float]] = {
     # The MultiQC pct trap: a value labeled `percent` (0-100) for a `fraction` metric
     # must be divided by 100; the reverse multiplies. Field *names* (`pct_*`) are not
     # trusted — only the caller-supplied raw_unit is.
-    ("percent", "fraction"): 0.01,
-    ("fraction", "percent"): 100.0,
+    ("percent", "fraction"): lambda v: v / 100.0,
+    ("fraction", "percent"): lambda v: v * 100.0,
 }
 
 
@@ -125,9 +129,12 @@ class MetricRegistry(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     version: int
-    entries: dict[str, MetricEntry]
-    # alias -> our_key. Built once at load; a plain dict keeps `resolve_alias` O(1).
-    alias_index: dict[str, str] = Field(default_factory=dict)
+    # Typed as read-only `Mapping` (not `dict`) so mypy rejects
+    # `default_registry().entries[k] = ...` — the registry is a process-shared, lru_cached
+    # singleton and an in-place mutation would poison it for every caller.
+    entries: Mapping[str, MetricEntry]
+    # alias -> our_key. Built once at load; keeps `resolve_alias` O(1).
+    alias_index: Mapping[str, str] = Field(default_factory=dict)
 
     @classmethod
     def load(cls, path: Path | None = None) -> MetricRegistry:
@@ -223,6 +230,18 @@ class MetricRegistry(BaseModel):
         entry = self.entry(our_key)  # controlled-vocabulary check
         canonical = entry.canonical_unit.value
 
+        # Guard the declared value_type: a bool metric must carry 0/1 and an int metric
+        # an integral value, so a mis-sourced number (e.g. a bool key handed 7.0) fails
+        # loud here instead of being stored as a nonsense normalized_value downstream.
+        if entry.value_type is ValueType.BOOL and raw_value not in (0.0, 1.0):
+            raise ValueError(
+                f"{our_key!r} is a bool metric; raw_value must be 0 or 1, got {raw_value!r}"
+            )
+        if entry.value_type is ValueType.INT and raw_value != int(raw_value):
+            raise ValueError(
+                f"{our_key!r} is an int metric; raw_value must be integral, got {raw_value!r}"
+            )
+
         if entry.raw_units_allowed and raw_unit not in entry.raw_units_allowed:
             raise ValueError(
                 f"raw_unit {raw_unit!r} not allowed for {our_key!r} "
@@ -232,12 +251,12 @@ class MetricRegistry(BaseModel):
         if raw_unit == canonical:
             return raw_value  # identity — e.g. `x` stays `x`, a fraction stays a fraction
 
-        factor = _CONVERSIONS.get((raw_unit, canonical))
-        if factor is None:
+        convert = _CONVERSIONS.get((raw_unit, canonical))
+        if convert is None:
             raise ValueError(
                 f"no unit conversion from {raw_unit!r} to {canonical!r} for {our_key!r}"
             )
-        return raw_value * factor
+        return convert(raw_value)
 
     def observe(
         self,

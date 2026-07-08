@@ -75,6 +75,25 @@ def test_percent_to_fraction(registry: MetricRegistry) -> None:
     assert math.isclose(registry.normalize("qc.q30", 0.95, "fraction"), 0.95)
 
 
+def test_percent_to_fraction_is_exact(registry: MetricRegistry) -> None:
+    """Conversion divides by 100 (not `* 0.01`), so the result is the exact decimal.
+
+    This is not pedantry: `normalized_value` is snapshotted into
+    `MetricValue.content_hash` (the immutable identity), so `0.95` vs
+    `0.9500000000000001` would give two different hashes for the same measurement.
+    """
+    assert registry.normalize("qc.q30", 95.0, "percent") == 0.95
+    assert registry.normalize("qc.q30", 50.0, "percent") == 0.5
+
+
+def test_bool_metric_rejects_non_boolean_value(registry: MetricRegistry) -> None:
+    """A `bool` metric must carry 0/1; a stray value is a loud error, not stored nonsense."""
+    assert registry.entry("identity.ngscheckmate_match").value_type.value == "bool"
+    assert registry.normalize("identity.ngscheckmate_match", 1.0, "bool") == 1.0
+    with pytest.raises(ValueError):
+        registry.normalize("identity.ngscheckmate_match", 7.0, "bool")
+
+
 def test_x_stays_x(registry: MetricRegistry) -> None:
     """`x` (fold coverage) is identity — no rescale."""
     assert registry.entry("qc.mean_target_coverage").canonical_unit is CanonicalUnit.X
