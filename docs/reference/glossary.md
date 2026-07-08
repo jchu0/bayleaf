@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-08 (MST) |
 | **Audience** | all |
-| **Related** | [domain-primer.md](domain-primer.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/qc_metrics-sources.md](../data/qc_metrics-sources.md), [data/schemas.md](../data/schemas.md), [design/architecture.md](../design/architecture.md) |
+| **Related** | [domain-primer.md](domain-primer.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/qc_metrics-sources.md](../data/qc_metrics-sources.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [design/architecture.md](../design/architecture.md) |
 
 ## Overview
 
@@ -90,6 +90,10 @@ thresholds. For fuller context see the [domain primer](domain-primer.md).
     license; distinct from the GPLv3 original `statgen/verifyBamID`).
 35. **WES / WGS** — whole-exome / whole-genome sequencing (contrasted with a targeted
     panel).
+36. **Cluster PF (pass-filter) / `qc.cluster_pf`** — the fraction of sequencing clusters
+    that clear the instrument's chastity filter; a run-level yield signal, registered as
+    the metric-registry `our_key` `qc.cluster_pf`
+    ([metric_registry.md](../data/metric_registry.md)).
 
 ## Software & architecture
 
@@ -123,6 +127,38 @@ thresholds. For fuller context see the [domain primer](domain-primer.md).
     never sets a verdict (ADR-0001).
 14. **Triage agent** — the advisory retrieval-grounded agent that suggests likely
     cause / next action; off the deterministic critical path (ADR-0009/0012).
+15. **Metric registry (`pipeguard.metrics`)** — the versioned canonical metric vocabulary
+    layered above drifting MultiQC/tool keys; on the QC critical path (rules gate on
+    registered metrics) ([metric_registry.md](../data/metric_registry.md)).
+16. **`our_key`** — a metric's canonical, controlled-vocabulary key (e.g. `qc.q30`,
+    `qc.cluster_pf`); thresholds and records may key **only** on a registered `our_key`, so
+    a MultiQC key rename can't silently drop a metric.
+17. **`canonical_unit`** — the single unit a metric is normalized *to* (one of `fraction` /
+    `percent` / `x` / `ratio` / `phred` / `count` / `bool`); the registry is the authority.
+18. **`normalize` / `denormalize`** — registry operations that convert a raw value into its
+    `canonical_unit` (keyed on the *declared* `raw_unit`, never the field name — this defuses
+    the MultiQC `pct_*` trap) and back to a display unit; exact inverses over one closed
+    conversion table.
+19. **`MetricValue`** — an immutable, content-hashed record of one observed metric:
+    `raw_value` in `raw_unit` plus the `normalized_value` in `canonical_unit`, with
+    `metric_registry_version` snapshotted for standalone readability (ADR-0007).
+20. **`normalized_value`** — a metric's value in its `canonical_unit`; the single
+    representation every downstream component reads — rules compare *this*, never `raw_value`.
+21. **Units contract** — the invariant that a metric crosses every component boundary as its
+    `normalized_value` in `canonical_unit`, so a percent is never compared against a fraction
+    ([schemas.md §6](../data/schemas.md)).
+22. **Notify port (`NotifyPort`)** — the outbound-notification seam (ADR-0010); OFF by
+    default, dispatches only *actionable* cards, with adapters `stub` (offline, $0) and
+    `slack` (live send opt-in).
+23. **`NotifyPayload`** — the channel-ready, content-hashed notification built from a flagged
+    card (title, plain-text fallback, Slack Block Kit blocks); display-only — it copies the
+    gate's verdict and can never set one (ADR-0001).
+24. **`notification.emitted`** — the append-only provenance event recorded per dispatched
+    notification (records the result, never a secret); absent when no notifier is wired
+    ([provenance.md](../data/provenance.md)).
+25. **Actionable-only notify policy** — a notification fires only for *actionable*
+    (non-PROCEED) cards (`DecisionCard.is_actionable`); a clean PROCEED card is skipped, so
+    the trail carries signal, not all-clears.
 
 ## The product
 
