@@ -1,4 +1,5 @@
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
+import { Intake } from './screens/Intake'
 import { Monitoring } from './screens/Monitoring'
 import { Provenance } from './screens/Provenance'
 import { ReviewQueue } from './screens/ReviewQueue'
@@ -20,6 +21,9 @@ export default function App() {
             <Link to="/queue" className="hover:text-ink">
               Queue
             </Link>
+            <Link to="/intake" className="hover:text-ink">
+              Intake
+            </Link>
             <Link to="/monitoring" className="hover:text-ink">
               Monitoring
             </Link>
@@ -36,6 +40,7 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/monitoring" element={<Monitoring />} />
             <Route path="/queue" element={<ReviewQueue />} />
+            <Route path="/intake" element={<Intake />} />
           </Routes>
         </main>
       </div>
