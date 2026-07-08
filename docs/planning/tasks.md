@@ -36,7 +36,7 @@ estimates — adjusted as we go.
 | 0 | Foundation & hygiene (uv, mypy, ruff, hooks) | done |
 | 1 | Design capture + provenance/event seam | in-progress |
 | Port | Productionization: FastAPI read-API + React frontend (ADR-0014) | in-progress |
-| 2 | Persistence + real QC data | todo |
+| 2 | Persistence + real QC data | in-progress |
 | 3 | Scoped agents + real confidence (triage agent T-015 done) | in-progress |
 | 4 | Cloud & IaC | wishlist |
 
@@ -67,4 +67,5 @@ estimates — adjusted as we go.
 | T-019 | Align confidence to "omit until grounded" (models.py `confidence` → Optional/None, drop demo Confidence tile, update README:32/:105) — part of the models→schemas.md rework | 1 | done | no | T-008 |
 | T-020 | FastAPI read-API over the core (`api/`; production seam, ADR-0010/0014) | Port | done | no | — |
 | T-021 | React frontend scaffold + design tokens (`frontend/`; Vite + Tailwind, ADR-0014) | Port | done | no | T-020 |
-| T-022 | React screens: run overview · decision cards · triage · provenance ✅; intake/review-queue/monitoring/settings remain | Port | in-progress | partial | T-021 |
+| T-022 | React screens: run overview · decision cards · triage · provenance · monitoring · settings ✅; intake/review-queue remain (backend-blocked) | Port | in-progress | partial | T-021 |
+| T-023 | SQLite persistence: Repository port + event→row projector + rebuild-db (ADR-0002/0003) | 2 | done | no | T-014 |

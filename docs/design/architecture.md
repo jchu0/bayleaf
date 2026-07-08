@@ -54,7 +54,8 @@ Every finding and verdict is labelled with the gate it came from:
    - `identifiers` — UUIDv7 ids, content hashing, UTC time.
 2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only
    event trail into an `EventLedger` (in-memory + JSONL), anchored to one `AnalysisRun`.
-   The event log is authoritative; the relational DB is a rebuildable projection (Phase 2).
+   The event log is authoritative; the relational DB is a rebuildable projection via the
+   `Repository` port + `rebuild-db` (SqliteRepository built; ADR-0002).
 3. **Triage agent (`triage/`, ADR-0009/0012).** Advisory `TriageNote` grounded in a
    curated knowledge corpus via a retrieval interface — OFF the deterministic critical path.
 4. **Delivery layers (thin, over the core).** `app/` Streamlit (offline demo / fallback);
@@ -82,11 +83,12 @@ triage agent is invoked on demand per flagged card and never re-enters the verdi
 |---|---|---|
 | Synthesizer (narration) | `PIPEGUARD_SYNTHESIZER=stub\|claude` | stub ($0) |
 | Triage agent | `PIPEGUARD_TRIAGE_AGENT=stub\|claude` | stub ($0) |
-| Repository (persistence) | SQLite → Postgres adapter (Phase 2) | in-memory + JSONL |
+| Repository (persistence) | `Repository` port; SqliteRepository built → Postgres later | SQLite + JSONL |
 | Deployment | ports & adapters; Nextflow compute portability (ADR-0003) | local |
 
 ## Deployment
 
 Local today: Streamlit (offline) + FastAPI (`uvicorn`) + React (Vite). The ports-&-adapters
 boundary and Nextflow (compute) carry portability to Slurm / AWS later (ADR-0003, wishlist).
-The core has no cloud/DB coupling; a repository adapter and IaC are Phase-2+ concerns.
+The core has no cloud/DB coupling; the repository adapter (`SqliteRepository`) is built,
+and a Postgres adapter + IaC are Phase-2+ concerns.
