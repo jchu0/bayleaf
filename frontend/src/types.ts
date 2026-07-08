@@ -103,3 +103,20 @@ export type TriageNote = {
   generated_by: string
   model: string | null
 }
+
+export type QCThreshold = {
+  metric: string
+  label: string
+  gate: number
+  hard_fail: number
+  higher_is_better: boolean
+  borderline_band: number
+  unit: string
+}
+
+export type Runbook = {
+  run_id_field: string
+  require_metadata_fields: string[]
+  qc_thresholds: QCThreshold[]
+  log_failure_markers: string[]
+}

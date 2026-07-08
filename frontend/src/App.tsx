@@ -2,16 +2,20 @@ import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
 import { Provenance } from './screens/Provenance'
 import { RunDetail } from './screens/RunDetail'
 import { RunOverview } from './screens/RunOverview'
+import { Settings } from './screens/Settings'
 
 export default function App() {
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-surface text-ink">
-        <header className="border-b border-border px-8 py-4">
+        <header className="flex items-center justify-between border-b border-border px-8 py-4">
           <Link to="/" className="flex w-fit items-center gap-2">
             <span className="text-xl">🧬</span>
             <span className="text-xl font-semibold">PipeGuard</span>
             <span className="text-ink-dim text-sm ml-2">provenance &amp; QC decision gate</span>
+          </Link>
+          <Link to="/settings" className="text-ink-dim text-sm hover:text-ink">
+            Settings
           </Link>
         </header>
         <main className="p-8">
@@ -19,6 +23,7 @@ export default function App() {
             <Route path="/" element={<RunOverview />} />
             <Route path="/runs/:runId" element={<RunDetail />} />
             <Route path="/runs/:runId/provenance" element={<Provenance />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
       </div>
