@@ -53,9 +53,7 @@ doc owns one question.
 | `docs/TABLE_OF_CONTENTS.md` | what docs exist and which code they map to (**start here**) |
 | `docs/reference/domain-primer.md` | the rare-disease / GIAB / gnomAD / ClinVar background |
 | `docs/reference/glossary.md` | terms and acronyms across bioinformatics, software, and clinical |
-| `docs/design/architecture.md` | system shape, components, data flow, external services, tradeoffs |
-| `docs/design/configuration.md` | the config layer and deployment/agent profiles |
-| `docs/design/structure.md` | repo + data layout, and the doc-to-code map |
+| `docs/design/architecture.md` | system shape, components, data flow, external services, tradeoffs, config layer + deployment/agent profiles (with ADR-0005); repo/data layout is the `CLAUDE.md` code map |
 | `docs/adr/` | important decisions, alternatives, consequences (one per file) |
 | `docs/data/schemas.md` | artifact contracts: required/optional fields, types, missing-semantics |
 | `docs/data/qc_metrics.md` | the QC metric set and gate thresholds |

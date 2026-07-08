@@ -35,19 +35,21 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 ## Design (how it is built)
 | Doc | Status | Purpose |
 |---|---|---|
-| [design/architecture.md](design/architecture.md) | ✅ | System shape: three gates, component map, data flow, invariants, seams |
-| [design/system-context.md](design/system-context.md) | 📝 | System context: external actors and systems |
-| [design/components.md](design/components.md) | 📝 | Components and their responsibilities |
-| [design/data-flow.md](design/data-flow.md) | 📝 | How data moves through the gates |
-| [design/interfaces.md](design/interfaces.md) | 📝 | Ports, adapters, and the read API |
-| [design/storage.md](design/storage.md) | 📝 | Stores, ledgers, and corpora |
-| [design/workflows.md](design/workflows.md) | 📝 | Key runtime workflows (gate, triage, HITL) |
-| [design/deployment.md](design/deployment.md) | 📝 | Deployment topologies (local / Slurm / cloud) |
-| [design/configuration.md](design/configuration.md) | 📝 | Config layer + deployment/agent profiles |
-| [design/structure.md](design/structure.md) | 📝 | Repo + data layout |
+| [design/architecture.md](design/architecture.md) | ✅ | System shape: three gates, component map, data flow, invariants, swappable seams, deployment |
 | [design/frontend/frontend-design-brief.md](design/frontend/frontend-design-brief.md) | ✅ | UI design brief (v1 + v2 additions) — the stable spec |
 | [design/frontend/handoffs/](design/frontend/handoffs/) | ✅ | Dated review→design handoff deltas (episodic) |
 | [design/frontend/](design/frontend/) | ✅ | Frontend prototype (`PipeGuard.html`) + design README |
+
+> **Consolidated, not split.** The system-view slices once planned as separate docs
+> (system-context, components, data-flow, interfaces, storage, workflows, deployment,
+> configuration, structure) live as sections of
+> [architecture.md](design/architecture.md) plus the ADRs — config/profiles →
+> [ADR-0005](adr/ADR-0005-config-layer-and-profiles.md); ports/interfaces →
+> [ADR-0003](adr/ADR-0003-deployment-agnostic-ports.md); storage/ledger →
+> [ADR-0002](adr/ADR-0002-event-driven-core-provenance-ledger.md) +
+> [provenance.md](data/provenance.md); repo/data layout → the code map in `CLAUDE.md`.
+> We chose one coherent system doc over near-duplicate stubs (MVP-first); split a slice
+> back out only if it outgrows its section.
 
 ## Decision records (ADR)
 One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
@@ -105,11 +107,11 @@ Which doc to open for a given part of the system.
 
 | If you're touching… | Read… |
 |---|---|
-| `src/pipeguard/` overall | `design/architecture.md` *(planned)* → until written: ADR-0002 + ADR-0013 |
+| `src/pipeguard/` overall | [`design/architecture.md`](design/architecture.md) (+ ADR-0002, ADR-0013) |
 | `models.py`, `parsers.py` (artifact I/O) | `data/schemas.md` |
 | `runbook.py`, `rules.py` (QC gate) | `data/qc_metrics.md` |
 | the event bus / ledger (planned) | `data/provenance.md`, ADR-0002 |
-| the config layer / profiles (planned) | `design/configuration.md`, ADR-0005 |
+| the config layer / profiles | ADR-0005 + [`architecture.md`](design/architecture.md) §Swappable seams |
 | the synthesizer / agents | ADR-0001, ADR-0006 |
 | any machine output / log format | ADR-0007, `data/schemas.md` |
 | anything: "why is it this way?" | `adr/` |

@@ -43,7 +43,7 @@ ship the **lean** profile and document **granular**.
 |---|---|
 | **Gains** | One codebase serves both segments; the multi-agent cost/separation tradeoff becomes a product feature, not an architecture fork |
 | **Costs** | A config layer and profile definitions to maintain and validate |
-| **Follow-ups** | Detail the layer + profiles in `design/configuration.md`; AI stays off by default within any profile (ADR-0006) |
+| **Follow-ups** | The layer + profiles are detailed here and in `design/architecture.md` §Swappable seams (consolidated; no standalone `configuration.md`); AI stays off by default within any profile (ADR-0006) |
 
 ## Revisit when
 

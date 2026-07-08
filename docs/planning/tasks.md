@@ -49,9 +49,9 @@ estimates — adjusted as we go.
 | T-002b | Concrete test-data QC profile (tune to GIAB panel subset) | 2 | todo | no | T-017 |
 | T-003 | `reference/domain-primer.md` + `reference/glossary.md` | 1 | done | yes | — |
 | T-004 | `requirements/{functional,nonfunctional,constraints}.md` | 1 | done | yes | — |
-| T-005 | `design/architecture.md` ✅; system-view docs (context, components, data-flow, interfaces, storage, workflows, deployment) remain | 1 | in-progress | partial | T-002 |
-| T-006 | `design/configuration.md` (profiles) | 1 | todo | yes | — |
-| T-007 | `design/structure.md` (repo + data map) | 1 | todo | yes | — |
+| T-005 | `design/architecture.md` ✅; the system-view slices (context, components, data-flow, interfaces, storage, workflows, deployment) are consolidated into it + the ADRs, not split into stubs (see ToC note) | 1 | done | partial | T-002 |
+| T-006 | Config layer / profiles — consolidated into ADR-0005 + architecture.md §Swappable seams (no standalone doc) | 1 | done | yes | — |
+| T-007 | Repo + data layout — consolidated into the CLAUDE.md code map (no standalone doc) | 1 | done | yes | — |
 | T-008 | Data docs ✅ (provenance.md, schemas.md, metric_registry.md, licensing.md) | 1 | done | yes | — |
 | T-009 | `quality/{evaluation,risks}.md` ✅ (+ demo/demo_plan.md) | 1 | done | yes | T-002 |
 | T-010 | ADRs 0008–0014 (issue-taxonomy, corpora, ticketing/API, tooling, agent-scoping, gate-architecture, productionization) | 1 | done | yes | — |
