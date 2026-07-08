@@ -10,10 +10,10 @@
 # `importlib.resources` loads it in a non-editable install — the same pattern as the
 # triage knowledge corpus (pyproject `[tool.setuptools.package-data]`).
 #
-# Seeded from the "Seed registry" table in docs/data/metric_registry.md. This is an
-# ADDITIVE artifact: parsers/rules/runbook do NOT consume it yet (deferred — needs
-# maintainer sign-off on the critical-path rewire). `metric_registry_version` bumps
-# deliberately and is pinned on every AnalysisRun.
+# Seeded from the "Seed registry" table in docs/data/metric_registry.md. ON the QC critical
+# path (T-025): the rules normalize each parsed metric through this registry and gate on the
+# canonical value; the runbook thresholds key on these `our_key`s. `metric_registry_version`
+# bumps deliberately and is pinned on every AnalysisRun.
 #
 # NOTE on units and the MultiQC pct trap (metric_registry.md rule 3): a `pct_*`-named
 # key does NOT tell you the scale. fastp/Picard raw fields are fractions (0-1) while the

@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-08 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [schemas.md](schemas.md) (§6 units contract), [provenance.md](provenance.md), [qc_metrics.md](qc_metrics.md), [nf-core-conventions.md](nf-core-conventions.md), the layered data-contract ADR *(in draft — link when numbered)* |
+| **Related** | [schemas.md](schemas.md) (§6 units contract), [provenance.md](provenance.md), [qc_metrics.md](qc_metrics.md), [nf-core-conventions.md](nf-core-conventions.md), [ADR-0015](../adr/ADR-0015-layered-data-contract.md) |
 
 ## Overview
 

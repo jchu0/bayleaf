@@ -327,9 +327,9 @@ class MetricValue(BaseModel):
     `normalized_value` at observe-time — this model only stores the result, which is why
     it round-trips cleanly through `model_dump(mode="json")` with no registry present.
 
-    ADDITIVE: parsers/rules do not emit these yet (deferred critical-path rewire). The
-    intended constructor is `MetricRegistry.observe(...)`, which validates `metric_key`
-    against the controlled vocabulary and fills the normalized/snapshot fields.
+    On the critical path (T-025): the QC rules build these via `MetricRegistry.observe(...)`
+    (which validates `metric_key` against the controlled vocabulary and fills the
+    normalized/snapshot fields) and gate on `normalized_value`.
     """
 
     model_config = ConfigDict(frozen=True)

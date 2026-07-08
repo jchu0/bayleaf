@@ -13,9 +13,9 @@ break a gate. `aliases[]` maps the drift back to a stable `our_key`, and `canoni
 is the single source of truth for normalization — see the `pct_*` trap handled in
 `normalize` below.
 
-ADDITIVE ONLY: parsers/rules/runbook do not call this yet. That wiring is deliberately
-deferred (needs maintainer sign-off on the critical-path change). This module is built to
-be usable the moment that wiring lands.
+ON THE CRITICAL PATH (T-025): `rules.evaluate_sample` normalizes each metric through this
+registry and gates on `MetricValue.normalized_value`; `denormalize` renders the canonical
+threshold back into the display unit for the finding text.
 """
 
 from __future__ import annotations
