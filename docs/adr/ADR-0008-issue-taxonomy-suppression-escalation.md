@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-07-07 (MST) |
+| **Status** | Accepted · Partially realized (finding category + rule-version-independent signature built; suppression/RBAC/escalation deferred) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0009](ADR-0009-corpora-retrieval-upskilling.md) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0009](ADR-0009-corpora-retrieval-upskilling.md), [ADR-0015](ADR-0015-layered-data-contract.md), [data/schemas.md](../data/schemas.md) |
 
 ## Context
 
@@ -45,6 +45,18 @@ fixing the cause. But blindly auto-applying fixes is unacceptable in this domain
 | **Gains** | No re-approval loop; systemic issues surface and route to the repair agent |
 | **Costs** | Signature scheme, suppression lifecycle, and RBAC to build |
 | **Follow-ups** | Signature fields finalized in the schema-design discussion |
+
+## Realized (2026-07-08)
+
+1. **Realized:** every `Finding` (`models.py`) carries a `category` and a semantic,
+   rule-version-independent `signature` (a hash of category + rule_id + sample + sorted evidence
+   loci, **excluding** `rule_version` so recurrence survives rule-pack bumps) alongside an
+   exact-identity `content_hash`. Findings are immutable (`frozen`); the signature is emitted on
+   each `finding.emitted` event.
+2. **Deferred (unchanged):** the suppression lifecycle, the ~3× recurrence escalation to the
+   pipeline-repair agent, RBAC tiers, and the `IssueSignature` / `ExperienceRecord` corpora
+   (schemas.md §16 / §14 — MVP-deferred). Suppression/resolution will live on those records,
+   never by mutating a `Finding` (schemas.md invariant 1).
 
 ## Revisit when
 

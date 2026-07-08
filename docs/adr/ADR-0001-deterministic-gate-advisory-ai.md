@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-07-07 (MST) |
+| **Status** | Accepted · Realized (rules decide, AI narrates; off-path extended to every later seam) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | ADR-0006, ADR-0007 |
+| **Related** | [ADR-0006](ADR-0006-ai-off-by-default-fallback.md), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md), [ADR-0015](ADR-0015-layered-data-contract.md) |
 
 ## Context
 
@@ -43,6 +43,17 @@ fails, the verdict and findings still stand.
 | **Gains** | Reproducible, source-traceable recommendations; the AI's job is bounded and independently evaluable (faithfulness to findings) |
 | **Costs** | Every new check must be encoded as a rule, not a prompt tweak |
 | **Follow-ups** | Define the faithfulness check in `quality/evaluation.md` |
+
+## Realized (2026-07-08)
+
+1. **Rules decide, AI narrates.** `rules.py` emits cited `Finding`s with suggested
+   verdicts; `synthesis/base.py::aggregate_verdict` picks the most-severe verdict
+   deterministically (never the LLM); `DecisionCard.confidence` is omitted until
+   grounded (T-019).
+2. **Off-critical-path extended to every later AI/dispatch seam.** The QC-triage agent
+   ([ADR-0012](ADR-0012-agent-scoping-model-tiering.md), `triage/`) and the notify port
+   ([ADR-0010](ADR-0010-ticketing-notify-read-api.md), `notify/`) both run *after* the
+   verdict is decided — a failure in either leaves findings + verdict intact.
 
 ## Revisit when
 

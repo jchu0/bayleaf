@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-07-07 (MST) |
+| **Status** | Accepted · Notify port BUILT + wired + live-Slack verified (T-015b); read API BUILT (FastAPI, ADR-0014); card status lifecycle deferred |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0008](ADR-0008-issue-taxonomy-suppression-escalation.md) |
+| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0008](ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [data/schemas.md](../data/schemas.md) |
 
 ## Context
 
@@ -42,6 +42,27 @@ surface that lets operators act on surfaced outputs.
 | **Gains** | HITL tracking + notifications + integration from one model; pulls the FastAPI read API forward as a real seam |
 | **Costs** | Status lifecycle, the notify port, and the read API to build |
 | **Follow-ups** | Resolved cards feed the experience ledger (ADR-0009) |
+
+## Realized (2026-07-08)
+
+1. **Outbound notify port BUILT and wired (T-015b).** `src/pipeguard/notify/` is a stub-first
+   `NotifyPort` (`StubNotifier` / `SlackNotifier`) wired into `run_gate(..., notifier=)` as an
+   optional, off-by-default, off-critical-path hook that runs *after* the verdict is decided
+   ([ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md)). Only actionable (non-PROCEED) cards
+   notify; each real notification emits an auditable `notification.emitted` event
+   ([ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md)) whose payload holds no secrets.
+   Messages are per-verdict, evidence-cited, and run-id-carrying, with a research/demo
+   disclaimer. **Live Slack send is opt-in via `PIPEGUARD_SLACK_LIVE` and was verified
+   end-to-end against a real workspace** (a token/channel alone never sends; any error degrades
+   to the offline stub). A `python -m pipeguard.notify` demo CLI exists.
+2. **Inbound read API BUILT** as the FastAPI backend (`api/`,
+   [ADR-0014](ADR-0014-productionization-fastapi-react.md)) — exactly the seam this ADR
+   anticipated, wrapping the framework-agnostic core.
+3. **Cards-as-tickets: partial.** `DecisionCard` is the operator-facing unit and the dashboard
+   review queue. The explicit `open → in-review → resolved` status lifecycle
+   (`ReviewItem`/`Ticket`, schemas.md §17), the Jira/Teams/Discord adapters, and the
+   resolved-cards → experience-ledger loop ([ADR-0009](ADR-0009-corpora-retrieval-upskilling.md))
+   remain MVP-deferred.
 
 ## Revisit when
 

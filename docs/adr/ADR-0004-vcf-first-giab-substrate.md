@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-07-07 (MST) |
+| **Status** | Accepted · Realized (GIAB HG002 fetch validated end-to-end on bioconda; synthetic generator built) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | ADR-0001, ADR-0007 |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md), [data/qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md) |
 
 ## Context
 
@@ -48,6 +48,16 @@ the provenance ledger as `real-giab` or `synthetic`. End-to-end generation
 | **Gains** | Product unblocked from day one; GIAB truth doubles as evaluation ground truth; synthetic data drives all four verdicts, retries, and seeds the experience ledger |
 | **Costs** | A synthetic-data generator to build and keep labeled |
 | **Follow-ups** | Clinical claims stay grounded in ClinVar/GIAB truth; planted issues live only in the operational layer. RNA-seq (STAR/salmon) is out of core scope |
+
+## Realized (2026-07-08)
+
+1. **Real substrate validated.** `scripts/fetch_giab_hg002.py` fetches GIAB HG002 (an
+   accessions manifest, `real-giab` origin — data never committed), validated end-to-end on a
+   bioconda env (real truth VCF + a `samtools -X` panel-reads slice) (T-017). Running the slice
+   through the QC/coverage gate remains.
+2. **Synthetic track built.** `pipeguard.synthetic` generates labeled failure-mode runs
+   (`synthetic` origin) that drive all four verdicts and seed the demo scenario (T-013). Every
+   artifact carries its origin tag per [ADR-0007](ADR-0007-ml-ready-structured-outputs.md).
 
 ## Revisit when
 

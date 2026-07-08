@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-07-07 (MST) |
+| **Status** | Accepted · Partially realized (knowledge corpus + one keyword-retrieval interface built; experience ledger deferred) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0007](ADR-0007-ml-ready-structured-outputs.md), [ADR-0008](ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) |
+| **Related** | [ADR-0007](ADR-0007-ml-ready-structured-outputs.md), [ADR-0008](ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md), [data/schemas.md](../data/schemas.md) |
 
 ## Context
 
@@ -43,6 +43,19 @@ over time without the cost and evaluation burden of model training.
 | **Gains** | Grounded, improving triage; the corpora double as ML-ready data |
 | **Costs** | A retrieval interface and ongoing corpus curation |
 | **Follow-ups** | Record schemas finalized in the schema discussion; fine-tuning (LoRA on an open-weight model) is a documented future option |
+
+## Realized (2026-07-08)
+
+1. **Knowledge corpus + the "one retrieval interface" built.** `triage/retrieval.py` ships a
+   narrow `Retriever` protocol (`retrieve(query, top_k)`) plus a dependency-free
+   `KeywordRetriever` over a curated knowledge JSONL (`triage/knowledge/qc_triage.jsonl`),
+   validated by pydantic and consumed by the QC-triage agent
+   ([ADR-0012](ADR-0012-agent-scoping-model-tiering.md)). The narrow protocol is exactly the seam
+   a BM25 / embedding / pgvector backend swaps into later.
+2. **Deferred (unchanged):** the append-only *experience* ledger
+   (`issue → diagnosis → action → outcome`) and its retrieval — "upskilling = retrieval, not
+   fine-tuning" still holds; the experience corpus lands with the ticket/resolution loop
+   ([ADR-0008](ADR-0008-issue-taxonomy-suppression-escalation.md), schemas.md §14).
 
 ## Revisit when
 

@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-07-07 (MST) |
+| **Status** | Accepted · Realized (`MetricValue` is the concrete ML-ready QC record; schema-versioned, origin-tagged JSONL) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | ADR-0002, ADR-0004 |
+| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md), [ADR-0015](ADR-0015-layered-data-contract.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md) |
 
 ## Context
 
@@ -45,6 +45,23 @@ and grow cleanly.
 | **Gains** | Outputs do double duty (operations + an ML-ready corpus); the wishlisted ML work has clean inputs waiting |
 | **Costs** | Upfront discipline: schema versioning, origin/label tagging, avoiding lossy free-text-only logs |
 | **Follow-ups** | Record schemas + versions in `data/schemas.md` and `data/provenance.md` |
+
+## Realized (2026-07-08)
+
+1. **`MetricValue` (`models.py`) is the concrete ML-ready QC record.** It is frozen, carries a
+   `content_hash` identity + `schema_version`, and — the load-bearing choice — **snapshots**
+   `canonical_unit` + `metric_registry_version` onto the record rather than dereferencing the
+   registry at read time, so one ledger row is standalone-interpretable for offline ML/audit.
+   The registry (`metrics/registry.py::observe`) computes the normalized value; the model only
+   stores it, so a row round-trips through `model_dump(mode="json")` with no registry present.
+2. **The structural discipline landed everywhere:** every persisted shape carries
+   `identifiers.SCHEMA_VERSION`; the provenance ledger is one-JSON-per-line JSONL
+   (`EventLedger`); artifacts are origin-tagged `real-giab | synthetic | contrived`
+   ([ADR-0004](ADR-0004-vcf-first-giab-substrate.md)); free-text narration always sits
+   *alongside* typed fields, never as the only representation.
+3. The full "why each shape" rationale — immutability, hashing, computed fields, the units
+   contract, confidence-omitted-until-grounded — is consolidated in
+   [ADR-0015](ADR-0015-layered-data-contract.md).
 
 ## Revisit when
 
