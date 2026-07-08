@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
+| **Status** | Accepted · Implemented (T-012) |
 | **Date** | 2026-07-07 (MST) |
 | **Deciders** | James Hu, Claude Code |
 | **Related** | [ADR-0006](ADR-0006-ai-off-by-default-fallback.md), [tasks T-012](../planning/tasks.md) |
@@ -16,11 +16,10 @@ drift risk, and it will only get more expensive to fix as the code grows.
 
 ## Decision
 
-1. **`pyproject.toml` is the single dependency source** (decided), managed with **uv**
-   (`uv.lock` pinned for a reproducible environment). `requirements.txt` **will be
-   retired once T-012 lands** — until then the repo keeps `requirements.txt` + `pip
-   install` as the working setup (mirrors CLAUDE.md's "migrating to uv" wording). Not
-   yet implemented.
+1. **`pyproject.toml` is the single dependency source**, managed with **uv**
+   (`uv.lock` pinned for a reproducible environment). `requirements.txt` is retired and
+   the dev toolchain lives in a PEP 735 `[dependency-groups]`; `uv sync` installs the
+   package editable (no `PYTHONPATH` shim). **Implemented in T-012 (2026-07-07).**
 2. **mypy** (strict-ish) and **ruff** (lint + format) enforce the coding standards.
 3. **Hook tiers:** pre-commit (ruff, secret scan, mypy), pre-push (pytest),
    batch/milestone (full evaluation incl. real-data validation, `pip-audit`).

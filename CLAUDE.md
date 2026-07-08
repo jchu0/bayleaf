@@ -19,18 +19,21 @@ this repo — do not assume any global rules apply here.
 ## Commands
 
 ```bash
-# Setup (migrating to uv + pyproject as the single dependency source — see ADR/journal)
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+# Setup (uv is the single dependency source: pyproject.toml + uv.lock)
+uv sync --all-extras                        # .venv + deps + dev tools, editable install
+uv run pre-commit install --install-hooks   # ruff/mypy/secret-scan (commit) + pytest (push)
 
 # Run the dashboard (offline; no API key needed)
-streamlit run app/streamlit_app.py        # http://localhost:8501
+uv run streamlit run app/streamlit_app.py   # http://localhost:8501
 
 # Tests (offline — pins the demo scenario)
-pytest                                     # pythonpath=src is set in pyproject.toml
+uv run pytest                               # editable install; no PYTHONPATH shim
+
+# Lint + strict type-check
+uv run ruff check && uv run mypy
 
 # Ad-hoc run of the core (no UI)
-PYTHONPATH=src python -c "from pipeguard import run_gate_from_dir; \
+uv run python -c "from pipeguard import run_gate_from_dir; \
   _, cards = run_gate_from_dir('data/mock_run_01'); \
   print([(c.sample_id, c.verdict.value) for c in cards])"
 ```

@@ -46,14 +46,13 @@ unconvincing to a bioinformatician. A rule computing it, with Claude explaining 
 ## Quick start
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+uv sync --all-extras     # creates .venv, installs deps + dev tools (editable)
 
 # Run the dashboard (offline — no API key, no cost)
-streamlit run app/streamlit_app.py
+uv run streamlit run app/streamlit_app.py
 
 # Run the tests
-pytest
+uv run pytest
 ```
 
 The dashboard opens on the bundled mock run (`data/mock_run_01`), a small NovaSeq run
