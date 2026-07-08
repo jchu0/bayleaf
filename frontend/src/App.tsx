@@ -1,6 +1,7 @@
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
 import { Monitoring } from './screens/Monitoring'
 import { Provenance } from './screens/Provenance'
+import { ReviewQueue } from './screens/ReviewQueue'
 import { RunDetail } from './screens/RunDetail'
 import { RunOverview } from './screens/RunOverview'
 import { Settings } from './screens/Settings'
@@ -16,6 +17,9 @@ export default function App() {
             <span className="text-ink-dim text-sm ml-2">provenance &amp; QC decision gate</span>
           </Link>
           <nav className="flex items-center gap-4 text-sm text-ink-dim">
+            <Link to="/queue" className="hover:text-ink">
+              Queue
+            </Link>
             <Link to="/monitoring" className="hover:text-ink">
               Monitoring
             </Link>
@@ -31,6 +35,7 @@ export default function App() {
             <Route path="/runs/:runId/provenance" element={<Provenance />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/monitoring" element={<Monitoring />} />
+            <Route path="/queue" element={<ReviewQueue />} />
           </Routes>
         </main>
       </div>
