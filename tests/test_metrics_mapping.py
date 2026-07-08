@@ -32,18 +32,20 @@ def test_maps_qcmetrics_to_normalized_metric_values() -> None:
     )
     values = metric_values_for(qc, analysis_run_id="arun_test")
     by = _by_key(values)
-    # cluster_pf has no registry key -> 4 mapped, not 5.
+    # All five QCMetrics fields now resolve to a registry our_key.
     assert set(by) == {
         "qc.q30",
         "qc.reads_passing_filter",
         "qc.mean_target_coverage",
         "qc.duplication",
+        "qc.cluster_pf",
     }
     # Percent rates normalize to fractions; coverage stays x.
     assert math.isclose(by["qc.q30"].normalized_value, 0.841)
     assert by["qc.q30"].canonical_unit is CanonicalUnit.FRACTION
     assert by["qc.q30"].raw_value == 84.1 and by["qc.q30"].raw_unit == "percent"
     assert math.isclose(by["qc.duplication"].normalized_value, 0.226)
+    assert math.isclose(by["qc.cluster_pf"].normalized_value, 0.834)
     assert math.isclose(by["qc.mean_target_coverage"].normalized_value, 29.2)
     assert by["qc.mean_target_coverage"].canonical_unit is CanonicalUnit.X
     # Provenance: each carries the sample, the source field, and the pinned registry version.
@@ -61,9 +63,24 @@ def test_missing_field_is_skipped_not_defaulted() -> None:
     assert "qc.mean_target_coverage" in keys
 
 
-def test_cluster_pf_is_unmapped_documents_the_gap() -> None:
-    # Only cluster_pf is set, and it has no seed-registry our_key yet -> nothing mapped.
-    assert metric_values_for(QCMetrics(sample_id="S1", cluster_pf=89.0)) == []
+def test_cluster_pf_maps_to_its_registry_key() -> None:
+    values = metric_values_for(QCMetrics(sample_id="S1", cluster_pf=89.0))
+    assert [v.metric_key for v in values] == ["qc.cluster_pf"]
+    assert math.isclose(values[0].normalized_value, 0.89)  # 89% -> fraction
+
+
+def test_runbook_thresholds_key_on_registered_metrics() -> None:
+    """Every DEFAULT_RUNBOOK threshold's our_key is in the registry's controlled vocabulary.
+
+    This is the runbook<->registry linkage guard: a threshold that gates on an unregistered
+    metric (a typo, or a metric we forgot to register) fails loudly here.
+    """
+    from pipeguard.metrics import default_registry
+    from pipeguard.runbook import DEFAULT_RUNBOOK
+
+    reg = default_registry()
+    for t in DEFAULT_RUNBOOK.qc_thresholds:
+        reg.entry(t.our_key)  # raises UnknownMetricError if not registered
 
 
 def test_maps_real_mock_run_01_s5() -> None:

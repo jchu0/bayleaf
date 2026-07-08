@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-07 (MST) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Audience** | bioinformatics / software |
 | **Related** | [schemas.md](schemas.md), [qc_metrics.md](qc_metrics.md), [nf-core-conventions.md](nf-core-conventions.md) |
 
@@ -45,6 +45,7 @@ metrics:
 | `preflight.phix_aligned` | preflight | run_qc | percent | higher_is_better | sav_interop | PhiX Aligned |
 | `qc.q30` | qc | base_quality | fraction | higher_is_better | fastp | `after_filtering_q30_rate` |
 | `qc.reads_passing_filter` | qc | yield | fraction | higher_is_better | fastp | `filtering_result_passed_filter_reads` / `pct_surviving` |
+| `qc.cluster_pf` | qc | yield | fraction | higher_is_better | sav_interop | `Cluster PF` |
 | `qc.duplication` | qc | duplication | fraction | lower_is_better | picard_markduplicates | `PERCENT_DUPLICATION` |
 | `qc.pct_mapped` | qc | alignment | fraction | higher_is_better | samtools | flagstat mapped |
 | `qc.on_target` | qc | enrichment | fraction | higher_is_better | picard_collecthsmetrics | `PCT_SELECTED_BASES` |

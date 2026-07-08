@@ -67,6 +67,19 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
    `{canonical_unit, metric_registry_version}` *for standalone ML-readability; the DB
    projection stays lean and dereferences the registry.*
 
+> **Units contract — one representation across components.** A metric crosses every
+> component boundary as its **`normalized_value`**: a `float` in the metric's
+> **`canonical_unit`** — a **decimal fraction** for rates (Q30 `0.841`, duplication `0.226`,
+> cluster-PF `0.834`), `x` for coverage. The [registry](metric_registry.md) is the single
+> authority on each metric's canonical unit; `MetricValue` snapshots `raw_value`/`raw_unit`
+> (what the tool reported, e.g. `84.1` `percent`) *alongside* the normalized value so the
+> conversion is auditable and never re-guessed downstream. **Consumers read
+> `normalized_value` (canonical) — never `raw_value`.** Passing a percent where a fraction is
+> expected is the units-mismatch bug this contract exists to prevent. Runbook thresholds gate
+> on the registry `our_key`; once the rules read normalized values (T-025 step 3) they are
+> expressed in the same canonical unit, so a threshold and the value it gates are always on
+> the same scale by construction.
+
 ### Findings & decisions
 7. **Evidence** — **source_kind** (`artifact|metric|multiqc_source|execution_trace|params|
    human_note`) · artifact_id · **metric_value_id** · **corpus_id** · source_file ·

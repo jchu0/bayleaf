@@ -19,13 +19,12 @@ from .registry import MetricRegistry, default_registry
 # not alias-resolved: the flat `QCMetrics` field names are not registry aliases, and the
 # scale each field is on (percent for rates, x for coverage — see data/mock_run_01 and the
 # runbook `unit`) must be *declared*, never guessed (the pct_* trap the registry defends).
-# `cluster_pf` (cluster pass-filter %) has no seed-registry `our_key` yet and is left
-# unmapped — adding a registry entry for it is a later step.
 _QCMETRICS_MAP: tuple[tuple[str, str, str], ...] = (
     ("q30", "qc.q30", "percent"),
     ("pct_reads_identified", "qc.reads_passing_filter", "percent"),
     ("mean_coverage", "qc.mean_target_coverage", "x"),
     ("dup_rate", "qc.duplication", "percent"),
+    ("cluster_pf", "qc.cluster_pf", "percent"),
 )
 
 

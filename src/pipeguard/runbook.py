@@ -20,6 +20,12 @@ class QCThreshold(BaseModel):
     """
 
     metric: str
+    # Registry `our_key` (controlled vocabulary) this threshold gates on — the stable link
+    # from the runbook to the metric registry (metric_registry.md rule 4). A test asserts
+    # every our_key is registered. NOTE (T-025): `gate`/`hard_fail`/`unit` are still in the
+    # per-tool display scale (e.g. Q30 in %); step 3 moves them to the registry's canonical
+    # unit (decimals) and switches the rules to compare `MetricValue.normalized_value`.
+    our_key: str
     label: str
     gate: float
     hard_fail: float
@@ -35,9 +41,12 @@ class Runbook(BaseModel):
     )
     qc_thresholds: list[QCThreshold] = Field(
         default_factory=lambda: [
-            QCThreshold(metric="q30", label="Q30", gate=85.0, hard_fail=75.0, unit="%"),
+            QCThreshold(
+                metric="q30", our_key="qc.q30", label="Q30", gate=85.0, hard_fail=75.0, unit="%"
+            ),
             QCThreshold(
                 metric="pct_reads_identified",
+                our_key="qc.reads_passing_filter",
                 label="% reads identified",
                 gate=70.0,
                 hard_fail=50.0,
@@ -45,16 +54,23 @@ class Runbook(BaseModel):
             ),
             QCThreshold(
                 metric="mean_coverage",
+                our_key="qc.mean_target_coverage",
                 label="Mean coverage",
                 gate=30.0,
                 hard_fail=15.0,
                 unit="x",
             ),
             QCThreshold(
-                metric="cluster_pf", label="Cluster PF", gate=80.0, hard_fail=60.0, unit="%"
+                metric="cluster_pf",
+                our_key="qc.cluster_pf",
+                label="Cluster PF",
+                gate=80.0,
+                hard_fail=60.0,
+                unit="%",
             ),
             QCThreshold(
                 metric="dup_rate",
+                our_key="qc.duplication",
                 label="Duplication rate",
                 gate=30.0,
                 hard_fail=50.0,

@@ -27,6 +27,7 @@ SEED_KEYS = {
     "preflight.phix_aligned",
     "qc.q30",
     "qc.reads_passing_filter",
+    "qc.cluster_pf",
     "qc.duplication",
     "qc.pct_mapped",
     "qc.on_target",

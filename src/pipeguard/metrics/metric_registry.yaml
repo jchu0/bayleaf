@@ -74,6 +74,22 @@ metrics:
     parser_version: null
     aliases: [filtering_result_passed_filter_reads]
 
+  qc.cluster_pf:
+    display_name: Cluster PF
+    gate: qc
+    category: yield
+    canonical_unit: fraction
+    value_type: float
+    direction: higher_is_better
+    source:
+      module: sav_interop
+      source_file: InterOp
+      raw_field: Cluster PF
+    raw_units_allowed: [fraction, percent]
+    parser: sav_interop
+    parser_version: null
+    aliases: [cluster_pf, pct_pf_clusters]
+
   qc.duplication:
     display_name: Duplication rate
     gate: qc
