@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-07-07 (MST) |
+| **Status** | Accepted · Partially realized (QC-triage agent #1 built, advisory + off-path; pipeline-repair agent #2 deferred) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0006](ADR-0006-ai-off-by-default-fallback.md) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0006](ADR-0006-ai-off-by-default-fallback.md), [ADR-0009](ADR-0009-corpora-retrieval-upskilling.md) |
 
 ## Context
 
@@ -46,6 +46,17 @@ frequent narration) or insufficient (cheap model on hard, systemic diagnosis).
 | **Gains** | Cost/quality efficiency, small blast radius, easy tuning via config |
 | **Costs** | Per-agent config and defaults to maintain |
 | **Follow-ups** | Defaults land with the config layer and the agents |
+
+## Realized (2026-07-08)
+
+1. **Agent #1 (QC-triage) built** (`triage/`): advisory, off the deterministic critical path,
+   selected via `PIPEGUARD_TRIAGE_AGENT=stub|claude`, off by default with a stub fallback on any
+   error incl. a safety refusal ([ADR-0006](ADR-0006-ai-off-by-default-fallback.md)). Its model
+   defaults to a cheaper tier (`claude-sonnet-5` via `PIPEGUARD_TRIAGE_MODEL`) than the Opus
+   narration default — the per-agent model tiering this ADR called for.
+2. **Deferred (unchanged):** the pipeline-repair agent #2 and its higher reasoning tier. Model
+   tiering lives in the `PIPEGUARD_*_MODEL` env knobs today, not yet a composed profile
+   ([ADR-0005](ADR-0005-config-layer-and-profiles.md)).
 
 ## Revisit when
 

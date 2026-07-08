@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-07-07 (MST) |
+| **Status** | Accepted · Partially realized (env-override tier + per-seam swappability built; composed `Profile` object still wishlist) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | ADR-0003, ADR-0006 |
+| **Related** | [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0006](ADR-0006-ai-off-by-default-fallback.md), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md), [design/architecture.md](../design/architecture.md) |
 
 ## Context
 
@@ -44,6 +44,18 @@ ship the **lean** profile and document **granular**.
 | **Gains** | One codebase serves both segments; the multi-agent cost/separation tradeoff becomes a product feature, not an architecture fork |
 | **Costs** | A config layer and profile definitions to maintain and validate |
 | **Follow-ups** | The layer + profiles are detailed here and in `design/architecture.md` §Swappable seams (consolidated; no standalone `configuration.md`); AI stays off by default within any profile (ADR-0006) |
+
+## Realized (2026-07-08)
+
+1. **The environment tier of the resolver is realized.** Each AI/notify seam flips via a
+   `PIPEGUARD_*` env var, stub-first and off by default — `PIPEGUARD_SYNTHESIZER` /
+   `PIPEGUARD_TRIAGE_AGENT` / `PIPEGUARD_NOTIFIER`, the per-agent `PIPEGUARD_*_MODEL` tiers
+   ([ADR-0012](ADR-0012-agent-scoping-model-tiering.md)), and `PIPEGUARD_SLACK_LIVE` — all
+   documented in `.env.example`.
+2. **Not yet built (honest gap):** the composed `Profile` bundle object and the full
+   `defaults → profile → env → override` resolver via pydantic-settings. The runbook is a
+   typed object (`runbook.py`), not yet a versioned per-lab profile record (schemas.md §19).
+   AI stays off by default regardless ([ADR-0006](ADR-0006-ai-off-by-default-fallback.md)).
 
 ## Revisit when
 

@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-07-07 (MST) |
+| **Status** | Accepted · Realized (synthesizer + triage stub-first with fallback; notify port inherits the contract) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | ADR-0001, ADR-0005 |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) |
 
 ## Context
 
@@ -42,6 +42,17 @@ tests pass without it. Model selection is configurable to trade cost for quality
 | **Gains** | Dev/CI cost nothing and run offline; the demo has a built-in safety net; enabling AI is a one-line config change |
 | **Costs** | Every AI path needs a maintained deterministic fallback |
 | **Follow-ups** | Every new agent inherits this contract, bounding blast radius as agent count grows |
+
+## Realized (2026-07-08)
+
+1. **Synthesizer + QC-triage agent** are stub-first and off by default (`get_synthesizer`,
+   `get_triage_agent`): each lazy-imports `anthropic`, is selected by a `PIPEGUARD_*` env var,
+   and falls back to the deterministic stub on *any* error — including a safety refusal. Model
+   choice is configurable via `PIPEGUARD_*_MODEL`.
+2. **The notify port ([ADR-0010](ADR-0010-ticketing-notify-read-api.md)) inherited the same
+   contract:** stub-first, `slack_sdk` lazy-imported (deliberately not a dependency), live send
+   guarded behind `PIPEGUARD_SLACK_LIVE`, degrading to the offline stub on any error — so the
+   default demo and the test suite never open a socket.
 
 ## Revisit when
 

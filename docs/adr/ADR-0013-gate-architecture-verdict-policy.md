@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-07-07 (MST) |
+| **Status** | Accepted · Realized (three-gate model + surface-and-decide policy built; QC gate now decides on registry-normalized canonical values, T-025) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0009](ADR-0009-corpora-retrieval-upskilling.md) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md), [ADR-0009](ADR-0009-corpora-retrieval-upskilling.md), [ADR-0015](ADR-0015-layered-data-contract.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/metric_registry.md](../data/metric_registry.md) |
 
 ## Context
 
@@ -63,6 +63,25 @@ human judgment call, not an automatic resequence.
 | **Gains** | Cheap early rejection of unsequenceable samples; a conservative, trust-building verdict policy; the corpora capture real human decisions for future guidance |
 | **Costs** | Three checkpoints, an override mechanism, and intake-metric wiring to build |
 | **Follow-ups** | Preflight + QC + variant metric sets land in `data/qc_metrics.md`; the decision record feeds ADR-0009 |
+
+## Realized (2026-07-08)
+
+1. **Three-gate model in code.** `models.py` defines `Gate{preflight, qc, variant}` and a
+   category → gate map; `DecisionCard.gate_results` derives a per-gate rollup from a card's
+   findings. `rules.py` emits preflight findings (provenance / metadata / pipeline categories)
+   and QC findings (metric / coverage / identity). The variant gate is modeled but no variant
+   rules fire yet; the Intake/Preflight screen is surfaced in the UI
+   (`frontend/src/screens/Intake.tsx`), while the manual override + Illumina InterOp/SAV intake
+   metrics remain wishlist.
+2. **Surface-and-decide verdict policy realized.** Provenance/identity → ESCALATE,
+   operational/pipeline log failures → RERUN, borderline QC → HOLD (`rules.py`, mirrored in the
+   notify `_VERDICT_GUIDANCE`). No auto-rerun on a QC breach — the human decides.
+3. **The QC gate now decides on registry-normalized canonical values (T-025).**
+   `rules._evaluate_metric` normalizes each metric through the registry
+   ([ADR-0007](ADR-0007-ml-ready-structured-outputs.md)) and compares `MetricValue.normalized_value`
+   against a runbook threshold stored in the same `canonical_unit`, so a change in a source's raw
+   unit can't silently move a gate; verdicts are byte-identical to before, and the finding text
+   renders back to raw units via `registry.denormalize` (schemas.md §6 units contract).
 
 ## Revisit when
 
