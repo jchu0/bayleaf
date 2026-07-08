@@ -371,7 +371,8 @@ class ReadsSliceAction:
         return (
             f"DOWNLOAD bam-index: {self.index_url}\n"
             f"    -> {self.index_dest}  [checksum: {'md5' if self.index_md5 else 'unpinned'}]\n"
-            f"SLICE reads to panel: samtools view -b -M -L {self.panel_bed} {self.source_url}\n"
+            f"SLICE reads to panel: samtools view -b -M -L {self.panel_bed} "
+            f"-X {self.source_url} {self.index_dest}\n"
             f"    -> {self.dest}  (SKIP whole-genome download; region-restricted subset only)"
         )
 
