@@ -49,16 +49,16 @@ estimates — adjusted as we go.
 | T-002b | Concrete test-data QC profile (tune to GIAB panel subset) | 2 | todo | no | T-017 |
 | T-003 | `reference/domain-primer.md` + `reference/glossary.md` | 1 | todo | yes | — |
 | T-004 | `requirements/{functional,nonfunctional,constraints}.md` | 1 | todo | yes | — |
-| T-005 | `design/architecture.md` + system-view docs (context, components, data-flow, interfaces, storage, workflows, deployment) | 1 | todo | partial | T-002 |
+| T-005 | `design/architecture.md` ✅; system-view docs (context, components, data-flow, interfaces, storage, workflows, deployment) remain | 1 | in-progress | partial | T-002 |
 | T-006 | `design/configuration.md` (profiles) | 1 | todo | yes | — |
 | T-007 | `design/structure.md` (repo + data map) | 1 | todo | yes | — |
-| T-008 | `data/{provenance,licensing}.md` (schemas.md + metric_registry.md ✅) | 1 | in-progress | yes | — |
+| T-008 | `data/licensing.md` remains (provenance.md ✅, schemas.md ✅, metric_registry.md ✅) | 1 | in-progress | yes | — |
 | T-009 | `quality/{evaluation,risks}.md` + `demo/demo_plan.md` | 1 | todo | yes | T-002 |
-| T-010 | ADR-pending → ADR-0008–0013 (issue-taxonomy, corpora, ticketing/API, tooling, agent-scoping, gate-architecture) | 1 | done | yes | — |
-| T-011 | Fresh production-framed `README.md` (committed; final polish awaits T-005 architecture.md) | 1 | in-progress | no | T-005 |
+| T-010 | ADRs 0008–0014 (issue-taxonomy, corpora, ticketing/API, tooling, agent-scoping, gate-architecture, productionization) | 1 | done | yes | — |
+| T-011 | Fresh production-framed `README.md` (committed; architecture.md now exists — final polish/demo-prep remains) | 1 | in-progress | no | T-005 |
 | T-012 | Phase 0 tooling: uv + `pyproject.toml` single source, mypy/ruff, hooks (batch full-eval → Phase 2/T-009) | 0 | done | no | — |
 | T-013 | GIAB HG002 subset fetch script + synthetic perturbation generator | 2 | todo | partial | T-002, T-008 |
-| T-014 | Event bus + provenance ledger (in-memory + JSONL; DB projection → Phase 2) | 1 | done | no | ADR-0002 |
+| T-014 | Event bus + provenance ledger (in-memory + JSONL; DB projection → T-023 ✅) | 1 | done | no | ADR-0002 |
 | T-015 | QC-triage agent (advisory, stub-first, corpus + retrieval, /triage API) | 3 | done | no | T-014 |
 | T-015b | Slack notify port for the triage/review flow (deferred from T-015) | 3 | todo | no | T-015 |
 | T-016 | Data strategy doc + label mock_run_01 origin | 1 | done | yes | — |
