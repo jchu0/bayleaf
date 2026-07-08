@@ -23,6 +23,9 @@ dependencies = [
 app = ["streamlit>=1.31"]
 api = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
 claude = ["anthropic>=0.40", "python-dotenv>=1.0"]
+# slack = the live outbound notify path (OFF by default — see pipeguard.notify; needs
+# PIPEGUARD_SLACK_LIVE armed + a bot token/channel). Absent -> the stub fallback.
+slack = ["slack-sdk>=3.27", "python-dotenv>=1.0"]
 
 [dependency-groups]
 # Dev toolchain (PEP 735; installed by default on `uv sync`).

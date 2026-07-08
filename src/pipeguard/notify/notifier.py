@@ -18,17 +18,18 @@ operator inbox should carry signal (cards that need a human), not an all-clear f
 passing sample. The check is :func:`should_notify`, grounded in the card's existing
 :attr:`~pipeguard.models.DecisionCard.is_actionable`.
 
-Live send is OUT OF SCOPE (T-015b)
-----------------------------------
-This task builds payload construction, the adapter shape, the lazy import, and the
-fallback — but does **not** wire a live Slack post. Posting to a real workspace is
-outward-facing and needs maintainer sign-off, so ``_LIVE_SEND_ENABLED`` is ``False`` and
-the default demo/tests never send. See :class:`SlackNotifier` for the guarded seam + TODO.
+Live send is OPT-IN (T-015b)
+----------------------------
+Payload construction, the adapter shape, the lazy import, and the fallback are always
+built; the actual outward-facing Slack post is armed only by exporting
+``PIPEGUARD_SLACK_LIVE`` (see :func:`_live_send_enabled`). Off by default and off from a
+token alone, so the default demo/tests never send. See :class:`SlackNotifier` for the seam.
 
 Env knobs (mirror the synthesizer/triage seams; nothing hardcoded — see .env.example):
-  PIPEGUARD_NOTIFIER        "stub" (default, offline, $0) | "slack" (adapter; live-send off)
-  PIPEGUARD_SLACK_CHANNEL   target channel id/name for the (disabled) Slack path
-  PIPEGUARD_SLACK_BOT_TOKEN bot token for the (disabled) Slack path — unused until sign-off
+  PIPEGUARD_NOTIFIER        "stub" (default, offline, $0) | "slack" (adapter)
+  PIPEGUARD_SLACK_LIVE      unset (default; never sends) | "1" to arm the live post
+  PIPEGUARD_SLACK_CHANNEL   target channel id/name for the Slack path (used when armed)
+  PIPEGUARD_SLACK_BOT_TOKEN bot token (xoxb-…, chat:write) — used only when live is armed
 """
 
 from __future__ import annotations
@@ -44,17 +45,28 @@ _ENV_NOTIFIER = "PIPEGUARD_NOTIFIER"
 _ENV_SLACK_CHANNEL = "PIPEGUARD_SLACK_CHANNEL"
 # The NAME of the env var holding the token — not a secret value itself.
 _ENV_SLACK_TOKEN = "PIPEGUARD_SLACK_BOT_TOKEN"
+# Explicit opt-in for the outward-facing live post (see _live_send_enabled).
+_ENV_SLACK_LIVE = "PIPEGUARD_SLACK_LIVE"
 
 # Placeholder channels so a payload stays deterministic when nothing is configured.
 _STUB_CHANNEL = "stub"
 _UNCONFIGURED_CHANNEL = "unconfigured"
 
-# The single, documented safety switch for the live Slack post. Kept a plain `bool`
-# (NOT typing.Final/Literal[False]) on purpose: a Literal[False] would let mypy treat the
-# guarded live-send block as unreachable and skip type-checking it, and the tests flip
-# this to True (monkeypatch) to exercise that block. Flipping it on for real is a
-# deliberate, maintainer-gated act — see SlackNotifier.notify.
-_LIVE_SEND_ENABLED: bool = False
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _live_send_enabled() -> bool:
+    """Whether the live Slack post is armed — the single safety switch.
+
+    Off unless ``PIPEGUARD_SLACK_LIVE`` is explicitly truthy in the environment.
+    Posting to a real workspace is outward-facing, so it never turns on by default,
+    by accident, or from the presence of a token alone: the demo and the test suite
+    stay offline until a maintainer deliberately exports this flag *and* supplies a
+    token + channel. Read from ``os.environ`` (not a module constant) so it is
+    opt-in per process and can't be silently baked in.
+    """
+    return os.environ.get(_ENV_SLACK_LIVE, "").strip().lower() in _TRUTHY
+
 
 # A conservative disclaimer on every notification: this is a research/demo QC aid, and the
 # verdict was decided deterministically — the message only formats it (CLAUDE.md guardrails).
@@ -215,9 +227,10 @@ class SlackNotifier:
       * Any error — an absent ``slack_sdk``, a missing token, an API failure — degrades to
         the offline stub. A notification problem can never break the gate or the demo.
 
-    Live send is intentionally guarded OFF (``_LIVE_SEND_ENABLED``): posting to a real
-    workspace is outward-facing and needs maintainer sign-off. With the guard off, every
-    call delegates to the stub (payload built + recorded, no socket opened).
+    Live send is opt-in via ``PIPEGUARD_SLACK_LIVE`` (:func:`_live_send_enabled`): posting
+    to a real workspace is outward-facing, so unless it is armed every call delegates to
+    the stub (payload built + recorded, no socket opened) — a configured token/channel
+    alone never sends.
     """
 
     name = "slack"
@@ -259,15 +272,14 @@ class SlackNotifier:
         if not should_notify(card):
             return _skipped_result(self.name)
 
-        if not _LIVE_SEND_ENABLED:
-            # PRIMARY GUARD: live Slack posting is out of scope (ADR-0010 §2, T-015b).
-            # Delegate to the offline stub — it builds + records the same payload and
-            # never opens a socket, so the default demo and the test suite never send.
-            # TODO(T-015b live-send): enable only behind an explicit maintainer-approved
-            # opt-in (e.g. a PIPEGUARD_SLACK_LIVE flag) AND a resolved bot token.
+        if not _live_send_enabled():
+            # PRIMARY GUARD: live Slack posting is opt-in only (ADR-0010 §2, T-015b).
+            # Without PIPEGUARD_SLACK_LIVE set, delegate to the offline stub — it builds +
+            # records the same payload and never opens a socket, so the default demo and
+            # the test suite never send even when a token/channel are configured.
             return self._fallback.notify(card)
 
-        # --- guarded live-send seam (unreached until _LIVE_SEND_ENABLED flips) --------
+        # --- live-send seam (reached only when PIPEGUARD_SLACK_LIVE is armed) ----------
         payload = build_payload(card, channel=self._channel)
         try:
             client = self._get_client()  # lazy slack_sdk import + token resolution

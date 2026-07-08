@@ -21,7 +21,6 @@ from pipeguard.notify import (
     get_notifier,
     should_notify,
 )
-from pipeguard.notify import notifier as notify_mod
 from pipeguard.synthesis import StubSynthesizer
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
@@ -32,6 +31,15 @@ def cards():
     # Stub synthesizer keeps the demo scenario deterministic: S4=ESCALATE, S5=HOLD,
     # S1/S2/S3=PROCEED (pinned in test_gate.py).
     return {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}
+
+
+@pytest.fixture(autouse=True)
+def _disarm_live_send(monkeypatch):
+    """Belt-and-suspenders: NO notify test may post to a real workspace — even on a machine
+    whose shell or .env has PIPEGUARD_SLACK_LIVE + a real token set. The live send is
+    env-armed, so we force it off for every test; the few tests that exercise the live seam
+    re-arm it explicitly (after this autouse fixture runs)."""
+    monkeypatch.delenv("PIPEGUARD_SLACK_LIVE", raising=False)
 
 
 # --- notify policy ----------------------------------------------------------
@@ -176,8 +184,8 @@ def test_slack_channel_is_read_from_env_never_hardcoded(cards, monkeypatch):
 
 
 def test_slack_live_seam_falls_back_to_stub_on_error(cards, monkeypatch):
-    """With the (normally OFF) guard flipped on, any send error still degrades to stub."""
-    monkeypatch.setattr(notify_mod, "_LIVE_SEND_ENABLED", True)
+    """With live send armed, any send error still degrades to stub."""
+    monkeypatch.setenv("PIPEGUARD_SLACK_LIVE", "1")
     agent = SlackNotifier()
 
     def _boom():
@@ -190,8 +198,8 @@ def test_slack_live_seam_falls_back_to_stub_on_error(cards, monkeypatch):
 
 
 def test_slack_live_seam_missing_client_lib_falls_back_to_stub(cards, monkeypatch):
-    """Guard on but slack_sdk absent: the lazy import raises ImportError → stub fallback."""
-    monkeypatch.setattr(notify_mod, "_LIVE_SEND_ENABLED", True)
+    """Live armed but slack_sdk absent: the lazy import raises ImportError → stub fallback."""
+    monkeypatch.setenv("PIPEGUARD_SLACK_LIVE", "1")
     # Force `import slack_sdk` to fail regardless of the developer's environment (a None
     # entry in sys.modules makes the import raise ImportError) and drop any token — so this
     # test can NEVER build a real client or touch the wire, even on a machine that happens
@@ -205,10 +213,10 @@ def test_slack_live_seam_missing_client_lib_falls_back_to_stub(cards, monkeypatc
 def test_slack_live_seam_posts_via_client_when_explicitly_enabled(cards, monkeypatch):
     """Prove the deferred wiring's SHAPE with a fake client — no real Slack API, no wire.
 
-    This is the one place SENT can occur, and only because the module guard is flipped in
-    the test AND a fake client is injected. The default demo/suite never reaches here.
+    This is the one place SENT can occur, and only because live send is armed in the test
+    AND a fake client is injected. The default demo/suite never reaches here.
     """
-    monkeypatch.setattr(notify_mod, "_LIVE_SEND_ENABLED", True)
+    monkeypatch.setenv("PIPEGUARD_SLACK_LIVE", "1")
 
     class _FakeSlackClient:
         def __init__(self):
@@ -234,19 +242,20 @@ def test_slack_live_seam_posts_via_client_when_explicitly_enabled(cards, monkeyp
     assert call["blocks"] == result.payload.blocks
 
 
-def test_slack_never_sends_by_default_even_with_creds(cards, monkeypatch):
-    """The default guard (_LIVE_SEND_ENABLED=False) suppresses sending even if creds exist."""
+def test_slack_never_sends_when_not_armed_even_with_creds(cards, monkeypatch):
+    """With PIPEGUARD_SLACK_LIVE unset, a token + channel alone never trigger a send."""
     monkeypatch.setenv("PIPEGUARD_SLACK_BOT_TOKEN", "xoxb-not-a-real-token")
     monkeypatch.setenv("PIPEGUARD_SLACK_CHANNEL", "C0EXAMPLE")
+    # (the autouse fixture already ensures PIPEGUARD_SLACK_LIVE is unset)
     agent = SlackNotifier()
 
-    # Spy: the client seam must never be touched on the shipped default path, even with
+    # Spy: the client seam must never be touched when live send isn't armed, even with
     # creds present — this directly proves "no send", not just a stub-shaped result.
     def _fail_if_called():
-        raise AssertionError("_get_client must not be called when _LIVE_SEND_ENABLED is False")
+        raise AssertionError("_get_client must not be called when live send is not armed")
 
     monkeypatch.setattr(agent, "_get_client", _fail_if_called)
-    # Guard is NOT flipped here — this asserts the shipped default never delivers.
+    # Live send is NOT armed here — this asserts the shipped default never delivers.
     result = agent.notify(cards["S4"])
     assert result.delivered is False
     assert result.adapter == "stub"
