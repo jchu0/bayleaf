@@ -62,3 +62,16 @@ cards = run_gate(load_run("data/mock_run_01"), ledger=ledger)
 3. `artifact.ingested` / `metric.parsed` events once **MetricValue/MetricRegistry**
    ingest lands with real QC data.
 4. **pipeline_provenance** on the AnalysisRun from sarek `pipeline_info/`.
+
+## Phase 1 scope notes (deliberate divergences from schemas.md)
+
+1. **AnalysisRun is per-run here**, not per-sample. schemas.md models it per-sample
+   (with `sample_id` / `input_artifact_ids`); Phase 1 creates one per gate execution —
+   the gate manifest (rule pack, runbook) is identical across a run's samples, so a
+   single anchor suffices and all cards share it. Per-sample AnalysisRuns arrive with
+   real per-sample pipeline provenance in Phase 2.
+2. **Records carry a Phase-1 subset of fields.** `Evidence` omits `artifact_id` /
+   `metric_value_id` / `corpus_id`; `DecisionCard` omits `model` / `supersedes_card_id`;
+   `ProvenanceEvent` omits `trace_id` / `correlation_id` / `ticket_id`; `gate_provenance`
+   ships `{rule_pack_version, runbook_metrics}` rather than the full manifest. Each fills
+   in as its producer (metric ingest, tickets, sarek provenance) lands in Phase 2.

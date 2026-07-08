@@ -22,9 +22,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from .identifiers import SCHEMA_VERSION, utc_now
+from .identifiers import SCHEMA_VERSION, new_id, utc_now
 from .identifiers import content_hash as _content_hash
 
 
@@ -73,11 +73,12 @@ class SourceKind(str, Enum):
     HUMAN_NOTE = "human_note"
 
 
-# Which gate owns each category (ADR-0013 three-gate model). Identity/provenance
-# checks ride the QC gate; intake metadata and pipeline/operational failures are
-# preflight; variant-level is the variant gate.
+# Which gate owns each category (ADR-0013 three-gate model). Provenance (barcode /
+# index integrity), intake metadata, and pipeline/operational failures are caught at
+# preflight; QC metrics and sample identity/swap (NGSCheckMate) are the QC gate;
+# variant-level is the variant gate. Mirrors the qc_metrics.md gate table.
 _CATEGORY_GATE: dict[Category, Gate] = {
-    Category.PROVENANCE: Gate.QC,
+    Category.PROVENANCE: Gate.PREFLIGHT,
     Category.QC: Gate.QC,
     Category.COVERAGE: Gate.QC,
     Category.CONTAMINATION: Gate.QC,
@@ -109,6 +110,8 @@ class Evidence(BaseModel):
     `expected` = expected_value.
     """
 
+    model_config = ConfigDict(frozen=True)
+
     source: str = Field(..., description="Artifact/file the evidence came from (source_file)")
     locator: str | None = Field(None, description="Row/field/line pointer within the source")
     value: str | None = Field(None, description="Observed value or excerpt (observed_value)")
@@ -129,7 +132,11 @@ class Finding(BaseModel):
     semantic, rule-version-independent key for recurrence tracking.
     """
 
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(default_factory=lambda: new_id("find"))
     rule_id: str
+    sample_id: str | None = None
     category: Category
     severity: Severity
     title: str
@@ -151,7 +158,12 @@ class Finding(BaseModel):
     def signature(self) -> str:
         """Semantic, rule-version-independent recurrence key (schemas.md redline 5)."""
         loci = sorted(f"{e.source}:{e.locator}" for e in self.evidence)
-        payload = {"category": self.category.value, "rule_id": self.rule_id, "loci": loci}
+        payload = {
+            "category": self.category.value,
+            "rule_id": self.rule_id,
+            "sample_id": self.sample_id,
+            "loci": loci,
+        }
         return _content_hash(payload)[:16]
 
     @computed_field  # type: ignore[prop-decorator]
@@ -161,6 +173,7 @@ class Finding(BaseModel):
         return _content_hash(
             {
                 "rule_id": self.rule_id,
+                "sample_id": self.sample_id,
                 "category": self.category.value,
                 "severity": self.severity.value,
                 "title": self.title,

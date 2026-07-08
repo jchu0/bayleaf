@@ -98,7 +98,7 @@ def run_gate(
                     outputs=[
                         EntityRef(
                             entity_type="finding",
-                            id=finding.rule_id,
+                            id=finding.id,
                             content_hash=finding.content_hash,
                         )
                     ],

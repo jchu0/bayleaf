@@ -6,9 +6,9 @@ normal development. When enabled, it sends the rule engine's findings plus a
 compact artifact context to Claude and gets back operator-readable narration.
 
 Design guarantees that keep it safe and cheap to flip on:
-  * The verdict and confidence are STILL computed deterministically from the
-    findings (via the shared grounding helpers) — Claude only writes prose.
-    The model cannot override the gate.
+  * The verdict is STILL computed deterministically from the findings (via the
+    shared grounding helpers) — Claude only writes prose and cannot override the
+    gate. Confidence is omitted until grounded (T-019).
   * `anthropic` is imported lazily, so the package installs and runs without it.
   * Any API error (including a safety `refusal`) falls back to StubSynthesizer,
     so a flaky conference network can never break the demo.

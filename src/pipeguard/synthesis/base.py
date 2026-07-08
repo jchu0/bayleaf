@@ -32,24 +32,6 @@ def aggregate_verdict(findings: list[Finding]) -> Verdict:
     return max((f.suggested_verdict for f in findings), key=lambda v: _VERDICT_RANK[v])
 
 
-def derive_confidence(findings: list[Finding], verdict: Verdict) -> float:
-    """How sure the *system* is about the recommendation.
-
-    Borderline-only cases are deliberately lower-confidence: the point of a HOLD
-    is that it is a judgment call a human should confirm.
-    """
-    if not findings:
-        return 0.96
-    has_critical = any(f.severity is Severity.CRITICAL for f in findings)
-    if verdict is Verdict.ESCALATE:
-        return 0.9 if has_critical else 0.7
-    if verdict is Verdict.RERUN:
-        return 0.88
-    if verdict is Verdict.HOLD:
-        return 0.62  # borderline by design -> flag for the operator
-    return 0.8
-
-
 def top_finding(findings: list[Finding]) -> Finding | None:
     """The single most decision-relevant finding, for headline generation."""
     if not findings:

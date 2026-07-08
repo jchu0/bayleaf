@@ -7,6 +7,7 @@ the rule engine is caught before it reaches the dashboard.
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from pipeguard import DEFAULT_RUNBOOK, Verdict, evaluate_run, load_run, run_gate
 from pipeguard.models import (
@@ -150,6 +151,10 @@ def test_finding_gate_is_derived_from_category(findings):
     """Each finding is labeled with the gate that owns its category (ADR-0013)."""
     s5_qc = [f for f in findings["S5"] if f.category is Category.QC]
     assert s5_qc and all(f.gate is Gate.QC for f in s5_qc)
+    # Barcode (provenance) and missing metadata are BOTH caught at preflight, per
+    # qc_metrics.md's gate table — before the sample enters the queue.
+    s4_prov = [f for f in findings["S4"] if f.category is Category.PROVENANCE]
+    assert s4_prov and all(f.gate is Gate.PREFLIGHT for f in s4_prov)
     s4_meta = [f for f in findings["S4"] if f.category is Category.METADATA]
     assert s4_meta and all(f.gate is Gate.PREFLIGHT for f in s4_meta)
 
@@ -159,7 +164,7 @@ def test_card_exposes_per_gate_results():
     cards = {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}
     s4 = cards["S4"]
     gates = {gr.gate for gr in s4.gate_results}
-    assert Gate.QC in gates  # S4's barcode/provenance finding rides the QC gate
+    assert Gate.PREFLIGHT in gates  # S4's barcode + metadata findings ride preflight
     assert all(gr.finding_rule_ids for gr in s4.gate_results)
 
 
@@ -195,10 +200,15 @@ def test_ledger_captures_gate_event_trail():
     types = [e.event_type for e in ledger.events]
     assert types[0] is EventType.ANALYSIS_RUN_STARTED
     assert types[-1] is EventType.ANALYSIS_RUN_COMPLETED
-    assert len(ledger.by_type(EventType.VERDICT_DECIDED)) == len(cards)  # one per sample
+    assert len(ledger.by_type(EventType.SAMPLE_REGISTERED)) == 5  # one per sample
+    assert len(ledger.by_type(EventType.VERDICT_DECIDED)) == len(cards)
     emitted = ledger.by_type(EventType.FINDING_EMITTED)
-    assert any(e.sample_id == "S4" for e in emitted)  # S4's findings are logged
-    assert all(e.outputs and e.outputs[0].content_hash for e in emitted)  # with hashes
+    assert len(emitted) == 4  # S4: barcode + missing-subject; S5: Q30 + coverage
+    # started(1) + registered(5) + findings(4) + verdicts(5) + completed(1) = 16
+    assert len(ledger.events) == 1 + 5 + 4 + 5 + 1
+    assert any(e.sample_id == "S4" for e in emitted)
+    assert all(e.outputs and e.outputs[0].content_hash for e in emitted)  # hashes
+    assert all(e.outputs[0].id.startswith("find_") for e in emitted)  # unique finding ids
 
 
 def test_cards_anchored_to_one_analysis_run():
@@ -221,3 +231,51 @@ def test_ledger_persists_jsonl(tmp_path: Path):
     lines = path.read_text().strip().splitlines()
     assert len(lines) == len(ledger.events)
     assert json.loads(lines[0])["event_type"] == "analysis_run.started"
+
+
+def test_findings_carry_sample_id_and_unique_id(findings):
+    """Findings are self-describing: sample_id set + a unique find_ id."""
+    s4 = findings["S4"]
+    assert all(f.sample_id == "S4" for f in s4)
+    ids = [f.id for f in s4]
+    assert all(i.startswith("find_") for i in ids)
+    assert len(set(ids)) == len(ids)  # unique per finding
+
+
+def test_signature_discriminates_by_sample():
+    """The same rule on different samples yields different signatures (no collision)."""
+    ev = [Evidence(source="pipeline.log", locator="matched line", value="ERROR")]
+    a = Finding(
+        rule_id="PIPE-001",
+        sample_id="S2",
+        category=Category.PIPELINE,
+        severity=Severity.CRITICAL,
+        title="t",
+        detail="d",
+        evidence=ev,
+        suggested_verdict=Verdict.RERUN,
+    )
+    b = a.model_copy(update={"sample_id": "S4"})
+    assert a.signature != b.signature  # sample_id is part of the semantic signature
+
+
+def test_finding_is_immutable():
+    """Findings are frozen so content_hash is a pinned identity (schemas.md invariant 1)."""
+    f = Finding(
+        rule_id="X",
+        category=Category.QC,
+        severity=Severity.WARN,
+        title="t",
+        detail="d",
+        evidence=[],
+        suggested_verdict=Verdict.HOLD,
+    )
+    with pytest.raises(ValidationError):
+        f.title = "changed"
+
+
+def test_card_content_hash_is_stable_and_distinct():
+    """Each card's content_hash is a 64-hex identity that differs by sample."""
+    cards = {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}
+    assert len(cards["S4"].content_hash) == 64
+    assert cards["S4"].content_hash != cards["S5"].content_hash

@@ -5,8 +5,8 @@ It is the default synthesizer so the whole app runs (and demos) offline, and it
 doubles as the ground truth the live ClaudeSynthesizer is checked against.
 
 The prose here is templated. The *only* thing the Claude path changes is the
-quality of `headline`, `rationale`, and `next_steps`; verdict/confidence/findings
-stay identical because they come from the shared grounding helpers.
+quality of `headline`, `rationale`, and `next_steps`; the verdict and findings
+stay identical (from the shared grounding helpers). Confidence is omitted (T-019).
 """
 
 from __future__ import annotations

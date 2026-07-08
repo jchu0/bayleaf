@@ -51,6 +51,7 @@ def _check_barcode(
         return None
     return Finding(
         rule_id="PROV-001",
+        sample_id=sid,
         category=Category.PROVENANCE,
         severity=Severity.CRITICAL,
         title="Barcode does not match the declared sample sheet",
@@ -89,6 +90,7 @@ def _check_presence(
         findings.append(
             Finding(
                 rule_id="PROV-002",
+                sample_id=sid,
                 category=Category.PROVENANCE,
                 severity=Severity.CRITICAL,
                 title="Sample has QC results but is absent from the sample sheet",
@@ -108,6 +110,7 @@ def _check_presence(
         findings.append(
             Finding(
                 rule_id="META-002",
+                sample_id=sid,
                 category=Category.METADATA,
                 severity=Severity.WARN,
                 title="No intake metadata for a sequenced sample",
@@ -137,6 +140,7 @@ def _check_metadata(sid: str, meta: Sample | None, runbook: Runbook) -> Finding 
         return None
     return Finding(
         rule_id="META-001",
+        sample_id=sid,
         category=Category.METADATA,
         severity=Severity.WARN,
         title="Required intake metadata is missing",
@@ -161,6 +165,7 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, value: float | None) -> F
     if value is None:
         return Finding(
             rule_id=f"QC-{threshold.metric.upper()}-NA",
+            sample_id=sid,
             category=Category.QC,
             severity=Severity.WARN,
             title=f"{threshold.label} is missing",
@@ -203,6 +208,7 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, value: float | None) -> F
     direction = "≥" if threshold.higher_is_better else "≤"
     return Finding(
         rule_id=f"QC-{threshold.metric.upper()}",
+        sample_id=sid,
         category=Category.QC,
         severity=severity,
         title=f"{threshold.label} {qualifier} the QC gate",
@@ -236,6 +242,7 @@ def _check_log(sid: str, log_lines: list[str], runbook: Runbook) -> Finding | No
         return None
     return Finding(
         rule_id="PIPE-001",
+        sample_id=sid,
         category=Category.PIPELINE,
         severity=Severity.CRITICAL,
         title="Pipeline logged a failure for this sample",
