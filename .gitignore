@@ -67,3 +67,5 @@ Thumbs.db
 .claude/settings.local.json
 # Machine-specific dev-server config (absolute venv path); see README to run the app
 .claude/launch.json
+# Background-agent scratch (git worktrees + agent outputs) — never committed
+.claude/worktrees/
