@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { Empty, ErrorBox, Loading } from '../components/States'
 import type { RunSummary } from '../types'
 import { VERDICT_TEXT } from '../verdict'
 
@@ -17,15 +18,9 @@ export function RunOverview() {
       .catch((e) => setError(String(e)))
   }, [])
 
-  if (error) {
-    return (
-      <div className="text-escalate border border-escalate rounded-lg p-4 max-w-3xl">
-        {error}. Is the API running?
-      </div>
-    )
-  }
-  if (!runs) return <p className="text-ink-dim">Loading runs…</p>
-  if (runs.length === 0) return <p className="text-ink-dim">No runs found.</p>
+  if (error) return <ErrorBox message={`${error}. Is the API running?`} />
+  if (!runs) return <Loading label="Loading runs…" />
+  if (runs.length === 0) return <Empty message="No runs found." />
 
   return (
     <div className="grid gap-4 max-w-3xl">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
+import { ErrorBox, Loading } from '../components/States'
 import type { ProvenanceEvent, RunDetail as RunDetailData } from '../types'
 
 const EVENT_META: Record<string, { icon: string; label: string }> = {
@@ -27,8 +28,8 @@ export function Provenance() {
       .catch((e) => setError(String(e)))
   }, [runId])
 
-  if (error) return <p className="text-escalate">{error}</p>
-  if (!detail) return <p className="text-ink-dim">Loading…</p>
+  if (error) return <ErrorBox message={error} />
+  if (!detail) return <Loading />
 
   return (
     <div className="max-w-3xl">

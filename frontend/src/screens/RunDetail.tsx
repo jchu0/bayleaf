@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { EvidenceTable } from '../components/EvidenceTable'
 import { GateResultStrip } from '../components/GateResultStrip'
+import { ErrorBox, Loading } from '../components/States'
 import { TriagePanel } from '../components/TriagePanel'
 import { VerdictBadge } from '../components/VerdictBadge'
 import type { DecisionCard, RunDetail as RunDetailData } from '../types'
@@ -19,8 +20,8 @@ export function RunDetail() {
       .catch((e) => setError(String(e)))
   }, [runId])
 
-  if (error) return <p className="text-escalate">{error}</p>
-  if (!detail) return <p className="text-ink-dim">Loading run…</p>
+  if (error) return <ErrorBox message={error} />
+  if (!detail) return <Loading label="Loading run…" />
 
   return (
     <div className="max-w-4xl">

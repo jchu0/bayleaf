@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { ErrorBox, Loading } from '../components/States'
 import type { Runbook } from '../types'
 
 export function Settings() {
@@ -14,8 +15,8 @@ export function Settings() {
       .catch((e) => setError(String(e)))
   }, [])
 
-  if (error) return <p className="text-escalate">{error}</p>
-  if (!runbook) return <p className="text-ink-dim">Loading config…</p>
+  if (error) return <ErrorBox message={error} />
+  if (!runbook) return <Loading label="Loading config…" />
 
   return (
     <div className="max-w-3xl">

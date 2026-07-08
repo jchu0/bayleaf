@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { ErrorBox, Loading } from '../components/States'
 import type { RunDetail, RunSummary } from '../types'
 import { GATE_LABEL, VERDICT_TEXT } from '../verdict'
 
@@ -27,8 +28,8 @@ export function Monitoring() {
       .catch((e) => setError(String(e)))
   }, [])
 
-  if (error) return <p className="text-escalate">{error}</p>
-  if (!runs) return <p className="text-ink-dim">Loading…</p>
+  if (error) return <ErrorBox message={error} />
+  if (!runs) return <Loading />
 
   const totalSamples = runs.reduce((a, r) => a + r.n_samples, 0)
   const totalAttention = runs.reduce((a, r) => a + r.n_attention, 0)
