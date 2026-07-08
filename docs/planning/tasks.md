@@ -47,17 +47,17 @@ estimates — adjusted as we go.
 | T-001 | Documentation workflow + ADRs 0001–0007 | 1 | done | — | — |
 | T-002 | `data/qc_metrics.md` (grounded, cited, breadth-first runbook) | 1 | done | yes | — |
 | T-002b | Concrete test-data QC profile (tune to GIAB panel subset) | 2 | todo | no | T-017 |
-| T-003 | `reference/domain-primer.md` + `reference/glossary.md` | 1 | todo | yes | — |
-| T-004 | `requirements/{functional,nonfunctional,constraints}.md` | 1 | todo | yes | — |
+| T-003 | `reference/domain-primer.md` + `reference/glossary.md` | 1 | done | yes | — |
+| T-004 | `requirements/{functional,nonfunctional,constraints}.md` | 1 | done | yes | — |
 | T-005 | `design/architecture.md` ✅; system-view docs (context, components, data-flow, interfaces, storage, workflows, deployment) remain | 1 | in-progress | partial | T-002 |
 | T-006 | `design/configuration.md` (profiles) | 1 | todo | yes | — |
 | T-007 | `design/structure.md` (repo + data map) | 1 | todo | yes | — |
-| T-008 | `data/licensing.md` remains (provenance.md ✅, schemas.md ✅, metric_registry.md ✅) | 1 | in-progress | yes | — |
-| T-009 | `quality/{evaluation,risks}.md` remain (demo/demo_plan.md ✅) | 1 | in-progress | yes | T-002 |
+| T-008 | Data docs ✅ (provenance.md, schemas.md, metric_registry.md, licensing.md) | 1 | done | yes | — |
+| T-009 | `quality/{evaluation,risks}.md` ✅ (+ demo/demo_plan.md) | 1 | done | yes | T-002 |
 | T-010 | ADRs 0008–0014 (issue-taxonomy, corpora, ticketing/API, tooling, agent-scoping, gate-architecture, productionization) | 1 | done | yes | — |
 | T-011 | Fresh production-framed `README.md` (committed; architecture.md now exists — final polish/demo-prep remains) | 1 | in-progress | no | T-005 |
 | T-012 | Phase 0 tooling: uv + `pyproject.toml` single source, mypy/ruff, hooks (batch full-eval → Phase 2/T-009) | 0 | done | no | — |
-| T-013 | GIAB HG002 subset fetch script + synthetic perturbation generator | 2 | todo | partial | T-002, T-008 |
+| T-013 | Synthetic run generator ✅ (`pipeguard.synthetic`; mock_run_02/03, all 4 verdicts); GIAB HG002 subset fetch script remains | 2 | in-progress | partial | T-002, T-008 |
 | T-014 | Event bus + provenance ledger (in-memory + JSONL; DB projection → T-023 ✅) | 1 | done | no | ADR-0002 |
 | T-015 | QC-triage agent (advisory, stub-first, corpus + retrieval, /triage API) | 3 | done | no | T-014 |
 | T-015b | Slack notify port for the triage/review flow (deferred from T-015) | 3 | todo | no | T-015 |

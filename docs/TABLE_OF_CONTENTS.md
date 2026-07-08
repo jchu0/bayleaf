@@ -21,16 +21,16 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 ## Reference (learn the domain)
 | Doc | Status | Purpose |
 |---|---|---|
-| [reference/domain-primer.md](reference/domain-primer.md) | 📝 | Rare-disease panels, GIAB HG002, gnomAD, ClinVar — for non-specialists |
-| [reference/glossary.md](reference/glossary.md) | 📝 | Terms across bioinformatics, software, and clinical |
+| [reference/domain-primer.md](reference/domain-primer.md) | ✅ | Rare-disease panels, GIAB HG002, gnomAD, ClinVar — for non-specialists |
+| [reference/glossary.md](reference/glossary.md) | ✅ | Terms across bioinformatics, software, and clinical |
 
 ## Requirements (what the system must do)
 | Doc | Status | Purpose |
 |---|---|---|
 | [requirements/scope-and-wishlist.md](requirements/scope-and-wishlist.md) | ✅ | In-scope, wishlist (with readiness), out-of-scope |
-| [requirements/functional.md](requirements/functional.md) | 📝 | Capabilities (REQ-F-NNN) |
-| [requirements/nonfunctional.md](requirements/nonfunctional.md) | 📝 | Reliability, provenance, security, performance (REQ-NF-NNN) |
-| [requirements/constraints.md](requirements/constraints.md) | 📝 | Timeline, budget, licensing, domain-safety (REQ-C-NNN) |
+| [requirements/functional.md](requirements/functional.md) | ✅ | Capabilities (REQ-F-NNN) |
+| [requirements/nonfunctional.md](requirements/nonfunctional.md) | ✅ | Reliability, provenance, security, performance (REQ-NF-NNN) |
+| [requirements/constraints.md](requirements/constraints.md) | ✅ | Timeline, budget, licensing, domain-safety (REQ-C-NNN) |
 
 ## Design (how it is built)
 | Doc | Status | Purpose |
@@ -80,13 +80,13 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [data/qc_metrics-rare-disease.md](data/qc_metrics-rare-disease.md) | ✅ | Rare-disease gold standards: depth/breadth, cancer/pathogen comparison, tool licenses |
 | [data/nf-core-conventions.md](data/nf-core-conventions.md) | ✅ | nf-core/sarek conventions → schema records (sample sheet, versions, MultiQC, artifacts) |
 | [data/provenance.md](data/provenance.md) | ✅ | Event seam: AnalysisRun anchor, event vocabulary, append-only ledger |
-| [data/licensing.md](data/licensing.md) | 📝 | Per-tool licenses in the stack |
+| [data/licensing.md](data/licensing.md) | ✅ | Per-tool + data-source licenses; external-process invocation model |
 
 ## Quality (is it correct, what could go wrong)
 | Doc | Status | Purpose |
 |---|---|---|
-| [quality/evaluation.md](quality/evaluation.md) | 📝 | What "good" means, checks, failure modes |
-| [quality/risks.md](quality/risks.md) | 📝 | Technical / product / data / demo risks + mitigations |
+| [quality/evaluation.md](quality/evaluation.md) | ✅ | What "good" means, checks (EVAL-NNN) grounded in the test suite, failure modes |
+| [quality/risks.md](quality/risks.md) | ✅ | Technical / product / data / demo risks + mitigations (RISK-NNN) |
 
 ## Demo
 | Doc | Status | Purpose |
