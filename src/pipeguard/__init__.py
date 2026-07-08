@@ -17,6 +17,14 @@ from .models import (
     SourceKind,
     Verdict,
 )
+from .notify import (
+    NotifyPayload,
+    NotifyPort,
+    NotifyResult,
+    NotifyStatus,
+    get_notifier,
+    notify_card,
+)
 from .parsers import load_run
 from .persistence import (
     CardRow,
@@ -63,6 +71,10 @@ __all__ = [
     "Gate",
     "GateResult",
     "KnowledgeEntry",
+    "NotifyPayload",
+    "NotifyPort",
+    "NotifyResult",
+    "NotifyStatus",
     "ProvenanceEvent",
     "Repository",
     "RunArtifacts",
@@ -78,9 +90,11 @@ __all__ = [
     "Verdict",
     "evaluate_run",
     "evaluate_sample",
+    "get_notifier",
     "get_synthesizer",
     "get_triage_agent",
     "load_run",
+    "notify_card",
     "project_events",
     "rebuild_db",
     "run_gate",
