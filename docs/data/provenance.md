@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Active (Phase 1 seam built; DB projection Phase 2) |
-| **Last updated** | 2026-07-07 (MST) |
+| **Status** | Active (Phase 1 seam built; DB projection + `rebuild-db` implemented) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Audience** | software / bioinformatics |
-| **Related** | [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [schemas.md](schemas.md), `src/pipeguard/provenance.py`, `src/pipeguard/engine.py` |
+| **Related** | [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [schemas.md](schemas.md), `src/pipeguard/provenance.py`, `src/pipeguard/engine.py`, `src/pipeguard/persistence/` |
 
 ## Overview
 
@@ -55,13 +55,45 @@ cards = run_gate(load_run("data/mock_run_01"), ledger=ledger)
 # ledger.events -> the full trail; ledger.by_type(EventType.VERDICT_DECIDED) -> per-sample
 ```
 
+## The DB projection (implemented — Phase 2)
+
+The relational projection promised above now exists in `src/pipeguard/persistence/`:
+a **rebuildable projection of the ledger**, reached only through a repository port
+so the core never touches a DB directly (ADR-0003).
+
+1. **`Repository` port** — the mandatory DB-agnostic interface (save/list runs,
+   samples, findings, cards; append/list events; `get_run_bundle`; `reset`).
+   `SqliteRepository` is the default adapter (stdlib `sqlite3`, no new dependency);
+   a Postgres adapter can implement the same port later.
+2. **Tables** (schema-versioned via `PRAGMA user_version`): `runs`, `samples`,
+   `findings`, `decision_cards`, `provenance_events`. `content_hash`/ids are
+   preserved verbatim; nested/unindexed data (`gate_provenance`, event
+   `inputs`/`outputs`/`payload`) is stored as JSON; timestamps are UTC ISO-8601.
+3. **One projector, two callers** — `project_events(events, repo)` is the only
+   event→row mapping. `run_gate(..., repo=…)` runs it live after a gate execution,
+   and `rebuild_db(ledger_path, repo)` runs it over a replayed JSONL file, so the
+   DB is a *pure function of the log* regardless of path. A row carries only what
+   an event snapshotted — nothing is invented.
+4. **`rebuild-db`** replays a ledger into a fresh projection deterministically
+   (clears first, so a rebuild is reproducible and rebuilding twice is idempotent):
+
+   ```bash
+   python -m pipeguard.persistence.rebuild run.events.jsonl pipeguard.sqlite
+   # or: make rebuild-db LEDGER=run.events.jsonl DB=pipeguard.sqlite
+   ```
+
+Only the current event vocabulary is projected (`analysis_run.started/completed`,
+`sample.registered`, `finding.emitted`, `verdict.decided`); reserved event types
+are still recorded verbatim in `provenance_events` and gain projected rows when
+their producers land.
+
 ## Deferred to Phase 2
 
-1. The relational **DB projection** + `rebuild-db` replay (repository interface, ADR-0003).
-2. **Strict-replay determinism** (byte-identical rebuild).
-3. `artifact.ingested` / `metric.parsed` events once **MetricValue/MetricRegistry**
-   ingest lands with real QC data.
-4. **pipeline_provenance** on the AnalysisRun from sarek `pipeline_info/`.
+1. **Strict-replay determinism** (byte-identical rebuild) — the projection is
+   deterministic and idempotent today; byte-identical hardening remains.
+2. `artifact.ingested` / `metric.parsed` events once **MetricValue/MetricRegistry**
+   ingest lands with real QC data (and their projected tables).
+3. **pipeline_provenance** on the AnalysisRun from sarek `pipeline_info/`.
 
 ## Phase 1 scope notes (deliberate divergences from schemas.md)
 
