@@ -1,4 +1,5 @@
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
+import { Monitoring } from './screens/Monitoring'
 import { Provenance } from './screens/Provenance'
 import { RunDetail } from './screens/RunDetail'
 import { RunOverview } from './screens/RunOverview'
@@ -14,9 +15,14 @@ export default function App() {
             <span className="text-xl font-semibold">PipeGuard</span>
             <span className="text-ink-dim text-sm ml-2">provenance &amp; QC decision gate</span>
           </Link>
-          <Link to="/settings" className="text-ink-dim text-sm hover:text-ink">
-            Settings
-          </Link>
+          <nav className="flex items-center gap-4 text-sm text-ink-dim">
+            <Link to="/monitoring" className="hover:text-ink">
+              Monitoring
+            </Link>
+            <Link to="/settings" className="hover:text-ink">
+              Settings
+            </Link>
+          </nav>
         </header>
         <main className="p-8">
           <Routes>
@@ -24,6 +30,7 @@ export default function App() {
             <Route path="/runs/:runId" element={<RunDetail />} />
             <Route path="/runs/:runId/provenance" element={<Provenance />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/monitoring" element={<Monitoring />} />
           </Routes>
         </main>
       </div>
