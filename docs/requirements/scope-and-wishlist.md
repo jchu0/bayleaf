@@ -66,6 +66,7 @@ the **variant gate** is Phase 2; **evaluation** vs. GIAB/synthetic truth is ongo
 | 15 | CNV / mosaicism calling (dedicated callers) | High | callers + validation | Out of gate scope; coverage/AB signals enable *advisory* agent observations without a caller |
 | 16 | User-defined custom QC metrics | Med | config/runbook model | Adjusting thresholds is in scope; defining new metric types is future |
 | 17 | Telemetry connectors (Datadog + other APM) | Low | telemetry seam | System-telemetry export; a Prometheus `/metrics` seam on the backend is the intended base |
+| 18 | Multi-user / multi-tenancy (auth + RBAC + per-user/org isolation) | Low–med | read-API + user model + scoped persistence | Today is **single-user** (all runs/cards global), which is fine for the demo. A lab/org boundary would add auth on the read-API, a user/role model, and scope the ledger/DB by tenant. Complements the de-id module (#14) for real deployments; the `human:<id>` actor already in the event vocabulary is the natural attribution seam |
 
 ## Out of scope
 
