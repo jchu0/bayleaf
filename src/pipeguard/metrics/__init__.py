@@ -2,7 +2,8 @@
 
 The stable layer above drifting MultiQC/tool keys: `MetricRegistry` loads the versioned
 `metric_registry.yaml`, and `MetricValue` (in `pipeguard.models`) records observations
-normalized against it. ADDITIVE — not yet on the parser/rules critical path.
+normalized against it. ON the QC-gate critical path (T-025): the rules normalize each
+metric through the registry and gate on the canonical value.
 """
 
 from __future__ import annotations

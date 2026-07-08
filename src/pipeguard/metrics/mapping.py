@@ -1,13 +1,14 @@
-"""Map the parsed flat ``QCMetrics`` onto normalized ``MetricValue`` records (T-025, step 1).
+"""Map the parsed flat ``QCMetrics`` onto normalized ``MetricValue`` records (T-025).
 
-The additive bridge from the current parse output (`QCMetrics`, a flat model on a per-tool
-scale) to the registry's canonical vocabulary: each field is resolved to its `our_key` and
-normalized to the canonical unit, producing self-contained `MetricValue` records
-(ADR-0007 — the normalized value + version are snapshotted onto the record).
+The bridge from the current parse output (`QCMetrics`, a flat model on a per-tool scale) to
+the registry's canonical vocabulary: each field is resolved to its `our_key` and normalized
+to the canonical unit, producing self-contained `MetricValue` records (ADR-0007 — the
+normalized value + version are snapshotted onto the record).
 
-**Additive only (step 1):** nothing calls this on the critical path yet. The rules still
-read `QCMetrics`; this only *builds* the registry-backed representation so the mapping +
-normalization can be reviewed on real data before it is wired in (steps 2-3).
+ON the critical path: `rules.evaluate_sample` calls this per sample and gates each threshold
+on the resulting `MetricValue.normalized_value` (canonical), so a change in a source's raw
+unit can't silently move a verdict. The field->our_key->raw_unit table below is the one place
+the source scale is declared.
 """
 
 from __future__ import annotations
