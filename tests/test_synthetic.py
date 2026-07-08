@@ -40,9 +40,25 @@ def _verdicts(run_dir: Path) -> dict[str, Verdict]:
     return {c.sample_id: c.verdict for c in cards}
 
 
+# The exact rule each mode must trip. Asserting the rule *set* (not just the
+# aggregated verdict) enforces the generator's "one rule per mode" design claim: an
+# accidental extra finding that doesn't outrank the intended verdict would otherwise
+# pass silently. Grounded against the live rules (see docstring above).
+_EXPECTED_RULES: dict[FailureMode, set[str]] = {
+    FailureMode.CLEAN: set(),
+    FailureMode.BARCODE_SWAP: {"PROV-001"},
+    FailureMode.MISSING_METADATA: {"META-001"},
+    FailureMode.ABSENT_FROM_SHEET: {"PROV-002"},
+    FailureMode.LOW_Q30: {"QC-Q30"},
+    FailureMode.LOW_COVERAGE: {"QC-MEAN_COVERAGE"},
+    FailureMode.HIGH_DUP: {"QC-DUP_RATE"},
+    FailureMode.PIPELINE_FAILURE: {"PIPE-001"},
+}
+
+
 @pytest.mark.parametrize("mode", list(FailureMode))
 def test_each_failure_mode_hits_intended_verdict(mode: FailureMode, tmp_path: Path) -> None:
-    """A single-sample run for each mode aggregates to the mode's intended verdict."""
+    """Each mode aggregates to its intended verdict *and* trips exactly its one rule."""
     spec = RunSpec(
         run_id="mock_run_single",
         run_name="RUN-TEST-SINGLE",
@@ -50,7 +66,10 @@ def test_each_failure_mode_hits_intended_verdict(mode: FailureMode, tmp_path: Pa
         samples=[SampleSpec(sample_id="S1", mode=mode)],
     )
     run_dir = generate_run(spec, tmp_path)
-    assert _verdicts(run_dir)["S1"] is INTENDED_VERDICT[mode]
+    _, cards = run_gate_from_dir(run_dir)
+    (card,) = cards
+    assert card.verdict is INTENDED_VERDICT[mode]
+    assert {f.rule_id for f in card.findings} == _EXPECTED_RULES[mode]
 
 
 def test_mixed_run_every_sample_matches_intent(tmp_path: Path) -> None:

@@ -211,16 +211,16 @@ def _effective_metadata(spec: SampleSpec, i: int, subject_base: int) -> dict[str
     with a blank required field) so META-001 fires — as opposed to no row at all,
     which would instead be caught by META-002.
     """
-    subject = spec.subject_id or f"SUBJ-{subject_base + i + 1}"
-    if spec.mode is FailureMode.MISSING_METADATA:
-        subject = ""
-    return {
+    row = {
         "sample_id": spec.sample_id,
-        "subject_id": subject,
+        "subject_id": spec.subject_id or f"SUBJ-{subject_base + i + 1}",
         "tissue": spec.tissue or _TISSUES[i % len(_TISSUES)],
         "library_prep": spec.library_prep or _PREPS[i % len(_PREPS)],
         "submitted_by": spec.submitted_by or _SUBMITTERS[i % len(_SUBMITTERS)],
     }
+    if spec.mode is FailureMode.MISSING_METADATA:
+        row[_MISSING_FIELD] = ""  # blank the required intake field -> META-001 (HOLD)
+    return row
 
 
 def _reads(i: int) -> int:
@@ -409,11 +409,17 @@ def generate_run(spec: RunSpec, out_dir: str | Path) -> Path:
     """
     run_dir = Path(out_dir) / spec.run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "SampleSheet.csv").write_text(_render_sample_sheet(spec))
-    (run_dir / "sample_metadata.csv").write_text(_render_metadata(spec))
-    (run_dir / "demux_stats.csv").write_text(_render_demux(spec))
-    (run_dir / "qc_metrics.csv").write_text(_render_qc(spec))
-    (run_dir / "pipeline.log").write_text(_render_log(spec))
+    # Pin encoding + LF explicitly so the byte-identical guarantee (and the
+    # reproducibility test) hold on Windows too, where text-mode write would
+    # otherwise translate "\n" -> "\r\n" and diverge from the committed POSIX bytes.
+    for name, render in (
+        ("SampleSheet.csv", _render_sample_sheet),
+        ("sample_metadata.csv", _render_metadata),
+        ("demux_stats.csv", _render_demux),
+        ("qc_metrics.csv", _render_qc),
+        ("pipeline.log", _render_log),
+    ):
+        (run_dir / name).write_text(render(spec), encoding="utf-8", newline="\n")
     return run_dir
 
 

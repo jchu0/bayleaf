@@ -38,8 +38,8 @@ requirement for a provenance tool.
 | Label | Meaning |
 |---|---|
 | `real-giab` | Real GIAB HG002 data (NIST) plus its gold-standard truth VCF / high-confidence BED |
-| `synthetic` | Programmatically perturbed from real data to create labeled failure modes |
-| `contrived` | Hand-authored demo data — realistic formats, invented values (no real provenance) |
+| `synthetic` | Programmatically perturbed **from real data** to create labeled failure modes |
+| `contrived` | Invented values, no real provenance — hand-authored *or* machine-generated (realistic formats, **not** derived from real data). The distinguishing axis from `synthetic` is real-data derivation, not authoring method: the [`pipeguard.synthetic`](../../src/pipeguard/synthetic/) generator emits `contrived` runs because its values are invented, not perturbed from a real sample. |
 
 ## Sources
 
