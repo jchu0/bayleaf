@@ -27,6 +27,13 @@ from .provenance import (
 )
 from .rules import evaluate_run, evaluate_sample
 from .runbook import DEFAULT_RUNBOOK, Runbook
+from .triage import (
+    KnowledgeEntry,
+    TriageCitation,
+    TriageNote,
+    get_triage_agent,
+    triage_card,
+)
 
 __version__ = "0.1.0"
 
@@ -42,16 +49,21 @@ __all__ = [
     "Finding",
     "Gate",
     "GateResult",
+    "KnowledgeEntry",
     "ProvenanceEvent",
     "RunArtifacts",
     "Runbook",
     "Severity",
     "SourceKind",
+    "TriageCitation",
+    "TriageNote",
     "Verdict",
     "evaluate_run",
     "evaluate_sample",
     "get_synthesizer",
+    "get_triage_agent",
     "load_run",
     "run_gate",
     "run_gate_from_dir",
+    "triage_card",
 ]
