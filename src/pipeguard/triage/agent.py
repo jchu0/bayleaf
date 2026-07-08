@@ -204,28 +204,31 @@ class ClaudeTriageAgent:
         # Retrieve deterministically first: it grounds both the prompt AND the note's
         # citations, so provenance survives even if the model output is discarded.
         hits = self._fallback._retrieve(card)
-        payload = {
-            "findings": [f.model_dump() for f in card.findings],
-            "retrieved_knowledge": [
-                {
-                    "id": h.entry.id,
-                    "title": h.entry.title,
-                    "likely_cause": h.entry.likely_cause,
-                    "suggested_action": h.entry.suggested_action,
-                    "source": h.entry.source,
-                    "score": h.score,
-                }
-                for h in hits
-            ],
-        }
-        user_content = (
-            f"Sample {card.sample_id} was flagged by the rule engine.\n\n"
-            f"Findings and retrieved knowledge (JSON):\n{json.dumps(payload, indent=2)}\n\n"
-            "Write the advisory triage note as JSON matching the required schema. "
-            "Do not mention or restate a verdict."
-        )
 
         try:
+            # Build inside the try so a serialization surprise also degrades to the
+            # stub. mode="json" keeps datetimes/enums JSON-safe (findings carry a
+            # created_at datetime — python mode would break json.dumps here).
+            payload = {
+                "findings": [f.model_dump(mode="json") for f in card.findings],
+                "retrieved_knowledge": [
+                    {
+                        "id": h.entry.id,
+                        "title": h.entry.title,
+                        "likely_cause": h.entry.likely_cause,
+                        "suggested_action": h.entry.suggested_action,
+                        "source": h.entry.source,
+                        "score": h.score,
+                    }
+                    for h in hits
+                ],
+            }
+            user_content = (
+                f"Sample {card.sample_id} was flagged by the rule engine.\n\n"
+                f"Findings and retrieved knowledge (JSON):\n{json.dumps(payload, indent=2)}\n\n"
+                "Write the advisory triage note as JSON matching the required schema. "
+                "Do not mention or restate a verdict."
+            )
             client = self._get_client()
             response = client.messages.create(
                 model=self.model,

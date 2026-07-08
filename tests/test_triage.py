@@ -140,6 +140,81 @@ def test_agent_falls_back_to_conservative_note_when_corpus_empty(cards):
     assert set(note.addresses_rule_ids) == {f.rule_id for f in cards["S4"].findings}
 
 
+# --- the Claude path (mocked): the flip must degrade safely, never 500 -------
+
+
+class _FakeBlock:
+    def __init__(self, text):
+        self.type = "text"
+        self.text = text
+
+
+class _FakeResponse:
+    def __init__(self, text, stop_reason="end_turn"):
+        self.stop_reason = stop_reason
+        self.content = [_FakeBlock(text)] if text is not None else []
+
+
+class _FakeClient:
+    """Stands in for anthropic.Anthropic — .messages.create returns/raises on cue."""
+
+    def __init__(self, response=None, raises=False):
+        self._response = response
+        self._raises = raises
+
+    @property
+    def messages(self):
+        return self
+
+    def create(self, **_kwargs):
+        if self._raises:
+            raise RuntimeError("simulated API failure")
+        return self._response
+
+
+def _claude_agent(monkeypatch, client):
+    from pipeguard.triage.agent import ClaudeTriageAgent
+
+    agent = ClaudeTriageAgent()
+    monkeypatch.setattr(agent, "_get_client", lambda: client)
+    return agent
+
+
+def test_claude_path_prose_is_llm_but_citations_stay_deterministic(cards, monkeypatch):
+    """On the live path the model writes ONLY the prose; provenance stays deterministic.
+
+    This also guards the serialization path: findings carry a datetime, so if the
+    prompt payload were built with python-mode model_dump() it would raise before the
+    API call and never reach the client — this test would then see a stub note, not
+    'claude'.
+    """
+    client = _FakeClient(
+        _FakeResponse('{"likely_cause": "MODEL cause", "suggested_action": "MODEL action"}')
+    )
+    note = _claude_agent(monkeypatch, client).triage_card(cards["S4"])
+    assert note is not None
+    assert note.generated_by == "claude"
+    assert note.likely_cause == "MODEL cause"  # prose comes from the model
+    assert note.suggested_action == "MODEL action"
+    # ...but the addressed findings + citations match the deterministic stub exactly.
+    stub = StubTriageAgent().triage_card(cards["S4"])
+    assert stub is not None
+    assert note.addresses_rule_ids == stub.addresses_rule_ids
+    assert [c.ref for c in note.citations] == [c.ref for c in stub.citations]
+    assert note.advisory is True and "verdict" not in note.model_dump()
+
+
+def test_claude_path_falls_back_to_stub_on_refusal(cards, monkeypatch):
+    client = _FakeClient(_FakeResponse(None, stop_reason="refusal"))
+    note = _claude_agent(monkeypatch, client).triage_card(cards["S4"])
+    assert note is not None and note.generated_by == "stub"  # degraded, not crashed
+
+
+def test_claude_path_falls_back_to_stub_on_error(cards, monkeypatch):
+    note = _claude_agent(monkeypatch, _FakeClient(raises=True)).triage_card(cards["S4"])
+    assert note is not None and note.generated_by == "stub"  # error degrades to stub
+
+
 # --- API endpoint -----------------------------------------------------------
 
 client = TestClient(app)

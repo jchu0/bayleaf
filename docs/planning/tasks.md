@@ -58,7 +58,8 @@ estimates — adjusted as we go.
 | T-012 | Phase 0 tooling: uv + `pyproject.toml` single source, mypy/ruff, hooks (batch full-eval → Phase 2/T-009) | 0 | done | no | — |
 | T-013 | GIAB HG002 subset fetch script + synthetic perturbation generator | 2 | todo | partial | T-002, T-008 |
 | T-014 | Event bus + provenance ledger (in-memory + JSONL; DB projection → Phase 2) | 1 | done | no | ADR-0002 |
-| T-015 | QC-triage agent + notify port (Slack) | 3 | todo | no | T-014 |
+| T-015 | QC-triage agent (advisory, stub-first, corpus + retrieval, /triage API) | 3 | in-progress | no | T-014 |
+| T-015b | Slack notify port for the triage/review flow (deferred from T-015) | 3 | todo | no | T-015 |
 | T-016 | Data strategy doc + label mock_run_01 origin | 1 | done | yes | — |
 | T-017 | Small real test FASTQ→BAM data (panel-region subset) for coverage/contam gates | 2 | todo | partial | T-002 |
 | T-018 | Frontend design brief + clickable prototype (`design/frontend/`) | 1 | done | yes | — |

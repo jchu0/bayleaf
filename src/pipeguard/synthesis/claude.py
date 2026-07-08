@@ -107,18 +107,20 @@ class ClaudeSynthesizer:
         # Verdict stays deterministic — Claude never touches it.
         verdict = aggregate_verdict(findings)
 
-        payload = {
-            "verdict": verdict.value,
-            "findings": [f.model_dump() for f in findings],
-            "artifact_context": self._sample_context(sample_id, artifacts),
-        }
-        user_content = (
-            f"Sample {sample_id} — the rule engine returned verdict '{verdict.value}'.\n\n"
-            f"Findings and artifact context (JSON):\n{json.dumps(payload, indent=2)}\n\n"
-            "Write the decision card narration as JSON matching the required schema."
-        )
-
         try:
+            # Build inside the try so a serialization surprise also degrades to the
+            # stub. mode="json" keeps datetimes/enums JSON-safe (findings carry a
+            # created_at datetime — python mode would break json.dumps here).
+            payload = {
+                "verdict": verdict.value,
+                "findings": [f.model_dump(mode="json") for f in findings],
+                "artifact_context": self._sample_context(sample_id, artifacts),
+            }
+            user_content = (
+                f"Sample {sample_id} — the rule engine returned verdict '{verdict.value}'.\n\n"
+                f"Findings and artifact context (JSON):\n{json.dumps(payload, indent=2)}\n\n"
+                "Write the decision card narration as JSON matching the required schema."
+            )
             client = self._get_client()
             # No `thinking` param: safe across opus-4-8 (off), sonnet-5 (adaptive),
             # and fable-5 (always on). output_config.format guarantees JSON text.
