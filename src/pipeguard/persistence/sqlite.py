@@ -27,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ..identifiers import utc_now
 from ..provenance import EntityRef, EventType, ProvenanceEvent
 from .records import CardRow, FindingRow, RunBundle, RunRow, SampleRow
 
@@ -128,7 +129,20 @@ class SqliteRepository:
 
     # --- lifecycle -------------------------------------------------------
     def initialize(self) -> None:
-        """Create the projection schema and stamp the table-layout version."""
+        """Create the projection schema and stamp the table-layout version.
+
+        On an existing DB, the stored `user_version` is checked before use: the
+        projection is disposable (ADR-0002), so an incompatible layout is a loud
+        error telling the caller to delete + rebuild-db, not a silent run against
+        a stale schema.
+        """
+        stored = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        if stored not in (0, PERSIST_SCHEMA_VERSION):
+            raise ValueError(
+                f"persistence DB has table-layout version {stored}, but this build "
+                f"expects {PERSIST_SCHEMA_VERSION}. The projection is disposable — "
+                f"delete the DB and rebuild it from the ledger (`make rebuild-db`)."
+            )
         self._conn.executescript(_SCHEMA)
         self._conn.execute(f"PRAGMA user_version = {PERSIST_SCHEMA_VERSION}")
         self._conn.commit()
@@ -229,7 +243,10 @@ class SqliteRepository:
 
     def append_event(self, event: ProvenanceEvent) -> None:
         """Record one event verbatim. INSERT OR REPLACE on the event id keeps a
-        replay idempotent while every column is round-trip lossless."""
+        replay idempotent. Primitive payload values round-trip exactly; a
+        non-JSON-native value (datetime/enum) would be stringified via `default=str`
+        — fine for the current all-primitive vocabulary, revisit when a richer
+        payload lands so the live and replayed paths encode it identically."""
         self._conn.execute(
             """INSERT OR REPLACE INTO provenance_events
                (id, event_type, analysis_run_id, run_id, sample_id, actor,
@@ -367,6 +384,6 @@ class SqliteRepository:
             inputs=[EntityRef.model_validate(x) for x in json.loads(row["inputs"])],
             outputs=[EntityRef.model_validate(x) for x in json.loads(row["outputs"])],
             payload=json.loads(row["payload"]),
-            created_at=_parse_dt(row["created_at"]) or datetime.now(),
+            created_at=_parse_dt(row["created_at"]) or utc_now(),
             schema_version=row["schema_version"],
         )

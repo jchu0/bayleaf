@@ -118,12 +118,10 @@ def test_events_round_trip_faithfully(ledger_and_cards):
     repo = _rebuilt(path)
     projected = repo.list_events()
 
-    assert [e.event_type for e in projected] == [e.event_type for e in original]
-    assert [e.id for e in projected] == [e.id for e in original]  # ledger (rowid) order
-    # Full-fidelity round-trip on a representative event.
-    first_original = original[0]
-    first_projected = projected[0]
-    assert first_projected.model_dump(mode="json") == first_original.model_dump(mode="json")
+    # Full-fidelity round-trip on EVERY event, in ledger (rowid) order.
+    assert [e.model_dump(mode="json") for e in projected] == [
+        e.model_dump(mode="json") for e in original
+    ]
     repo.close()
 
 
@@ -153,8 +151,31 @@ def test_rebuild_is_idempotent(ledger_and_cards):
     repo.close()
 
 
+def test_rebuild_from_different_ledger_drops_stale_rows(ledger_and_cards, tmp_path: Path):
+    """rebuild-db reset()s first, so replaying a DIFFERENT ledger drops stale rows.
+
+    INSERT OR REPLACE alone cannot do this (it only overwrites matching ids), so
+    this is what actually proves `reset()` runs on a rebuild.
+    """
+    path, _ = ledger_and_cards
+    repo = SqliteRepository(":memory:")
+    rebuild_db(path, repo)
+    assert repo.list_runs()  # populated from mock_run_01
+
+    empty_ledger = tmp_path / "empty.jsonl"
+    empty_ledger.write_text("")
+    rebuild_db(empty_ledger, repo)  # rebuild from an empty log
+    # Every stale row must be gone — the DB now mirrors the (empty) ledger.
+    assert repo.list_runs() == []
+    assert repo.list_samples() == []
+    assert repo.list_findings() == []
+    assert repo.list_decision_cards() == []
+    assert repo.list_events() == []
+    repo.close()
+
+
 def test_live_repo_wiring_matches_rebuild(tmp_path: Path):
-    """run_gate(repo=...) writes the same projection a ledger rebuild would."""
+    """run_gate(repo=...) writes byte-identical rows to what a ledger rebuild would."""
     path = tmp_path / "run.events.jsonl"
     ledger = EventLedger(path=path)
     live_repo = SqliteRepository(":memory:")
@@ -162,26 +183,30 @@ def test_live_repo_wiring_matches_rebuild(tmp_path: Path):
 
     rebuilt_repo = _rebuilt(path)
 
-    # Same verdicts and same content hashes via both paths (DB = f(ledger)).
-    assert {c.sample_id: c.verdict for c in live_repo.list_decision_cards()} == {
-        c.sample_id: c.verdict for c in rebuilt_repo.list_decision_cards()
-    }
-    assert {f.content_hash for f in live_repo.list_findings()} == {
-        f.content_hash for f in rebuilt_repo.list_findings()
-    }
-    assert len(live_repo.list_events()) == len(rebuilt_repo.list_events()) == 16
+    # Full-row equality across EVERY table via both paths (DB = f(ledger)).
+    assert _dump(live_repo) == _dump(rebuilt_repo)
+    assert len(live_repo.list_events()) == 16
     live_repo.close()
     rebuilt_repo.close()
 
 
-def test_default_flow_persists_nothing(tmp_path: Path):
-    """No repo passed -> run_gate does not touch a DB (behavior unchanged)."""
-    # A fresh DB left untouched by a repo-less run must stay empty.
-    repo = SqliteRepository(tmp_path / "unused.sqlite")
-    run_gate(load_run(DATA), synthesizer=StubSynthesizer())  # no repo=
-    assert repo.list_runs() == []
-    assert repo.list_events() == []
+def test_repo_param_persists_without_changing_output(tmp_path: Path):
+    """Passing a repo persists, but does NOT change run_gate's output (back-compat)."""
+    without = run_gate(load_run(DATA), synthesizer=StubSynthesizer())  # no repo
+    repo = SqliteRepository(tmp_path / "p.sqlite")
+    with_repo = run_gate(load_run(DATA), synthesizer=StubSynthesizer(), repo=repo)
+
+    # Identical cards (sample, verdict, content_hash) whether or not a repo is wired.
+    assert [(c.sample_id, c.verdict, c.content_hash) for c in without] == [
+        (c.sample_id, c.verdict, c.content_hash) for c in with_repo
+    ]
+    # The repo path persisted; a fresh repo the run never saw stays empty.
+    assert repo.list_runs() and repo.list_events()
+    untouched = SqliteRepository(":memory:")
+    run_gate(load_run(DATA), synthesizer=StubSynthesizer())  # no repo
+    assert untouched.list_runs() == [] and untouched.list_events() == []
     repo.close()
+    untouched.close()
 
 
 def test_reset_clears_projection(ledger_and_cards):

@@ -17,13 +17,12 @@ Two seams use it:
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Protocol
 
 from ..provenance import ProvenanceEvent
 from .records import CardRow, FindingRow, RunBundle, RunRow, SampleRow
 
 
-@runtime_checkable
 class Repository(Protocol):
     """A store for the ledger's relational projection (runs/samples/findings/
     cards/events). Adapters must make writes idempotent on a record's identity so
@@ -40,6 +39,10 @@ class Repository(Protocol):
         The relational store is disposable (ADR-0002); `reset` + a replay makes a
         rebuild a pure function of the ledger.
         """
+        ...
+
+    def close(self) -> None:
+        """Release the adapter's resources (e.g. a DB connection)."""
         ...
 
     # --- writes (idempotent upserts on identity) -------------------------

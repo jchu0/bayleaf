@@ -35,7 +35,8 @@ def project_events(events: Iterable[ProvenanceEvent], repo: Repository) -> int:
     A run's summary fields (`status`, `n_samples`, `completed_at`) are known only
     at `analysis_run.completed`, so run rows are accumulated across the stream and
     flushed once at the end — the same final state whether replayed live or from
-    a file.
+    a file. Every row's `schema_version` is taken from its source event, so the
+    projection is a pure function of the *ledger* (not the current code version).
     """
     runs: dict[str, RunRow] = {}
     count = 0
@@ -45,7 +46,9 @@ def project_events(events: Iterable[ProvenanceEvent], repo: Repository) -> int:
         et = event.event_type
 
         if et is EventType.ANALYSIS_RUN_STARTED and event.run_id:
-            run = runs.setdefault(event.run_id, RunRow(run_id=event.run_id))
+            run = runs.setdefault(
+                event.run_id, RunRow(run_id=event.run_id, schema_version=event.schema_version)
+            )
             run.analysis_run_id = event.analysis_run_id
             run.generated_by = _as_str(event.payload.get("generated_by"))
             gate_prov = event.payload.get("gate_provenance")
@@ -54,7 +57,9 @@ def project_events(events: Iterable[ProvenanceEvent], repo: Repository) -> int:
             run.started_at = event.created_at
 
         elif et is EventType.ANALYSIS_RUN_COMPLETED and event.run_id:
-            run = runs.setdefault(event.run_id, RunRow(run_id=event.run_id))
+            run = runs.setdefault(
+                event.run_id, RunRow(run_id=event.run_id, schema_version=event.schema_version)
+            )
             run.analysis_run_id = run.analysis_run_id or event.analysis_run_id
             run.status = _as_str(event.payload.get("status")) or "completed"
             run.completed_at = event.created_at
@@ -69,6 +74,7 @@ def project_events(events: Iterable[ProvenanceEvent], repo: Repository) -> int:
                     sample_id=event.sample_id,
                     analysis_run_id=event.analysis_run_id,
                     registered_at=event.created_at,
+                    schema_version=event.schema_version,
                 )
             )
 
@@ -87,6 +93,7 @@ def project_events(events: Iterable[ProvenanceEvent], repo: Repository) -> int:
                         severity=_as_str(event.payload.get("severity")),
                         signature=_as_str(event.payload.get("signature")),
                         created_at=event.created_at,
+                        schema_version=event.schema_version,
                     )
                 )
 
@@ -105,6 +112,7 @@ def project_events(events: Iterable[ProvenanceEvent], repo: Repository) -> int:
                         generated_by=_as_str(event.payload.get("generated_by")),
                         content_hash=ref.content_hash if ref is not None else None,
                         created_at=event.created_at,
+                        schema_version=event.schema_version,
                     )
                 )
 
