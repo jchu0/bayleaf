@@ -20,6 +20,7 @@ from pathlib import Path
 from .identifiers import utc_now
 from .models import RULE_PACK_VERSION, DecisionCard, RunArtifacts
 from .parsers import load_run
+from .persistence import Repository, project_events
 from .provenance import AnalysisRun, EntityRef, EventLedger, EventType, ProvenanceEvent
 from .rules import evaluate_run
 from .runbook import DEFAULT_RUNBOOK, Runbook
@@ -48,12 +49,18 @@ def run_gate(
     runbook: Runbook | None = None,
     synthesizer: Synthesizer | None = None,
     ledger: EventLedger | None = None,
+    repo: Repository | None = None,
 ) -> list[DecisionCard]:
     """Evaluate every sample and return decision cards, most-urgent first.
 
     Emits the provenance event trail into `ledger` (a throwaway in-memory ledger
     if none is given). Each returned card is anchored to the AnalysisRun via
     `analysis_run_id`.
+
+    If a `repo` (an ADR-0003 :class:`~pipeguard.persistence.Repository` port) is
+    passed, the event trail is projected into it once the run completes — through
+    the *same* projector that `rebuild_db` uses, so the DB stays a pure projection
+    of the ledger. Omit `repo` and nothing is persisted (default flow unchanged).
     """
     runbook = runbook or DEFAULT_RUNBOOK
     synthesizer = synthesizer or get_synthesizer()
@@ -139,6 +146,11 @@ def run_gate(
         )
     )
 
+    # Project the authoritative event trail into the DB when a repository is
+    # wired in — after the run completes, so the projection mirrors the log.
+    if repo is not None:
+        project_events(ledger.events, repo)
+
     # Surface the samples that need a human first. Stable sort keeps parse order
     # within a verdict (confidence is no longer computed — omitted until grounded).
     cards.sort(key=lambda c: _VERDICT_ORDER.get(c.verdict.value, 9))
@@ -150,7 +162,8 @@ def run_gate_from_dir(
     runbook: Runbook | None = None,
     synthesizer: Synthesizer | None = None,
     ledger: EventLedger | None = None,
+    repo: Repository | None = None,
 ) -> tuple[RunArtifacts, list[DecisionCard]]:
     """Convenience: load a run directory and evaluate it in one call."""
     artifacts = load_run(run_dir)
-    return artifacts, run_gate(artifacts, runbook, synthesizer, ledger)
+    return artifacts, run_gate(artifacts, runbook, synthesizer, ledger, repo)
