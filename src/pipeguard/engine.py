@@ -19,6 +19,7 @@ from pathlib import Path
 
 from .identifiers import utc_now
 from .models import RULE_PACK_VERSION, DecisionCard, RunArtifacts
+from .notify import NotifyPort, NotifyStatus
 from .parsers import load_run
 from .persistence import Repository, project_events
 from .provenance import AnalysisRun, EntityRef, EventLedger, EventType, ProvenanceEvent
@@ -50,6 +51,7 @@ def run_gate(
     synthesizer: Synthesizer | None = None,
     ledger: EventLedger | None = None,
     repo: Repository | None = None,
+    notifier: NotifyPort | None = None,
 ) -> list[DecisionCard]:
     """Evaluate every sample and return decision cards, most-urgent first.
 
@@ -61,6 +63,16 @@ def run_gate(
     passed, the event trail is projected into it once the run completes — through
     the *same* projector that `rebuild_db` uses, so the DB stays a pure projection
     of the ledger. Omit `repo` and nothing is persisted (default flow unchanged).
+
+    If a `notifier` (an ADR-0010 :class:`~pipeguard.notify.NotifyPort`) is passed,
+    each finished card is handed to it *after* the run completes — a downstream,
+    off-critical-path dispatch (ADR-0001). The port's own policy skips clean
+    PROCEED cards, so only actionable cards notify; each real notification emits a
+    :attr:`~pipeguard.provenance.EventType.NOTIFICATION_EMITTED` event so the
+    dispatch is auditable (ADR-0002). Omit `notifier` (the default) and no
+    notification happens and no notify event is emitted — the trail is byte-for-byte
+    unchanged. The notifier only consumes finished cards; it never sets or alters a
+    verdict (ADR-0001).
     """
     runbook = runbook or DEFAULT_RUNBOOK
     synthesizer = synthesizer or get_synthesizer()
@@ -146,8 +158,50 @@ def run_gate(
         )
     )
 
+    # Notify is an OPTIONAL, off-by-default, downstream dispatch (ADR-0010). It runs
+    # only when a notifier is injected and strictly AFTER the run is decided, so it is
+    # off the deterministic critical path and can never influence a verdict (ADR-0001).
+    # The port's own policy skips clean PROCEED cards; only a real notification is
+    # recorded, so the trail carries signal (actionable cards), not an all-clear per
+    # sample. Each such notification is an auditable event (ADR-0002) whose payload
+    # holds only the NotifyResult's non-secret facts — never a token or channel creds.
+    if notifier is not None:
+        for card in cards:
+            result = notifier.notify(card)
+            if result.status is NotifyStatus.SKIPPED or result.payload is None:
+                continue
+            ledger.emit(
+                ProvenanceEvent(
+                    event_type=EventType.NOTIFICATION_EMITTED,
+                    analysis_run_id=arun.id,
+                    run_id=artifacts.run_id,
+                    sample_id=card.sample_id,
+                    inputs=[
+                        EntityRef(
+                            entity_type="card",
+                            id=card.sample_id,
+                            content_hash=card.content_hash,
+                        )
+                    ],
+                    outputs=[
+                        EntityRef(
+                            entity_type="notification",
+                            id=card.sample_id,
+                            content_hash=result.payload.content_hash,
+                        )
+                    ],
+                    payload={
+                        "adapter": result.adapter,
+                        "status": result.status.value,
+                        "delivered": result.delivered,
+                        "verdict": card.verdict.value,
+                    },
+                )
+            )
+
     # Project the authoritative event trail into the DB when a repository is
-    # wired in — after the run completes, so the projection mirrors the log.
+    # wired in — after the run completes (and after any notifications are recorded),
+    # so the projection mirrors the full log.
     if repo is not None:
         project_events(ledger.events, repo)
 
@@ -163,7 +217,8 @@ def run_gate_from_dir(
     synthesizer: Synthesizer | None = None,
     ledger: EventLedger | None = None,
     repo: Repository | None = None,
+    notifier: NotifyPort | None = None,
 ) -> tuple[RunArtifacts, list[DecisionCard]]:
     """Convenience: load a run directory and evaluate it in one call."""
     artifacts = load_run(run_dir)
-    return artifacts, run_gate(artifacts, runbook, synthesizer, ledger, repo)
+    return artifacts, run_gate(artifacts, runbook, synthesizer, ledger, repo, notifier)
