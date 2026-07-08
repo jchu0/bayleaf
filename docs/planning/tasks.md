@@ -53,7 +53,7 @@ estimates — adjusted as we go.
 | T-006 | `design/configuration.md` (profiles) | 1 | todo | yes | — |
 | T-007 | `design/structure.md` (repo + data map) | 1 | todo | yes | — |
 | T-008 | `data/licensing.md` remains (provenance.md ✅, schemas.md ✅, metric_registry.md ✅) | 1 | in-progress | yes | — |
-| T-009 | `quality/{evaluation,risks}.md` + `demo/demo_plan.md` | 1 | todo | yes | T-002 |
+| T-009 | `quality/{evaluation,risks}.md` remain (demo/demo_plan.md ✅) | 1 | in-progress | yes | T-002 |
 | T-010 | ADRs 0008–0014 (issue-taxonomy, corpora, ticketing/API, tooling, agent-scoping, gate-architecture, productionization) | 1 | done | yes | — |
 | T-011 | Fresh production-framed `README.md` (committed; architecture.md now exists — final polish/demo-prep remains) | 1 | in-progress | no | T-005 |
 | T-012 | Phase 0 tooling: uv + `pyproject.toml` single source, mypy/ruff, hooks (batch full-eval → Phase 2/T-009) | 0 | done | no | — |

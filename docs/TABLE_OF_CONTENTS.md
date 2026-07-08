@@ -91,7 +91,7 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 ## Demo
 | Doc | Status | Purpose |
 |---|---|---|
-| [demo/demo_plan.md](demo/demo_plan.md) | 📝 | Flow, expected I/O, fallback path |
+| [demo/demo_plan.md](demo/demo_plan.md) | ✅ | Narrative, walkthrough, the two "wow" moments, expected I/O, fallbacks |
 
 ## Meta
 | Doc | Status | Purpose |
