@@ -14,10 +14,12 @@ Rule families:
 
 from __future__ import annotations
 
+from .metrics import default_registry, metric_values_for
 from .models import (
     Category,
     Evidence,
     Finding,
+    MetricValue,
     QCMetrics,
     RunArtifacts,
     Sample,
@@ -161,8 +163,8 @@ def _check_metadata(sid: str, meta: Sample | None, runbook: Runbook) -> Finding 
     )
 
 
-def _evaluate_metric(sid: str, threshold: QCThreshold, value: float | None) -> Finding | None:
-    if value is None:
+def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -> Finding | None:
+    if mv is None:
         return Finding(
             rule_id=f"QC-{threshold.metric.upper()}-NA",
             sample_id=sid,
@@ -182,6 +184,9 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, value: float | None) -> F
             suggested_verdict=Verdict.HOLD,
         )
 
+    # DECISION on the CANONICAL (normalized) value vs the canonical threshold — both on the
+    # registry's scale, so a change in the source's raw unit can't silently move the gate.
+    value = mv.normalized_value
     passes = value >= threshold.gate if threshold.higher_is_better else value <= threshold.gate
     if passes:
         return None
@@ -194,7 +199,8 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, value: float | None) -> F
         verdict = Verdict.RERUN
         qualifier = "hard-fails"
     else:
-        # Distinguish a true borderline (just past the gate) from a clear miss.
+        # Distinguish a true borderline (just past the gate) from a clear miss. The band is
+        # relative (gate * (1 ± band)), so the classification is scale-invariant.
         if threshold.higher_is_better:
             borderline_edge = threshold.gate * (1 - threshold.borderline_band)
             borderline = value >= borderline_edge
@@ -205,6 +211,12 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, value: float | None) -> F
         verdict = Verdict.HOLD
         qualifier = "is borderline against" if borderline else "misses"
 
+    # DISPLAY in the operator-facing raw unit (option 2 / schemas.md units contract): the
+    # observed value as the tool reported it, and the canonical thresholds rendered back
+    # into that same unit so the message reads naturally (e.g. "84.1%; gate >= 85%").
+    reg = default_registry()
+    disp_gate = reg.denormalize(threshold.our_key, threshold.gate, mv.raw_unit)
+    disp_hard = reg.denormalize(threshold.our_key, threshold.hard_fail, mv.raw_unit)
     direction = "≥" if threshold.higher_is_better else "≤"
     return Finding(
         rule_id=f"QC-{threshold.metric.upper()}",
@@ -213,19 +225,19 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, value: float | None) -> F
         severity=severity,
         title=f"{threshold.label} {qualifier} the QC gate",
         detail=(
-            f"{threshold.label} for {sid} is {value:g}{threshold.unit}; runbook gate is "
-            f"{direction} {threshold.gate:g}{threshold.unit} "
-            f"(hard-fail {threshold.hard_fail:g}{threshold.unit})."
+            f"{threshold.label} for {sid} is {mv.raw_value:g}{threshold.unit}; runbook gate is "
+            f"{direction} {disp_gate:g}{threshold.unit} "
+            f"(hard-fail {disp_hard:g}{threshold.unit})."
         ),
         evidence=[
             Evidence(
                 source="qc_metrics.csv",
                 locator=f"{sid}.{threshold.metric}",
-                value=f"{value:g}{threshold.unit}",
-                expected=f"{direction} {threshold.gate:g}{threshold.unit}",
+                value=f"{mv.raw_value:g}{threshold.unit}",
+                expected=f"{direction} {disp_gate:g}{threshold.unit}",
                 source_kind=SourceKind.METRIC,
                 source_field=threshold.metric,
-                threshold=f"hard-fail {direction} {threshold.hard_fail:g}{threshold.unit}",
+                threshold=f"hard-fail {direction} {disp_hard:g}{threshold.unit}",
             )
         ],
         suggested_verdict=verdict,
@@ -278,8 +290,11 @@ def evaluate_sample(sid: str, artifacts: RunArtifacts, runbook: Runbook) -> list
         findings.append(meta_finding)
 
     if qc is not None:
+        # Normalize once via the registry, then gate each threshold on its our_key's value.
+        # A None QCMetrics field yields no MetricValue -> the threshold sees `None` (missing).
+        by_key = {mv.metric_key: mv for mv in metric_values_for(qc)}
         for threshold in runbook.qc_thresholds:
-            metric_finding = _evaluate_metric(sid, threshold, getattr(qc, threshold.metric, None))
+            metric_finding = _evaluate_metric(sid, threshold, by_key.get(threshold.our_key))
             if metric_finding:
                 findings.append(metric_finding)
 

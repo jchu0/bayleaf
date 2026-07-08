@@ -95,6 +95,21 @@ def test_bool_metric_rejects_non_boolean_value(registry: MetricRegistry) -> None
         registry.normalize("identity.ngscheckmate_match", 7.0, "bool")
 
 
+def test_denormalize_is_the_inverse_of_normalize(registry: MetricRegistry) -> None:
+    """denormalize renders a canonical value back into a display unit (for the finding text)."""
+    # A fraction gate 0.85 shown as 85 percent.
+    assert math.isclose(registry.denormalize("qc.q30", 0.85, "percent"), 85.0)
+    # Identity when the target is already the canonical unit (fraction, and x for coverage).
+    assert registry.denormalize("qc.q30", 0.841, "fraction") == 0.841
+    assert registry.denormalize("qc.mean_target_coverage", 30.0, "x") == 30.0
+    # Round-trips: normalize then denormalize returns the original.
+    frac = registry.normalize("qc.q30", 84.1, "percent")
+    assert math.isclose(registry.denormalize("qc.q30", frac, "percent"), 84.1)
+    # An unsupported target unit raises rather than guessing (x has no percent form).
+    with pytest.raises(ValueError):
+        registry.denormalize("qc.mean_target_coverage", 30.0, "percent")
+
+
 def test_x_stays_x(registry: MetricRegistry) -> None:
     """`x` (fold coverage) is identity — no rescale."""
     assert registry.entry("qc.mean_target_coverage").canonical_unit is CanonicalUnit.X

@@ -76,9 +76,10 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > conversion is auditable and never re-guessed downstream. **Consumers read
 > `normalized_value` (canonical) — never `raw_value`.** Passing a percent where a fraction is
 > expected is the units-mismatch bug this contract exists to prevent. Runbook thresholds gate
-> on the registry `our_key`; once the rules read normalized values (T-025 step 3) they are
-> expressed in the same canonical unit, so a threshold and the value it gates are always on
-> the same scale by construction.
+> on the registry `our_key` and are stored in the same canonical unit, so the rules compare a
+> threshold and the `normalized_value` it gates on the same scale by construction; the finding
+> text then renders both back into the operator-facing raw unit (Q30 `0.841 < 0.85` internally,
+> shown as `84.1% / ≥ 85%`).
 
 ### Findings & decisions
 7. **Evidence** — **source_kind** (`artifact|metric|multiqc_source|execution_trace|params|

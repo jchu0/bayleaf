@@ -22,11 +22,14 @@ class QCThreshold(BaseModel):
     metric: str
     # Registry `our_key` (controlled vocabulary) this threshold gates on — the stable link
     # from the runbook to the metric registry (metric_registry.md rule 4). A test asserts
-    # every our_key is registered. NOTE (T-025): `gate`/`hard_fail`/`unit` are still in the
-    # per-tool display scale (e.g. Q30 in %); step 3 moves them to the registry's canonical
-    # unit (decimals) and switches the rules to compare `MetricValue.normalized_value`.
+    # every our_key is registered.
     our_key: str
     label: str
+    # `gate`/`hard_fail` are in the metric's registry CANONICAL unit (decimals — a fraction
+    # for rates like Q30 0.85, `x` for coverage). The rules compare
+    # `MetricValue.normalized_value` (also canonical) against them, so a threshold and the
+    # value it gates are always on the same scale (schemas.md units contract). `unit` is the
+    # DISPLAY symbol (%/x) the finding renders the canonical value back into for operators.
     gate: float
     hard_fail: float
     higher_is_better: bool = True
@@ -41,15 +44,17 @@ class Runbook(BaseModel):
     )
     qc_thresholds: list[QCThreshold] = Field(
         default_factory=lambda: [
+            # gate/hard_fail in CANONICAL units (fractions for rates, x for coverage) — the
+            # same scale as MetricValue.normalized_value the rules compare them against.
             QCThreshold(
-                metric="q30", our_key="qc.q30", label="Q30", gate=85.0, hard_fail=75.0, unit="%"
+                metric="q30", our_key="qc.q30", label="Q30", gate=0.85, hard_fail=0.75, unit="%"
             ),
             QCThreshold(
                 metric="pct_reads_identified",
                 our_key="qc.reads_passing_filter",
                 label="% reads identified",
-                gate=70.0,
-                hard_fail=50.0,
+                gate=0.70,
+                hard_fail=0.50,
                 unit="%",
             ),
             QCThreshold(
@@ -64,16 +69,16 @@ class Runbook(BaseModel):
                 metric="cluster_pf",
                 our_key="qc.cluster_pf",
                 label="Cluster PF",
-                gate=80.0,
-                hard_fail=60.0,
+                gate=0.80,
+                hard_fail=0.60,
                 unit="%",
             ),
             QCThreshold(
                 metric="dup_rate",
                 our_key="qc.duplication",
                 label="Duplication rate",
-                gate=30.0,
-                hard_fail=50.0,
+                gate=0.30,
+                hard_fail=0.50,
                 higher_is_better=False,
                 unit="%",
             ),

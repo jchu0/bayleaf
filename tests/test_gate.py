@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from pipeguard import DEFAULT_RUNBOOK, Verdict, evaluate_run, load_run, run_gate
+from pipeguard.metrics import default_registry
 from pipeguard.models import (
     Category,
     Evidence,
@@ -25,6 +26,13 @@ from pipeguard.rules import _evaluate_metric
 from pipeguard.synthesis import StubSynthesizer, aggregate_verdict
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
+
+
+def _q30_mv(raw_percent: float):
+    """A qc.q30 MetricValue at a raw percent value (normalized to a fraction by the registry)."""
+    return default_registry().observe(
+        metric_key="qc.q30", raw_value=raw_percent, raw_unit="percent", sample_id="SX"
+    )
 
 
 @pytest.fixture(scope="module")
@@ -83,7 +91,7 @@ def test_verdict_aggregation_precedence(findings):
 
 def test_metric_hard_fail_is_rerun():
     threshold = DEFAULT_RUNBOOK.threshold_for("q30")
-    finding = _evaluate_metric("SX", threshold, 60.0)  # below hard_fail 75
+    finding = _evaluate_metric("SX", threshold, _q30_mv(60.0))  # 60% -> 0.60 < hard_fail 0.75
     assert finding is not None
     assert finding.severity.value == "critical"
     assert finding.suggested_verdict is Verdict.RERUN
@@ -91,7 +99,7 @@ def test_metric_hard_fail_is_rerun():
 
 def test_metric_pass_returns_none():
     threshold = DEFAULT_RUNBOOK.threshold_for("q30")
-    assert _evaluate_metric("SX", threshold, 95.0) is None
+    assert _evaluate_metric("SX", threshold, _q30_mv(95.0)) is None  # 95% -> 0.95 >= gate 0.85
 
 
 def test_missing_metric_flagged():

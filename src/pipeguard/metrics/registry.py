@@ -258,6 +258,25 @@ class MetricRegistry(BaseModel):
             )
         return convert(raw_value)
 
+    def denormalize(self, our_key: str, value: float, to_unit: str) -> float:
+        """Convert a value in the metric's `canonical_unit` back to `to_unit`.
+
+        The inverse of `normalize`, over the same closed conversion table — used to render a
+        canonical threshold in a metric's raw/display unit (a fraction gate 0.85 shown as
+        85 percent) without a hardcoded factor. Identity when `to_unit` is the canonical
+        unit; raises on an unsupported pair rather than guessing.
+        """
+        entry = self.entry(our_key)  # controlled-vocabulary check
+        canonical = entry.canonical_unit.value
+        if to_unit == canonical:
+            return value
+        convert = _CONVERSIONS.get((canonical, to_unit))
+        if convert is None:
+            raise ValueError(
+                f"no unit conversion from {canonical!r} to {to_unit!r} for {our_key!r}"
+            )
+        return convert(value)
+
     def observe(
         self,
         *,
