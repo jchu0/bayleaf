@@ -44,7 +44,8 @@ estimates — adjusted as we go.
 | ID | Task | Phase | Status | Parallel-safe | Depends on |
 |---|---|---|---|---|---|
 | T-001 | Documentation workflow + ADRs 0001–0007 | 1 | done | — | — |
-| T-002 | `data/qc_metrics.md` (grounded in fastp/MultiQC/mosdepth fields) | 1 | todo | yes | — |
+| T-002 | `data/qc_metrics.md` (grounded, cited, breadth-first runbook) | 1 | done | yes | — |
+| T-002b | Concrete test-data QC profile (tune to GIAB panel subset) | 2 | todo | no | T-017 |
 | T-003 | `reference/domain-primer.md` + `reference/glossary.md` | 1 | todo | yes | — |
 | T-004 | `requirements/{functional,nonfunctional,constraints}.md` | 1 | todo | yes | — |
 | T-005 | `design/architecture.md` + system-view docs (context, components, data-flow, interfaces, storage, workflows, deployment) | 1 | todo | partial | T-002 |

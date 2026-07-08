@@ -41,6 +41,9 @@ are blocked on unbuilt core seams, not on research.
 | 12 | In-app user feedback on the system | Low | frontend | Product-refinement telemetry to guide iteration |
 | 13 | Data-platform connectors (Box, Drive, OneDrive, S3, DNAnexus, Databricks, Snowflake, BigQuery, Redshift) | Low–med each | artifact-store port | Adapters; breadth work |
 | 14 | Configurable de-identification module (HIPAA / PHI) | Med | connectors + policy | **Prerequisite** for any real patient-data integration; the demo stays public/synthetic |
+| 15 | CNV / mosaicism calling (dedicated callers) | High | callers + validation | Out of gate scope; coverage/AB signals enable *advisory* agent observations without a caller |
+| 16 | User-defined custom QC metrics | Med | config/runbook model | Adjusting thresholds is in scope; defining new metric types is future |
+| 17 | Telemetry connectors (Datadog + other APM) | Low | telemetry seam | System-telemetry export; a Prometheus `/metrics` seam on the backend is the intended base |
 
 ## Out of scope
 
