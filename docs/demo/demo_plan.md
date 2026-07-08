@@ -44,7 +44,7 @@ npm --prefix frontend run dev                  # React UI (proxies /api -> :8010
 6. **Monitoring** — verdict distribution + per-gate flag rate. **Settings** — the runbook
    thresholds (labelled illustrative, not clinical).
 
-## The two "wow" moments
+## The "wow" moments
 
 1. **Flip the AI on, live.** `PIPEGUARD_TRIAGE_AGENT=claude` (and/or
    `PIPEGUARD_SYNTHESIZER=claude`) → the same triage panel now shows Claude-written prose,
@@ -53,6 +53,13 @@ npm --prefix frontend run dev                  # React UI (proxies /api -> :8010
 2. **Reproducibility from the log.** `make rebuild-db LEDGER=run.events.jsonl DB=pg.sqlite`
    rebuilds the entire relational projection from the authoritative event ledger — same
    run / samples / findings / cards / events, byte-stable. The DB is disposable; the log is truth.
+3. **An escalation lands in Slack, live.**
+   `PIPEGUARD_NOTIFIER=slack PIPEGUARD_SLACK_LIVE=1 uv run python -m pipeguard.notify data/mock_run_01`
+   → the gate runs and the S4 escalation (+ S5 hold) post to a real Slack channel as cited
+   cards. Off by default (stub, $0); the live post is armed **only** by the explicit
+   `PIPEGUARD_SLACK_LIVE` flag (needs `uv sync --extra slack` + a bot token/channel in `.env`),
+   and any Slack error degrades to the stub. Shows the ops-integration seam (ADR-0010) as a
+   real, controlled side effect — verified end-to-end against a live workspace.
 
 ## Expected I/O (the pinned scenario)
 

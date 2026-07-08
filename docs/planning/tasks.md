@@ -60,7 +60,7 @@ estimates — adjusted as we go.
 | T-013 | Synthetic run generator ✅ (`pipeguard.synthetic`) + GIAB HG002 subset fetch script ✅ (`scripts/fetch_giab_hg002.py`, accessions manifest; real fetch needs the genomics toolchain → T-017) | 2 | done | partial | T-002, T-008 |
 | T-014 | Event bus + provenance ledger (in-memory + JSONL; DB projection → T-023 ✅) | 1 | done | no | ADR-0002 |
 | T-015 | QC-triage agent (advisory, stub-first, corpus + retrieval, /triage API) | 3 | done | no | T-014 |
-| T-015b | Outbound notify port ✅ + wired into `run_gate` as an optional off-by-default hook (`notifier=`; `NOTIFICATION_EMITTED` events; Streamlit stub outbox) ✅ — live Slack send pending a bot token/webhook | 3 | done | no | T-015 |
+| T-015b | Outbound notify port ✅ + wired into `run_gate` (`notifier=`; `NOTIFICATION_EMITTED` events) ✅ + live Slack send behind a `PIPEGUARD_SLACK_LIVE` opt-in, **verified end-to-end against a real workspace** + `python -m pipeguard.notify` demo CLI ✅ | 3 | done | no | T-015 |
 | T-016 | Data strategy doc + label mock_run_01 origin | 1 | done | yes | — |
 | T-017 | Real GIAB HG002 panel data: fetch validated end-to-end on a bioconda env (`conda create -n hackathon -c conda-forge -c bioconda samtools bcftools htslib`; truth VCF + 470-record panel VCF + 70,996-read panel BAM slice via `samtools -X`); running the slice through the QC gate (coverage/contam) remains | 2 | in-progress | partial | T-002 |
 | T-018 | Frontend design brief + clickable prototype (`design/frontend/`) | 1 | done | yes | — |
