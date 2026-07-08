@@ -55,7 +55,7 @@ estimates — adjusted as we go.
 | T-009 | `quality/{evaluation,risks}.md` + `demo/demo_plan.md` | 1 | todo | yes | T-002 |
 | T-010 | ADR-pending → ADR-0008–0013 (issue-taxonomy, corpora, ticketing/API, tooling, agent-scoping, gate-architecture) | 1 | done | yes | — |
 | T-011 | Fresh production-framed `README.md` (committed; final polish awaits T-005 architecture.md) | 1 | in-progress | no | T-005 |
-| T-012 | Phase 0 tooling: uv + `pyproject.toml` single source, mypy/ruff, hooks | 0 | done | no | — |
+| T-012 | Phase 0 tooling: uv + `pyproject.toml` single source, mypy/ruff, hooks (batch full-eval → Phase 2/T-009) | 0 | done | no | — |
 | T-013 | GIAB HG002 subset fetch script + synthetic perturbation generator | 2 | todo | partial | T-002, T-008 |
 | T-014 | Event bus + provenance ledger | 1/2 | todo | no | ADR-0002 |
 | T-015 | QC-triage agent + notify port (Slack) | 3 | todo | no | T-014 |

@@ -65,11 +65,21 @@ class ClaudeSynthesizer:
         self.model = model or os.environ.get("PIPEGUARD_CLAUDE_MODEL", "claude-opus-4-8")
         self.max_tokens = max_tokens
         self._fallback = StubSynthesizer()
-        self._client = None  # created lazily on first use
+        self._client: Any = None  # anthropic client, created lazily on first use
 
     def _get_client(self) -> Any:
         if self._client is None:
             import anthropic  # lazy: package works without anthropic installed
+
+            # Best-effort: load a local .env so ANTHROPIC_API_KEY works as
+            # documented in .env.example. python-dotenv ships with the [claude]
+            # extra; plain environment variables still work without it.
+            try:
+                from dotenv import load_dotenv
+
+                load_dotenv()
+            except ImportError:
+                pass
 
             self._client = anthropic.Anthropic()  # resolves credentials from env
         return self._client

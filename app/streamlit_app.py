@@ -11,19 +11,13 @@ Run:  streamlit run app/streamlit_app.py
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-# Make the src/ package importable without an install step (dev convenience).
-_SRC = Path(__file__).resolve().parent.parent / "src"
-if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
-
-from pipeguard import DecisionCard, RunArtifacts, load_run, run_gate  # noqa: E402
-from pipeguard.engine import get_synthesizer  # noqa: E402
+from pipeguard import DecisionCard, RunArtifacts, load_run, run_gate
+from pipeguard.engine import get_synthesizer
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 

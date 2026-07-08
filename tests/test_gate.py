@@ -10,6 +10,7 @@ import pytest
 
 from pipeguard import DEFAULT_RUNBOOK, Verdict, evaluate_run, load_run, run_gate
 from pipeguard.models import QCMetrics
+from pipeguard.parsers import parse_sample_sheet
 from pipeguard.rules import _evaluate_metric
 from pipeguard.synthesis import StubSynthesizer, aggregate_verdict
 
@@ -115,3 +116,22 @@ def test_hard_fail_sample_reruns():
     art.qc = [q if q.sample_id != "S2" else QCMetrics(sample_id="S2", q30=60.0) for q in art.qc]
     cards = {c.sample_id: c for c in run_gate(art, synthesizer=StubSynthesizer())}
     assert cards["S2"].verdict is Verdict.RERUN
+
+
+def test_sample_sheet_tolerates_short_rows(tmp_path: Path) -> None:
+    """A row with fewer cells than the header is a data signal (missing fields
+    become None), not a zip length crash — guards the tolerant strict=False in
+    parse_sample_sheet. A row with a blank sample_id is skipped entirely.
+    """
+    sheet = tmp_path / "SampleSheet.csv"
+    sheet.write_text(
+        "[BCLConvert_Data]\n"
+        "sample_id,index\n"
+        "S1,ACGTACGT\n"
+        "S2\n"  # short row: sample_id present, index cell missing
+        ",TTTTTTTT\n"  # blank sample_id: dropped
+    )
+    by_id = {e.sample_id: e for e in parse_sample_sheet(sheet)}
+    assert set(by_id) == {"S1", "S2"}  # blank-id row skipped, short row kept
+    assert by_id["S2"].index is None  # missing trailing cell -> None, no crash
+    assert by_id["S1"].index == "ACGTACGT"

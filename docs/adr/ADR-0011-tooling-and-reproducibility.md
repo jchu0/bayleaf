@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · Implemented (T-012) |
+| **Status** | Accepted · Implemented (T-012); batch-tier full-eval deferred to Phase 2 |
 | **Date** | 2026-07-07 (MST) |
 | **Deciders** | James Hu, Claude Code |
 | **Related** | [ADR-0006](ADR-0006-ai-off-by-default-fallback.md), [tasks T-012](../planning/tasks.md) |
@@ -23,6 +23,9 @@ drift risk, and it will only get more expensive to fix as the code grows.
 2. **mypy** (strict-ish) and **ruff** (lint + format) enforce the coding standards.
 3. **Hook tiers:** pre-commit (ruff, secret scan, mypy), pre-push (pytest),
    batch/milestone (full evaluation incl. real-data validation, `pip-audit`).
+   *Implemented:* tiers 1–2 in `.pre-commit-config.yaml`; the batch tier's
+   `pip-audit` runs via `make audit`, while the full evaluation is deferred to
+   Phase 2 (it needs the eval harness — see T-009).
 4. Coding standards (type hints, docstrings, why-comments, typed config) are enforced.
 
 ## Assumptions

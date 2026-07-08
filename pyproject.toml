@@ -26,6 +26,7 @@ dev = [
     "mypy>=1.11",
     "ruff>=0.6",
     "pre-commit>=3.8",
+    "pip-audit>=2.7", # batch-tier dependency vulnerability scan (`make audit`)
 ]
 
 [tool.setuptools.packages.find]
@@ -52,9 +53,15 @@ files = ["src", "app"]
 strict = true
 plugins = ["pydantic.mypy"]
 
-# Third-party libs — treat as opaque at the boundary (don't type-check their
-# internals; their bundled stubs also assume a newer target than our 3.10 floor).
+# Data/UI libs without usable bundled stubs — opaque at the boundary:
+#   - pandas ships no py.typed (needs the separate, incomplete pandas-stubs) and
+#     is used only for simple CSV I/O;
+#   - numpy's stubs use PEP 695 `type` statements that assume a newer target
+#     than our 3.10 floor;
+#   - streamlit ships no stubs.
+# anthropic is deliberately NOT here: it ships types and is the live-API
+# integration point, so its usage in synthesis/claude.py is type-checked.
 [[tool.mypy.overrides]]
-module = ["streamlit.*", "anthropic.*", "pandas.*", "numpy.*"]
+module = ["streamlit.*", "pandas.*", "numpy.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
