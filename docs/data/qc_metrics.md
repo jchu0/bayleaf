@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-07 (MST) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds) |
+| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization), [schemas.md](schemas.md) (§6 units contract) |
 
 ## Overview
 
@@ -26,7 +26,11 @@ Three checkpoints per ADR-0013.
 3. **Depth is per-modality; Q30 is per platform × read-length** (matrix below).
 4. **Surface and decide** (ADR-0013): most breaches → HOLD or ESCALATE; RERUN only
    for operational / file-system failures.
-5. **Normalize units** — fastp fields are fractions (0–1); MultiQC are percentages.
+5. **Normalize units** — fastp fields are fractions (0–1); MultiQC are percentages. This is
+   now handled by the [metric registry](metric_registry.md): every metric crosses the gate as
+   its canonical `normalized_value`, and thresholds are stored + compared in that same unit
+   ([schemas.md](schemas.md) §6 units contract) — a percent-for-fraction mix-up can't silently
+   move a gate.
 
 ## Gate 1 — Preflight / intake (before the queue)
 
@@ -111,7 +115,9 @@ The Q30 gate = the platform × read-length expected value, operator-adjustable.
 Thresholds live in an operator-owned runbook **profile** keyed on **assay × sample
 type** (whole blood / saliva). We ship two:
 1. A **guideline-default profile** — the cited defaults above.
-2. A concrete **test-data profile** tuned to our GIAB HG002 panel-subset — **pending
-   [T-017](../planning/tasks.md)** (fetch a small real FASTQ→BAM). This gives the gate
-   real numbers to validate against, with **no hardcoded universals**: the test-data
-   profile is configured to what that dataset actually achieves.
+2. A concrete **test-data profile** tuned to our GIAB HG002 panel-subset. Its prerequisite —
+   fetching a small real GIAB slice ([T-017](../planning/tasks.md)) — is **done**: the fetch
+   script ([`scripts/fetch_giab_hg002.py`](../../scripts/fetch_giab_hg002.py)) is validated
+   end-to-end (truth VCF + panel-region reads; see [strategy.md](strategy.md)). Tuning the
+   profile to what that dataset actually achieves is the remaining step, still with **no
+   hardcoded universals**.

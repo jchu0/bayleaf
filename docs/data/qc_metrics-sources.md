@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-07 (MST) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [qc_metrics.md](qc_metrics.md) (the runbook we derive from this), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) |
+| **Related** | [qc_metrics.md](qc_metrics.md) (the runbook we derive from this), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds + lit review), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) |
 
 ## How to read this
 

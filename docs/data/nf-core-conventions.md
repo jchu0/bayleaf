@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-07 (MST) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [schemas.md](schemas.md) (the records we derive), [qc_metrics.md](qc_metrics.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) |
+| **Related** | [schemas.md](schemas.md) (the records we derive), [metric_registry.md](metric_registry.md) (the registry §4 argues for), [qc_metrics.md](qc_metrics.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) |
 
 ## Framing
 
@@ -77,6 +77,9 @@ MarkDuplicates `PERCENT_DUPLICATION`.
   unstable** (e.g. fastp `after_filtering_q30_rate` reading zero, MultiQC issue #936). Pin
   a canonical registry `our_key → {module, json_key, source_file, unit}` rather than
   trusting General-Stats column names. This also replaces the fixed `QCMetrics` columns.
+  **Now implemented** as [`metric_registry.yaml`](../../src/pipeguard/metrics/metric_registry.yaml)
+  + a typed `MetricRegistry`, on the QC critical path (see [metric_registry.md](metric_registry.md));
+  today it still maps the flat `QCMetrics` fields (`mapping.py`) pending real MultiQC parsing.
 
 ## 5. `nextflow_schema.json` → `RunbookProfile` shape
 

@@ -5,16 +5,24 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-08 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [schemas.md](schemas.md), [qc_metrics.md](qc_metrics.md), [nf-core-conventions.md](nf-core-conventions.md) |
+| **Related** | [schemas.md](schemas.md) (§6 units contract), [provenance.md](provenance.md), [qc_metrics.md](qc_metrics.md), [nf-core-conventions.md](nf-core-conventions.md), the layered data-contract ADR *(in draft — link when numbered)* |
 
 ## Overview
 
 The **canonical metric vocabulary** — the stable layer above drifting MultiQC/tool keys.
 `MetricValue` records observed values; the **registry defines what they mean** (canonical
-unit, direction, source contract). Parsers normalize against it; `RunbookProfile.thresholds`
-key on it. It is a **versioned artifact** (pinned per `AnalysisRun` as
-`metric_registry_version`), and becomes a real `metric_registry.yaml` loaded by the parser
-layer in implementation. This is why a MultiQC key change never silently breaks a gate.
+unit, direction, source contract). It is a **versioned artifact** (pinned per `AnalysisRun`
+as `metric_registry_version`). This is why a MultiQC key change never silently breaks a gate.
+
+**Realized in code (T-024/T-025).** The registry is a real
+[`metric_registry.yaml`](../../src/pipeguard/metrics/metric_registry.yaml) loaded by a typed,
+frozen [`MetricRegistry`](../../src/pipeguard/metrics/registry.py)
+(`entry`/`resolve_alias`/`normalize`/`denormalize`/`observe`), and it is **on the QC critical
+path today**: the rule engine maps each parsed `QCMetrics` field to its `our_key`, normalizes
+via `observe`, and gates on `MetricValue.normalized_value`
+([mapping.py](../../src/pipeguard/metrics/mapping.py) → [rules.py](../../src/pipeguard/rules.py)).
+*(The `pipeguard.metrics` module docstrings still read "additive only" — stale; the wiring
+has landed.)*
 
 ## Entry shape
 
@@ -69,5 +77,14 @@ metrics:
 2. `aliases[]` maps prior/variant MultiQC keys to the canonical `our_key` — the shield
    against MultiQC key drift.
 3. `canonical_unit` is the single source for normalization; `MetricValue.normalized_value`
-   is computed against it (and snapshotted into the ledger record for ML-self-containment).
-4. `RunbookProfile.thresholds` may only key on registered `our_key`s (controlled vocabulary).
+   is computed against it (and snapshotted onto every record for ML-self-containment).
+   `denormalize` is the exact inverse over the same closed conversion table — used to render a
+   canonical threshold back into a metric's raw/display unit (a `0.85` fraction gate shown as
+   `85%`) with no hardcoded factor.
+4. Thresholds may only key on registered `our_key`s (controlled vocabulary) — **realized:**
+   `runbook.QCThreshold` carries an `our_key` and stores `gate`/`hard_fail` in the metric's
+   **canonical** unit (Q30 `0.85`, coverage in `x`), and a test asserts every threshold
+   `our_key` is registered. The rules compare `MetricValue.normalized_value` against it, so a
+   threshold and the value it gates are always on the same scale (the fuller
+   `RunbookProfile.thresholds` config record in [schemas.md](schemas.md) #19 keeps the same
+   rule).
