@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-08 (MST) |
 | **Audience** | software / all (non-genomics readers) |
-| **Related** | [glossary.md](glossary.md), [data/strategy.md](../data/strategy.md), [data/qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [data/qc_metrics-sources.md](../data/qc_metrics-sources.md), [design/architecture.md](../design/architecture.md) |
+| **Related** | [glossary.md](glossary.md), [data/strategy.md](../data/strategy.md), [data/qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [data/qc_metrics-sources.md](../data/qc_metrics-sources.md), [data/metric_registry.md](../data/metric_registry.md), [design/architecture.md](../design/architecture.md), [quality/evaluation.md](../quality/evaluation.md) |
 
 ## Overview
 
@@ -68,7 +68,8 @@ The upstream genomics pipeline is *input generation* and is out of PipeGuard's s
 ([qc_metrics-sources.md](../data/qc_metrics-sources.md)):
 
 1. **Sequencing (Illumina short-read).** The instrument (e.g. NovaSeq, MiSeq)
-   produces short reads and per-run quality signals — cluster pass-filter, error
+   produces short reads and per-run quality signals — cluster pass-filter (registered as
+   the metric `qc.cluster_pf`, [metric_registry.md](../data/metric_registry.md)), error
    rate, and **%≥Q30** (the fraction of base calls with a Phred quality ≥30,
    i.e. ≤1-in-1000 estimated error). Q30 expectations are **platform × read-length**
    specific vendor specs, not clinical gates ([qc_metrics.md](../data/qc_metrics.md)

@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-08 (MST) |
 | **Audience** | all |
-| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) |
+| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
 
 ## Overview
 
@@ -30,11 +30,17 @@ clinician would actually feel.
 **Risk.** MultiQC reports percentages (`pct_*`, ×100) while fastp reports fractions
 (0–1). Mixing them shifts a borderline sample across a threshold with no error.
 
-**Mitigation.** A canonical [metric registry](../data/metric_registry.md) normalizes
-units at the boundary; the pinned demo scenario ([evaluation.md](evaluation.md) EVAL-001)
-locks the borderline S5 values so any drift fails a test.
+**Mitigation.** **Now mitigated by the units contract** ([schemas.md §6](../data/schemas.md)):
+the canonical [metric registry](../data/metric_registry.md) is **on the QC critical path** —
+rules compare each metric's `normalized_value` against a runbook threshold stored in the same
+`canonical_unit`, and normalization keys on the *declared* `raw_unit` (never the field name),
+so a `pct_*` percentage can't be silently read as a fraction. This is verified byte-identical
+to the pre-registry path ([evaluation.md](evaluation.md) EVAL-005), with the registry's
+normalize/denormalize round-trip (EVAL-004) and the pinned borderline S5 demo values (EVAL-001)
+locking any residual drift to a test failure.
 
-**Owner / revisit trigger.** Any new parser or metric source — re-pin and add a case.
+**Owner / revisit trigger.** Any new parser or metric source keying on an unregistered metric —
+add the registry entry + re-pin a case.
 
 ### RISK-002 — Content-hash instability from non-canonical serialization
 
@@ -214,6 +220,32 @@ env var and flipped on only for the demo moment ([constraints.md](../requirement
 REQ-C-010/011; MEMORY: conserve-API-credits).
 
 **Owner / revisit trigger.** Any session that sets `PIPEGUARD_*=claude`.
+
+### RISK-033 — Live Slack post is a real outbound side effect
+
+| Field | Value |
+|---|---|
+| **Category** | Demo / Security |
+| **Likelihood** | Low |
+| **Impact** | Medium |
+| **Status** | Mitigating |
+| **Added** | 2026-07-08 (MST) |
+
+**Risk.** The notify port (ADR-0010) can post a decision card to a real Slack channel — data
+leaving the machine. An accidental, mis-targeted, or premature send (wrong channel, dev noise,
+sensitive content) during development or the demo.
+
+**Mitigation.** Off by default: the `stub` adapter builds and records the payload but sends
+nothing ($0, offline). A live post is armed **only** by explicit `PIPEGUARD_SLACK_LIVE=1`
+**and** `PIPEGUARD_NOTIFIER=slack` **and** a bot token + channel read from env (never hardcoded;
+`.env.example` documents them). The actionable-only policy means no all-clear spam; any missing
+cred, missing Slack SDK, or Slack error degrades to the stub. EVAL-041 pins that it never sends
+unless armed, and `notification.emitted` records the result and **no secret**
+([evaluation.md](evaluation.md) EVAL-040/041; [demo_plan.md](../demo/demo_plan.md) §"wow"
+moment 3). Demo content is synthetic/contrived, not PHI.
+
+**Owner / revisit trigger.** Any session that sets `PIPEGUARD_SLACK_LIVE`; demo rehearsal
+against the live workspace; any move toward real (PHI-bearing) data.
 
 ---
 

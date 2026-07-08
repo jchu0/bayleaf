@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-08 (MST) |
 | **Audience** | presenter / judges |
-| **Related** | [architecture.md](../design/architecture.md), [provenance.md](../data/provenance.md), [qc_metrics.md](../data/qc_metrics.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) |
+| **Related** | [architecture.md](../design/architecture.md), [provenance.md](../data/provenance.md), [qc_metrics.md](../data/qc_metrics.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
 
 ## The narrative (60 seconds)
 
@@ -63,9 +63,11 @@ npm --prefix frontend run dev                  # React UI (proxies /api -> :8010
 
 ## Expected I/O (the pinned scenario)
 
-`mock_run_01`: **S1–S3 proceed** (clean), **S4 escalate** (barcode/index swap + missing
-`subject_id`, both at the preflight gate), **S5 hold** (borderline Q30 84.1% and
-coverage 29.2×). 16 provenance events. These are test-pinned, so the demo is deterministic.
+`mock_run_01`: **S1–S3 proceed** (clean), **S4 escalate** (barcode/index swap — declared i5
+`GGCTCTGA` vs observed `AGGCGAAG` — plus missing `subject_id`, both at the preflight gate),
+**S5 hold** (borderline Q30 84.1% and coverage 29.2×). **16 provenance events** on the default
+(no-notifier) run; wiring the notify port for wow-moment 3 adds **two** `notification.emitted`
+events — one per actionable card (S4, S5). These are test-pinned, so the demo is deterministic.
 
 ## Fallbacks (in order)
 
