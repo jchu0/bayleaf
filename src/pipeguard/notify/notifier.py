@@ -37,7 +37,7 @@ from __future__ import annotations
 import os
 from typing import Any, Protocol
 
-from ..models import DecisionCard, Finding
+from ..models import DecisionCard, Finding, Verdict
 from .models import NotifyPayload, NotifyResult, NotifyStatus
 
 # Env var names, in one place so the factory and .env.example never drift.
@@ -86,56 +86,116 @@ def should_notify(card: DecisionCard) -> bool:
     return card.is_actionable
 
 
+# Category-specific framing keyed on the verdict — turns a bare finding list into an
+# actionable message: what *kind* of problem this is and what to do about it. The verdict
+# is the gate's; this only explains it, and never sets one (ADR-0001).
+_VERDICT_GUIDANCE: dict[Verdict, tuple[str, str]] = {
+    Verdict.ESCALATE: (
+        "🔴 Provenance / identity risk",
+        "Chain-of-custody issue — do NOT use this sample downstream until its identity is "
+        "verified. This is not a fixable data-quality problem.",
+    ),
+    Verdict.RERUN: (
+        "🟠 Operational / pipeline failure",
+        "The pipeline failed for this sample — re-run it. An operational failure, not a "
+        "borderline metric.",
+    ),
+    Verdict.HOLD: (
+        "🟡 Borderline QC — needs operator judgment",
+        "A metric missed a gate but cleared the hard floor. A human decides proceed vs. "
+        "rerun; this is not an automatic fail.",
+    ),
+    Verdict.PROCEED: ("🟢 Clean", "No action needed."),  # never notified; here for totality
+}
+
+
+def _evidence_detail(f: Finding) -> str:
+    """The numbers behind a finding: observed vs. expected, pulled from its evidence.
+
+    This turns "Q30 borderline" into "Q30: observed 84.1, expected 85" — the QC metric
+    values an operator actually needs. Read straight off the immutable evidence; the port
+    computes nothing.
+    """
+    parts: list[str] = []
+    for e in f.evidence:
+        if e.value is None:
+            continue
+        label = e.source_field or e.locator or e.source
+        expected = e.expected or e.threshold
+        if expected is not None:
+            parts.append(f"{label}: observed {e.value}, expected {expected}")
+        else:
+            parts.append(f"{label}: {e.value}")
+    return "; ".join(parts)
+
+
 def _finding_line(f: Finding) -> str:
-    """One compact, human-readable line for a finding (severity + rule + title)."""
-    return f"[{f.severity.value}] {f.rule_id}: {f.title}"
+    """One line for a finding: severity + rule + title, enriched with observed-vs-expected."""
+    base = f"[{f.severity.value}] {f.rule_id}: {f.title}"
+    detail = _evidence_detail(f)
+    return f"{base} — {detail}" if detail else base
 
 
 def _plain_text(card: DecisionCard) -> str:
     """A deterministic plain-text body — the Slack `text` fallback and the stub's record.
 
     No timestamps or ids are interpolated, so identical cards yield identical text (the
-    determinism the tests pin). Findings/steps come straight off the card in their stable
-    order; the port adds nothing the gate did not already decide.
+    determinism the tests pin). Content is tailored per verdict (see _VERDICT_GUIDANCE);
+    findings/steps come straight off the card in their stable order.
     """
+    kind, action = _VERDICT_GUIDANCE.get(card.verdict, ("", ""))
+    run = card.run_id or "unknown-run"
     lines = [
-        f"Sample {card.sample_id} — verdict {card.verdict.value.upper()}",
+        f"[{card.verdict.value.upper()}] sample {card.sample_id} @ run {run}",
         card.headline,
+        "",
+        kind,
+        action,
     ]
     if card.findings:
-        lines.append("")
-        lines.append("Findings:")
-        lines.extend(f"  - {_finding_line(f)}" for f in card.findings)
+        lines += ["", "Findings:"]
+        lines += [f"  - {_finding_line(f)}" for f in card.findings]
     if card.next_steps:
-        lines.append("")
-        lines.append("Next steps:")
-        lines.extend(f"  - {step}" for step in card.next_steps)
-    lines.extend(["", _DISCLAIMER])
+        lines += ["", "Next steps:"]
+        lines += [f"  - {step}" for step in card.next_steps]
+    lines += ["", _DISCLAIMER]
     return "\n".join(lines)
 
 
-def _blocks(card: DecisionCard, title: str, text: str) -> list[dict[str, Any]]:
+def _section(text: str) -> dict[str, Any]:
+    """A Slack Block Kit mrkdwn section block."""
+    return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
+
+
+def _blocks(card: DecisionCard, title: str) -> list[dict[str, Any]]:
     """Slack Block Kit blocks, as plain dicts (no Slack SDK needed to build them).
 
-    Kept structurally simple and deterministic: a header, a summary section, an optional
-    findings section, and a context disclaimer. The header is truncated to Slack's 150-char
-    plain_text limit so a long headline can never make the (future) post 400.
+    Header → summary with sample + run fields → the verdict-specific guidance → findings
+    (with observed-vs-expected evidence) → next steps → the research/demo disclaimer. The
+    header is truncated to Slack's 150-char plain_text limit so a long headline can't 400.
     """
+    run = card.run_id or "unknown-run"
+    summary = f"*{card.verdict.value.upper()}* — {card.headline}"
     blocks: list[dict[str, Any]] = [
         {"type": "header", "text": {"type": "plain_text", "text": title[:150]}},
         {
             "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": (
-                    f"*{card.verdict.value.upper()}* — {card.headline}\nSample `{card.sample_id}`"
-                ),
-            },
+            "text": {"type": "mrkdwn", "text": summary},
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Sample*\n`{card.sample_id}`"},
+                {"type": "mrkdwn", "text": f"*Run*\n`{run}`"},
+            ],
         },
     ]
+    kind, action = _VERDICT_GUIDANCE.get(card.verdict, ("", ""))
+    if kind:
+        blocks.append(_section(f"{kind}\n{action}"))
     if card.findings:
         finding_md = "\n".join(f"• {_finding_line(f)}" for f in card.findings)
-        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": finding_md}})
+        blocks.append(_section(f"*Findings*\n{finding_md}"))
+    if card.next_steps:
+        steps_md = "\n".join(f"• {step}" for step in card.next_steps)
+        blocks.append(_section(f"*Next steps*\n{steps_md}"))
     blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": _DISCLAIMER}]})
     return blocks
 
@@ -147,14 +207,15 @@ def build_payload(card: DecisionCard, *, channel: str) -> NotifyPayload:
     provenance/determinism — is identical no matter which adapter sends it. It reads only
     the card's already-decided fields; it never computes or alters a verdict (ADR-0001).
     """
-    title = f"[{card.verdict.value.upper()}] {card.sample_id} — {card.headline}"
-    text = _plain_text(card)
+    run = card.run_id or "unknown-run"
+    title = f"[{card.verdict.value.upper()}] {card.sample_id} @ {run} — {card.headline}"
     return NotifyPayload(
         channel=channel,
         title=title,
-        text=text,
-        blocks=_blocks(card, title, text),
+        text=_plain_text(card),
+        blocks=_blocks(card, title),
         sample_id=card.sample_id,
+        run_id=card.run_id,
         verdict=card.verdict,
         headline=card.headline,
     )
@@ -219,7 +280,7 @@ class StubNotifier:
 
 
 class SlackNotifier:
-    """Slack notify adapter — OFF by default, live send deferred (T-015b, ADR-0010 §2).
+    """Slack notify adapter — OFF by default, live send opt-in (T-015b, ADR-0010 §2).
 
     Design guarantees mirror `ClaudeTriageAgent` so the seam is safe to flip on later:
       * ``slack_sdk`` is imported lazily (it is deliberately NOT a dependency), so the

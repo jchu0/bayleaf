@@ -9,9 +9,9 @@ Two record shapes live here:
     what the deterministic gate decided and can never set or change a verdict (ADR-0001).
   * :class:`NotifyResult` — the outcome of a :meth:`~pipeguard.notify.NotifyPort.notify`
     call. Its :class:`NotifyStatus` distinguishes *skipped by policy* (a clean card),
-    *prepared* (payload built + recorded but not sent — the stub, or the Slack adapter
-    while live send is out of scope), and *sent* (a real post — reserved for the deferred
-    live-send seam, never produced today).
+    *prepared* (payload built + recorded but not sent — the stub, or the Slack adapter when
+    live send is not armed), and *sent* (a real post — the Slack adapter with
+    ``PIPEGUARD_SLACK_LIVE`` armed).
 
 Both reuse the shared content-hash helper so a payload has the same stable, deterministic
 identity every other record does — which is also what makes the payload testably
@@ -38,8 +38,8 @@ class NotifyStatus(str, Enum):
     """
 
     SKIPPED = "skipped"  # notify policy said no (a clean PROCEED card) — no payload built
-    PREPARED = "prepared"  # payload built + recorded, but NOT sent (stub, or guarded Slack)
-    SENT = "sent"  # a real outbound post — reserved for the deferred live-send seam
+    PREPARED = "prepared"  # payload built + recorded, but NOT sent (stub, or unarmed Slack)
+    SENT = "sent"  # a real outbound post (Slack with PIPEGUARD_SLACK_LIVE armed)
 
 
 class NotifyPayload(BaseModel):
@@ -48,8 +48,7 @@ class NotifyPayload(BaseModel):
     Frozen and content-hashed like every other record: identical inputs yield an
     identical payload (and identical ``content_hash``), which is the property the tests
     pin. ``blocks`` are Slack Block Kit structures kept as plain ``dict``s so the core
-    stays framework-agnostic — building them needs no Slack SDK; only the (deferred)
-    live send would.
+    stays framework-agnostic — building them needs no Slack SDK; only a live send would.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -63,6 +62,9 @@ class NotifyPayload(BaseModel):
         default_factory=list, description="Slack Block Kit blocks (plain JSON dicts)"
     )
     sample_id: str
+    run_id: str | None = Field(
+        None, description="Human run id the card belongs to (e.g. mock_run_01), for traceability"
+    )
     # Copied from the card for traceability. The notify port NEVER decides a verdict
     # (ADR-0001); this mirrors what the deterministic gate already set.
     verdict: Verdict
@@ -79,6 +81,7 @@ class NotifyPayload(BaseModel):
                 "text": self.text,
                 "blocks": self.blocks,
                 "sample_id": self.sample_id,
+                "run_id": self.run_id,
                 "verdict": self.verdict.value,
                 "headline": self.headline,
             }
@@ -107,5 +110,5 @@ class NotifyResult(BaseModel):
 
     @property
     def delivered(self) -> bool:
-        """True only for a real outbound send — never today (live send is deferred)."""
+        """True only for a real outbound send (Slack with live send armed)."""
         return self.status is NotifyStatus.SENT

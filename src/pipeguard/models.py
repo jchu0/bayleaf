@@ -236,6 +236,11 @@ class DecisionCard(BaseModel):
     analysis_run_id: str | None = Field(
         None, description="Anchors the card to the gate execution that produced it"
     )
+    run_id: str | None = Field(
+        None,
+        description="Human run id the card belongs to (e.g. mock_run_01); contextual, "
+        "not part of content_hash",
+    )
     schema_version: int = SCHEMA_VERSION
     created_at: datetime = Field(default_factory=utc_now)
 

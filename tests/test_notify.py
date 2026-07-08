@@ -89,8 +89,26 @@ def test_stub_builds_wellformed_payload_for_flagged_card(cards):
     # Blocks are Slack-shaped: a header first, every block a typed dict.
     assert payload.blocks and payload.blocks[0]["type"] == "header"
     assert all("type" in b for b in payload.blocks)
+    # Enriched: carries the run id, the category-specific guidance, and the observed-vs-
+    # expected evidence numbers an operator needs.
+    assert payload.run_id == "mock_run_01"
+    assert "mock_run_01" in payload.text
+    assert "Provenance / identity risk" in payload.text  # ESCALATE framing
+    assert "observed" in payload.text  # evidence numbers surfaced
     # Recorded to the outbox rather than sent.
     assert notifier.outbox == [payload]
+
+
+def test_payload_is_category_specific_by_verdict(cards):
+    """Message content is tailored per verdict category, each with run id + evidence."""
+    esc = build_payload(cards["S4"], channel="stub")  # ESCALATE (provenance/identity)
+    hold = build_payload(cards["S5"], channel="stub")  # HOLD (borderline QC)
+    assert "identity risk" in esc.text.lower()  # provenance/identity framing
+    assert "operator judgment" in hold.text.lower()  # borderline-QC framing
+    assert esc.text != hold.text  # genuinely different messages per category
+    for p in (esc, hold):
+        assert p.run_id == "mock_run_01"
+        assert "observed" in p.text  # observed-vs-expected evidence
 
 
 def test_payload_reflects_the_cards_verdict_not_a_new_one(cards):

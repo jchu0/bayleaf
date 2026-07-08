@@ -132,6 +132,7 @@ def run_gate(
 
         card = synthesizer.synthesize(sample_id, findings, artifacts)
         card.analysis_run_id = arun.id
+        card.run_id = artifacts.run_id
         ledger.emit(
             ProvenanceEvent(
                 event_type=EventType.VERDICT_DECIDED,
