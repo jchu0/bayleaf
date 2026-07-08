@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-07 (MST) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [metric_registry.md](metric_registry.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013 |
+| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, the layered data-contract ADR *(in draft — link when numbered)* |
 
 ## Overview
 
@@ -61,11 +61,15 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
    scores{verdict precision/recall, narration faithfulness} · report_artifact_id · status.
 
 ### QC
-6. **MetricValue** (`metric_`) — sample_id · analysis_run_id · **metric_key** *(→ registry)* ·
-   gate · raw_value · raw_unit · **normalized_value** · source_artifact_id · source_field ·
-   source_locator · parser_version. *Ledger record additionally snapshots*
-   `{canonical_unit, metric_registry_version}` *for standalone ML-readability; the DB
-   projection stays lean and dereferences the registry.*
+6. **MetricValue** (`metric_`) — sample_id · analysis_run_id · **metric_key** *(→ registry
+   `our_key`)* · gate · raw_value · raw_unit · **normalized_value** · **canonical_unit** ·
+   **metric_registry_version** · source_artifact_id · source_field · source_locator ·
+   parser_version · content_hash. **Immutable** (`frozen`, content-hash identity), built via
+   [`MetricRegistry.observe(...)`](metric_registry.md) — the registry (not the model) computes
+   `normalized_value` and stamps `canonical_unit` + `metric_registry_version` **onto every
+   record** (not dereferenced at read time) so a row is standalone-interpretable for ML/audit
+   (ADR-0007). **On the critical path today:** the rule engine builds registry-backed
+   `MetricValue`s during evaluation and gates on `normalized_value` (units contract below).
 
 > **Units contract — one representation across components.** A metric crosses every
 > component boundary as its **`normalized_value`**: a `float` in the metric's
@@ -78,8 +82,13 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > expected is the units-mismatch bug this contract exists to prevent. Runbook thresholds gate
 > on the registry `our_key` and are stored in the same canonical unit, so the rules compare a
 > threshold and the `normalized_value` it gates on the same scale by construction; the finding
-> text then renders both back into the operator-facing raw unit (Q30 `0.841 < 0.85` internally,
+> text then renders both back into the operator-facing raw unit via `MetricRegistry.denormalize` (Q30 `0.841 < 0.85` internally,
 > shown as `84.1% / ≥ 85%`).
+
+> **Realized in code:** `runbook.QCThreshold` carries the registry `our_key` + canonical
+> `gate`/`hard_fail`; `rules._evaluate_metric` decides on `normalized_value` then denormalizes
+> for display — verdicts stay byte-identical to the pre-registry engine
+> ([metric_registry.md](metric_registry.md)).
 
 ### Findings & decisions
 7. **Evidence** — **source_kind** (`artifact|metric|multiqc_source|execution_trace|params|
@@ -93,6 +102,7 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
    IssueSignature/Ticket/ExperienceRecord.)*
 9. **GateResult** *(embedded in DecisionCard)* — gate · verdict · severity · finding_ids[] · rationale.
 10. **DecisionCard** (`card_`) — **one per (sample × analysis_run)** · analysis_run_id ·
+    **run_id** *(human run id, e.g. `mock_run_01`; contextual — not in `content_hash`)* ·
     sample_id · verdict (`proceed|hold|rerun|escalate`) · **confidence?** *(nullable —
     omitted until grounded)* · headline · rationale · next_steps[] · finding_ids[] ·
     gate_results[] (GateResult) · generated_by · model · **content_hash** · created_at ·
@@ -126,8 +136,18 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 17. **ReviewItem/Ticket** (`tkt_`) — card_id · sample_id · status (`open|in_review|resolved`) ·
     priority · assignee · required_tier (`reviewer|approver`) · resolution_experience_id ·
     created_at · updated_at.
-18. **NotifyEvent** — ticket_id · channel (`slack|jira|…`) · status (`queued|sent|failed`) ·
-    payload · created_at.
+18. **Notifications** (ADR-0010 §2) — two shapes:
+    a. **NotifyEvent** *(ticket-era shape, deferred)* — ticket_id · channel (`slack|jira|…`) ·
+       status (`queued|sent|failed`) · payload · created_at.
+    b. **NotifyPayload / NotifyResult** *(implemented — T-015b)* — the outbound notify port
+       turns a *flagged* `DecisionCard` into a channel-ready notification. **NotifyPayload**
+       (frozen, content-hashed): channel · title · text · blocks[] *(Slack Block Kit dicts — no
+       SDK to build)* · sample_id · run_id · **verdict** · headline — **display only**, copies
+       the gate's verdict and never sets one (ADR-0001). **NotifyResult**: status
+       (`skipped|prepared|sent`) · adapter (`stub|slack`) · payload? · detail. Only *actionable*
+       (non-PROCEED) cards notify; live Slack send is opt-in (`PIPEGUARD_SLACK_LIVE`) and
+       degrades to the offline stub on any error. Each real notification emits a
+       `notification.emitted` event (below). See [provenance.md](provenance.md).
 
 ### Config
 19. **RunbookProfile** — assay · assay_version · sample_type · platform · **profile_version** ·
@@ -142,6 +162,7 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 Authoritative append-only ledger, projector-compatible from day one:
 `run.registered` · `sample.registered` · `analysis_run.started` · `artifact.ingested` ·
 `metric.parsed` · `finding.emitted` · `verdict.decided` · `analysis_run.completed` ·
+`notification.emitted` *(one per actionable card when a notifier is wired — T-015b)* ·
 `ticket.actioned` · `resolution.recorded`.
 
 **Separately authoritative (NOT event-sourced / not in decision-replay):**

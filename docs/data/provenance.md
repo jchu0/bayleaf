@@ -35,6 +35,14 @@ addition that needs real sarek data (see [nf-core-conventions](nf-core-conventio
    `artifact.ingested`, `metric.parsed` (Phase 2 ingest), `ticket.actioned`,
    `resolution.recorded` (ticketing phase).
 
+**Note — normalization is already on the gate, the event is not.** The metric registry is
+live on the QC critical path (T-024/T-025): the rule engine builds registry-backed, normalized
+`MetricValue`s during evaluation and gates on `normalized_value` (see
+[metric_registry.md](metric_registry.md), [schemas.md](schemas.md) §6). `metric.parsed` stays
+**reserved** only because those `MetricValue`s are built in-memory from the parsed metrics, not
+yet emitted as ledger events — that (and `artifact.ingested`) lands with artifact-level QC
+ingest in Phase 2.
+
 Each event carries `analysis_run_id` / `run_id` / `sample_id`, an `actor`
 (`system` | `rule_engine` | `agent` | `human:<id>`), typed `payload`, and
 `inputs`/`outputs` as **EntityRef**s (`entity_type` + `id` + `content_hash` for
@@ -93,8 +101,9 @@ their producers land.
 
 1. **Strict-replay determinism** (byte-identical rebuild) — the projection is
    deterministic and idempotent today; byte-identical hardening remains.
-2. `artifact.ingested` / `metric.parsed` events once **MetricValue/MetricRegistry**
-   ingest lands with real QC data (and their projected tables).
+2. `artifact.ingested` / `metric.parsed` **events** (and their projected tables) once
+   artifact-level QC ingest lands — the `MetricValue`/`MetricRegistry` normalization they would
+   record already runs on the gate (above), just not yet as emitted events.
 3. **pipeline_provenance** on the AnalysisRun from sarek `pipeline_info/`.
 
 ## Phase 1 scope notes (deliberate divergences from schemas.md)

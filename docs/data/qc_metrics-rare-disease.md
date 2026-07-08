@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-07 (MST) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [qc_metrics.md](qc_metrics.md), [qc_metrics-sources.md](qc_metrics-sources.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md) |
+| **Related** | [qc_metrics.md](qc_metrics.md), [qc_metrics-sources.md](qc_metrics-sources.md), [licensing.md](licensing.md) (consumes the §4 verified-license table), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md) |
 
 ## How to read this
 
