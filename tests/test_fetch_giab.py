@@ -150,6 +150,14 @@ def test_target_path_uses_basename_only(tmp_path: Path) -> None:
     assert target_path(tmp_path, "a/b/HG002.vcf.gz") == tmp_path / "HG002.vcf.gz"
 
 
+def test_target_path_rejects_degenerate_basename(tmp_path: Path) -> None:
+    # `.`/`..`/empty have no basename and would collapse `dest` to the root — reject them
+    # rather than write a stray `.part` sibling just outside the target dir.
+    for bad in (".", "..", ""):
+        with pytest.raises(ManifestError):
+            target_path(tmp_path, bad)
+
+
 def test_resolve_target_root_prefers_explicit(tmp_path: Path) -> None:
     m = _manifest()
     assert resolve_target_root(m, tmp_path) == tmp_path
@@ -242,6 +250,22 @@ def test_resolve_actions_with_reads_slices_not_whole_download(tmp_path: Path) ->
     assert slice_action.dest.name.endswith(".panel.bam")
     # No DownloadAction ever targets the whole BAM.
     assert not any(isinstance(a, DownloadAction) and a.url.endswith("HG002.bam") for a in actions)
+
+
+def test_reads_source_never_becomes_a_download_even_if_flagged(tmp_path: Path) -> None:
+    """Structural guard: a manifest flipping the reads BAM to download:true is still refused.
+
+    The 'never pull the whole 122G BAM' guarantee must be enforced in code, not rest on a
+    manifest boolean — so an edit to the manifest can't silently queue a whole-genome pull.
+    """
+    tampered = _MANIFEST_JSON.replace(
+        '"kind": "reads-bam-source", "download": false',
+        '"kind": "reads-bam-source", "download": true',
+    )
+    actions = resolve_actions(parse_manifest(tampered), tmp_path, with_reads=False, panel_bed=None)
+    assert not any(isinstance(a, DownloadAction) and a.url.endswith("HG002.bam") for a in actions)
+    # Only the three truth artifacts download; the BAM source is structurally excluded.
+    assert len([a for a in actions if isinstance(a, DownloadAction)]) == 3
 
 
 def test_format_plan_is_readable_and_safe(tmp_path: Path) -> None:

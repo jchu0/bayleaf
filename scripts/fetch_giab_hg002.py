@@ -243,9 +243,16 @@ def target_path(target_root: Path, filename: str) -> Path:
     """Where ``filename`` lands under the git-ignored target root.
 
     The basename is taken from the manifest (never from the URL) so a moved
-    accession can't redirect a write outside ``target_root``.
+    accession can't redirect a write outside ``target_root``. A degenerate
+    basename (``.``/``..``/empty) is rejected rather than collapsing ``dest`` to
+    ``target_root`` itself.
     """
-    return target_root / Path(filename).name
+    name = Path(filename).name
+    # Reject empty (`.`/trailing-slash → "") and `..`, which would resolve to the parent
+    # of target_root — a `Path(filename).name` of ".." is non-empty but still escapes.
+    if name in ("", ".", ".."):
+        raise ManifestError(f"artifact filename {filename!r} has no usable basename")
+    return target_root / name
 
 
 def _hash_file(path: Path, algo: str) -> str:
@@ -403,8 +410,14 @@ def resolve_actions(
     actions: list[Action] = []
 
     for art in manifest.artifacts:
+        # Structural guard on the load-bearing safety rule (CLAUDE.md Data-handling 1):
+        # the whole reads BAM (122G) is NEVER downloaded, only sliced. Refuse it here in
+        # code — regardless of the manifest's `download` flag — so a manifest edit flipping
+        # `download: true` on the reads source can't queue a whole-BAM pull.
+        if art.kind == "reads-bam-source" or art.index_url is not None:
+            continue
         if not art.download:
-            continue  # e.g. the reads BAM source — sliced, never downloaded whole
+            continue  # optional/derived artifacts opt out of the plain download
         actions.append(
             DownloadAction(
                 key=art.key,
@@ -523,14 +536,25 @@ def fetch_reads_slice(action: ReadsSliceAction, *, opener: UrlOpener, force: boo
 
     if not action.index_dest.exists() or force:
         download(action.index_url, action.index_dest, opener=opener)
-    verify_checksum(action.index_dest, md5=action.index_md5, sha256=None)
-    LOG.info("bam index ready: %s", action.index_dest.name)
+    index_check = verify_checksum(action.index_dest, md5=action.index_md5, sha256=None)
+    if index_check.unpinned:
+        # Mirror the truth-artifact path: warn (don't fail) when the index has no pinned
+        # md5, so a future manifest that drops the pin doesn't silently skip verification.
+        LOG.warning(
+            "bam index %s downloaded but NOT integrity-checked (no md5 pinned in the manifest).",
+            action.index_dest.name,
+        )
+    else:
+        LOG.info("bam index verified: %s", action.index_dest.name)
 
-    # `-M -L <bed>` restricts to the panel regions; the remote URL means only the
-    # overlapping blocks are streamed — the 122G BAM is never fully transferred.
+    # `-M -L <bed>` restricts to the panel regions; `-X ... <index_dest>` supplies the
+    # locally-verified index so htslib streams only the overlapping blocks from the remote
+    # BAM instead of re-fetching the index over the wire. The 122G BAM is never fully
+    # transferred. NOTE: confirm the exact samtools flags on a toolchain machine
+    # (samtools built with libcurl/remote support) — see scripts/README.md.
     cmd = [
         samtools, "view", "-b", "-M", "-L", str(action.panel_bed),
-        "-o", str(action.dest), action.source_url,
+        "-X", "-o", str(action.dest), action.source_url, str(action.index_dest),
     ]  # fmt: skip
     LOG.info("slicing reads to panel: %s", " ".join(cmd))
     _run(cmd)
