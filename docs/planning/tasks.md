@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-07 (MST) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Purpose** | Top-layer session input (read alongside the ToC): tracks development, timeline, and flags parallel-safe work so non-blocking items can fan out to background agents. |
 
 ## Timeline
@@ -35,8 +35,9 @@ estimates — adjusted as we go.
 |---|---|---|
 | 0 | Foundation & hygiene (uv, mypy, ruff, hooks) | done |
 | 1 | Design capture + provenance/event seam | in-progress |
+| Port | Productionization: FastAPI read-API + React frontend (ADR-0014) | in-progress |
 | 2 | Persistence + real QC data | todo |
-| 3 | Scoped agents + real confidence | todo |
+| 3 | Scoped agents + real confidence (triage agent T-015 done) | in-progress |
 | 4 | Cloud & IaC | wishlist |
 
 ## Task board
@@ -58,9 +59,12 @@ estimates — adjusted as we go.
 | T-012 | Phase 0 tooling: uv + `pyproject.toml` single source, mypy/ruff, hooks (batch full-eval → Phase 2/T-009) | 0 | done | no | — |
 | T-013 | GIAB HG002 subset fetch script + synthetic perturbation generator | 2 | todo | partial | T-002, T-008 |
 | T-014 | Event bus + provenance ledger (in-memory + JSONL; DB projection → Phase 2) | 1 | done | no | ADR-0002 |
-| T-015 | QC-triage agent (advisory, stub-first, corpus + retrieval, /triage API) | 3 | in-progress | no | T-014 |
+| T-015 | QC-triage agent (advisory, stub-first, corpus + retrieval, /triage API) | 3 | done | no | T-014 |
 | T-015b | Slack notify port for the triage/review flow (deferred from T-015) | 3 | todo | no | T-015 |
 | T-016 | Data strategy doc + label mock_run_01 origin | 1 | done | yes | — |
 | T-017 | Small real test FASTQ→BAM data (panel-region subset) for coverage/contam gates | 2 | todo | partial | T-002 |
 | T-018 | Frontend design brief + clickable prototype (`design/frontend/`) | 1 | done | yes | — |
-| T-019 | Align confidence to "omit until grounded" (models.py `confidence` → Optional/None, drop demo Confidence tile, update README:32/:105) — part of the models→schemas.md rework | 1 | todo | no | T-008 |
+| T-019 | Align confidence to "omit until grounded" (models.py `confidence` → Optional/None, drop demo Confidence tile, update README:32/:105) — part of the models→schemas.md rework | 1 | done | no | T-008 |
+| T-020 | FastAPI read-API over the core (`api/`; production seam, ADR-0010/0014) | Port | done | no | — |
+| T-021 | React frontend scaffold + design tokens (`frontend/`; Vite + Tailwind, ADR-0014) | Port | done | no | T-020 |
+| T-022 | React screens: run overview · decision cards · triage · provenance ✅; intake/review-queue/monitoring/settings remain | Port | in-progress | partial | T-021 |

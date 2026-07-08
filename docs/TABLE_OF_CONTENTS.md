@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-07 (MST) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Audience** | all (contributors and Claude Code) |
 
 **Start here.** This index is the map of what exists. Read it first, then open
@@ -67,6 +67,7 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [ADR-0011](adr/ADR-0011-tooling-and-reproducibility.md) | Tooling and reproducibility |
 | [ADR-0012](adr/ADR-0012-agent-scoping-model-tiering.md) | Agent scoping and per-agent model tiering |
 | [ADR-0013](adr/ADR-0013-gate-architecture-verdict-policy.md) | Gate architecture (preflight/QC/variant) + surface-and-decide verdict policy |
+| [ADR-0014](adr/ADR-0014-productionization-fastapi-react.md) | Productionize with FastAPI + React; Streamlit as the demo fallback |
 
 ## Data (the artifacts and their lineage)
 | Doc | Status | Purpose |

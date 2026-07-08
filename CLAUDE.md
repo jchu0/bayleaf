@@ -116,14 +116,24 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 5. **Deployment-agnostic ports & adapters**; Nextflow carries compute portability (ADR-0003).
 6. **Config layer + profiles** serve research (lean) and biotech (granular) from one codebase (ADR-0005).
 
-## Current code map (session-1 baseline; evolving)
+## Current code map (evolving; updated 2026-07-08)
 
-1. `pipeguard.rules` emits cited `Finding`s; verdict/confidence computed in
-   `synthesis/base.py` — never by the LLM.
-2. Synthesizer swappable via `PIPEGUARD_SYNTHESIZER=stub|claude` (default `stub`,
-   offline, $0); `synthesis/claude.py` imports `anthropic` lazily and falls back to
-   the stub on any error. Model via `PIPEGUARD_CLAUDE_MODEL` (default `claude-opus-4-8`).
-3. Data contract flows through `pipeguard.models` (pydantic); runbook holds QC policy.
+1. **Core (`src/pipeguard/`), framework-agnostic.** `rules` emits cited, immutable
+   `Finding`s (each derives its gate + a rule-version-independent signature +
+   content_hash); `synthesis/base.py` aggregates the verdict (never the LLM);
+   confidence is omitted until grounded (T-019). `models` is the pydantic data
+   contract; `identifiers` gives UUIDv7 ids + content hashing; `runbook` holds QC policy.
+2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only
+   event trail (analysis_run.started → per-sample findings/verdict → completed) into an
+   `EventLedger` (in-memory + JSONL); the event log is authoritative, the DB a
+   rebuildable projection (Phase 2).
+3. **Swappable AI, OFF by default.** Synthesizer via `PIPEGUARD_SYNTHESIZER=stub|claude`;
+   advisory QC-triage agent (`triage/`, ADR-0009/0012) via `PIPEGUARD_TRIAGE_AGENT=stub|claude`
+   — both stub-first ($0), import `anthropic` lazily, and fall back to the stub on any
+   error (incl. a safety refusal). Models via `PIPEGUARD_*_MODEL`.
+4. **Delivery layers (thin, over the core).** `app/` = Streamlit demo (kept as the
+   guaranteed-working fallback); `api/` = FastAPI read-API (the production seam, ADR-0010);
+   `frontend/` = React + Vite + Tailwind consuming the API (ADR-0014).
 
 ## Git conventions
 
