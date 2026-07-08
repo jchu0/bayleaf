@@ -94,7 +94,9 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 ## Demo
 | Doc | Status | Purpose |
 |---|---|---|
-| [demo/demo_plan.md](demo/demo_plan.md) | ✅ | Narrative, walkthrough, the two "wow" moments, expected I/O, fallbacks |
+| [demo/demo_plan.md](demo/demo_plan.md) | ✅ | Narrative, walkthrough, the three "wow" moments, expected I/O, fallbacks |
+| [demo/run-of-show.md](demo/run-of-show.md) | ✅ | Timed live run-of-show (5:00) — script, pre-flight checklist, fallback ladder |
+| [demo/one-pager.md](demo/one-pager.md) | ✅ | Judge-facing one-pager (problem, differentiators, why-it's-real, guardrails) |
 
 ## Meta
 | Doc | Status | Purpose |

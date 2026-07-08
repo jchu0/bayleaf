@@ -25,6 +25,10 @@ audit: ## Batch/milestone tier: dependency vulnerability scan
 # disposable and rebuilt from the authoritative log. Override LEDGER=/DB= as needed.
 LEDGER ?= run.events.jsonl
 DB ?= pipeguard.sqlite
+emit-ledger: ## Write a FRESH event ledger from the demo run (LEDGER=...) — for the rebuild demo
+	rm -f $(LEDGER)
+	uv run python -c "from pipeguard import load_run, run_gate, EventLedger; run_gate(load_run('data/mock_run_01'), ledger=EventLedger('$(LEDGER)'))"
+	@echo "wrote $(LEDGER) ($$(wc -l < $(LEDGER) | tr -d ' ') events)"
 rebuild-db: ## Rebuild the SQLite projection from a JSONL ledger (LEDGER=... DB=...)
 	uv run python -m pipeguard.persistence.rebuild $(LEDGER) $(DB)
 

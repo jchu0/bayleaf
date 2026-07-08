@@ -76,10 +76,11 @@ PIPEGUARD_TRIAGE_AGENT=claude PIPEGUARD_SYNTHESIZER=claude \
 gotcha):
 
 ```bash
-rm -f run.events.jsonl pg.sqlite && \
-uv run python -c "from pipeguard import load_run; from pipeguard.engine import run_gate; from pipeguard.provenance import EventLedger; run_gate(load_run('data/mock_run_01'), ledger=EventLedger('run.events.jsonl'))" && \
-make rebuild-db LEDGER=run.events.jsonl DB=pg.sqlite
+make emit-ledger && make rebuild-db
 ```
+
+(`emit-ledger` deletes any stale `run.events.jsonl` and writes a fresh 16-event ledger from
+`mock_run_01`; `rebuild-db` replays it into `pipeguard.sqlite`. Both artifacts are gitignored.)
 
 Expected tail: `... 16 event(s) -> 1 run(s), 5 decision card(s).`
 

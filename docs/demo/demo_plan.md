@@ -50,9 +50,10 @@ npm --prefix frontend run dev                  # React UI (proxies /api -> :8010
    `PIPEGUARD_SYNTHESIZER=claude`) → the same triage panel now shows Claude-written prose,
    with citations + addressed findings still **deterministic**. If the API errors or the
    safety classifier refuses, it **degrades to the stub** — the demo cannot break.
-2. **Reproducibility from the log.** `make rebuild-db LEDGER=run.events.jsonl DB=pg.sqlite`
-   rebuilds the entire relational projection from the authoritative event ledger — same
-   run / samples / findings / cards / events, byte-stable. The DB is disposable; the log is truth.
+2. **Reproducibility from the log.** `make emit-ledger && make rebuild-db` writes a fresh
+   16-event ledger from the demo run, then rebuilds the entire relational projection from that
+   authoritative log — `16 event(s) → 1 run, 5 decision cards`, byte-stable. The DB is
+   disposable; the log is truth.
 3. **An escalation lands in Slack, live.**
    `PIPEGUARD_NOTIFIER=slack PIPEGUARD_SLACK_LIVE=1 uv run python -m pipeguard.notify data/mock_run_01`
    → the gate runs and the S4 escalation (+ S5 hold) post to a real Slack channel as cited
