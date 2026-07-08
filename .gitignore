@@ -43,6 +43,11 @@ data/processed/
 models/
 outputs/
 
+# Real GIAB HG002 downloads — fetched by scripts/fetch_giab_hg002.py, NEVER committed.
+# The reproducible record is the committed manifest (scripts/giab_hg002_manifest.json);
+# the bytes (VCF/BED/BAM/index) live here and stay out of git (CLAUDE.md Data-handling 1).
+data/real-giab/
+
 # Node (in case of a web frontend)
 node_modules/
 .next/

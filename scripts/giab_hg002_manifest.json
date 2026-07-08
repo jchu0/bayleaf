@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "origin": "real-giab",
+  "sample": "HG002 / NA24385 (AshkenazimTrio son), NIST GIAB",
+  "reference": "GRCh38",
+  "benchmark_release": "NISTv4.2.1 small-variant benchmark",
+  "license": "Public / open (NIST GIAB — no restrictions; no PHI). No credentials required.",
+  "retrieved_utc": "2026-07-08",
+  "target_subdir": "data/real-giab",
+  "sources": [
+    "https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/AshkenazimTrio/HG002_NA24385_son/NISTv4.2.1/GRCh38/",
+    "https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/data/AshkenazimTrio/HG002_NA24385_son/NIST_Illumina_2x250bps/novoalign_bams/",
+    "https://www.nist.gov/programs-projects/genome-bottle"
+  ],
+  "notes": "GIAB does not publish a checksums file in the v4.2.1 release directory, so md5/sha256 are null for the truth artifacts (truth-vcf, truth-vcf-index, high-conf-bed): the fetch script computes and logs a sha256 on first download for pin-after-first-fetch reproducibility. The reads BAM source carries the REAL md5 published by GIAB (HG002_corrected_md5sums.feb19upload.txt); only its small .bai index is ever downloaded (and md5-verified), because the whole 122G BAM is NEVER downloaded — --with-reads streams a region-restricted slice via samtools.",
+  "artifacts": [
+    {
+      "key": "truth_vcf",
+      "kind": "truth-vcf",
+      "url": "https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/AshkenazimTrio/HG002_NA24385_son/NISTv4.2.1/GRCh38/HG002_GRCh38_1_22_v4.2.1_benchmark.vcf.gz",
+      "filename": "HG002_GRCh38_1_22_v4.2.1_benchmark.vcf.gz",
+      "approx_size": "149M",
+      "md5": null,
+      "sha256": null,
+      "required": true,
+      "download": true,
+      "verify_connectivity": true,
+      "notes": "NIST v4.2.1 small-variant truth calls, chr1-22. The gold-standard 'answer key' for faithfulness checks."
+    },
+    {
+      "key": "truth_vcf_index",
+      "kind": "truth-vcf-index",
+      "url": "https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/AshkenazimTrio/HG002_NA24385_son/NISTv4.2.1/GRCh38/HG002_GRCh38_1_22_v4.2.1_benchmark.vcf.gz.tbi",
+      "filename": "HG002_GRCh38_1_22_v4.2.1_benchmark.vcf.gz.tbi",
+      "approx_size": "1.6M",
+      "md5": null,
+      "sha256": null,
+      "required": true,
+      "download": true,
+      "verify_connectivity": true,
+      "notes": "Tabix index for the truth VCF; required for --panel-bed region restriction via tabix/bcftools."
+    },
+    {
+      "key": "high_conf_bed",
+      "kind": "high-conf-bed",
+      "url": "https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/AshkenazimTrio/HG002_NA24385_son/NISTv4.2.1/GRCh38/HG002_GRCh38_1_22_v4.2.1_benchmark_noinconsistent.bed",
+      "filename": "HG002_GRCh38_1_22_v4.2.1_benchmark_noinconsistent.bed",
+      "approx_size": "11M",
+      "md5": null,
+      "sha256": null,
+      "required": true,
+      "download": true,
+      "verify_connectivity": true,
+      "notes": "High-confidence regions BED. Faithfulness claims are only valid inside these regions."
+    },
+    {
+      "key": "reads_bam_source",
+      "kind": "reads-bam-source",
+      "url": "https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/data/AshkenazimTrio/HG002_NA24385_son/NIST_Illumina_2x250bps/novoalign_bams/HG002.GRCh38.2x250.bam",
+      "filename": "HG002.GRCh38.2x250.bam",
+      "index_url": "https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/data/AshkenazimTrio/HG002_NA24385_son/NIST_Illumina_2x250bps/novoalign_bams/HG002.GRCh38.2x250.bam.bai",
+      "index_filename": "HG002.GRCh38.2x250.bam.bai",
+      "approx_size": "122G",
+      "index_approx_size": "9.0M",
+      "md5": "56c30eaa4e2f25ff0ac80ef30e09d78e",
+      "index_md5": "a3c2b449df6509ca83fbd3fea22b9aee",
+      "required": false,
+      "download": false,
+      "verify_connectivity": true,
+      "notes": "Illumina 2x250 novoalign reads. The whole BAM (122G) is NEVER downloaded. Only used as a remote source that --with-reads slices to a panel region via `samtools view -M -L <panel.bed>`, producing a small local subset BAM. The md5/index_md5 above are the REAL values GIAB publishes in HG002_corrected_md5sums.feb19upload.txt; index_md5 is enforced on the downloaded .bai."
+    }
+  ]
+}
