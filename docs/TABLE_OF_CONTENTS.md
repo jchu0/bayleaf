@@ -70,7 +70,8 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 |---|---|---|
 | [data/strategy.md](data/strategy.md) | ✅ | Data strategy: sourcing, origin labels, real/synthetic tracks |
 | [data/schemas.md](data/schemas.md) | 📝 | Artifact contracts: fields, types, missing-semantics |
-| [data/qc_metrics.md](data/qc_metrics.md) | 📝 | QC metric set and gate thresholds |
+| [data/qc_metrics.md](data/qc_metrics.md) | 📝 | QC metric set and gate thresholds (the decided runbook) |
+| [data/qc_metrics-sources.md](data/qc_metrics-sources.md) | ✅ | Grounded reference: verified field names + cited thresholds |
 | [data/provenance.md](data/provenance.md) | 📝 | I/O lineage model and ledger format |
 | [data/licensing.md](data/licensing.md) | 📝 | Per-tool licenses in the stack |
 
