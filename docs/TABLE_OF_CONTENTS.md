@@ -64,6 +64,7 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [ADR-0010](adr/ADR-0010-ticketing-notify-read-api.md) | Ticketing: cards, notify ports, read API |
 | [ADR-0011](adr/ADR-0011-tooling-and-reproducibility.md) | Tooling and reproducibility |
 | [ADR-0012](adr/ADR-0012-agent-scoping-model-tiering.md) | Agent scoping and per-agent model tiering |
+| [ADR-0013](adr/ADR-0013-gate-architecture-verdict-policy.md) | Gate architecture (preflight/QC/variant) + surface-and-decide verdict policy |
 
 ## Data (the artifacts and their lineage)
 | Doc | Status | Purpose |

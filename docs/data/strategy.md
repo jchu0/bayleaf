@@ -27,6 +27,11 @@ requirement for a provenance tool.
    reads and large artifacts stay out of git (see `.gitignore`).
 5. **ML-ready outputs.** Structured, schema-versioned, and labeled, so the ledgers
    double as an ML corpus (ADR-0007).
+6. **Real BAM-level building data.** To build and validate the coverage and
+   contamination gates, use small **real test FASTQs** (e.g. a panel-region subset
+   of GIAB HG002 reads) converted to BAMs via a minimal `fastp → BWA-MEM2 →
+   mosdepth` run — no WGS needed. This yields real `mosdepth` / `VerifyBamID2`
+   metrics, resolving the MVP toward including the coverage gate (ADR-0013).
 
 ## Origin labels
 

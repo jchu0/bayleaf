@@ -59,3 +59,4 @@ estimates — adjusted as we go.
 | T-014 | Event bus + provenance ledger | 1/2 | todo | no | ADR-0002 |
 | T-015 | QC-triage agent + notify port (Slack) | 3 | todo | no | T-014 |
 | T-016 | Data strategy doc + label mock_run_01 origin | 1 | done | yes | — |
+| T-017 | Small real test FASTQ→BAM data (panel-region subset) for coverage/contam gates | 2 | todo | partial | T-002 |
