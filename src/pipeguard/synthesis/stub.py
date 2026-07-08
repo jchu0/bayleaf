@@ -12,7 +12,7 @@ stay identical because they come from the shared grounding helpers.
 from __future__ import annotations
 
 from ..models import Category, DecisionCard, Finding, RunArtifacts, Verdict
-from .base import Synthesizer, aggregate_verdict, derive_confidence, top_finding
+from .base import Synthesizer, aggregate_verdict, top_finding
 
 _VERDICT_HEADLINE = {
     Verdict.PROCEED: "Clear to proceed",
@@ -45,7 +45,6 @@ class StubSynthesizer:
         self, sample_id: str, findings: list[Finding], artifacts: RunArtifacts
     ) -> DecisionCard:
         verdict = aggregate_verdict(findings)
-        confidence = derive_confidence(findings, verdict)
         lead = top_finding(findings)
 
         if lead is None:
@@ -74,7 +73,6 @@ class StubSynthesizer:
         return DecisionCard(
             sample_id=sample_id,
             verdict=verdict,
-            confidence=confidence,
             headline=headline,
             rationale=rationale,
             next_steps=list(_NEXT_STEPS[verdict]),

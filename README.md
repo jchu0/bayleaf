@@ -29,7 +29,7 @@ So PipeGuard splits the work:
 | Layer | Owns | Guarantees |
 |---|---|---|
 | **Rule engine** (`pipeguard.rules`) | The facts: barcode/ID mismatches, missing fields, QC vs. runbook thresholds, log failures — each a cited `Finding`. | Deterministic. Every number traces to a rule and a source file. |
-| **Synthesizer** (`pipeguard.synthesis`) | The narration: the verdict's headline, rationale, and next steps in operator language. | Verdict & confidence are still computed from the findings — the model phrases, it does not decide. |
+| **Synthesizer** (`pipeguard.synthesis`) | The narration: the verdict's headline, rationale, and next steps in operator language. | The verdict is computed from the findings — the model phrases, it does not decide. |
 
 An LLM eyeballing whether `Q30 = 84.1%` clears an 85% gate is unreliable and
 unconvincing to a bioinformatician. A rule computing it, with Claude explaining the
@@ -101,7 +101,7 @@ src/pipeguard/            # framework-agnostic core (no UI dependency)
   parsers.py              # Illumina-style artifact parsers (sample sheet, demux, QC, log)
   rules.py                # deterministic rule engine -> cited Findings
   synthesis/
-    base.py               # Synthesizer protocol + grounding helpers (verdict/confidence)
+    base.py               # Synthesizer protocol + grounding helpers (verdict aggregation)
     stub.py               # zero-cost deterministic narration (default)
     claude.py             # live Claude integration point (off by default)
   engine.py               # orchestration: load -> evaluate -> synthesize -> cards

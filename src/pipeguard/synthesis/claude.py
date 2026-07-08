@@ -26,7 +26,7 @@ import os
 from typing import Any
 
 from ..models import DecisionCard, Finding, RunArtifacts
-from .base import Synthesizer, aggregate_verdict, derive_confidence
+from .base import Synthesizer, aggregate_verdict
 from .stub import StubSynthesizer
 
 # JSON schema for the *narration only*. Verdict/confidence/findings are not the
@@ -104,9 +104,8 @@ class ClaudeSynthesizer:
     def synthesize(
         self, sample_id: str, findings: list[Finding], artifacts: RunArtifacts
     ) -> DecisionCard:
-        # Verdict + confidence stay deterministic — Claude never touches them.
+        # Verdict stays deterministic — Claude never touches it.
         verdict = aggregate_verdict(findings)
-        confidence = derive_confidence(findings, verdict)
 
         payload = {
             "verdict": verdict.value,
@@ -143,7 +142,6 @@ class ClaudeSynthesizer:
             return DecisionCard(
                 sample_id=sample_id,
                 verdict=verdict,
-                confidence=confidence,
                 headline=narration["headline"],
                 rationale=narration["rationale"],
                 next_steps=list(narration.get("next_steps", [])),

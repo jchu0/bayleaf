@@ -64,7 +64,12 @@ def _render_card(card: DecisionCard) -> None:
                 for step in card.next_steps:
                     st.markdown(f"- {step}")
         with right:
-            st.metric("Confidence", f"{card.confidence * 100:.0f}%")
+            # Confidence is omitted until grounded (T-019). Surface the per-gate
+            # breakdown instead — which gate flagged the sample, and its verdict.
+            if card.gate_results:
+                st.caption("Gates")
+                for gr in card.gate_results:
+                    st.markdown(f"- **{gr.gate.value}** · {gr.verdict.value}")
             st.caption(f"narration: `{card.generated_by}`")
 
         if card.findings:

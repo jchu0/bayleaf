@@ -23,6 +23,7 @@ from .models import (
     Sample,
     SampleSheetEntry,
     Severity,
+    SourceKind,
     Verdict,
 )
 from .runbook import DEFAULT_RUNBOOK, QCThreshold, Runbook
@@ -166,7 +167,11 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, value: float | None) -> F
             detail=f"No {threshold.label} value was reported for {sid}.",
             evidence=[
                 Evidence(
-                    source="qc_metrics.csv", locator=f"{sid}.{threshold.metric}", value="missing"
+                    source="qc_metrics.csv",
+                    locator=f"{sid}.{threshold.metric}",
+                    value="missing",
+                    source_kind=SourceKind.METRIC,
+                    source_field=threshold.metric,
                 )
             ],
             suggested_verdict=Verdict.HOLD,
@@ -212,6 +217,9 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, value: float | None) -> F
                 locator=f"{sid}.{threshold.metric}",
                 value=f"{value:g}{threshold.unit}",
                 expected=f"{direction} {threshold.gate:g}{threshold.unit}",
+                source_kind=SourceKind.METRIC,
+                source_field=threshold.metric,
+                threshold=f"hard-fail {direction} {threshold.hard_fail:g}{threshold.unit}",
             )
         ],
         suggested_verdict=verdict,
@@ -233,7 +241,12 @@ def _check_log(sid: str, log_lines: list[str], runbook: Runbook) -> Finding | No
         title="Pipeline logged a failure for this sample",
         detail=f"The run log contains {len(hits)} failure marker(s) referencing {sid}.",
         evidence=[
-            Evidence(source="pipeline.log", locator="matched line", value=line.strip())
+            Evidence(
+                source="pipeline.log",
+                locator="matched line",
+                value=line.strip(),
+                source_kind=SourceKind.EXECUTION_TRACE,
+            )
             for line in hits[:5]
         ],
         suggested_verdict=Verdict.RERUN,

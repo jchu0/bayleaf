@@ -50,8 +50,9 @@ def run_gate(
         synthesizer.synthesize(sample_id, findings, artifacts)
         for sample_id, findings in findings_by_sample.items()
     ]
-    # Surface the samples that need a human first.
-    cards.sort(key=lambda c: (_VERDICT_ORDER.get(c.verdict.value, 9), -c.confidence))
+    # Surface the samples that need a human first. Stable sort keeps parse order
+    # within a verdict (confidence is no longer computed — omitted until grounded).
+    cards.sort(key=lambda c: _VERDICT_ORDER.get(c.verdict.value, 9))
     return cards
 
 

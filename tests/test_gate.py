@@ -9,7 +9,15 @@ from pathlib import Path
 import pytest
 
 from pipeguard import DEFAULT_RUNBOOK, Verdict, evaluate_run, load_run, run_gate
-from pipeguard.models import QCMetrics
+from pipeguard.models import (
+    Category,
+    Evidence,
+    Finding,
+    Gate,
+    QCMetrics,
+    Severity,
+    SourceKind,
+)
 from pipeguard.parsers import parse_sample_sheet
 from pipeguard.rules import _evaluate_metric
 from pipeguard.synthesis import StubSynthesizer, aggregate_verdict
@@ -104,7 +112,7 @@ def test_stub_card_is_grounded():
     by_id = {c.sample_id: c for c in cards}
     s4 = by_id["S4"]
     assert s4.generated_by == "stub"
-    assert 0.0 <= s4.confidence <= 1.0
+    assert s4.confidence is None  # confidence omitted until grounded (T-019)
     assert s4.findings  # findings carried onto the card
     assert s4.next_steps
 
@@ -135,3 +143,45 @@ def test_sample_sheet_tolerates_short_rows(tmp_path: Path) -> None:
     assert set(by_id) == {"S1", "S2"}  # blank-id row skipped, short row kept
     assert by_id["S2"].index is None  # missing trailing cell -> None, no crash
     assert by_id["S1"].index == "ACGTACGT"
+
+
+def test_finding_gate_is_derived_from_category(findings):
+    """Each finding is labeled with the gate that owns its category (ADR-0013)."""
+    s5_qc = [f for f in findings["S5"] if f.category is Category.QC]
+    assert s5_qc and all(f.gate is Gate.QC for f in s5_qc)
+    s4_meta = [f for f in findings["S4"] if f.category is Category.METADATA]
+    assert s4_meta and all(f.gate is Gate.PREFLIGHT for f in s4_meta)
+
+
+def test_card_exposes_per_gate_results():
+    """The card derives a per-gate breakdown from its findings."""
+    cards = {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}
+    s4 = cards["S4"]
+    gates = {gr.gate for gr in s4.gate_results}
+    assert Gate.QC in gates  # S4's barcode/provenance finding rides the QC gate
+    assert all(gr.finding_rule_ids for gr in s4.gate_results)
+
+
+def test_finding_hash_is_identity_but_signature_ignores_rule_version():
+    """content_hash includes rule_version; the semantic signature does not."""
+    ev = [Evidence(source="qc_metrics.csv", locator="SX.q30", value="60%")]
+    base = {
+        "rule_id": "QC-Q30",
+        "category": Category.QC,
+        "severity": Severity.WARN,
+        "title": "t",
+        "detail": "d",
+        "evidence": ev,
+        "suggested_verdict": Verdict.HOLD,
+    }
+    a = Finding(**base)
+    b = Finding(**base, rule_version="9.9.9")
+    assert a.content_hash == Finding(**base).content_hash  # deterministic
+    assert a.content_hash != b.content_hash  # rule_version is part of identity
+    assert a.signature == b.signature  # ...but NOT part of the semantic signature
+
+
+def test_qc_evidence_tagged_as_metric(findings):
+    """QC metric evidence carries the METRIC source_kind for the trust layer."""
+    q30 = next(f for f in findings["S5"] if f.rule_id == "QC-Q30")
+    assert all(e.source_kind is SourceKind.METRIC for e in q30.evidence)
