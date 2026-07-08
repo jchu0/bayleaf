@@ -259,3 +259,25 @@ def test_slack_never_sends_when_not_armed_even_with_creds(cards, monkeypatch):
     result = agent.notify(cards["S4"])
     assert result.delivered is False
     assert result.adapter == "stub"
+
+
+# --- the `python -m pipeguard.notify` CLI ------------------------------------
+
+
+def test_notify_cli_gates_and_reports_actionable(monkeypatch, capsys):
+    """The CLI gates a run and reports its actionable cards via the env-selected notifier."""
+    monkeypatch.setenv("PIPEGUARD_NOTIFIER", "stub")  # never live in tests
+    from pipeguard.notify.__main__ import main
+
+    assert main([str(DATA)]) == 0
+    out = capsys.readouterr().out
+    assert "2 actionable" in out  # mock_run_01: S4 escalate + S5 hold
+    assert "notified S4" in out and "notified S5" in out
+    assert "Notifier: stub" in out
+
+
+def test_notify_cli_no_args_returns_usage(capsys):
+    from pipeguard.notify.__main__ import main
+
+    assert main([]) == 2
+    assert "usage:" in capsys.readouterr().err
