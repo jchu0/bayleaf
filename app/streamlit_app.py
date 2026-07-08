@@ -18,6 +18,7 @@ import streamlit as st
 
 from pipeguard import DecisionCard, RunArtifacts, load_run, run_gate
 from pipeguard.engine import get_synthesizer
+from pipeguard.notify import StubNotifier
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
@@ -128,7 +129,12 @@ def main() -> None:
         return
 
     artifacts = _load(str(DATA_ROOT / run_name))
-    cards = run_gate(artifacts, synthesizer=synth)
+    # Wire the offline notify port (ADR-0010): the stub builds + records a payload for
+    # each actionable card into an in-memory outbox and never opens a socket ($0, no
+    # send). Passing it changes nothing about the verdicts — it only consumes finished
+    # cards (ADR-0001). Live Slack send stays deferred and OFF (see notify.SlackNotifier).
+    notifier = StubNotifier()
+    cards = run_gate(artifacts, synthesizer=synth, notifier=notifier)
 
     # --- Summary strip ---
     counts = dict.fromkeys(VERDICT_STYLE, 0)
@@ -149,6 +155,22 @@ def main() -> None:
         )
     else:
         st.success("All samples cleared the gate.")
+
+    # --- Notifications (offline stub — nothing is sent) ---
+    # The stub notifier queued one payload per actionable card into its in-memory
+    # outbox. Surface the count + a preview so the demo shows the notify seam without
+    # any live send (live Slack posting is deferred and OFF, ADR-0010 / T-015b).
+    outbox = notifier.outbox
+    if outbox:
+        st.info(
+            f"📬 **{len(outbox)} notification(s) queued** (offline stub — nothing sent). "
+            "Set `PIPEGUARD_NOTIFIER=slack` to select the Slack adapter; live send stays "
+            "deferred until maintainer sign-off."
+        )
+        with st.expander(f"Preview the {len(outbox)} queued notification(s)"):
+            for queued in outbox:
+                st.markdown(f"**{queued.title}**")
+                st.code(queued.text, language="text")
 
     st.divider()
 

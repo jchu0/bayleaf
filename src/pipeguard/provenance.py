@@ -33,6 +33,7 @@ class EventType(str, Enum):
     FINDING_EMITTED = "finding.emitted"
     VERDICT_DECIDED = "verdict.decided"
     ANALYSIS_RUN_COMPLETED = "analysis_run.completed"
+    NOTIFICATION_EMITTED = "notification.emitted"
     TICKET_ACTIONED = "ticket.actioned"
     RESOLUTION_RECORDED = "resolution.recorded"
 
