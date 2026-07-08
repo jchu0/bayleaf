@@ -45,7 +45,8 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 | [design/deployment.md](design/deployment.md) | 📝 | Deployment topologies (local / Slurm / cloud) |
 | [design/configuration.md](design/configuration.md) | 📝 | Config layer + deployment/agent profiles |
 | [design/structure.md](design/structure.md) | 📝 | Repo + data layout |
-| [design/frontend/frontend-design-brief.md](design/frontend/frontend-design-brief.md) | ✅ | UI design brief (+ v2 additions) for the design session |
+| [design/frontend/frontend-design-brief.md](design/frontend/frontend-design-brief.md) | ✅ | UI design brief (v1 + v2 additions) — the stable spec |
+| [design/frontend/handoffs/](design/frontend/handoffs/) | ✅ | Dated review→design handoff deltas (episodic) |
 | [design/frontend/](design/frontend/) | ✅ | Frontend prototype (`PipeGuard.html`) + design README |
 
 ## Decision records (ADR)

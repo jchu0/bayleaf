@@ -100,36 +100,12 @@ Decisions made after the initial brief (see ADR-0013 and `data/qc_metrics.md`):
 8. **(Light) monitoring view.** A run-throughput / verdict-over-time surface serves
    the monitoring focus (system telemetry via Prometheus arrives with the backend).
 
-## Prototype alignment deltas — incorporate in the next iteration
+## Handoffs
 
-An adversarial review (2026-07-07) graded `PipeGuard.html` against the now-complete
-schema/QC design. The prototype is **broadly faithful** — four verdicts, three gates,
-breadth/20×/callable, saliva/sample-type, provenance/origin, and it correctly omits
-confidence. Close these deltas next (P1 first):
+Episodic review→design deltas live as dated docs under [handoffs/](handoffs/) — kept out
+of this brief so it stays the stable, paste-and-go spec:
 
-1. **Identity gate (P1).** Add an **NGSCheckMate** genotype-concordance card
-   (`identity.ngscheckmate_match`, source `ngscheckmate_matched.txt`) as the *primary*
-   swap signal alongside sex-concordance, and relabel **Contamination · FREEMIX** as an
-   *optional, non-sarek-default* extra — not an always-on co-equal metric. Today the
-   prototype has no NGSCheckMate and elevates FREEMIX, so a barcode-preserving swap could
-   pass on index + sex alone. Ref `data/qc_metrics.md` identity/contamination rows.
-2. **Per-gate GateResults (P1).** Surface a per-card strip with **preflight / QC /
-   variant** each carrying its own verdict + severity + rationale + finding refs
-   (`data/schemas.md` GateResult), or explicitly scope GateResult out of the MVP UI. Today
-   the card shows only one dominant-gate tag plus a fleet-wide pass-rate.
-3. **`operational` gate value (P2).** Retag PIPE-001 from `gate:'operational'` to a schema
-   gate (`preflight`|`qc`) with `cat:'pipeline'` — the gate enum is preflight|qc|variant only.
-4. **Evidence `source_kind` (P2).** Add the `source_kind` classifier chip
-   (artifact|metric|multiqc_source|execution_trace|params|human_note) to evidence rows;
-   optionally split `threshold` from `expected`.
-5. **Origin tokens (P2).** Rename `origin:'real'` → `'real-giab'` (and use `'contrived'`
-   where apt) to match the schema enum + CLAUDE.md data-handling rule 1.
-6. **FREEMIX default (P2).** Align to the runbook's **3% fail + 1.5–3% band** (the prototype
-   hardcodes ≤ 2% with no band), or annotate 2% as a deliberate project override.
-7. **Missing QC metrics (P2).** Add **zero-coverage targets** (`qc.zero_cov_targets`) as a
-   distinct card metric; where the assay warrants, add **% mapped**, **fold-80 uniformity**,
-   and **% target ≥ 30×**.
-
-*The prototype is a single-line minified bundle — open it in a browser to confirm which
-metric cards actually render before finalizing this list.*
+1. [2026-07-07 — alignment & freshness](handoffs/2026-07-07-alignment.md) — prototype
+   graded against the final schema/QC design: identity gate (NGSCheckMate), per-gate
+   results, plus five polish items.
 
