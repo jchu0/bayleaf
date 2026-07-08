@@ -51,6 +51,12 @@ export type DecisionCard = {
   content_hash: string
 }
 
+export type EntityRef = {
+  entity_type: string
+  id: string
+  content_hash: string | null
+}
+
 export type ProvenanceEvent = {
   id: string
   event_type: string
@@ -58,6 +64,8 @@ export type ProvenanceEvent = {
   run_id: string | null
   sample_id: string | null
   actor: string
+  inputs: EntityRef[]
+  outputs: EntityRef[]
   payload: Record<string, unknown>
   created_at: string
 }

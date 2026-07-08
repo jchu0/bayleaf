@@ -1,4 +1,5 @@
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
+import { Provenance } from './screens/Provenance'
 import { RunDetail } from './screens/RunDetail'
 import { RunOverview } from './screens/RunOverview'
 
@@ -17,6 +18,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<RunOverview />} />
             <Route path="/runs/:runId" element={<RunDetail />} />
+            <Route path="/runs/:runId/provenance" element={<Provenance />} />
           </Routes>
         </main>
       </div>

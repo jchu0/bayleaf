@@ -30,7 +30,9 @@ export function RunDetail() {
       <h2 className="mt-2 text-2xl font-mono">{detail.run_id}</h2>
       <p className="text-ink-dim text-sm mb-6">
         {detail.summary.n_samples} samples · {detail.summary.n_attention} need attention ·{' '}
-        {detail.events.length} provenance events
+        <Link to={`/runs/${runId}/provenance`} className="underline hover:text-ink">
+          {detail.events.length} provenance events →
+        </Link>
       </p>
       <div className="grid gap-4">
         {detail.cards.map((card) => (
