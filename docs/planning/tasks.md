@@ -62,7 +62,7 @@ estimates — adjusted as we go.
 | T-015 | QC-triage agent (advisory, stub-first, corpus + retrieval, /triage API) | 3 | done | no | T-014 |
 | T-015b | Outbound notify port ✅ + wired into `run_gate` (`notifier=`; `NOTIFICATION_EMITTED` events) ✅ + live Slack send behind a `PIPEGUARD_SLACK_LIVE` opt-in, **verified end-to-end against a real workspace** + `python -m pipeguard.notify` demo CLI ✅ | 3 | done | no | T-015 |
 | T-016 | Data strategy doc + label mock_run_01 origin | 1 | done | yes | — |
-| T-017 | Real GIAB HG002 panel data: fetch validated end-to-end on a bioconda env (`conda create -n hackathon -c conda-forge -c bioconda samtools bcftools htslib`; truth VCF + 470-record panel VCF + 70,996-read panel BAM slice via `samtools -X`); running the slice through the QC gate (coverage/contam) remains | 2 | in-progress | partial | T-002 |
+| T-017 | Real GIAB HG002 panel data through the QC gate ✅ (`scripts/gate_giab.py`): `mosdepth --by` on the fetched panel BAM → real 55.8× coverage + 99%/97% breadth → gated (PROCEED, clears the 30× gate) reusing `run_gate` + registry rules unchanged. Fetch also validated (truth VCF + `samtools -X` reads slice). Fastq metrics (Q30/dup) + contamination (verifybamid2) remain — a BAM doesn't carry them | 2 | done | partial | T-002 |
 | T-018 | Frontend design brief + clickable prototype (`design/frontend/`) | 1 | done | yes | — |
 | T-019 | Align confidence to "omit until grounded" (models.py `confidence` → Optional/None, drop demo Confidence tile, update README:32/:105) — part of the models→schemas.md rework | 1 | done | no | T-008 |
 | T-020 | FastAPI read-API over the core (`api/`; production seam, ADR-0010/0014) | Port | done | no | — |

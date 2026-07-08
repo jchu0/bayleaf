@@ -89,3 +89,21 @@ in-memory opener). It is covered by `make check` (ruff + strict mypy + pytest).
 
 Related: [`docs/data/strategy.md`](../docs/data/strategy.md) · task **T-013**
 (GIAB half) / **T-017** groundwork · [ADR-0004](../docs/adr/ADR-0004-vcf-first-giab-substrate.md).
+
+## `gate_giab.py` — real GIAB data through the QC gate (T-017)
+
+Once the reads slice is fetched (`--with-reads`), this runs the **real** panel data
+through the deterministic gate:
+
+```bash
+# needs mosdepth on PATH (bioconda), plus the fetched panel BAM
+conda install -n hackathon -c conda-forge -c bioconda mosdepth
+PATH=/path/to/env/bin:$PATH python scripts/gate_giab.py
+```
+
+It runs `mosdepth --by <panel.bed>` for the real in-panel **mean coverage + breadth**,
+writes a git-ignored `data/real-giab/run/` directory carrying that real coverage in the
+parsers' on-disk shape, and gates it with a coverage-focused runbook (reusing `run_gate`
+and the registry-backed rules unchanged). Honest scope: a BAM yields coverage/breadth, not
+the fastq/run metrics (Q30/dup/PF) — so it gates the metric the artifact actually holds.
+Validated end-to-end: HG002 panel = **55.8× coverage** (clears the 30× gate), **99% ≥ 20×**.
