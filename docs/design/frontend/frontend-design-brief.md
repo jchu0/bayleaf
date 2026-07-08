@@ -108,4 +108,3 @@ of this brief so it stays the stable, paste-and-go spec:
 1. [2026-07-07 — alignment & freshness](handoffs/2026-07-07-alignment.md) — prototype
    graded against the final schema/QC design: identity gate (NGSCheckMate), per-gate
    results, plus five polish items.
-

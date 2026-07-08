@@ -1,0 +1,56 @@
+# Hook tiers (ADR-0011):
+#   pre-commit -> ruff (lint+format), mypy, secret scan, hygiene
+#   pre-push   -> pytest (offline suite)
+#   batch/milestone -> full eval + pip-audit (run manually, not a git hook)
+#
+# Lint/type/test run in the project's uv environment for exact parity with a
+# local `uv run`, so a hook can never pass on a stale interpreter.
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^docs/design/frontend/PipeGuard\.html$ # generated minified bundle
+      - id: end-of-file-fixer
+        exclude: ^docs/design/frontend/PipeGuard\.html$ # generated minified bundle
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"] # block raw reads / large artifacts (data-handling rule 1)
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff (lint)
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff (format)
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+      - id: mypy
+        name: mypy (strict)
+        entry: uv run mypy
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+      - id: pytest
+        name: pytest (offline suite)
+        entry: uv run pytest -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
