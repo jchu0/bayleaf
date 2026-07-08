@@ -28,6 +28,13 @@ links to [evaluation.md](../quality/evaluation.md).
    the event ledger; `rebuild-db` replays deterministically and is idempotent (a
    second rebuild yields the same projection). Byte-identical strict replay is a
    Phase-2 hardening. *Trace:* [provenance.md](../data/provenance.md), ADR-0002.
+4. **REQ-NF-004 — Unit-stable gating.** QC metrics are normalized to canonical decimals
+   through the metric registry before thresholding, so a source's raw-unit change (or a
+   MultiQC key rename absorbed by the registry/mapping) cannot move a verdict. Introducing
+   the registry on the critical path (T-024/T-025) left the pinned demo verdicts
+   **byte-identical**. *Verify:* the offline suite + pinned scenario stayed green across
+   T-024/T-025 — [metric_registry.md](../data/metric_registry.md),
+   [schemas.md](../data/schemas.md) §QC (units contract).
 
 ## Provenance & auditability
 
@@ -49,8 +56,12 @@ links to [evaluation.md](../quality/evaluation.md).
 ## Security & privacy
 
 1. **REQ-NF-020 — Secrets via env only.** No keys, tokens, credentials, or private
-   URLs are hardcoded; the live-AI path reads its key from the environment. New
-   required env vars are added to `.env.example`. *Trace:* CLAUDE.md Security.
+   URLs are hardcoded; the live-AI path reads its key from the environment. The live
+   Slack notify path likewise reads its bot token + channel from env
+   (`PIPEGUARD_SLACK_BOT_TOKEN` / `PIPEGUARD_SLACK_CHANNEL`) and stays disarmed unless
+   `PIPEGUARD_SLACK_LIVE=1`, so a stray token cannot post. New required env vars are added
+   to `.env.example`. *Trace:* CLAUDE.md Security, [architecture.md](../design/architecture.md)
+   §Outbound notify seam.
 2. **REQ-NF-021 — No PHI in the repo.** No raw reads, PHI, or large artifacts are
    committed; accessions + a fetch script are committed instead. The demo uses
    public/synthetic/contrived data only. *Trace:* CLAUDE.md Data handling,

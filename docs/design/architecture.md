@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-08 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [schemas.md](../data/schemas.md), [provenance.md](../data/provenance.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [provenance.md](../data/provenance.md) |
 
 ## Overview
 
@@ -32,24 +32,34 @@ Every finding and verdict is labelled with the gate it came from:
 
 ```
  run dir ─▶ parsers ─▶ RunArtifacts ─▶ rules ─▶ Finding[] ─▶ synthesis ─▶ DecisionCard[]
-                                          │                                   │
-                                          ├────────▶ provenance: EventLedger ◀┘  (append-only,
+                                        ▲ │                                   │  │
+                    metric registry ────┘ │  (rules normalize each metric to  │  │
+                    (canonical decimals,  │   a canonical decimal via the     │  │
+                     ON the critical path)│   registry, then gate)            │  │
+                                          ├────────▶ provenance: EventLedger ◀─┘  │ (append-only,
                                           │            (analysis_run/finding/       ADR-0002)
-                                          │             verdict events)
+                                          │             verdict/notification events)
                             triage agent ─┘  (advisory, off the critical path, ADR-0009)
-                                                          │
-      ┌───────────────────────────────────────────────────┤
-      ▼                          ▼                         ▼
+                                                          │           notify/ ◀────┘
+      ┌───────────────────────────────────────────────────┤        (outbound, off by
+      ▼                          ▼                         ▼         default, ADR-0010)
  app/ Streamlit           api/ FastAPI  ───────────▶  frontend/ React
  (offline fallback)       (read-API seam, ADR-0010)   (Vite+Tailwind, ADR-0014)
 ```
 
 1. **Core (`src/pipeguard/`), framework-agnostic.**
    - `parsers` → a typed `RunArtifacts` bundle (tolerant: a missing field is a signal).
-   - `rules` — the trust anchor: computes cited, immutable `Finding`s; never guesses.
+   - `metrics` — the **metric registry** (versioned `metric_registry.yaml` + `MetricValue`):
+     resolves each source key to a canonical `our_key` and normalizes the value to a canonical
+     unit. **ON the QC-gate critical path** (T-024/T-025): `rules` normalizes through it before
+     thresholding, so drift in a source's raw unit can't silently move a verdict. See
+     [metric_registry.md](../data/metric_registry.md) + [schemas.md](../data/schemas.md) §QC (units contract).
+   - `rules` — the trust anchor: computes cited, immutable `Finding`s; never guesses. Gates each
+     metric on its **canonical (normalized) value vs a canonical-decimal threshold** keyed on
+     `our_key`; a missing field yields no `MetricValue` (a signal, not a crash).
    - `models` — the pydantic data contract; `Finding`/`Evidence` are frozen + content-hashed,
      each `Finding` derives its gate + a rule-version-independent signature.
-   - `runbook` — operator-configurable QC thresholds + gate policy.
+   - `runbook` — operator-configurable QC thresholds (keyed on `our_key`, canonical decimals) + gate policy.
    - `synthesis` — verdict aggregation (deterministic) + narration (stub or Claude).
    - `identifiers` — UUIDv7 ids, content hashing, UTC time.
 2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only
@@ -59,8 +69,9 @@ Every finding and verdict is labelled with the gate it came from:
 3. **Triage agent (`triage/`, ADR-0009/0012).** Advisory `TriageNote` grounded in a
    curated knowledge corpus via a retrieval interface — OFF the deterministic critical path.
 4. **Delivery layers (thin, over the core).** `app/` Streamlit (offline demo / fallback);
-   `api/` FastAPI read-API (the production seam); `frontend/` React (run overview → decision
-   cards + triage → provenance → monitoring/settings).
+   `api/` FastAPI read-API (the production seam); `frontend/` React — **all prototype screens
+   now built**: run overview → intake/preflight → decision cards + triage → review queue →
+   provenance → monitoring → settings (a `DecisionCard` carries `run_id`).
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
@@ -71,10 +82,12 @@ Every finding and verdict is labelled with the gate it came from:
 
 ## Data flow
 
-`load_run` → `evaluate_run` (rules → `Finding[]` per sample) → `run_gate` (synthesize each
-sample → `DecisionCard`; emit the event trail; anchor cards to the `AnalysisRun`) → the
-FastAPI read-API serves cards + events + config → the React frontend renders them. The
-triage agent is invoked on demand per flagged card and never re-enters the verdict path.
+`load_run` → `evaluate_run` (rules **normalize each metric through the registry**, then →
+`Finding[]` per sample) → `run_gate` (synthesize each sample → `DecisionCard`; emit the event
+trail; anchor cards to the `AnalysisRun`; optionally dispatch actionable cards through an
+injected `notifier`) → the FastAPI read-API serves cards + events + config → the React
+frontend renders them. The triage agent is invoked on demand per flagged card and never
+re-enters the verdict path.
 
 ## Invariants
 
@@ -91,8 +104,13 @@ triage agent is invoked on demand per flagged card and never re-enters the verdi
 | Synthesizer (narration) | `PIPEGUARD_SYNTHESIZER=stub\|claude` | stub ($0) |
 | Triage agent | `PIPEGUARD_TRIAGE_AGENT=stub\|claude` | stub ($0) |
 | Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack`; `PIPEGUARD_SLACK_LIVE=1` to arm the live post | stub ($0, no network) |
+| Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — add/remap a source metric without touching rules | canonical decimals; ON the critical path |
 | Repository (persistence) | `Repository` port; SqliteRepository built → Postgres later | SQLite + JSONL |
 | Deployment | ports & adapters; Nextflow compute portability (ADR-0003) | local |
+
+Unlike the AI/notify seams (off by default, adapter-swapped at the edge), the **metric registry
+is on the critical path** — its "flex" is that new tool keys or unit changes are absorbed by the
+versioned YAML/mapping, not by editing `rules`, keeping verdicts byte-identical across the change.
 
 ## Deployment
 

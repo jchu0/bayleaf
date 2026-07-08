@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-07 (MST) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [ADRs](../adr/), [journal 2026-07-07](../journal/2026-07-07-design-and-planning.md) |
+| **Related** | [ADRs](../adr/), [functional.md](functional.md), [planning/tasks.md](../planning/tasks.md), [journal 2026-07-08](../journal/2026-07-08-build.md) |
 
 ## Overview
 
@@ -23,12 +23,34 @@ are blocked on unbuilt core seams, not on research.
 6. **Dashboard**: review queue (cards-as-tickets), evidence, monitoring; a **Slack** notify adapter.
 7. Rigorous **evaluation** vs. GIAB truth + synthetic failure modes.
 
+## Built as of 2026-07-08
+
+The MVP core is standing; these in-scope pieces are now built and verified (see
+[functional.md](functional.md) + [tasks.md](../planning/tasks.md)):
+
+1. **Deterministic decision gate** with cited findings, provenance ledger, and SQLite projection (in-scope 1–2).
+2. **Metric registry on the QC-gate critical path** (T-024/T-025) — metrics normalized to
+   canonical decimals before thresholding; verdicts byte-identical (in-scope 1;
+   [architecture.md](../design/architecture.md), [metric_registry.md](../data/metric_registry.md)).
+3. **Outbound notify port + Slack adapter** (T-015b) — wired into `run_gate` (off by default),
+   per-verdict evidence-cited messages, `notification.emitted` events, live Slack opt-in
+   (`PIPEGUARD_SLACK_LIVE`), `python -m pipeguard.notify` CLI (in-scope 6).
+4. **GIAB HG002 fetch** — `scripts/fetch_giab_hg002.py` validated end-to-end on a bioconda env;
+   data never committed (in-scope 3).
+5. **Dashboard — all prototype screens built** in the React frontend: run overview, intake/preflight,
+   decision cards + triage, review queue, provenance, monitoring, settings (in-scope 6);
+   plus the Streamlit offline fallback.
+6. **Both AI seams** (synthesizer, QC-triage agent) present, stub-first ($0), env-flippable to live.
+
+Still open in-scope: the **granular config profile** is documented, not shipped (see wishlist #1);
+the **variant gate** is Phase 2; **evaluation** vs. GIAB/synthetic truth is ongoing.
+
 ## Wishlist (documented, deferred)
 
 | # | Item | Research | Blocked on | Notes |
 |---|---|---|---|---|
 | 1 | Granular agent profile | Low | config layer + agents | Design captured (ADR-0005/0012); build after core |
-| 2 | Jira / Teams / Discord notify adapters | Low | notify port | Adapter interface first; Discord webhook is trivial |
+| 2 | Jira / Teams / Discord notify adapters | Low | — (notify port **built**, T-015b) | Port + Slack adapter shipped; remaining channels are just new `NotifyPort` adapters. Wiring notify into the read-API/ticketing flow is the follow-on |
 | 3 | Cloud deploy + Terraform (AWS / HealthOmics) | Low–med | containerization | Write as target-state IaC before any apply |
 | 4 | Pipeline-repair agent (agent #2) | Low–med | QC-triage + escalation | Next agent after QC (ADR-0012) |
 | 5 | pgvector read-clustering / contaminant-QC | **High** | vector store + research | Nearly a separate project; empirical, unproven |

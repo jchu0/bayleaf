@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-08 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
 
 ## Overview
 
@@ -59,6 +59,14 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
 6. **REQ-F-015 — Config-driven thresholds.** Thresholds come from an operator-owned
    runbook **profile** keyed on **assay × sample type**; no hardcoded universal
    thresholds. *Trace:* [qc_metrics.md](../data/qc_metrics.md) §Principles, ADR-0005.
+7. **REQ-F-016 — Metrics normalized through the registry; gate on canonical values.**
+   Each QC metric is resolved to its canonical `our_key` and normalized to a **canonical
+   decimal** via the **metric registry** before gating; the gate compares the normalized
+   value against a canonical-decimal runbook threshold (both on the registry's scale), so
+   a change in a source's raw unit cannot silently move a verdict, and verdicts stay
+   byte-identical. The registry is **on the QC-gate critical path**; a missing field yields
+   no `MetricValue` (a signal, not a crash). *Trace:* [metric_registry.md](../data/metric_registry.md),
+   [schemas.md](../data/schemas.md) §QC (units contract), `rules.py`, T-024/T-025.
 
 ## Advisory triage agent (ADR-0009/0012)
 
@@ -72,11 +80,14 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    ADR-0012.
 3. **REQ-F-022 — Outbound notify.** For each *actionable* card (HOLD/RERUN/ESCALATE;
    clean cards are skipped), the system can emit a per-verdict, evidence-cited notification
-   through a swappable notify port (stub-first, $0; Slack adapter). It **formats what the
-   gate decided, never a verdict** (ADR-0001); the live Slack post is opt-in via
-   `PIPEGUARD_SLACK_LIVE`, degrades to the stub on any error, and is recorded as a
-   `notification.emitted` ledger event. *Trace:* [architecture.md](../design/architecture.md)
-   §Outbound notify seam, [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md).
+   through a swappable notify port (`PIPEGUARD_NOTIFIER=stub|slack`, stub-first, $0). The
+   hook is **optional and off by default** — `run_gate(notifier=…)` is wired only when a
+   notifier is injected, and with none the event trail is byte-for-byte unchanged. It
+   **formats what the gate decided, never a verdict** (ADR-0001); the live Slack post is
+   opt-in via `PIPEGUARD_SLACK_LIVE`, degrades to the stub on any error, and every send is
+   recorded as a `notification.emitted` ledger event. `python -m pipeguard.notify <run_dir>`
+   is the CLI. *Trace:* [architecture.md](../design/architecture.md) §Outbound notify seam,
+   [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md).
 
 ## Provenance & persistence (ADR-0002/0003)
 
@@ -103,12 +114,14 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
 2. **REQ-F-041 — On-demand triage endpoint.** The API exposes a per-card triage call
    that invokes the advisory agent without re-entering the verdict path. *Trace:*
    [architecture.md](../design/architecture.md), ADR-0010.
-3. **REQ-F-042 — Operator screens.** The UI presents: run overview (per-verdict
-   counts + needs-attention), decision cards (verdict + per-gate strip + cited
-   evidence), triage, provenance (event trail), review queue, monitoring, and
-   settings (runbook thresholds, labelled illustrative). *Trace:* [demo_plan.md](../demo/demo_plan.md),
-   [architecture.md](../design/architecture.md); intake / review-queue screens are
-   partly backend-blocked ([tasks T-022](../planning/tasks.md)).
+3. **REQ-F-042 — Operator screens.** The UI presents the full screen set (**all built** in
+   the React frontend): run overview (per-verdict counts + needs-attention),
+   intake/preflight (run-level sequencing QC + per-sample admission with manual override),
+   decision cards (verdict + per-gate strip + cited evidence), triage, provenance (event
+   trail), review queue, monitoring, and settings (runbook thresholds, labelled
+   illustrative). *Trace:* [demo_plan.md](../demo/demo_plan.md),
+   [architecture.md](../design/architecture.md); some screens still consume partial API
+   data pending backend wiring ([tasks T-022](../planning/tasks.md)).
 4. **REQ-F-043 — Offline fallback view.** A Streamlit app renders the same core
    offline, in one process, as the guaranteed-working demo fallback. *Trace:*
    [demo_plan.md](../demo/demo_plan.md), ADR-0014.

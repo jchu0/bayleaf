@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-07 (MST) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Audience** | design / frontend |
-| **Related** | [ADR-0010](../../adr/ADR-0010-ticketing-notify-read-api.md), [scope-and-wishlist](../../requirements/scope-and-wishlist.md) |
+| **Related** | [ADR-0010](../../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0014](../../adr/ADR-0014-productionization-fastapi-react.md), [scope-and-wishlist](../../requirements/scope-and-wishlist.md), [README.md](./README.md) |
 
 ## How to use
 
@@ -69,9 +69,17 @@ settings, and data-platform integrations. Keep to the core flow above.
 **Deliverable.** Wireframes/mockups for screens 1–5, a simple color + component
 system, and the key states (loading / empty / error).
 
-## Additions since v1 — incorporate in the next iteration
+## Build status (2026-07-08)
 
-Decisions made after the initial brief (see ADR-0013 and `data/qc_metrics.md`):
+The full screen set is now **built** in the React frontend (`frontend/`) and mirrored in the
+clickable prototype (`PipeGuard.html`): the six core screens below **plus** the v2 additions —
+including the **preflight/intake gate** — all exist. This brief stays the stable spec; the
+sections below record the intent the build followed.
+
+## Additions since v1 — incorporated (now built)
+
+Decisions made after the initial brief (see ADR-0013 and `data/qc_metrics.md`), now
+implemented in both the prototype and the React frontend:
 
 1. **Three-gate model + preflight/intake gate.** The gate is three checkpoints:
    **preflight/intake** (before processing) → **QC gate** → **variant gate**. Add an

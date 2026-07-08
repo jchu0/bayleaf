@@ -17,6 +17,11 @@ on an index swap + missing `subject_id`, **S5 hold** on borderline depth/callabi
 It is design intent, not production code — but every number and citation on screen
 traces to the real mock run, so it doubles as a spec for what the React views must show.
 
+As of **2026-07-08** the React frontend (`frontend/`) implements this **full screen set**
+against the FastAPI read-API — run overview, intake/preflight, decision cards + triage,
+review queue, provenance, monitoring, and settings all exist — so the prototype and the
+shipped UI are in parity (a `DecisionCard` now carries `run_id`).
+
 ## How to view
 
 Open **`PipeGuard.html`** in any browser. It is a single self-contained file (fonts,
