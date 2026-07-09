@@ -7,6 +7,7 @@ import csv
 import io
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
@@ -160,3 +161,17 @@ def test_export_validation_and_404():
     assert client.get("/api/export", params={"grain": "bogus"}).status_code == 400
     assert client.get("/api/export", params={"verdict": "maybe"}).status_code == 400
     assert client.get("/api/export", params={"run_id": "NOPE"}).status_code == 404
+
+
+def test_export_feature_parquet_roundtrips():
+    pq = pytest.importorskip("pyarrow.parquet")  # skip if the optional 'parquet' extra is absent
+    resp = client.get(
+        "/api/export", params={"format": "parquet", "grain": "feature", "run_id": "mock_run_01"}
+    )
+    assert resp.status_code == 200
+    assert "parquet" in resp.headers["content-type"]
+    assert resp.headers["content-disposition"].rstrip('"').endswith(".parquet")
+    # Round-trip the columnar bytes: schema + row count + a known column survive.
+    table = pq.read_table(io.BytesIO(resp.content))
+    assert int(resp.headers["x-pipeguard-row-count"]) == table.num_rows
+    assert {"metric_key", "normalized_value", "canonical_unit", "origin"} <= set(table.column_names)

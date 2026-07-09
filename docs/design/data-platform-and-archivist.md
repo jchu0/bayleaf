@@ -44,10 +44,11 @@ below where they conflict; the questions are kept for traceability).
 2. **Persistence direction (D3 — proposed, confirm).** SQLite stays the operational projection
    now. **End-goal = Postgres as the single operational store, using its built-in `pgvector`
    as the vector store** (subsumes wishlist #5) — *not* Postgres **plus** a separate DuckDB.
-   The export is a **single tabular/columnar file on demand** (CSV / JSONL / **Parquet**),
-   never "masses of loose files": the DB is the store, the file is a disposable export
-   artifact. **DuckDB is demoted to optional** (a local-analytics convenience). See wishlist
-   #19/#5.
+   The export is a **single tabular/columnar file on demand** (CSV / JSONL / **Parquet** —
+   Parquet is a **first-class option now** via an optional `pyarrow` extra, so a user brings
+   any reader: pandas / polars / DuckDB), never "masses of loose files": the DB is the store,
+   the file is a disposable export artifact. **DuckDB demoted to optional** (a local-analytics
+   convenience). See wishlist #19/#5.
 3. **Pipeline state → "mission control" (Re:1a).** Capture **per-step pipeline execution
    state, start→end**, as append-only ledger events, projected to the dashboard — the OLTP
    substrate that lets the dashboard evolve into a mission-control view. Target-state; pairs
@@ -57,23 +58,27 @@ below where they conflict; the questions are kept for traceability).
    column.
 5. **Export honesty + PII (D6/D10/D11).** Two export paths, two honesty labels; drop/hash
    `submitted_by` even for HG002; carry **origin** from a per-run marker (default `unknown`),
-   which gates whether intake-identity fields are exported (§2.1d).
+   which gates whether intake-identity fields are exported (§2.1d). Origin is the seam that
+   **evolves toward a study-specific id** (`study_id`) for study-scoped grouping/isolation
+   (relates to multi-tenancy, wishlist #18).
 6. **Output layout + archive (D7/D8).** Keep the `fastq/` `mosdepth/` `run/` names.
    **BAM→CRAM for archiving is CONFIRMED** (overrides the earlier "defer"). A run's **archive**
    = FASTQ(`.gz`) · CRAM(+`.crai`) · VCF output(s)(+`.tbi`) · QC metrics — **plus, do not
    forget:** the intake sheets (`SampleSheet.csv` + `sample_metadata.csv`), pipeline provenance
-   (software versions + params + execution trace), the MultiQC report, a `MANIFEST.sha256`
-   carrying origin labels, and the **reference identity (genome build + per-`@SQ` M5) required
-   to decode the CRAM later**. A **config file maps artifact-kind → output path** so PipeGuard
+   (software versions + params + execution trace), the MultiQC report, **PipeGuard's own
+   decision cards** (the verdicts that run produced), a `MANIFEST.sha256` carrying origin
+   labels, and the **reference identity (genome build + per-`@SQ` M5) required to decode the
+   CRAM later**. A **config file maps artifact-kind → output path** so PipeGuard
    reads any layout (ties to the config layer [ADR-0005](../adr/ADR-0005-config-layer-and-profiles.md)
    + the canvas builder, wishlist #11).
 7. **Variant-gate substrate (General + D8/D13).** Add a **real disease-gene panel** over GIAB
    HG002 (truth-backed) + a **simple, pluggable caller** — PipeGuard mostly *reads* the VCFs a
    caller emits (point it at the VCF folder; the caller is bring-your-own). The variant **gate
    rules stay Phase 2**; the panel + caller + VCF ingest are design-now (build-now-if-time).
-   Design in progress (a dedicated workflow). **Guardrail (load-bearing):** HG002 is a
-   *benchmark genome, not a patient*; any surfaced variant is a ClinVar-classified **test
-   fixture**, never a diagnosis, and truth claims hold only inside the high-confidence BED.
+   **Design done — see Appendix D.** The build-now-if-time slice (`gate_giab.py --call` +
+   EVAL-030) is **approved if time remains** after the export slice. **Guardrail (load-bearing):**
+   HG002 is a *benchmark genome, not a patient*; any surfaced variant is a ClinVar-classified
+   **test fixture**, never a diagnosis, and truth claims hold only inside the high-confidence BED.
 8. **Naming (D14).** `pct_reads_identified` is a fastp pass-filter rate, not a barcode-ID
    metric — document now, rename the metric key eventually.
 9. **Run-control (D12) + agent slot (D9).** Run-control stays wishlist #20 (revisit flex day).

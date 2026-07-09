@@ -289,6 +289,38 @@ def _to_jsonl(rows: Iterable[dict[str, Any]]) -> str:
     return "".join(json.dumps(row) + "\n" for row in rows)
 
 
+def _to_parquet(fields: list[str], rows: list[dict[str, Any]]) -> bytes:
+    """Serialize to a single columnar Parquet file (D3) so a consumer reads it with any tool.
+
+    `pyarrow` is an optional extra, imported lazily (mirroring the claude/slack seams) so the
+    base install stays lean — absent, a clear 501 points at the extra, and CSV/JSONL still work.
+    """
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ImportError as exc:  # pragma: no cover - only without the parquet extra
+        raise HTTPException(
+            status_code=501,
+            detail="parquet export needs the 'parquet' extra: uv sync --extra parquet",
+        ) from exc
+    # Column-major with the explicit field order; an empty result still carries the schema.
+    table = pa.table({f: [row.get(f) for row in rows] for f in fields})
+    buf = pa.BufferOutputStream()
+    pq.write_table(table, buf)  # type: ignore[no-untyped-call]
+    return bytes(buf.getvalue().to_pybytes())
+
+
+def _serialize(
+    fmt: str, fields: list[str], rows: list[dict[str, Any]]
+) -> tuple[str | bytes, str, str]:
+    """Return (body, extension, media_type) for the requested format."""
+    if fmt == "csv":
+        return _to_csv(fields, rows), "csv", "text/csv"
+    if fmt == "jsonl":
+        return _to_jsonl(rows), "jsonl", "application/x-ndjson"
+    return _to_parquet(fields, rows), "parquet", "application/vnd.apache.parquet"
+
+
 @app.get("/api/export")
 def export(
     fmt: str = Query("csv", alias="format"),
@@ -302,13 +334,14 @@ def export(
     A read-only, deterministic re-derivation over the served runs — the whole *query + export +
     ML-ready* story from data the API already computes, no persistence wiring. `grain=decision`
     is one row per (run, sample) with verdict + narration + findings; `grain=feature` is one
-    registry-normalized `MetricValue` per row (long format = the ML corpus). `format=csv|jsonl`.
-    Filter by `run_id`, `verdict`, or `q` (run-id substring). Every row carries its `origin`;
-    operator PII is never emitted (D10). This is a LIVE recompute, not audit provenance
-    (`X-PipeGuard-Export-Source`).
+    registry-normalized `MetricValue` per row (long format = the ML corpus).
+    `format=csv|jsonl|parquet` (Parquet needs the optional `parquet` extra; pandas/polars/DuckDB
+    read it). Filter by `run_id`, `verdict`, or `q` (run-id substring). Every row carries its
+    `origin`; operator PII is never emitted (D10). This is a LIVE recompute, not audit
+    provenance (`X-PipeGuard-Export-Source`).
     """
-    if fmt not in ("csv", "jsonl"):
-        raise HTTPException(status_code=400, detail="format must be 'csv' or 'jsonl'")
+    if fmt not in ("csv", "jsonl", "parquet"):
+        raise HTTPException(status_code=400, detail="format must be 'csv', 'jsonl', or 'parquet'")
     if grain not in ("decision", "feature"):
         raise HTTPException(status_code=400, detail="grain must be 'decision' or 'feature'")
     if verdict is not None and verdict not in _VERDICT_ORDER:
@@ -323,10 +356,9 @@ def export(
     fields = _DECISION_FIELDS if grain == "decision" else _FEATURE_FIELDS
     builder = _decision_rows if grain == "decision" else _feature_rows
     rows = list(builder(run_ids, verdict))
-    body = _to_csv(fields, rows) if fmt == "csv" else _to_jsonl(rows)
+    body, ext, media = _serialize(fmt, fields, rows)
 
     scope = run_id or (f"q-{q}" if q else "all")
-    ext, media = ("csv", "text/csv") if fmt == "csv" else ("jsonl", "application/x-ndjson")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     filename = f"pipeguard-{scope}-{grain}-{stamp}.{ext}"
     return Response(
