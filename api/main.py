@@ -63,6 +63,13 @@ _RUNBOOK_DISCLAIMER = (
     "These gate values are demo policy, not calibrated or validated clinical cutoffs."
 )
 
+# Make the units contract explicit at the API boundary so an integrator never renders a
+# canonical 0.85 fraction as "0.85%": gate/hard_fail are in canonical units, `unit` is display.
+_RUNBOOK_UNITS_NOTE = (
+    "gate/hard_fail are in each metric's canonical unit (fraction for %-unit metrics, x for "
+    "coverage); 'unit' is the display symbol — multiply %-unit gates by 100 to display them."
+)
+
 
 class RunbookThreshold(BaseModel):
     """One QC gate's policy, flattened for operators/integrators (the settings screen).
@@ -89,6 +96,7 @@ class RunbookPolicy(BaseModel):
     """
 
     disclaimer: str
+    units_note: str
     run_id_field: str
     required_metadata_fields: list[str]
     thresholds: list[RunbookThreshold]
@@ -198,6 +206,7 @@ def get_runbook() -> RunbookPolicy:
     ]
     return RunbookPolicy(
         disclaimer=_RUNBOOK_DISCLAIMER,
+        units_note=_RUNBOOK_UNITS_NOTE,
         run_id_field=DEFAULT_RUNBOOK.run_id_field,
         required_metadata_fields=DEFAULT_RUNBOOK.require_metadata_fields,
         thresholds=thresholds,

@@ -4,6 +4,15 @@ import { api } from '../api'
 import { ErrorBox, Loading } from '../components/States'
 import type { Runbook } from '../types'
 
+// Runbook gates are stored in CANONICAL units (fraction for %-metrics, x for coverage);
+// `unit` is only the display symbol. Convert back to the human unit the operator reads —
+// this mirrors the core's registry.denormalize for the two display units the runbook uses,
+// so an 85% gate never renders as "0.85%". Trim float noise to 2dp.
+function displayThreshold(value: number, unit: string): string {
+  const shown = unit === '%' ? value * 100 : value
+  return `${Math.round(shown * 100) / 100}${unit}`
+}
+
 export function Settings() {
   const [runbook, setRunbook] = useState<Runbook | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -57,17 +66,14 @@ export function Settings() {
                   {t.label} <span className="font-mono text-xs text-ink-dim">{t.metric}</span>
                 </td>
                 <td className="p-3 font-mono text-xs text-ink-dim">{t.unit || '—'}</td>
-                <td className="p-3 font-mono">
-                  {t.gate}
-                  {t.unit}
+                <td className="p-3 font-mono">{displayThreshold(t.gate, t.unit)}</td>
+                <td className="p-3 font-mono text-ink-dim">
+                  {/* borderline_band is RELATIVE to the gate (gate × band); show the
+                      absolute band in display units, not the bare 0.03 fraction. */}
+                  ±{displayThreshold(t.gate * t.borderline_band, t.unit)}
                 </td>
                 <td className="p-3 font-mono text-ink-dim">
-                  ±{t.borderline_band}
-                  {t.unit}
-                </td>
-                <td className="p-3 font-mono text-ink-dim">
-                  {t.hard_fail}
-                  {t.unit}
+                  {displayThreshold(t.hard_fail, t.unit)}
                 </td>
                 <td className="p-3 text-ink-dim">
                   {t.higher_is_better ? '≥ (higher is better)' : '≤ (lower is better)'}

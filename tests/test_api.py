@@ -47,6 +47,8 @@ def test_runbook_endpoint_exposes_thresholds():
     body = client.get("/api/runbook").json()
     # Life-science guardrail: the policy must read as illustrative, never clinical.
     assert "NOT clinical" in body["disclaimer"]
+    # Units contract surfaced so an integrator can't render a canonical 0.85 as "0.85%".
+    assert "canonical unit" in body["units_note"]
     assert body["run_id_field"] == "run_id"
     assert body["required_metadata_fields"] == [
         "subject_id",
@@ -70,18 +72,28 @@ def test_metrics_prometheus_exposition():
     assert resp.headers["content-type"].startswith("text/plain; version=0.0.4")
     body = resp.text
     assert body.endswith("\n")
-    # Well-formed exposition: HELP/TYPE headers present for a labelled metric.
-    assert "# HELP pipeguard_cards_total" in body
-    assert "# TYPE pipeguard_cards_total counter" in body
-    # Aggregate scalars across the 3 committed mock runs (17 total cards).
-    assert "pipeguard_runs_total 3" in body
-    assert "pipeguard_samples_total 17" in body
+    lines = body.splitlines()  # anchor to whole lines so "... 3" can't match "... 30"
+    # Well-formed exposition: every metric family declares HELP + TYPE before its series.
+    for name in (
+        "pipeguard_runs_total",
+        "pipeguard_samples_total",
+        "pipeguard_cards_total",
+        "pipeguard_gate_flagged_samples_total",
+    ):
+        assert any(ln.startswith(f"# HELP {name} ") for ln in lines), name
+        assert f"# TYPE {name} counter" in lines, name
+    # Aggregate scalars across the 3 committed mock runs (17 total cards). These are pinned to
+    # the committed fixtures; data/real-giab/ does NOT register (its SampleSheet is nested a
+    # level deeper than the data/*/ discovery glob), so the GIAB pipeline can't perturb them.
+    assert "pipeguard_runs_total 3" in lines
+    assert "pipeguard_samples_total 17" in lines
     # Per-verdict counts (mock_run_01: S4 escalate, S5 hold, S1-S3 proceed; +02/+03).
-    assert 'pipeguard_cards_total{verdict="proceed"} 7' in body
-    assert 'pipeguard_cards_total{verdict="hold"} 5' in body
-    assert 'pipeguard_cards_total{verdict="rerun"} 2' in body
-    assert 'pipeguard_cards_total{verdict="escalate"} 3' in body
+    verdicts = {"proceed": 7, "hold": 5, "rerun": 2, "escalate": 3}
+    for v, n in verdicts.items():
+        assert f'pipeguard_cards_total{{verdict="{v}"}} {n}' in lines
+    # Internal consistency, independent of how many runs exist: samples == sum of verdicts.
+    assert sum(verdicts.values()) == 17
     # Per-gate flagged-sample counts; variant gate is present-and-zero for series stability.
-    assert 'pipeguard_gate_flagged_samples_total{gate="preflight"} 6' in body
-    assert 'pipeguard_gate_flagged_samples_total{gate="qc"} 4' in body
-    assert 'pipeguard_gate_flagged_samples_total{gate="variant"} 0' in body
+    assert 'pipeguard_gate_flagged_samples_total{gate="preflight"} 6' in lines
+    assert 'pipeguard_gate_flagged_samples_total{gate="qc"} 4' in lines
+    assert 'pipeguard_gate_flagged_samples_total{gate="variant"} 0' in lines
