@@ -92,7 +92,7 @@ in isolated feature branches (merge what finishes); the rest are clarified targe
 | W13 | ArtifactStore port + Local + S3 adapter **(built ✅ — port + Local + guarded S3)** | `feat/artifact-store-port-s3` | T-039 |
 | W14 | Config-driven de-id export policy ✅ (`api/deid.py` — per-field DROP/HASH/GATE_BY_ORIGIN + origin-gated `include=identity` cohort-key opt-in; demo seam, not HIPAA; no new dep) | `feat/deid-export-policy` | T-040 |
 | W3 | Container deploy slice (+ unapplied Terraform) | `feat/container-deploy-slice` | T-041 |
-| W12 | In-app user feedback | `feat/in-app-feedback` | T-042 |
+| W12 | In-app user feedback ✅ **BUILT** (T-042) — off-gate telemetry: per-decision agree/disagree thumbs + a global product FAB → `POST /api/feedback` → gitignored JSONL. The app's first write endpoint (read-API stays read-only over the decision domain) | `feat/in-app-feedback` | T-042 |
 
 **SCOPE-ONLY (documented target-state, not built now):** W5 (contaminant-QC, High research),
 W6 (variant-miner, High research), W7 (RNA-seq modality, XL new pipeline+gate), W8 (LoRA

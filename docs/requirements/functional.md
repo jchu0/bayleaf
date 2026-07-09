@@ -127,7 +127,14 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    fabricate instrument/compute artifacts the FASTQ-first build doesn't capture. *Trace:*
    [demo_plan.md](../demo/demo_plan.md), [architecture.md](../design/architecture.md),
    [tasks T-022/T-022b/T-037](../planning/tasks.md).
-4. **REQ-F-043 — Offline fallback view.** A Streamlit app renders the same core
+4. **REQ-F-044 — In-app feedback (off-gate telemetry).** The app captures product feedback
+   via the one write endpoint, `POST /api/feedback` — a per-decision agree/disagree signal
+   (keyed to verdict + gate + rule ids + card hash) and a global product note — appended to a
+   gitignored JSONL. It is **off the deterministic gate** (never mutates a verdict/provenance
+   event; ADR-0001), carries **no operator identity** (`extra="forbid"` structural guard), and
+   resolves `origin` server-side. *Trace:* [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md),
+   [tasks T-042](../planning/tasks.md).
+5. **REQ-F-043 — Offline fallback view.** A Streamlit app renders the same core
    offline, in one process, as the guaranteed-working demo fallback. *Trace:*
    [demo_plan.md](../demo/demo_plan.md), ADR-0014.
 

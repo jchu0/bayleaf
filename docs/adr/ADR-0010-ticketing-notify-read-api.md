@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · Notify port BUILT + wired + live-Slack verified (T-015b); read API BUILT (FastAPI, ADR-0014); card status lifecycle deferred |
-| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
+| **Status** | Accepted · Notify port BUILT + wired + live-Slack verified (T-015b); read API BUILT (FastAPI, ADR-0014); off-gate feedback write BUILT (`POST /api/feedback`, T-042/W12); card status lifecycle deferred |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) · 2026-07-09 (MST) |
 | **Deciders** | James Hu, Claude Code |
 | **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0008](ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [data/schemas.md](../data/schemas.md) |
 
@@ -66,7 +66,16 @@ surface that lets operators act on surfaced outputs.
    `get_notifier()` maps `slack|teams|discord`.
 2. **Inbound read API BUILT** as the FastAPI backend (`api/`,
    [ADR-0014](ADR-0014-productionization-fastapi-react.md)) — exactly the seam this ADR
-   anticipated, wrapping the framework-agnostic core.
+   anticipated, wrapping the framework-agnostic core. It stays **read-only over the decision
+   domain**: no endpoint mutates a verdict, finding, provenance event, or the ledger.
+2a. **Off-gate feedback write BUILT (T-042/W12).** The one write endpoint, `POST /api/feedback`,
+   is deliberately *not* a decision write — it appends product telemetry (a per-decision
+   agree/disagree signal + a global product note) to a gitignored JSONL in a separate module
+   (`api/feedback.py`) that never imports the core, so it can never call `run_gate` or touch
+   provenance ([ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md)). It carries no operator
+   identity (`extra="forbid"` structural guard), resolves `origin` server-side, and leaks
+   neither path nor message on failure. The **card status-transition writes** (Jira/ticketing)
+   remain the deferred write phase — feedback is telemetry, not a ticket mutation.
 3. **Cards-as-tickets: partial.** `DecisionCard` is the operator-facing unit and the dashboard
    review queue. The explicit `open → in-review → resolved` status lifecycle
    (`ReviewItem`/`Ticket`, schemas.md §17), the **Jira** adapter (a write action that creates
