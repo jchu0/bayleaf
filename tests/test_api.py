@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.deid import DeidAction, DeidPolicy, _pseudonymize, default_policy, export_fields, redact
+from api.feedback_store import JsonlFeedbackStore, SqliteFeedbackStore, get_feedback_store
 from api.main import app
 
 client = TestClient(app)
@@ -77,6 +78,7 @@ def test_artifacts_endpoint_maps_stages_with_real_hash_and_origin():
 def _decision_body(**over):
     body = {
         "target": "decision",
+        "source": "decision-card",
         "signal": "disagree",
         "reason_code": "threshold_too_strict",
         "context": {
@@ -133,6 +135,7 @@ def test_feedback_product_target_strips_message_and_defaults_origin_unknown(tmp_
         "/api/feedback",
         json={
             "target": "product",
+            "source": "product-fab",
             "kind": "confusing",
             "message": "  Provenance DAG unclear  ",
             "context": {"screen": "Provenance"},
@@ -141,6 +144,7 @@ def test_feedback_product_target_strips_message_and_defaults_origin_unknown(tmp_
     assert resp.status_code == 201
     rec = _read_feedback(store)[0]
     assert rec["message"] == "Provenance DAG unclear" and rec["origin"] == "unknown"
+    assert rec["source"] == "product-fab"  # the originating surface is traced
 
 
 def test_feedback_cross_field_validation(tmp_path, monkeypatch):
@@ -151,6 +155,7 @@ def test_feedback_cross_field_validation(tmp_path, monkeypatch):
             "/api/feedback",
             json={
                 "target": "decision",
+                "source": "decision-card",
                 "context": {"run_id": "mock_run_01", "sample_id": "S4", "verdict": "escalate"},
             },
         ).status_code
@@ -166,12 +171,16 @@ def test_feedback_cross_field_validation(tmp_path, monkeypatch):
     )
     # product with no kind
     assert (
-        client.post("/api/feedback", json={"target": "product", "message": "hi"}).status_code == 422
+        client.post(
+            "/api/feedback", json={"target": "product", "source": "product-fab", "message": "hi"}
+        ).status_code
+        == 422
     )
     # product carrying a decision signal
     assert (
         client.post(
-            "/api/feedback", json={"target": "product", "kind": "idea", "signal": "agree"}
+            "/api/feedback",
+            json={"target": "product", "source": "product-fab", "kind": "idea", "signal": "agree"},
         ).status_code
         == 422
     )
@@ -179,7 +188,13 @@ def test_feedback_cross_field_validation(tmp_path, monkeypatch):
 
 def test_feedback_enum_and_bounds_validation(tmp_path, monkeypatch):
     monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
-    assert client.post("/api/feedback", json={"target": "bogus"}).status_code == 422
+    assert (
+        client.post("/api/feedback", json={"target": "bogus", "source": "product-fab"}).status_code
+        == 422
+    )
+    assert (
+        client.post("/api/feedback", json=_decision_body(source="nowhere")).status_code == 422
+    )  # bad source
     assert client.post("/api/feedback", json=_decision_body(signal="maybe")).status_code == 422
     assert client.post("/api/feedback", json=_decision_body(message="x" * 2001)).status_code == 422
     # a path-ish run_id fails the charset pattern
@@ -229,11 +244,12 @@ def test_feedback_message_stays_one_jsonl_line(tmp_path, monkeypatch):
     assert _read_feedback(store)[0]["message"] == nasty.strip()  # escaping round-trips
 
 
-def test_feedback_write_failure_returns_503_without_leak(tmp_path, monkeypatch):
-    def _boom(_record):
-        raise OSError("disk full at /secret/path")
+def test_feedback_write_failure_returns_503_without_leak(monkeypatch):
+    class _Boom:
+        def append(self, _record):
+            raise OSError("disk full at /secret/path")
 
-    monkeypatch.setattr("api.main.append_feedback", _boom)
+    monkeypatch.setattr("api.main.get_feedback_store", _Boom)
     resp = client.post("/api/feedback", json=_decision_body())
     assert resp.status_code == 503 and "unavailable" in resp.json()["detail"]
     assert "disk full" not in resp.text and "/secret/path" not in resp.text
@@ -258,6 +274,44 @@ def test_feedback_does_not_touch_decision_domain(tmp_path, monkeypatch):
     before = client.get("/api/runs/mock_run_01").json()
     assert client.post("/api/feedback", json=_decision_body()).status_code == 201
     assert client.get("/api/runs/mock_run_01").json() == before  # verdicts/provenance unchanged
+
+
+def test_feedback_sqlite_store_roundtrips_through_the_endpoint(tmp_path, monkeypatch):
+    # Route the endpoint's telemetry into a real (offline, zero-dep) SQLite DB, then read it
+    # back through the store's read_all — proving "feedback in a database" end to end.
+    db = tmp_path / "feedback.sqlite"
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_STORE", "sqlite")
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_DB", str(db))
+    assert (
+        client.post("/api/feedback", json=_decision_body(message="into the DB")).status_code == 201
+    )
+    assert (
+        client.post(
+            "/api/feedback",
+            json={"target": "product", "source": "product-fab", "kind": "idea", "message": "hi DB"},
+        ).status_code
+        == 201
+    )
+    rows = SqliteFeedbackStore(str(db)).read_all()
+    assert len(rows) == 2
+    by_target = {r["target"]: r for r in rows}
+    assert by_target["decision"]["message"] == "into the DB"
+    assert by_target["decision"]["context"]["sample_id"] == "S4"  # full record round-trips
+    assert by_target["product"]["source"] == "product-fab"
+
+
+def test_feedback_store_factory_selects_and_degrades(tmp_path, monkeypatch):
+    monkeypatch.setenv(
+        "PIPEGUARD_FEEDBACK_DB", str(tmp_path / "f.sqlite")
+    )  # keep it out of the repo
+    monkeypatch.delenv("PIPEGUARD_FEEDBACK_STORE", raising=False)
+    assert isinstance(get_feedback_store(), JsonlFeedbackStore)  # default
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_STORE", "sqlite")
+    assert isinstance(get_feedback_store(), SqliteFeedbackStore)
+    # postgres selected but no psycopg/DATABASE_URL here -> degrade to JSONL, never raise.
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_STORE", "postgres")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert isinstance(get_feedback_store(), JsonlFeedbackStore)
 
 
 def test_runbook_endpoint_exposes_thresholds():

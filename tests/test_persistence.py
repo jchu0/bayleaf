@@ -19,7 +19,10 @@ from pipeguard import (
     rebuild_db,
     run_gate,
 )
-from pipeguard.persistence import project_events
+from pipeguard.persistence import get_repository, project_events
+from pipeguard.persistence import postgres as _pg
+from pipeguard.persistence import sqlite as _sq
+from pipeguard.persistence.postgres import PostgresRepository
 from pipeguard.synthesis import StubSynthesizer
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
@@ -243,3 +246,40 @@ def _dump(repo: SqliteRepository) -> dict[str, list[dict]]:
         "cards": [c.model_dump(mode="json") for c in repo.list_decision_cards()],
         "events": [e.model_dump(mode="json") for e in repo.list_events()],
     }
+
+
+# --- Postgres port (ADR-0016) — OFF by default; offline safety guarantees, no live server ----
+# Mirrors the S3 tests: pin the guarantees that make the seam safe to flip on later (default is
+# SQLite, a missing extra/DSN degrades, the adapter never silently connects) without a real DB.
+
+
+def test_get_repository_defaults_to_offline_sqlite(monkeypatch):
+    monkeypatch.delenv("PIPEGUARD_REPOSITORY", raising=False)
+    repo = get_repository()
+    assert type(repo).__name__ == "SqliteRepository"
+    repo.close()
+
+
+def test_get_repository_postgres_degrades_to_sqlite_when_unavailable(monkeypatch):
+    # Postgres selected but no psycopg/DATABASE_URL here -> degrade to SQLite, never raise.
+    monkeypatch.setenv("PIPEGUARD_REPOSITORY", "postgres")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    repo = get_repository()
+    assert type(repo).__name__ == "SqliteRepository"
+    repo.close()
+
+
+def test_postgres_repository_never_silently_connects_without_a_dsn(monkeypatch):
+    # Constructing without a DSN raises a clear RuntimeError (missing-extra OR missing-DSN),
+    # never an implicit connect to a default host.
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(RuntimeError):
+        PostgresRepository()
+
+
+def test_postgres_and_sqlite_project_the_same_tables():
+    # A backend swap must not change what a reader can query: identical table set + the Postgres
+    # DDL declares each one, with ON CONFLICT upserts (in the write SQL) for idempotent replay.
+    assert set(_pg._TABLES) == set(_sq._TABLES)
+    for table in _pg._TABLES:
+        assert f"CREATE TABLE IF NOT EXISTS {table}" in _pg._SCHEMA

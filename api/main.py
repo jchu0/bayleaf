@@ -39,7 +39,8 @@ from pipeguard.provenance import ProvenanceEvent
 from pipeguard.triage import TriageNote
 
 from .deid import IDENTITY_FIELDS, DeidPolicy, default_policy, export_fields, redact
-from .feedback import FEEDBACK_SCHEMA_VERSION, FeedbackAck, FeedbackIn, append_feedback
+from .feedback import FEEDBACK_SCHEMA_VERSION, FeedbackAck, FeedbackIn
+from .feedback_store import get_feedback_store
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
@@ -196,9 +197,11 @@ def submit_feedback(body: FeedbackIn) -> FeedbackAck:
         "origin": _run_origin(ctx.run_id) if ctx.run_id else "unknown",
     }
     try:
-        append_feedback(record)
-    except OSError:
-        # Map a disk/write failure to a generic 503 — never leak the path or the message body.
+        # The sink is env-selected (JSONL / SQLite / Postgres) and degrades to JSONL if a DB is
+        # misconfigured; a write that still fails (disk full, DB down mid-flight) maps to a
+        # generic 503 — never leaking the path, DSN, or the message body.
+        get_feedback_store().append(record)
+    except Exception:
         raise HTTPException(status_code=503, detail="feedback store unavailable") from None
     return FeedbackAck(
         id=feedback_id, received_at=received_at, schema_version=FEEDBACK_SCHEMA_VERSION

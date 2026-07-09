@@ -52,6 +52,7 @@ export function DecisionFeedback({
     try {
       await api.feedback({
         target: 'decision',
+        source: 'decision-card',
         signal,
         reason_code: reason,
         message: message.trim() || null,

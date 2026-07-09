@@ -1,25 +1,16 @@
 """In-app feedback capture (W12) — product telemetry, OFF the deterministic gate.
 
 Framework boundary + guardrail (CLAUDE.md 1, ADR-0001): this module holds the feedback
-data contract + the append-only writer, with **no** FastAPI import and **no** import of the
+data *contract* (the pydantic models), with **no** FastAPI import and **no** import of the
 `pipeguard` core — so the one write path in the app can never touch a verdict, finding,
 provenance event, or the EventLedger. It mirrors `api/deid.py`: a self-contained telemetry
-seam beside the read-API, not inside the gate wiring.
-
-Config (env, mirroring the existing ``os.environ`` pattern): ``PIPEGUARD_FEEDBACK_PATH``
-sets the JSONL sink; default is ``feedback.events.jsonl`` at the repo root (gitignored, next
-to ``run.events.jsonl`` by convention). It is an operational path, never a secret. The path
-is **server-fixed** — no request value ever contributes to it, so path traversal is
-structurally impossible.
+seam beside the read-API, not inside the gate wiring. The pluggable sink (JSONL / SQLite /
+Postgres) lives in `api/feedback_store.py` (ADR-0016).
 """
 
 from __future__ import annotations
 
-import json
-import os
-import threading
-from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -32,14 +23,6 @@ from pydantic import (
 
 # Bump when the stored record shape changes, so an out-of-band reader can branch on it.
 FEEDBACK_SCHEMA_VERSION = 1
-
-_ENV_FEEDBACK_PATH = "PIPEGUARD_FEEDBACK_PATH"
-# Repo root, beside where run.events.jsonl lives by convention (api/ -> parent -> parent).
-_DEFAULT_FEEDBACK_PATH = Path(__file__).resolve().parent.parent / "feedback.events.jsonl"
-
-# Serialize appends within a worker so concurrent requests can't interleave a line. Honest
-# seam: multi-worker/multi-process needs a file lock (flock) or a durable sink — not built.
-_WRITE_LOCK = threading.Lock()
 
 # A rule id like ``PROV-001`` / ``qc.q30`` — bounded + charset-locked so it can never carry a
 # newline (which would forge a second JSONL record) or a control char.
@@ -81,6 +64,9 @@ class FeedbackIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     target: Literal["decision", "product"]
+    # The exact UI surface the reaction came from (trace) — distinct from `target` (the semantic
+    # kind), so a future decision-target surface (triage note, review queue) is still traceable.
+    source: Literal["decision-card", "product-fab", "triage-note", "review-queue"]
     signal: Literal["agree", "disagree"] | None = None
     reason_code: (
         Literal[
@@ -134,24 +120,3 @@ class FeedbackAck(BaseModel):
     received_at: str
     schema_version: int
     status: Literal["recorded"] = "recorded"
-
-
-def feedback_path() -> Path:
-    """The JSONL sink, resolved at call-time from the env (so tests monkeypatch cleanly)."""
-    raw = os.environ.get(_ENV_FEEDBACK_PATH, "").strip()
-    return Path(raw) if raw else _DEFAULT_FEEDBACK_PATH
-
-
-def append_feedback(record: dict[str, Any]) -> None:
-    """Append one record as a single JSONL line (append-only; prior lines are never touched).
-
-    ``json.dumps`` escapes every value, so a message containing ``\\n`` or ``"`` can never forge
-    a second line. ``OSError`` propagates so the caller can map a disk failure to a 503 without
-    leaking the path.
-    """
-    line = json.dumps(record, ensure_ascii=False) + "\n"
-    path = feedback_path()
-    with _WRITE_LOCK:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(line)

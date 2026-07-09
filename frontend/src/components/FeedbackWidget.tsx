@@ -57,6 +57,7 @@ export function FeedbackWidget() {
     try {
       await api.feedback({
         target: 'product',
+        source: 'product-fab',
         kind,
         message: message.trim(),
         context: {

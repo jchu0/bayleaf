@@ -192,6 +192,8 @@ export type MetricCatalog = {
 // an agree/disagree signal keyed to a verdict; `product` carries a kind for diffuse feedback.
 // Mirrors api/feedback.py; the request never carries any operator identity field.
 export type FeedbackTarget = 'decision' | 'product'
+// The exact UI surface a reaction came from (trace) — distinct from `target`.
+export type FeedbackSource = 'decision-card' | 'product-fab' | 'triage-note' | 'review-queue'
 export type FeedbackSignal = 'agree' | 'disagree'
 export type FeedbackKind = 'idea' | 'problem' | 'confusing' | 'praise'
 export type FeedbackReasonCode =
@@ -214,6 +216,7 @@ export type FeedbackContext = {
 
 export type FeedbackIn = {
   target: FeedbackTarget
+  source: FeedbackSource
   signal?: FeedbackSignal | null
   reason_code?: FeedbackReasonCode | null
   kind?: FeedbackKind | null

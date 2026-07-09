@@ -33,6 +33,10 @@ parquet = ["pyarrow>=16"]
 # PIPEGUARD_S3_LIVE armed + a bucket + AWS creds). boto3 is lazily imported and absent ->
 # the store degrades to the local adapter. Same optional-extra shape as slack/parquet.
 s3 = ["boto3>=1.34"]
+# postgres = the Postgres persistence adapter (OFF by default — see pipeguard.persistence;
+# needs PIPEGUARD_REPOSITORY=postgres + DATABASE_URL). psycopg is lazily imported and absent ->
+# the repository degrades to the offline SQLite adapter. Same optional-extra shape as s3 (ADR-0016).
+postgres = ["psycopg[binary]>=3.1"]
 
 [dependency-groups]
 # Dev toolchain (PEP 735; installed by default on `uv sync`).
@@ -109,4 +113,11 @@ ignore_missing_imports = true
 # we don't pull for a single deferred boundary — treat it as opaque here, mirroring slack_sdk.
 [[tool.mypy.overrides]]
 module = ["boto3", "boto3.*"]
+ignore_missing_imports = true
+
+# psycopg is the OPTIONAL [postgres] extra, lazy-imported inside PostgresRepository and off by
+# default (PIPEGUARD_REPOSITORY=sqlite). Same deferred-boundary treatment as boto3/slack_sdk —
+# the DB adapter is opaque at type-check time; the connection is typed Any.
+[[tool.mypy.overrides]]
+module = ["psycopg", "psycopg.*"]
 ignore_missing_imports = true
