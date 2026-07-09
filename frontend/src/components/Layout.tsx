@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { api } from '../api'
 import type { RunSummary } from '../types'
+import { FeedbackWidget } from './FeedbackWidget'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 
@@ -27,6 +28,9 @@ export function Layout() {
           <div className="pg-fade">
             <Outlet />
           </div>
+          {/* One global feedback FAB in the light content column — rides every screen,
+              touches none of them (off-gate product telemetry, W12). */}
+          <FeedbackWidget />
         </main>
       </div>
     </div>

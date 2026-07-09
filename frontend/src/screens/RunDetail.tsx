@@ -2,6 +2,7 @@ import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
+import { DecisionFeedback } from '../components/DecisionFeedback'
 import { EvidenceTable } from '../components/EvidenceTable'
 import { GateResultStrip } from '../components/GateResultStrip'
 import { ErrorBox, Loading } from '../components/States'
@@ -178,6 +179,11 @@ function CardView({
 }) {
   const actionable = card.verdict !== 'proceed'
   const showBody = open && density !== 'dense'
+  // Keys for the per-decision feedback footer: the flagged gate (as FlaggedChip picks it) +
+  // the distinct rule ids this card cites.
+  const fbGr = card.gate_results.find((g) => g.verdict === card.verdict) ?? card.gate_results[0]
+  const fbGate = fbGr?.gate ?? card.findings[0]?.gate ?? null
+  const fbRuleIds = [...new Set(card.findings.map((f) => f.rule_id))]
   return (
     <article className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
       <button onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3 text-left">
@@ -222,6 +228,14 @@ function CardView({
                   <TriagePanel runId={runId} sampleId={card.sample_id} />
                 </div>
               )}
+              <DecisionFeedback
+                runId={runId}
+                sampleId={card.sample_id}
+                verdict={card.verdict}
+                gate={fbGate}
+                ruleIds={fbRuleIds}
+                cardContentHash={card.content_hash}
+              />
             </>
           )}
         </div>

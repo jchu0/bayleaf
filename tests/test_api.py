@@ -71,6 +71,195 @@ def test_artifacts_endpoint_maps_stages_with_real_hash_and_origin():
     assert client.get("/api/runs/NOPE/artifacts").status_code == 404
 
 
+# --- In-app feedback (W12): the one write endpoint, off the deterministic gate -------------
+
+
+def _decision_body(**over):
+    body = {
+        "target": "decision",
+        "signal": "disagree",
+        "reason_code": "threshold_too_strict",
+        "context": {
+            "run_id": "mock_run_01",
+            "sample_id": "S4",
+            "verdict": "escalate",
+            "gate": "qc",
+            "rule_ids": ["QC-Q30"],
+            "card_content_hash": "abc123def",
+            "route": "/runs/mock_run_01",
+            "screen": "Decision cards",
+        },
+    }
+    body.update(over)
+    return body
+
+
+def _read_feedback(path):
+    return [
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
+
+
+def test_feedback_decision_target_records_and_acks(tmp_path, monkeypatch):
+    store = tmp_path / "feedback.jsonl"
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(store))
+    resp = client.post("/api/feedback", json=_decision_body(message="  disagree with this call  "))
+    assert resp.status_code == 201
+    ack = resp.json()
+    assert (
+        ack["status"] == "recorded"
+        and ack["schema_version"] == 1
+        and ack["id"]
+        and ack["received_at"]
+    )
+    # The ack never echoes the submitted message back (no reflection surface).
+    assert "message" not in ack
+    rows = _read_feedback(store)
+    assert len(rows) == 1
+    rec = rows[0]
+    assert (
+        rec["id"] == ack["id"] and rec["schema_version"] == 1 and rec["app_version"] == app.version
+    )
+    assert rec["origin"] == "contrived"  # server-resolved from mock_run_01's origin marker
+    assert rec["target"] == "decision" and rec["signal"] == "disagree"
+    assert rec["message"] == "disagree with this call"  # whitespace-stripped
+    assert rec["context"]["sample_id"] == "S4" and rec["context"]["verdict"] == "escalate"
+
+
+def test_feedback_product_target_strips_message_and_defaults_origin_unknown(tmp_path, monkeypatch):
+    store = tmp_path / "feedback.jsonl"
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(store))
+    resp = client.post(
+        "/api/feedback",
+        json={
+            "target": "product",
+            "kind": "confusing",
+            "message": "  Provenance DAG unclear  ",
+            "context": {"screen": "Provenance"},
+        },
+    )
+    assert resp.status_code == 201
+    rec = _read_feedback(store)[0]
+    assert rec["message"] == "Provenance DAG unclear" and rec["origin"] == "unknown"
+
+
+def test_feedback_cross_field_validation(tmp_path, monkeypatch):
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
+    # decision with no signal
+    assert (
+        client.post(
+            "/api/feedback",
+            json={
+                "target": "decision",
+                "context": {"run_id": "mock_run_01", "sample_id": "S4", "verdict": "escalate"},
+            },
+        ).status_code
+        == 422
+    )
+    # decision missing the verdict snapshot
+    assert (
+        client.post(
+            "/api/feedback",
+            json=_decision_body(context={"run_id": "mock_run_01", "sample_id": "S4"}),
+        ).status_code
+        == 422
+    )
+    # product with no kind
+    assert (
+        client.post("/api/feedback", json={"target": "product", "message": "hi"}).status_code == 422
+    )
+    # product carrying a decision signal
+    assert (
+        client.post(
+            "/api/feedback", json={"target": "product", "kind": "idea", "signal": "agree"}
+        ).status_code
+        == 422
+    )
+
+
+def test_feedback_enum_and_bounds_validation(tmp_path, monkeypatch):
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
+    assert client.post("/api/feedback", json={"target": "bogus"}).status_code == 422
+    assert client.post("/api/feedback", json=_decision_body(signal="maybe")).status_code == 422
+    assert client.post("/api/feedback", json=_decision_body(message="x" * 2001)).status_code == 422
+    # a path-ish run_id fails the charset pattern
+    assert (
+        client.post(
+            "/api/feedback",
+            json=_decision_body(
+                context={"run_id": "../etc", "sample_id": "S4", "verdict": "escalate"}
+            ),
+        ).status_code
+        == 422
+    )
+
+
+def test_feedback_forbids_extra_fields_as_pii_guard(tmp_path, monkeypatch):
+    store = tmp_path / "f.jsonl"
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(store))
+    assert (
+        client.post("/api/feedback", json=_decision_body(email="a@b.com")).status_code == 422
+    )  # smuggled identity
+    assert (
+        client.post("/api/feedback", json=_decision_body(id="deadbeef")).status_code == 422
+    )  # client-set server field
+    assert (
+        client.post(  # extra inside context
+            "/api/feedback",
+            json=_decision_body(
+                context={
+                    "run_id": "mock_run_01",
+                    "sample_id": "S4",
+                    "verdict": "escalate",
+                    "subject_id": "P123",
+                }
+            ),
+        ).status_code
+        == 422
+    )
+    assert not store.exists() or _read_feedback(store) == []  # nothing appended on a rejected write
+
+
+def test_feedback_message_stays_one_jsonl_line(tmp_path, monkeypatch):
+    store = tmp_path / "f.jsonl"
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(store))
+    nasty = 'line1\nline2 "quoted"\ttab'
+    assert client.post("/api/feedback", json=_decision_body(message=nasty)).status_code == 201
+    assert store.read_text(encoding="utf-8").count("\n") == 1  # exactly one physical record
+    assert _read_feedback(store)[0]["message"] == nasty.strip()  # escaping round-trips
+
+
+def test_feedback_write_failure_returns_503_without_leak(tmp_path, monkeypatch):
+    def _boom(_record):
+        raise OSError("disk full at /secret/path")
+
+    monkeypatch.setattr("api.main.append_feedback", _boom)
+    resp = client.post("/api/feedback", json=_decision_body())
+    assert resp.status_code == 503 and "unavailable" in resp.json()["detail"]
+    assert "disk full" not in resp.text and "/secret/path" not in resp.text
+
+
+def test_feedback_cors_allows_post_from_dev_origin_only(tmp_path, monkeypatch):
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
+    ok = client.options(
+        "/api/feedback",
+        headers={"Origin": "http://localhost:5173", "Access-Control-Request-Method": "POST"},
+    )
+    assert "POST" in ok.headers.get("access-control-allow-methods", "")
+    evil = client.options(
+        "/api/feedback",
+        headers={"Origin": "http://evil.example", "Access-Control-Request-Method": "POST"},
+    )
+    assert evil.headers.get("access-control-allow-origin") != "http://evil.example"
+
+
+def test_feedback_does_not_touch_decision_domain(tmp_path, monkeypatch):
+    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
+    before = client.get("/api/runs/mock_run_01").json()
+    assert client.post("/api/feedback", json=_decision_body()).status_code == 201
+    assert client.get("/api/runs/mock_run_01").json() == before  # verdicts/provenance unchanged
+
+
 def test_runbook_endpoint_exposes_thresholds():
     body = client.get("/api/runbook").json()
     # Life-science guardrail: the policy must read as illustrative, never clinical.

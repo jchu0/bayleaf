@@ -1,7 +1,26 @@
-import type { MetricCatalog, RunArtifact, RunDetail, Runbook, RunSummary, TriageNote } from './types'
+import type {
+  FeedbackAck,
+  FeedbackIn,
+  MetricCatalog,
+  RunArtifact,
+  RunDetail,
+  Runbook,
+  RunSummary,
+  TriageNote,
+} from './types'
 
 async function get<T>(url: string): Promise<T> {
   const res = await fetch(url)
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  return (await res.json()) as T
+}
+
+async function post<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
   return (await res.json()) as T
 }
@@ -17,4 +36,6 @@ export const api = {
     ),
   config: () => get<Runbook>('/api/config'),
   metricsRegistry: () => get<MetricCatalog>('/api/metrics/registry'),
+  // The one write: off-gate product telemetry (W12).
+  feedback: (body: FeedbackIn) => post<FeedbackAck>('/api/feedback', body),
 }

@@ -52,6 +52,9 @@ data/real-giab/
 run.events.jsonl
 *.sqlite
 
+# In-app feedback telemetry (W12) — append-only local sink, never committed.
+feedback.events.jsonl
+
 # Node (in case of a web frontend)
 node_modules/
 .next/

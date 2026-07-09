@@ -1,8 +1,14 @@
 """FastAPI read-API over the pipeguard core — the production seam (ADR-0010).
 
 Framework boundary: this wraps `pipeguard`; the core has no FastAPI import (CLAUDE.md
-architecture guardrail 1). The React frontend consumes these endpoints. Read-only for
-now — write actions (ticket transitions, notify) arrive with the ticketing phase.
+architecture guardrail 1). The React frontend consumes these endpoints.
+
+Read-only over the DECISION domain: no endpoint mutates a verdict, finding, provenance
+event, or the EventLedger, and rules still decide (ADR-0001). The one write is
+`POST /api/feedback` — append-only PRODUCT TELEMETRY that is OFF the deterministic gate
+(`api/feedback.py`): it records operator reactions/notes to a separate, gitignored JSONL,
+never calls `run_gate`, never touches provenance, and can never set or influence a verdict.
+Ticket-transition writes still belong to a later phase.
 
 Run:  uv run uvicorn api.main:app --reload --port 8010
 """
@@ -13,6 +19,7 @@ import csv
 import hashlib
 import io
 import json
+import uuid
 from collections import Counter
 from collections.abc import Iterable, Iterator
 from datetime import datetime, timezone
@@ -32,16 +39,19 @@ from pipeguard.provenance import ProvenanceEvent
 from pipeguard.triage import TriageNote
 
 from .deid import IDENTITY_FIELDS, DeidPolicy, default_policy, export_fields, redact
+from .feedback import FEEDBACK_SCHEMA_VERSION, FeedbackAck, FeedbackIn, append_feedback
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
 app = FastAPI(title="PipeGuard API", version="0.1.0")
 
-# The React dev server (Vite) runs on 5173; allow it in dev.
+# The React dev server (Vite) runs on 5173; allow it in dev. GET for the read-API + exactly
+# one write verb (POST) for the off-gate feedback telemetry — no PUT/DELETE/PATCH. Origins
+# stay pinned to the two dev hosts (not "*"); tightening them is the production-seam knob.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -162,6 +172,37 @@ def _evaluate(run_id: str) -> RunDetail:
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/api/feedback", status_code=201)
+def submit_feedback(body: FeedbackIn) -> FeedbackAck:
+    """Record in-app feedback — the app's only write, and it is OFF the deterministic gate.
+
+    Product telemetry (ADR-0001): this appends an operator reaction/note to a separate,
+    gitignored JSONL and returns an ack. It NEVER calls `run_gate`, touches the EventLedger
+    or SQLite projection, or mutates a verdict/finding/card. The client cannot set the
+    server-authored fields (`FeedbackIn` is `extra="forbid"`); `origin` is resolved
+    server-side via `_run_origin` (the trust anchor), never trusted from the request.
+    """
+    ctx = body.context
+    feedback_id = uuid.uuid4().hex  # stdlib uuid on purpose — no coupling to the core's ids
+    received_at = datetime.now(timezone.utc).isoformat()
+    record: dict[str, Any] = {
+        **body.model_dump(),
+        "id": feedback_id,
+        "schema_version": FEEDBACK_SCHEMA_VERSION,
+        "received_at": received_at,
+        "app_version": app.version,
+        "origin": _run_origin(ctx.run_id) if ctx.run_id else "unknown",
+    }
+    try:
+        append_feedback(record)
+    except OSError:
+        # Map a disk/write failure to a generic 503 — never leak the path or the message body.
+        raise HTTPException(status_code=503, detail="feedback store unavailable") from None
+    return FeedbackAck(
+        id=feedback_id, received_at=received_at, schema_version=FEEDBACK_SCHEMA_VERSION
+    )
 
 
 @app.get("/api/runs")

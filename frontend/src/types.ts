@@ -187,3 +187,43 @@ export type MetricCatalog = {
   n_gated: number
   entries: MetricCatalogEntry[]
 }
+
+// In-app feedback (W12) — product telemetry, OFF the deterministic gate. `decision` carries
+// an agree/disagree signal keyed to a verdict; `product` carries a kind for diffuse feedback.
+// Mirrors api/feedback.py; the request never carries any operator identity field.
+export type FeedbackTarget = 'decision' | 'product'
+export type FeedbackSignal = 'agree' | 'disagree'
+export type FeedbackKind = 'idea' | 'problem' | 'confusing' | 'praise'
+export type FeedbackReasonCode =
+  | 'threshold_too_strict'
+  | 'threshold_too_loose'
+  | 'wrong_root_cause'
+  | 'missing_context'
+  | 'other'
+
+export type FeedbackContext = {
+  run_id?: string | null
+  sample_id?: string | null
+  verdict?: Verdict | null
+  gate?: Gate | null
+  rule_ids?: string[]
+  card_content_hash?: string | null
+  route?: string | null
+  screen?: string | null
+}
+
+export type FeedbackIn = {
+  target: FeedbackTarget
+  signal?: FeedbackSignal | null
+  reason_code?: FeedbackReasonCode | null
+  kind?: FeedbackKind | null
+  message?: string | null
+  context?: FeedbackContext
+}
+
+export type FeedbackAck = {
+  id: string
+  received_at: string
+  schema_version: number
+  status: 'recorded'
+}
