@@ -24,6 +24,36 @@ Every item is tagged one of three ways so you can triage effort:
 
 **The through-line:** the live app reproduces the prototype's *low-volume* design and inherits its limitations, and three systemic things break as a product — (a) **no scale affordances anywhere**, (b) **the controls meant to absorb volume are inert or broken**, and (c) **several hero surfaces are display-only** (Settings can't edit, Pipeline Builder can't emit, Decision cards' density lever produces empty bodies). Fixing (b) is nearly free and is the highest-leverage work.
 
+## 0.1 What to open first (you have repo read access — these are paths, not attachments)
+
+This brief is a **delta**: it critiques the live app against the specs and prototype without
+restating them, so it quotes real code paths and type/component names it never reproduces. Open
+these to ground it — in order. Nothing needs to travel with this file; the whole repo is readable.
+
+**Load-bearing (open these to act):**
+
+1. `frontend/src/` — **the subject.** Screens `frontend/src/screens/*.tsx`, `frontend/src/components/*`,
+   and the data contract `frontend/src/types.ts` + `frontend/src/api.ts`. Every §5 item is a delta on
+   *current* behavior (e.g. Decision-cards' `showBody = open && density !== 'dense'`, Settings' unread
+   `profile` state, Runs' `n_attention === 0` verdict inference).
+2. `frontend/src/index.css` (+ `frontend/src/verdict.ts`) — the **design-token source of truth**
+   (the Tailwind v4 `@theme` block + the verdict/gate/severity → class maps). Load-bearing for anything visual.
+3. `docs/design/frontend/operator-ui-handoff-README.md` — the **operator-UI spec** this audit measures
+   the app against (needed to resolve the §5a / §6 rail + QC-readout design-questions).
+4. `docs/design/frontend/pipeline-builder-brief.md` + `docs/design/frontend/README.md` — the **Pipeline
+   Builder spec pair.** All of §4's vocabulary (Locators, `ArtifactKind`, `StageKind` lane order,
+   `run_layout.yaml`, composes-≠-executes, gate-terminal / agents-port-less) is defined here, not here in the brief.
+5. `docs/design/frontend/PipeGuard.html` — the **prototype.** Open **only** for items tagged
+   "see PipeGuard.html" (port-anchored edges, console layout, decision-card layout); per §0 it is a
+   reference, **not** a gold standard (it shares several of the app's limitations).
+
+**Grounding (as needed):**
+
+6. `docs/design/frontend/frontend-design-brief.md` — the ToC-canonical **stable UI spec** (durable product framing).
+7. `docs/design/architecture.md` · `docs/design/agents.md` — the **invariants the UI must render honestly**
+   (rules decide / AI advises; agents advisory + off the gate).
+8. `docs/design/node-authoring-agent.md` — only for the §4h / §6-Q6 **node-authoring agent** (roster #5, T-046).
+
 ---
 
 ## 1. Cross-cutting themes (the "why" behind the per-screen list)
