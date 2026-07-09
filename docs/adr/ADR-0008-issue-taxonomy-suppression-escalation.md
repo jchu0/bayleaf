@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · Partially realized (finding category + rule-version-independent signature built; reviewer/approver RBAC tiers BUILT — `api/auth.py`, [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md); suppression-muting + ~3× recurrence escalation deferred) |
-| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
+| **Status** | Accepted · Partially realized (finding category + rule-version-independent signature built; reviewer/approver RBAC tiers BUILT — `api/auth.py`, [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md); the pipeline-repair agent that CONSUMES a recurring signature BUILT on-demand — `GET /api/monitoring/signatures/{signature}/repair`, [ADR-0012](ADR-0012-agent-scoping-model-tiering.md); suppression-muting + the AUTOMATIC ~3× recurrence-escalation trigger deferred) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-09 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0009](ADR-0009-corpora-retrieval-upskilling.md), [ADR-0015](ADR-0015-layered-data-contract.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [data/schemas.md](../data/schemas.md) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0009](ADR-0009-corpora-retrieval-upskilling.md), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md), [ADR-0015](ADR-0015-layered-data-contract.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [data/schemas.md](../data/schemas.md) |
 
 ## Context
 
@@ -46,7 +46,7 @@ fixing the cause. But blindly auto-applying fixes is unacceptable in this domain
 | **Costs** | Signature scheme, suppression lifecycle, and RBAC to build |
 | **Follow-ups** | Signature fields finalized in the schema-design discussion |
 
-## Realized (2026-07-08)
+## Realized (2026-07-09)
 
 1. **Realized:** every `Finding` (`models.py`) carries a `category` and a semantic,
    rule-version-independent `signature` (a hash of category + rule_id + sample + sorted evidence
@@ -57,10 +57,24 @@ fixing the cause. But blindly auto-applying fixes is unacceptable in this domain
    assumption 2) now exist as the shared identity/RBAC primitive (`api/auth.py` — `Role`
    `viewer|reviewer|approver` + `require_role`), applied to the suppression/escalation approvals
    in `api/routers/review_queue.py` ([ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md)).
-   **Still deferred (unchanged):** the suppression-muting lifecycle, the ~3× recurrence escalation
-   to the pipeline-repair agent, and the `IssueSignature` / `ExperienceRecord` corpora
-   (schemas.md §16 / §14 — MVP-deferred). Suppression/resolution will live on those records,
-   never by mutating a `Finding` (schemas.md invariant 1).
+   **Still deferred:** the suppression-muting lifecycle, the **automatic** ~3× recurrence-escalation
+   *trigger* (the agent it would route to is now built — see item 3), and the `IssueSignature` /
+   `ExperienceRecord` corpora (schemas.md §16 / §14 — MVP-deferred). Suppression/resolution will
+   live on those records, never by mutating a `Finding` (schemas.md invariant 1).
+3. **Pipeline-repair agent BUILT (on-demand); the automatic escalation trigger still deferred.**
+   Keep the distinction crisp — Decision §3 has two halves, and only the second shipped:
+   a. **Consumer (built).** The agent that *consumes* a recurring signature now exists
+      (`pipeline_repair/`, [ADR-0012](ADR-0012-agent-scoping-model-tiering.md)): given a
+      `RecurringSignature` it retrieves a curated remediation corpus
+      (`knowledge/pipeline_repair.jsonl`, **grounded in this ADR's issue taxonomy** — the same
+      category + rule signatures from item 1) and returns a cited, advisory `RepairProposal`. It
+      never applies a fix and never sets a verdict ([ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md);
+      Decision §4's "never blind auto-apply"). It is reached **on-demand** via
+      `GET /api/monitoring/signatures/{signature}/repair` — a human chooses to open the proposal.
+   b. **Auto-trigger (deferred).** The Decision §3 rule that a signature recurring ~3× (configurable)
+      *automatically* escalates into this agent is **not built**. So the consumer is wired, but the
+      automatic ~3× trigger that would route into it remains the piece still to come — nothing routes
+      to the agent without a human asking.
 
 ## Revisit when
 

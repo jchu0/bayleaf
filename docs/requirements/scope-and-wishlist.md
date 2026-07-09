@@ -43,8 +43,13 @@ The MVP core is standing; these in-scope pieces are now built and verified (see
    (T-022b): run overview, intake/preflight, decision cards, agent triage, review queue,
    provenance (compute-DAG), monitoring, settings — **plus the Pipeline Builder** (T-044/#11);
    plus the Streamlit offline fallback.
-6. **Three AI seams** (synthesizer, QC-triage agent, off-gate feedback-triage agent) present,
-   stub-first ($0), env-flippable to live.
+6. **AI seams — the synthesizer (narrator) plus four advisory agents** — QC-triage, off-gate
+   feedback-triage, **pipeline-repair (#2, T-058) and archivist (#3, T-059)** — all present,
+   stub-first ($0), env-flippable to live, and **off the deterministic gate** (ADR-0001). The
+   **archivist** (`api/archivist.py`, data-platform §5, Haiku) is an advisory "librarian":
+   `GET /api/runs/{id}/archive-digest` + `GET /api/archive/index` index/summarize already-decided
+   runs into an `ArchiveDigest` (organizational, **not** diagnostic; never opens/moves/relabels a
+   file). The designed node-authoring agent (roster #5, T-046) remains its $0 deterministic stub.
 7. **Read-API policy + telemetry seams** (T-027) — `GET /api/runbook` (flattened thresholds,
    illustrative-not-clinical + a `units_note`), `GET /metrics` (Prometheus text exposition), and
    `GET /api/runs/{id}/artifacts` (per-stage data I/O with real sha256/size/origin, powering the
@@ -65,7 +70,7 @@ the **variant gate** is Phase 2; **evaluation** vs. GIAB/synthetic truth is ongo
 | 1 | Granular agent profile | Low | config layer + agents | Design captured (ADR-0005/0012); build after core |
 | 2 | Jira / Teams / Discord notify adapters | Low | — (notify port **built**, T-015b) | Port + Slack (T-015b), **Teams + Discord webhook adapters shipped (T-035)** — stdlib `urllib.request` POST, per-adapter live flag, stub-default. **Jira deferred** (a write action → needs a `content_hash` idempotency guard; ticketing/write-action phase). Wiring notify into the read-API/ticketing flow is the follow-on |
 | 3 | Cloud deploy + Terraform (AWS / HealthOmics) | Low–med | containerization | Write as target-state IaC before any apply |
-| 4 | Pipeline-repair agent (agent #2) | Low–med | QC-triage + escalation | Next agent after QC (ADR-0012) |
+| 4 | Pipeline-repair agent (agent #2) | Low–med | — (QC-triage **built**) | ✅ **BUILT** (T-058, ADR-0008/0012) — advisory, **off the gate**: a recurring `Finding.signature` from the monitoring rollup → a cited `RepairProposal{summary, attach_to(stage), scope(gate)}` grounded in a curated remediation corpus (no invented thresholds; `advisory=True`, no verdict). Stub-first ($0) / `PIPEGUARD_PIPELINE_REPAIR_AGENT` (Opus-high). On-demand `GET /api/monitoring/signatures/{signature}/repair`; the ~3× auto-escalation stays deferred. Core module [`src/pipeguard/pipeline_repair/`](../../src/pipeguard/pipeline_repair/) |
 | 5 | pgvector read-clustering / contaminant-QC | **High** | vector store + research | Nearly a separate project; empirical, unproven. The intended vector store is **Postgres `pgvector`** — the end-goal single store (D3/#19), not a separate system |
 | 6 | NLP variant-miner (PubMed/PMC + ClinVar) | **High** | corpus + review flow | "Candidate variants for expert curation", never auto-actionable |
 | 7 | RNA-seq modality | Med | new pipeline + gate | Extension beyond the germline DNA panel |

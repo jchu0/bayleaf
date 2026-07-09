@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) |
 
 ## Overview
 
@@ -89,6 +89,51 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    is the CLI. *Trace:* [architecture.md](../design/architecture.md) §Outbound notify seam,
    [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md).
 
+## Advisory agent roster — pipeline-repair & archivist (ADR-0001/0008/0012)
+
+Two further advisory agents (roster #2/#3, [agents.md](../design/agents.md) §Roster) join the
+QC-triage agent (REQ-F-020/021). Each shares the same contract as triage: **advisory, on-demand,
+and OFF the deterministic gate** — like every agent (ADR-0001) it never sets, routes, or overrides
+a verdict or confidence; it is **stub-first ($0, offline)** and env-flippable to live; and its
+output is an immutable, content-hashed record whose organizational/remediation fields and citations
+are **deterministic**, with only the free prose optionally model-authored (the shared invariant now
+holds across **five** agents — triage, feedback, pipeline-repair, archivist, and the designed
+node-authoring agent).
+
+1. **REQ-F-023 — Advisory pipeline-repair agent.** On a **recurring issue signature** rolled up
+   from the monitoring view (the same `Finding.signature` counter `GET /api/monitoring` uses), the
+   system can produce a cited **RepairProposal** {`summary`, `attach_to` (pipeline stage), `scope`
+   (gate)} proposing a **human-reviewed** remediation grounded in a curated remediation corpus
+   (ADR-0008 taxonomy + the runbook; **no invented thresholds**). `advisory` is pinned `True` and the
+   record has **no verdict/confidence field**; `attach_to`/`scope` and every citation are
+   deterministic (from the corpus + the addressed rule/signature), only the prose may be
+   model-refined. It is exposed **on-demand** at
+   `GET /api/monitoring/signatures/{signature}/repair` (404 if the signature does not recur in the
+   window) — explicitly **not** the deferred ~3× auto-escalation trigger — and **never edits a
+   pipeline** (compose ≠ execute; a fix changes nothing on the gate until a human approves + the
+   builder emits a new `run_layout.yaml`). Env `PIPEGUARD_PIPELINE_REPAIR_AGENT=stub|claude`
+   (Opus-high, `PIPEGUARD_PIPELINE_REPAIR_MODEL`), stub-default, degrade-to-stub on any error.
+   *Trace:* [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+   [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md),
+   [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md),
+   [agents.md](../design/agents.md) §Roster #2, `src/pipeguard/pipeline_repair/`,
+   [tasks T-058](../planning/tasks.md).
+2. **REQ-F-024 — Advisory archivist (librarian) agent.** The system can index/summarize
+   already-decided runs into an **ArchiveDigest** (an organizational digest + a prepared export
+   manifest + a cross-run index) — **organizational, not diagnostic**. It runs on a **least-privilege**
+   input (no `subject_id`/tissue/`submitted_by`), **never opens/moves/deletes a file or relabels an
+   `origin`**, `advisory` is pinned `True`, and it carries no verdict/confidence (ADR-0001); every
+   organizational number is deterministic and only the summary prose may be model-authored. Its
+   `released`-lifecycle readiness flag is an **organizational** state, never a per-sample verdict
+   (REQ-F-003 holds). Exposed on-demand at `GET /api/runs/{id}/archive-digest` (one run) and
+   `GET /api/archive/index` (cross-run). Env `PIPEGUARD_ARCHIVIST_AGENT=stub|claude` (Haiku,
+   `PIPEGUARD_ARCHIVIST_MODEL`), stub-default, degrade-to-stub. *Trace:*
+   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+   [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) §model-tiering,
+   [data-platform-and-archivist.md](../design/data-platform-and-archivist.md) §5,
+   [agents.md](../design/agents.md) §Roster #3, `api/archivist.py`,
+   [tasks T-059](../planning/tasks.md).
+
 ## Provenance & persistence (ADR-0002/0003)
 
 1. **REQ-F-030 — Append-only event ledger.** Every gate execution emits an
@@ -113,9 +158,10 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    sha256 + on-disk size + origin tag; raw reads above an 8 MiB cap are size-listed, not
    hashed), export, and config over the framework-agnostic core (the production seam).
    *Trace:* [architecture.md](../design/architecture.md), ADR-0010/0014.
-2. **REQ-F-041 — On-demand triage endpoint.** The API exposes a per-card triage call
-   that invokes the advisory agent without re-entering the verdict path. *Trace:*
-   [architecture.md](../design/architecture.md), ADR-0010.
+2. **REQ-F-041 — On-demand advisory-agent endpoints.** The API exposes per-card triage plus the
+   pipeline-repair (REQ-F-023) and archivist (REQ-F-024) calls, each invoking an advisory agent
+   **without re-entering the verdict path** — all read-only over already-decided artifacts.
+   *Trace:* [architecture.md](../design/architecture.md), [agents.md](../design/agents.md), ADR-0010.
 3. **REQ-F-042 — Operator screens.** The UI presents the full screen set (**all built +
    migrated 1:1** to the design handoff's light theme, T-022b): run overview (per-verdict
    counts + needs-attention), intake/preflight (run-level QC rollup + per-sample admission
@@ -179,11 +225,13 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
 
 ## AI configurability (ADR-0006)
 
-1. **REQ-F-050 — Env-flippable AI, off by default.** Both AI seams flip via env —
-   `PIPEGUARD_SYNTHESIZER=stub|claude` and `PIPEGUARD_TRIAGE_AGENT=stub|claude`
-   (default `stub`, $0, offline); model via `PIPEGUARD_*_MODEL`. *Trace:*
+1. **REQ-F-050 — Env-flippable AI, off by default.** Every AI seam flips via env, each
+   defaulting to `stub` ($0, offline): the synthesizer (`PIPEGUARD_SYNTHESIZER`) plus the four
+   advisory agents — QC-triage (`PIPEGUARD_TRIAGE_AGENT`), off-gate feedback
+   (`PIPEGUARD_FEEDBACK_AGENT`), pipeline-repair (`PIPEGUARD_PIPELINE_REPAIR_AGENT`), and archivist
+   (`PIPEGUARD_ARCHIVIST_AGENT`) — all `stub|claude`; model via `PIPEGUARD_*_MODEL`. *Trace:*
    [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [architecture.md](../design/architecture.md)
-   §Swappable seams.
+   §Swappable seams, [agents.md](../design/agents.md).
 2. **REQ-F-051 — Deterministic fallback on failure.** If an AI call is disabled,
    errors, or is refused by a safety classifier, the system degrades to the stub;
    the deterministic verdict and findings still stand. *Trace:* ADR-0006,

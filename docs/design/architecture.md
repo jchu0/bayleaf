@@ -68,8 +68,13 @@ Every finding and verdict is labelled with the gate it came from:
    `Repository` port + `rebuild-db`, selected by `get_repository()` — SqliteRepository *and* a
    guarded, off-by-default PostgresRepository (ADR-0002/0016).
 3. **Advisory agents (OFF the deterministic critical path).** The QC-triage agent (`triage/`,
-   ADR-0009/0012) grounds a `TriageNote` in a curated corpus; the off-gate feedback-triage agent
-   (`api/feedback_agent.py`, ADR-0016) categorizes the in-app feedback corpus.
+   ADR-0009/0012) grounds a `TriageNote` in a curated corpus; the pipeline-repair agent
+   (`src/pipeguard/pipeline_repair/`, ADR-0009/0012) turns a recurring cross-run signature into a
+   cited, human-reviewed `RepairProposal` (never edits a pipeline, never sets a verdict); the
+   off-gate feedback-triage agent (`api/feedback_agent.py`, ADR-0016) categorizes the in-app
+   feedback corpus; and the off-gate archivist (`api/archivist.py`) rolls up released runs into an
+   advisory `ArchiveDigest` (an organizational index — no verdict/confidence field by construction).
+   All are stub-first ($0), import `anthropic` lazily, and fall back to the stub on any error.
 4. **Delivery layers (thin, over the core).** `app/` Streamlit (offline demo / fallback);
    `api/` FastAPI — the production read-API seam (ADR-0010/0014/0016); `frontend/` React —
    **all 8 operator screens built + migrated to the light-theme handoff, plus the Pipeline
@@ -161,6 +166,13 @@ Every finding and verdict is labelled with the gate it came from:
      finding, `fail` ⟺ a CRITICAL finding, `borderline` ⟺ a WARN finding) so the readout can never
      contradict the gate, and the **core `DecisionCard` model is untouched** — pure re-presentation,
      off the deterministic path (ADR-0001).
+   - **Advisory agent reads (off the gate).** Three on-demand, read-only endpoints surface the
+     advisory agents without re-entering the core: `GET /api/monitoring/signatures/{signature}/repair`
+     returns the pipeline-repair agent's cited `RepairProposal` for a recurring signature, and
+     `GET /api/runs/{id}/archive-digest` + `GET /api/archive/index` return the archivist's
+     `ArchiveDigest` (a per-run or cross-run organizational index). Each formats an advisory
+     suggestion over already-decided state — it never sets/overrides a verdict, edits a pipeline, or
+     moves an artifact (ADR-0001).
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
@@ -178,8 +190,8 @@ Every finding and verdict is labelled with the gate it came from:
 `Finding[]` per sample) → `run_gate` (synthesize each sample → `DecisionCard`; emit the event
 trail; anchor cards to the `AnalysisRun`; optionally dispatch actionable cards through an
 injected `notifier`) → the FastAPI read-API serves cards + events + config → the React
-frontend renders them. The triage agent is invoked on demand per flagged card and never
-re-enters the verdict path. The read-API shapes those cards for screens without re-entering the
+frontend renders them. The triage, pipeline-repair, and archivist agents are invoked on demand
+(per flagged card / recurring signature / released run) and never re-enter the verdict path. The read-API shapes those cards for screens without re-entering the
 core: it labels each run with an honest lifecycle `status` read from the provenance trail,
 filters/sorts/paginates the run list, and pre-aggregates the monitoring roll-up
 (`GET /api/monitoring`) so a dashboard renders from one response. The Pipeline Builder's
@@ -193,7 +205,7 @@ config override, notably, records intent without mutating the live runbook.
 ## Invariants
 
 1. **Rules decide; AI is advisory** — never sets/overrides a verdict or confidence (ADR-0001).
-2. **AI is OFF by default** with a deterministic fallback; all three AI seams flip via env, $0 by default (ADR-0006).
+2. **AI is OFF by default** with a deterministic fallback; all five AI seams (synthesizer, triage, feedback-triage, pipeline-repair, archivist) flip via env, $0 by default (ADR-0006).
 3. **Event log is authoritative**; the DB is a disposable, rebuildable projection (ADR-0002).
 4. **Core stays framework-agnostic** — no Streamlit/FastAPI/React imports in `src/pipeguard/`; ports & adapters (ADR-0003).
 5. **Findings are immutable + content-hashed**; confidence is omitted until grounded.
@@ -215,6 +227,8 @@ config override, notably, records intent without mutating the live runbook.
 | Synthesizer (narration) | `PIPEGUARD_SYNTHESIZER=stub\|claude` | stub ($0) |
 | Triage agent | `PIPEGUARD_TRIAGE_AGENT=stub\|claude` | stub ($0) |
 | Feedback-triage agent (off-gate) | `PIPEGUARD_FEEDBACK_AGENT=stub\|claude` (`PIPEGUARD_FEEDBACK_MODEL`); advisory categorization of the in-app feedback corpus (`api/feedback_agent.py`) | stub ($0) |
+| Pipeline-repair agent (advisory) | `PIPEGUARD_PIPELINE_REPAIR_AGENT=stub\|claude` (`PIPEGUARD_PIPELINE_REPAIR_MODEL`, default Opus-high); cross-run remediation proposals over a recurring signature (`src/pipeguard/pipeline_repair/`) | stub ($0) |
+| Archivist agent (off-gate) | `PIPEGUARD_ARCHIVIST_AGENT=stub\|claude` (`PIPEGUARD_ARCHIVIST_MODEL`, default Haiku); organizational digest/index over released runs (`api/archivist.py`) | stub ($0) |
 | Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack\|teams\|discord`; each adapter armed by its OWN `PIPEGUARD_{SLACK,TEAMS,DISCORD}_LIVE=1` (Teams/Discord also need `PIPEGUARD_{TEAMS,DISCORD}_WEBHOOK_URL`) | stub ($0, no network) |
 | Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — add/remap a source metric without touching rules | canonical decimals; ON the critical path |
 | Repository (persistence) | `Repository` port; SqliteRepository **and** guarded PostgresRepository built (ADR-0016), `get_repository()` selects | SQLite + JSONL (Postgres off by default) |

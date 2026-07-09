@@ -151,16 +151,22 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    *and* PostgresRepository (guarded, off-by-default, ADR-0016); `rebuild-db` targets either (ADR-0003).
 3. **Swappable AI, OFF by default.** Synthesizer via `PIPEGUARD_SYNTHESIZER=stub|claude`;
    advisory QC-triage agent (`triage/`, ADR-0009/0012) via `PIPEGUARD_TRIAGE_AGENT=stub|claude`;
-   advisory feedback-categorization agent (`api/feedback_agent.py`, off-gate) via
-   `PIPEGUARD_FEEDBACK_AGENT=stub|claude` — all stub-first ($0), import `anthropic` lazily, and
-   fall back to the stub on any error (incl. a safety refusal). Models via `PIPEGUARD_*_MODEL`.
+   advisory pipeline-repair agent (`src/pipeguard/pipeline_repair/`, ADR-0009/0012) via
+   `PIPEGUARD_PIPELINE_REPAIR_AGENT=stub|claude` (recurring signature → cited `RepairProposal`,
+   Opus-high default); advisory feedback-categorization agent (`api/feedback_agent.py`, off-gate)
+   via `PIPEGUARD_FEEDBACK_AGENT=stub|claude`; advisory archivist (`api/archivist.py`, off-gate)
+   via `PIPEGUARD_ARCHIVIST_AGENT=stub|claude` (released runs → organizational `ArchiveDigest`,
+   Haiku default) — all five stub-first ($0), import `anthropic` lazily, and fall back to the stub
+   on any error (incl. a safety refusal). Models via `PIPEGUARD_*_MODEL`.
 4. **Delivery layers (thin, over the core).** `app/` = Streamlit demo (kept as the
    guaranteed-working fallback); `api/` = FastAPI read-API + **off-gate writes**
    (`POST /api/feedback` → `FeedbackStore`; `POST /api/pipelines`, now **auth-gated**
    via `require_role` capturing `submitted_by`, → a pluggable `PipelineGraphStore` — a
    tolerant versioned envelope reserving a draft→approve+RBAC lifecycle, T-049; both
    jsonl/sqlite/postgres) + the artifacts + **windowed-monitoring** endpoints
-   (`GET /api/runs/{id}/artifacts`, `GET /api/monitoring`) + runs pagination/search with
+   (`GET /api/runs/{id}/artifacts`, `GET /api/monitoring`) + **advisory agent reads** (off-gate,
+   read-only: `GET /api/monitoring/signatures/{signature}/repair`, `GET /api/runs/{id}/archive-digest`,
+   `GET /api/archive/index`) + runs pagination/search with
    **Tier-0 params** (status filter, platform-aware `q`, sort aliases, facet-count header) +
    honest `RunSummary` status/platform/date (from the SampleSheet `[Header]`), the production
    seam (ADR-0010/0016). Authz lives in the dev-shim `api/auth.py` (Role viewer|reviewer|approver
