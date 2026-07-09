@@ -50,6 +50,13 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 1. Before non-trivial changes, inspect the relevant files and propose a short plan.
 2. No broad refactors unless explicitly asked. Prefer small, reviewable diffs.
 3. If requirements are ambiguous, make a reasonable assumption, state it, continue.
+4. **Parallelize by default.** Batch independent work into as many concurrent processes as
+   safely possible: issue independent tool calls in one message, and fan out subagents/
+   workflows for non-blocking tasks (audits, per-file/-screen sweeps, research, multi-angle
+   design, verification). Scout inline to discover the work-list, then fan out over it.
+   Caveats: keep tightly-coupled edits to the *same* file single-author (parallel writers
+   collide); serialize steps with a real data dependency; use read-only agents (Explore) for
+   audits/reviews. When unsure whether two tasks are independent, they usually are — split them.
 
 **Architecture guardrails**
 1. `src/pipeguard/` stays framework-agnostic — no Streamlit/FastAPI imports in the core.
