@@ -1,19 +1,22 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { api } from '../api'
 import { ErrorBox, Loading } from '../components/States'
-import type { MetricCatalog, Runbook } from '../types'
+import type { MetricCatalog, QCThreshold, Runbook } from '../types'
 
 // Runbook gates are stored in CANONICAL units (fraction for %-metrics, x for coverage);
-// `unit` is only the display symbol. Convert back so an 85% gate never renders as "0.85%".
-function displayThreshold(value: number, unit: string): string {
+// `unit` is only the display symbol. Convert to the display number an operator reads (an 85%
+// gate is stored 0.85) — used both for read-out and to seed the editable threshold inputs.
+function toDisplayNum(value: number, unit: string): number {
   const shown = unit === '%' ? value * 100 : value
-  return `${Math.round(shown * 100) / 100}${unit}`
+  return Math.round(shown * 100) / 100
 }
 
+// Per-model list pricing is ILLUSTRATIVE ($ per million tokens, input / output) — shown to
+// make the tiering tradeoff legible, not a live or contractual quote.
 const MODELS = [
-  { id: 'opus', name: 'Claude Opus 4.8', note: 'Highest capability' },
-  { id: 'sonnet', name: 'Claude Sonnet 5', note: 'Balanced — default tier' },
-  { id: 'haiku', name: 'Claude Haiku 4.5', note: 'Fastest / cheapest' },
+  { id: 'opus', name: 'Claude Opus 4.8', note: 'Highest capability', costIn: 15, costOut: 75 },
+  { id: 'sonnet', name: 'Claude Sonnet 5', note: 'Balanced — default tier', costIn: 3, costOut: 15 },
+  { id: 'haiku', name: 'Claude Haiku 4.5', note: 'Fastest / cheapest', costIn: 1, costOut: 5 },
 ] as const
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: ReactNode }) {
@@ -56,17 +59,42 @@ export function Settings() {
   const [slackOn, setSlackOn] = useState(true)
   const [model, setModel] = useState<(typeof MODELS)[number]['id']>('sonnet')
   const [synth, setSynth] = useState<'stub' | 'claude'>('stub')
+  // Local-only "what-if" edits to the QC thresholds (display units). Demo affordance — never
+  // persisted to the runbook and never touches a verdict (rules decide; this is config-preview).
+  const [edits, setEdits] = useState<Record<string, { gate: string; hard_fail: string }>>({})
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     api
       .config()
-      .then(setRunbook)
+      .then((rb) => {
+        setRunbook(rb)
+        // Seed the editable inputs from the live runbook, in display units.
+        setEdits(
+          Object.fromEntries(
+            rb.qc_thresholds.map((t) => [
+              t.metric,
+              { gate: String(toDisplayNum(t.gate, t.unit)), hard_fail: String(toDisplayNum(t.hard_fail, t.unit)) },
+            ]),
+          ),
+        )
+      })
       .catch((e) => setError(String(e)))
     api.metricsRegistry().then(setCatalog).catch(() => setCatalog(null))
   }, [])
 
   if (error) return <ErrorBox message={error} />
   if (!runbook) return <Loading label="Loading config…" />
+
+  const granular = profile === 'granular'
+
+  function editThreshold(t: QCThreshold, field: 'gate' | 'hard_fail', value: string) {
+    setEdits((prev) => ({
+      ...prev,
+      [t.metric]: { ...(prev[t.metric] ?? { gate: '', hard_fail: '' }), [field]: value },
+    }))
+    setSaved(false)
+  }
 
   return (
     <div className="mx-auto max-w-[720px] space-y-4">
@@ -103,7 +131,7 @@ export function Settings() {
         </div>
       </Section>
 
-      <Section title="Model tiering" desc="Per-agent model; the deterministic gate needs no model.">
+      <Section title="Model tiering" desc="Per-agent model; the deterministic gate needs no model. List pricing is illustrative $/Mtok.">
         <div className="space-y-1.5">
           {MODELS.map((m) => (
             <button
@@ -123,6 +151,12 @@ export function Settings() {
               <span className="flex-1">
                 <span className="block text-[13px] font-medium text-text">{m.name}</span>
                 <span className="block text-[11.5px] text-text-3">{m.note}</span>
+              </span>
+              <span className="shrink-0 text-right">
+                <span className="block font-mono text-[12px] text-text">
+                  ${m.costIn} / ${m.costOut}
+                </span>
+                <span className="block text-[10px] uppercase tracking-wide text-text-3">in / out · per Mtok</span>
               </span>
             </button>
           ))}
@@ -150,7 +184,7 @@ export function Settings() {
 
       <Section
         title="QC thresholds"
-        desc="The active runbook, keyed per assay × sample type (read-only in this build)."
+        desc="The active runbook for the current profile (single profile shown). Edit a value for a local what-if — demo only, never persisted and never routes a verdict."
       >
         <div className="mb-3">
           <NotClinical label="Illustrative · configurable · not clinical" />
@@ -160,34 +194,86 @@ export function Settings() {
             <thead>
               <tr className="bg-card-2 text-left text-[10.5px] uppercase tracking-wide text-text-3">
                 <th className="px-3 py-2 font-medium">Metric</th>
-                <th className="px-3 py-2 font-medium">Unit</th>
+                {granular && <th className="px-3 py-2 font-medium">Unit</th>}
                 <th className="px-3 py-2 font-medium">Gate</th>
                 <th className="px-3 py-2 font-medium">Borderline</th>
                 <th className="px-3 py-2 font-medium">Hard-fail</th>
-                <th className="px-3 py-2 font-medium">Direction</th>
+                {granular && <th className="px-3 py-2 font-medium">Direction</th>}
               </tr>
             </thead>
             <tbody>
-              {runbook.qc_thresholds.map((t) => (
-                <tr key={t.metric} className="border-t border-line">
-                  <td className="px-3 py-2">
-                    {t.label} <span className="font-mono text-[11px] text-text-3">{t.metric}</span>
-                  </td>
-                  <td className="px-3 py-2 font-mono text-[12px] text-text-2">{t.unit || '—'}</td>
-                  <td className="px-3 py-2 font-mono text-[12px] text-text">{displayThreshold(t.gate, t.unit)}</td>
-                  <td className="px-3 py-2 font-mono text-[12px] text-text-2">
-                    ±{displayThreshold(t.gate * t.borderline_band, t.unit)}
-                  </td>
-                  <td className="px-3 py-2 font-mono text-[12px] text-text-2">
-                    {displayThreshold(t.hard_fail, t.unit)}
-                  </td>
-                  <td className="px-3 py-2 text-[12px] text-text-2">
-                    {t.higher_is_better ? '≥ higher is better' : '≤ lower is better'}
-                  </td>
-                </tr>
-              ))}
+              {runbook.qc_thresholds.map((t) => {
+                const edit = edits[t.metric] ?? {
+                  gate: String(toDisplayNum(t.gate, t.unit)),
+                  hard_fail: String(toDisplayNum(t.hard_fail, t.unit)),
+                }
+                // Borderline is derived from the (possibly edited) gate × band, so an edit to
+                // the gate visibly moves the band — keeps the what-if internally consistent.
+                const gateNum = parseFloat(edit.gate)
+                const borderline = Number.isFinite(gateNum)
+                  ? `±${Math.round(gateNum * t.borderline_band * 100) / 100}${t.unit}`
+                  : '—'
+                return (
+                  <tr key={t.metric} className="border-t border-line">
+                    <td className="px-3 py-2">
+                      {t.label} <span className="font-mono text-[11px] text-text-3">{t.metric}</span>
+                    </td>
+                    {granular && (
+                      <td className="px-3 py-2 font-mono text-[12px] text-text-2">{t.unit || '—'}</td>
+                    )}
+                    <td className="px-3 py-2">
+                      <span className="inline-flex items-center gap-1">
+                        <input
+                          type="number"
+                          value={edit.gate}
+                          onChange={(e) => editThreshold(t, 'gate', e.target.value)}
+                          aria-label={`${t.label} gate threshold`}
+                          className="w-16 rounded border border-line bg-card px-1.5 py-0.5 font-mono text-[12px] text-text focus:border-accent focus:outline-none"
+                        />
+                        {t.unit && <span className="font-mono text-[11px] text-text-3">{t.unit}</span>}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-[12px] text-text-2">{borderline}</td>
+                    <td className="px-3 py-2">
+                      <span className="inline-flex items-center gap-1">
+                        <input
+                          type="number"
+                          value={edit.hard_fail}
+                          onChange={(e) => editThreshold(t, 'hard_fail', e.target.value)}
+                          aria-label={`${t.label} hard-fail threshold`}
+                          className="w-16 rounded border border-line bg-card px-1.5 py-0.5 font-mono text-[12px] text-text focus:border-accent focus:outline-none"
+                        />
+                        {t.unit && <span className="font-mono text-[11px] text-text-3">{t.unit}</span>}
+                      </span>
+                    </td>
+                    {granular && (
+                      <td className="px-3 py-2 text-[12px] text-text-2">
+                        {t.higher_is_better ? '≥ higher is better' : '≤ lower is better'}
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setSaved(true)}
+            className="rounded-lg border border-accent bg-accent px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors hover:bg-accent-strong"
+          >
+            Save thresholds
+          </button>
+          {saved ? (
+            <span className="text-[12px] font-medium text-proceed-fg">
+              Saved locally · demo — not persisted to the runbook.
+            </span>
+          ) : (
+            <span className="text-[12px] text-text-3">
+              Local what-if only — edits stay in this browser session.
+            </span>
+          )}
         </div>
 
         <p className="mb-1.5 mt-4 text-[10.5px] font-semibold uppercase tracking-wide text-text-3">
@@ -202,7 +288,7 @@ export function Settings() {
         </div>
       </Section>
 
-      {catalog && (
+      {granular && catalog && (
         <Section
           title="Metric catalog"
           desc={`Registered metric vocabulary (registry v${catalog.metric_registry_version}) — ${catalog.n_gated} of ${catalog.n_registered} gated by the runbook today; the rest are vocabulary the gate can adopt without new code.`}

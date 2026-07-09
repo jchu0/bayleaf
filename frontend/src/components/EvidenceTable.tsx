@@ -38,29 +38,51 @@ export function EvidenceTable({ findings }: { findings: Finding[] }) {
               </thead>
               <tbody>
                 {items.map((f) => {
-                  const e: Evidence | undefined = f.evidence[0]
-                  return (
-                    <tr key={f.id} className="border-t border-line align-top">
-                      <td className="px-3 py-2">
-                        <div className="font-medium text-text">{f.title}</div>
-                        {f.detail && <div className="mt-0.5 text-[11.5px] text-text-3">{f.detail}</div>}
-                        {e && (
-                          <div className="mt-0.5 font-mono text-[10.5px] text-text-3">
-                            {f.rule_id} · {e.source}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-[12px] text-text">
-                        <Observed value={e?.value ?? null} expected={e?.expected ?? null} />
-                      </td>
-                      <td className="px-3 py-2 font-mono text-[12px] text-text-2">
-                        {e?.expected ?? e?.threshold ?? '—'}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <StatusChip sev={f.severity} />
-                      </td>
-                    </tr>
-                  )
+                  // Show every cited evidence row (not just evidence[0]); a finding with
+                  // multiple citations renders one sub-row per source so provenance stays
+                  // complete. `[null]` keeps a finding visible even with no evidence attached.
+                  const evs: (Evidence | null)[] = f.evidence.length > 0 ? f.evidence : [null]
+                  return evs.map((e, i) => {
+                    // Traceability caption: rule id (primary row only) · source_kind · source ·
+                    // source_field/locator — surfaces where the number actually came from.
+                    const cite = [
+                      i === 0 ? f.rule_id : null,
+                      e?.source_kind,
+                      e?.source,
+                      e?.source_field ?? e?.locator,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                    return (
+                      <tr key={`${f.id}-${i}`} className="border-t border-line align-top">
+                        <td className="px-3 py-2">
+                          {i === 0 && (
+                            <>
+                              <div className="font-medium text-text">{f.title}</div>
+                              {f.detail && (
+                                <div className="mt-0.5 text-[11.5px] text-text-3">{f.detail}</div>
+                              )}
+                            </>
+                          )}
+                          {cite && (
+                            <div className={`font-mono text-[10.5px] text-text-3 ${i === 0 ? 'mt-0.5' : ''}`}>
+                              {i > 0 ? '↳ ' : ''}
+                              {cite}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-[12px] text-text">
+                          <Observed value={e?.value ?? null} expected={e?.expected ?? null} />
+                        </td>
+                        <td className="px-3 py-2 font-mono text-[12px] text-text-2">
+                          {e?.expected ?? e?.threshold ?? '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {i === 0 && <StatusChip sev={f.severity} />}
+                        </td>
+                      </tr>
+                    )
+                  })
                 })}
               </tbody>
             </table>

@@ -5,11 +5,11 @@ import { api } from '../api'
 import { DecisionFeedback } from '../components/DecisionFeedback'
 import { EvidenceTable } from '../components/EvidenceTable'
 import { GateResultStrip } from '../components/GateResultStrip'
-import { ErrorBox, Loading } from '../components/States'
+import { Empty, ErrorBox, Loading } from '../components/States'
 import { TriagePanel } from '../components/TriagePanel'
 import { VerdictBadge } from '../components/VerdictBadge'
 import type { DecisionCard, RunDetail as RunDetailData, Verdict } from '../types'
-import { GATE_DOT, GATE_LABEL, VERDICT_TEXT } from '../verdict'
+import { GATE_DOT, GATE_LABEL, VERDICT_STRIPE, VERDICT_TEXT } from '../verdict'
 
 type Density = 'split' | 'brief' | 'dense'
 type CardFilter = Verdict | 'all' | 'attention'
@@ -28,17 +28,16 @@ export function RunDetail() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<CardFilter>('all')
   const [density, setDensity] = useState<Density>('split')
-  const [open, setOpen] = useState<Record<string, boolean>>({})
+  // Per-card explicit open/closed overrides. Absent → fall back to the density default
+  // (`defaultOpen`): only Split auto-expands the non-proceed cards, so switching to Brief
+  // no longer springs every attention card open. Cleared when the run changes.
+  const [override, setOverride] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
+    setOverride({})
     api
       .run(runId)
-      .then((d) => {
-        setDetail(d)
-        setOpen(
-          Object.fromEntries(d.cards.filter((c) => c.verdict !== 'proceed').map((c) => [c.sample_id, true])),
-        )
-      })
+      .then(setDetail)
       .catch((e) => setError(String(e)))
   }, [runId])
 
@@ -61,6 +60,18 @@ export function RunDetail() {
     { key: 'proceed', label: 'Proceed', count: counts.proceed ?? 0 },
   ]
 
+  // Density default: only Split auto-expands the actionable (non-proceed) cards; an explicit
+  // per-card override (from a toggle or expand/collapse-all) always wins.
+  const defaultOpen = (c: DecisionCard) => density === 'split' && c.verdict !== 'proceed'
+  const isOpen = (c: DecisionCard) => override[c.sample_id] ?? defaultOpen(c)
+  const allOpen = filtered.length > 0 && filtered.every(isOpen)
+  const toggleAll = () =>
+    setOverride((o) => ({
+      ...o,
+      ...Object.fromEntries(filtered.map((c) => [c.sample_id, !allOpen])),
+    }))
+  const activeLabel = chips.find((c) => c.key === filter)?.label ?? 'this'
+
   return (
     <div className="mx-auto max-w-[1080px]">
       <div className="flex items-start justify-between gap-4">
@@ -70,20 +81,30 @@ export function RunDetail() {
             {detail.run_id} · {detail.summary.n_samples} samples · sorted most-urgent first
           </p>
         </div>
-        <div className="flex items-center gap-2 text-[12.5px]">
-          <span className="text-text-3">Layout</span>
-          <div className="flex overflow-hidden rounded-lg border border-line">
-            {(['split', 'brief', 'dense'] as Density[]).map((d) => (
-              <button
-                key={d}
-                onClick={() => setDensity(d)}
-                className={`px-2.5 py-1 capitalize ${
-                  density === d ? 'bg-card-2 font-medium text-text' : 'bg-card text-text-2 hover:text-text'
-                }`}
-              >
-                {d}
-              </button>
-            ))}
+        <div className="flex items-center gap-3 text-[12.5px]">
+          {density !== 'dense' && (
+            <button
+              onClick={toggleAll}
+              className="rounded-lg border border-line bg-card px-2.5 py-1 text-text-2 hover:border-line-strong hover:text-text"
+            >
+              {allOpen ? 'Collapse all' : 'Expand all'}
+            </button>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="text-text-3">Layout</span>
+            <div className="flex overflow-hidden rounded-lg border border-line">
+              {(['split', 'brief', 'dense'] as Density[]).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDensity(d)}
+                  className={`px-2.5 py-1 capitalize ${
+                    density === d ? 'bg-card-2 font-medium text-text' : 'bg-card text-text-2 hover:text-text'
+                  }`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -136,16 +157,22 @@ export function RunDetail() {
       </div>
 
       <div className="mt-4 space-y-3">
-        {filtered.map((card) => (
-          <CardView
-            key={card.sample_id}
-            runId={runId}
-            card={card}
-            density={density}
-            open={!!open[card.sample_id]}
-            onToggle={() => setOpen((o) => ({ ...o, [card.sample_id]: !o[card.sample_id] }))}
-          />
-        ))}
+        {filtered.length === 0 ? (
+          <Empty message={`No samples match the “${activeLabel}” filter.`} />
+        ) : (
+          filtered.map((card) => (
+            <CardView
+              key={card.sample_id}
+              runId={runId}
+              card={card}
+              density={density}
+              open={isOpen(card)}
+              onToggle={() =>
+                setOverride((o) => ({ ...o, [card.sample_id]: !isOpen(card) }))
+              }
+            />
+          ))
+        )}
       </div>
     </div>
   )
@@ -164,6 +191,22 @@ function FlaggedChip({ card }: { card: DecisionCard }) {
   )
 }
 
+function NextSteps({ steps }: { steps: string[] }) {
+  if (steps.length === 0) return null
+  return (
+    <div className="mt-4">
+      <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">
+        Recommended next steps
+      </p>
+      <ul className="list-disc space-y-1 pl-5 text-[13px] text-text">
+        {steps.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function CardView({
   runId,
   card,
@@ -177,15 +220,32 @@ function CardView({
   open: boolean
   onToggle: () => void
 }) {
+  // Per-verdict colored spine so a collapsed/compact card reads its verdict at a glance.
+  const stripe = `border-l-[3px] ${VERDICT_STRIPE[card.verdict]}`
+
+  // Dense: a real one-line compact row — verdict + id + headline + flagged gate, no expand.
+  if (density === 'dense') {
+    return (
+      <article
+        className={`flex items-center gap-3 rounded-xl border border-line ${stripe} bg-card px-4 py-2.5 shadow-card`}
+      >
+        <VerdictBadge verdict={card.verdict} />
+        <span className="shrink-0 font-mono text-[13px] font-semibold text-text">{card.sample_id}</span>
+        <span className="min-w-0 flex-1 truncate text-[13px] text-text-2">{card.headline}</span>
+        <FlaggedChip card={card} />
+      </article>
+    )
+  }
+
   const actionable = card.verdict !== 'proceed'
-  const showBody = open && density !== 'dense'
+  const full = density === 'split'
   // Keys for the per-decision feedback footer: the flagged gate (as FlaggedChip picks it) +
   // the distinct rule ids this card cites.
   const fbGr = card.gate_results.find((g) => g.verdict === card.verdict) ?? card.gate_results[0]
   const fbGate = fbGr?.gate ?? card.findings[0]?.gate ?? null
   const fbRuleIds = [...new Set(card.findings.map((f) => f.rule_id))]
   return (
-    <article className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
+    <article className={`overflow-hidden rounded-xl border border-line ${stripe} bg-card shadow-card`}>
       <button onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3 text-left">
         {open ? (
           <ChevronDown size={16} className="shrink-0 text-text-3" />
@@ -197,13 +257,14 @@ function CardView({
         <span className="min-w-0 flex-1 truncate text-[13.5px] text-text">{card.headline}</span>
         <FlaggedChip card={card} />
       </button>
-      {showBody && (
+      {open && (
         <div className="border-t border-line px-4 py-4">
           <p className="mb-3 text-[13px] text-text-2">{card.rationale}</p>
           {card.gate_results.length > 0 && (
             <GateResultStrip results={card.gate_results} cardVerdict={card.verdict} />
           )}
-          {density === 'split' && (
+          {full ? (
+            // Split: the full readout — evidence table, next steps, triage, feedback.
             <>
               <div className="mt-4">
                 <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">
@@ -211,18 +272,7 @@ function CardView({
                 </p>
                 <EvidenceTable findings={card.findings} />
               </div>
-              {card.next_steps.length > 0 && (
-                <div className="mt-4">
-                  <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">
-                    Recommended next steps
-                  </p>
-                  <ul className="list-disc space-y-1 pl-5 text-[13px] text-text">
-                    {card.next_steps.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <NextSteps steps={card.next_steps} />
               {actionable && (
                 <div className="mt-4">
                   <TriagePanel runId={runId} sampleId={card.sample_id} />
@@ -237,6 +287,10 @@ function CardView({
                 cardContentHash={card.content_hash}
               />
             </>
+          ) : (
+            // Brief: a lighter body — gate strip + next steps only (heavy evidence table and
+            // the triage/feedback panels stay in Split).
+            <NextSteps steps={card.next_steps} />
           )}
         </div>
       )}

@@ -4,9 +4,18 @@ import { BookOpen, FileText, Send, Sparkles } from 'lucide-react'
 import { api } from '../api'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { VerdictBadge } from '../components/VerdictBadge'
+import { VERDICT_DOT } from '../verdict'
 import type { DecisionCard, RunDetail, TriageCitation, TriageNote } from '../types'
 
 const VERDICT_RANK: Record<string, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
+
+// Canned triage prompts surfaced as one-click chips above the free-text input, so an
+// operator can drive the (advisory) agent without typing. They reuse the same ask flow.
+const QUICK_ASKS = [
+  'What is the most likely cause?',
+  'What should I check first?',
+  'Which findings drove this?',
+] as const
 
 export function AgentTriage() {
   const { runId = '' } = useParams()
@@ -59,6 +68,8 @@ export function AgentTriage() {
                       : 'border-line bg-card text-text-2 hover:text-text'
                   }`}
                 >
+                  {/* Verdict signal so escalate reads apart from hold at a glance (rules decide the verdict). */}
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${VERDICT_DOT[c.verdict]}`} />
                   {c.sample_id}
                 </button>
               ))}
@@ -92,12 +103,12 @@ function TriageCard({ runId, card }: { runId: string; card: DecisionCard }) {
 
   const offline = !note?.model // stub agent has no model; a live run stamps one
 
-  function ask(e: FormEvent) {
-    e.preventDefault()
-    const q = draft.trim()
+  // Single ask path shared by the free-text form and the quick-ask preset chips.
+  // The live agent is env-armed (PIPEGUARD_TRIAGE_AGENT=claude); offline we echo an honest
+  // stub reply rather than fabricate an answer.
+  function submit(raw: string) {
+    const q = raw.trim()
     if (!q) return
-    // The live agent is env-armed (PIPEGUARD_TRIAGE_AGENT=claude); offline we echo an honest
-    // stub reply rather than fabricate an answer.
     setThread((t) => [
       ...t,
       { role: 'user', text: q },
@@ -109,6 +120,11 @@ function TriageCard({ runId, card }: { runId: string; card: DecisionCard }) {
       },
     ])
     setDraft('')
+  }
+
+  function ask(e: FormEvent) {
+    e.preventDefault()
+    submit(draft)
   }
 
   if (state === 'loading') return <div className="mt-4"><Loading label="Asking the triage agent…" /></div>
@@ -164,7 +180,8 @@ function TriageCard({ runId, card }: { runId: string; card: DecisionCard }) {
       {/* Ask the agent */}
       <div className="border-t border-line px-5 py-4">
         {thread.length > 0 && (
-          <div className="mb-3 space-y-2">
+          // Cap the transcript height so a long Q&A scrolls in place instead of pushing the input off-screen.
+          <div className="mb-3 max-h-[260px] space-y-2 overflow-y-auto pr-1">
             {thread.map((m, i) => (
               <div
                 key={i}
@@ -179,6 +196,19 @@ function TriageCard({ runId, card }: { runId: string; card: DecisionCard }) {
             ))}
           </div>
         )}
+        {/* Quick-ask presets — one click submits a canned question through the same ask flow. */}
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {QUICK_ASKS.map((q) => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => submit(q)}
+              className="rounded-full border border-line bg-card-2 px-2.5 py-1 text-[11.5px] text-text-2 transition-colors hover:border-accent hover:text-accent"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
         <form onSubmit={ask} className="flex items-center gap-2">
           <input
             value={draft}

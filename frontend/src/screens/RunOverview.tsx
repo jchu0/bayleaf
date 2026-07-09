@@ -1,8 +1,8 @@
 import { AlertTriangle, ChevronRight } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
-import { Empty, ErrorBox, Loading } from '../components/States'
+import { Empty, ErrorBox, Skeleton } from '../components/States'
 import type { RunSummary } from '../types'
 import { VERDICT_BAR } from '../verdict'
 
@@ -14,10 +14,51 @@ function SegmentedBar({ counts, total }: { counts: RunSummary['counts']; total: 
     <div className="flex h-2 w-full overflow-hidden rounded-full bg-card-3">
       {VERDICTS.map((v) => {
         const n = counts[v] ?? 0
+        // Native tooltip so the per-verdict breakdown is legible even when a segment is
+        // too thin to read — hover shows e.g. "proceed: 3".
         return n ? (
-          <div key={v} className={VERDICT_BAR[v]} style={{ width: `${(n / total) * 100}%` }} />
+          <div
+            key={v}
+            className={VERDICT_BAR[v]}
+            style={{ width: `${(n / total) * 100}%` }}
+            title={`${v}: ${n}`}
+          />
         ) : null
       })}
+    </div>
+  )
+}
+
+// Static page header — no data needed, so it renders during loading too (keeps the
+// shell stable while the run rows shimmer in).
+function RunsHeader() {
+  return (
+    <>
+      <h1 className="text-[22px] font-semibold tracking-tight text-text">Sequencing runs</h1>
+      <p className="mt-1 flex items-center gap-2 text-[13px] text-text-2">
+        Provenance &amp; QC decision gate. Each run resolves to a per-sample verdict —{' '}
+        <span className="font-medium text-text">proceed, hold, rerun, or escalate</span>.
+        <span className="ml-auto flex items-center gap-1.5 text-text-2">
+          <span className="h-2 w-2 rounded-full bg-proceed" /> Gate online
+        </span>
+      </p>
+    </>
+  )
+}
+
+// Shimmer placeholder that mirrors a real run row's layout (id block · samples + bar · chip).
+function SkeletonRunRow() {
+  return (
+    <div className="flex items-center gap-5 rounded-xl border border-line bg-card px-5 py-4 shadow-card">
+      <div className="w-52 shrink-0 space-y-2">
+        <Skeleton className="h-3.5 w-40" />
+        <Skeleton className="h-2.5 w-24" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <Skeleton className="mb-2.5 h-2.5 w-20" />
+        <Skeleton className="h-2 w-full rounded-full" />
+      </div>
+      <Skeleton className="h-6 w-28 shrink-0 rounded-lg" />
     </div>
   )
 }
@@ -27,12 +68,19 @@ export function RunOverview() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
 
-  useEffect(() => {
+  // Extracted so the error state's Retry button can re-run the exact same fetch.
+  const load = useCallback(() => {
+    setError(null)
+    setRuns(null)
     api
       .runs()
       .then(setRuns)
       .catch((e) => setError(String(e)))
   }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   const filtered = useMemo(() => {
     if (!runs) return []
@@ -41,8 +89,20 @@ export function RunOverview() {
     return runs
   }, [runs, filter])
 
-  if (error) return <ErrorBox message={`${error}. Is the API running?`} />
-  if (!runs) return <Loading label="Loading runs…" />
+  if (error) return <ErrorBox message={`${error}. Is the API running?`} onRetry={load} />
+
+  if (!runs) {
+    return (
+      <div className="mx-auto max-w-[1080px]">
+        <RunsHeader />
+        <div className="mt-[52px] space-y-2.5">
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonRunRow key={i} />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   const nAttention = runs.filter((r) => r.n_attention > 0).length
   const pills: { key: Filter; label: string; count: number }[] = [
@@ -53,14 +113,7 @@ export function RunOverview() {
 
   return (
     <div className="mx-auto max-w-[1080px]">
-      <h1 className="text-[22px] font-semibold tracking-tight text-text">Sequencing runs</h1>
-      <p className="mt-1 flex items-center gap-2 text-[13px] text-text-2">
-        Provenance &amp; QC decision gate. Each run resolves to a per-sample verdict —{' '}
-        <span className="font-medium text-text">proceed, hold, rerun, or escalate</span>.
-        <span className="ml-auto flex items-center gap-1.5 text-text-2">
-          <span className="h-2 w-2 rounded-full bg-proceed" /> Gate online
-        </span>
-      </p>
+      <RunsHeader />
 
       <div className="mt-5 flex items-center gap-2">
         {pills.map((p) => (
@@ -79,7 +132,21 @@ export function RunOverview() {
       </div>
 
       <div className="mt-4 space-y-2.5">
-        {filtered.length === 0 && <Empty message="No runs match this filter." />}
+        {filtered.length === 0 && (
+          <div className="space-y-3">
+            <Empty message={filter === 'all' ? 'No runs yet.' : 'No runs match this filter.'} />
+            {filter !== 'all' && (
+              <div className="text-center">
+                <button
+                  onClick={() => setFilter('all')}
+                  className="rounded-[20px] border border-line bg-card px-3 py-1 text-[13px] text-text-2 transition-colors hover:border-line-strong"
+                >
+                  Show all runs
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {filtered.map((run) => {
           const total = VERDICTS.reduce((s, v) => s + (run.counts[v] ?? 0), 0) || 1
           const needs = run.n_attention > 0

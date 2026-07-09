@@ -186,12 +186,21 @@ const GATE_CHECKPOINTS = [
   { label: 'variant', c: '#0e8f7e' },
 ]
 
-const VALIDATION = [
-  { code: 'V4', sev: 'info', msg: 'Gate is terminal, singular, and non-removable — verdict routing is unrepresentable.' },
-  { code: 'V5', sev: 'info', msg: 'QC-triage agent is off the critical path (no data ports).' },
-  { code: 'V6', sev: 'info', msg: 'Every emitted locator has origin: unknown — config locates, it never relabels provenance.' },
-  { code: 'V3', sev: 'info', msg: 'Gate reachable via ingest — all metric-bearing kinds are produced.' },
+type Sev = 'critical' | 'warn' | 'info'
+// Each check carries the node it references so a click can focus the offending node.
+const VALIDATION: { code: string; sev: Sev; msg: string; node?: string }[] = [
+  { code: 'V4', sev: 'info', msg: 'Gate is terminal, singular, and non-removable — verdict routing is unrepresentable.', node: 'g_gate' },
+  { code: 'V5', sev: 'info', msg: 'QC-triage agent is off the critical path (no data ports).', node: 'a_qc_triage' },
+  { code: 'V6', sev: 'info', msg: 'Every emitted locator has origin: unknown — config locates, it never relabels provenance.', node: 'n_fastp' },
+  { code: 'V3', sev: 'info', msg: 'Gate reachable via ingest — all metric-bearing kinds are produced.', node: 'g_gate' },
 ]
+
+// Severity → row tint + code-chip, reusing the verdict 4-shade (escalate/hold) + preflight blue.
+const SEV_STYLE: Record<Sev, { row: string; chip: string }> = {
+  critical: { row: 'border-escalate-bd bg-escalate-bg', chip: 'bg-escalate/15 text-escalate-fg' },
+  warn: { row: 'border-hold-bd bg-hold-bg', chip: 'bg-hold/15 text-hold-fg' },
+  info: { row: 'border-line bg-card', chip: 'bg-preflight/10 text-preflight' },
+}
 
 const YAML: Record<Prof, string> = {
   giab_panel: `schema_version: run_layout/1
@@ -301,6 +310,9 @@ export function PipelineBuilder() {
             onClick={() => {
               setDrawerOpen(true)
               setEmitted(true)
+              // Emit COMPOSES — it never executes. Demo build writes the layout to the
+              // browser console; a wired backend would hand it to deterministic ingest.
+              console.log(`# PIPEGUARD_RUN_LAYOUT=${profile}\n${YAML[profile]}`)
             }}
             className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
           >
@@ -351,12 +363,15 @@ export function PipelineBuilder() {
         onToggle={() => setDrawerOpen((o) => !o)}
         profile={profile}
         emitted={emitted}
+        selected={selected}
+        onSelect={setSelected}
       />
     </div>
   )
 }
 
 function Palette({ onCollapse }: { onCollapse: () => void }) {
+  const [query, setQuery] = useState('')
   const sections: { heading: string; items: { name: string; sub: string; icon: LucideIcon; muted?: boolean }[] }[] = [
     {
       heading: 'Tool nodes',
@@ -373,19 +388,34 @@ function Palette({ onCollapse }: { onCollapse: () => void }) {
     },
     { heading: 'Gate', items: [{ name: 'Decision gate', sub: 'terminal · pinned', icon: ShieldCheck }] },
   ]
+  // Live filter on node name or kind — the palette is a picker, not a decoration.
+  const q = query.trim().toLowerCase()
+  const filtered = q
+    ? sections
+        .map((s) => ({ ...s, items: s.items.filter((it) => it.name.toLowerCase().includes(q) || it.sub.toLowerCase().includes(q)) }))
+        .filter((s) => s.items.length > 0)
+    : sections
   return (
     <div className="flex w-60 shrink-0 flex-col border-r border-line bg-card">
       <div className="flex items-center gap-2 p-3">
-        <div className="flex flex-1 items-center gap-2 rounded-lg border border-line bg-page px-2.5 py-1.5 text-[12.5px] text-text-3">
-          <Search size={14} />
-          Search nodes…
+        <div className="flex flex-1 items-center gap-2 rounded-lg border border-line bg-page px-2.5 py-1.5 focus-within:border-accent">
+          <Search size={14} className="shrink-0 text-text-3" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search nodes…"
+            className="min-w-0 flex-1 bg-transparent text-[12.5px] text-text placeholder:text-text-3 focus:outline-none"
+          />
         </div>
         <button onClick={onCollapse} className="grid h-7 w-7 place-items-center rounded-lg text-text-3 hover:bg-page" title="Collapse">
           <Minus size={15} />
         </button>
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 pb-4">
-        {sections.map((s) => (
+        {filtered.length === 0 && (
+          <p className="px-1 pt-2 text-[11.5px] text-text-3">No nodes match “{query.trim()}”.</p>
+        )}
+        {filtered.map((s) => (
           <div key={s.heading}>
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] text-text-3">{s.heading}</p>
             <div className="space-y-1.5">
@@ -486,8 +516,10 @@ function PortRow({ port, dir, isView }: { port: Port; dir: 'in' | 'out'; isView:
   ) : (
     <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-text-3" />
   )
+  // Pull the port dot out to the card edge (undoing the grid's px-3) so the seeded edge
+  // paths — which terminate on each node's left/right border — visibly touch a real port.
   return (
-    <div className={`flex items-center gap-1.5 ${dir === 'out' ? 'flex-row-reverse' : ''}`}>
+    <div className={`flex items-center gap-1.5 ${dir === 'out' ? '-mr-3 flex-row-reverse' : '-ml-3'}`}>
       {dot}
       <span className={`truncate font-mono text-[10px] ${isView ? 'text-text-2' : 'text-text-3'}`}>{port.kind}</span>
     </div>
@@ -652,6 +684,9 @@ function Inspector({
   onTab: (t: Tab) => void
   onClose: () => void
 }) {
+  // Controlled param edits, keyed by `${tool}:${param}` so switching nodes keeps prior edits.
+  // Display-only vs the emitted YAML (compose != execute), but no longer uncontrolled.
+  const [paramEdits, setParamEdits] = useState<Record<string, string>>({})
   const title = isGate ? 'Decision gate' : isAgent ? 'QC-triage agent' : tool?.tool ?? ''
   const sub = isGate ? 'terminal · runbook-read-only' : isAgent ? 'advisory · off critical path' : tool?.stageLabel ?? ''
   return (
@@ -704,17 +739,21 @@ function Inspector({
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {tab === 'params' && (
               <div className="space-y-3">
-                {tool.params.map((p) => (
-                  <div key={p.k}>
-                    <label className="mb-1 block font-mono text-[11px] text-text-2">{p.k}</label>
-                    <input
-                      defaultValue={p.v}
-                      readOnly={isView}
-                      className="w-full rounded-lg border border-line bg-card-2 px-2.5 py-1.5 font-mono text-[12px] text-text focus:border-accent focus:outline-none"
-                    />
-                    <p className="mt-0.5 text-[10.5px] text-text-3">{p.help}</p>
-                  </div>
-                ))}
+                {tool.params.map((p) => {
+                  const key = `${tool.id}:${p.k}`
+                  return (
+                    <div key={p.k}>
+                      <label className="mb-1 block font-mono text-[11px] text-text-2">{p.k}</label>
+                      <input
+                        value={paramEdits[key] ?? p.v}
+                        onChange={(e) => setParamEdits((m) => ({ ...m, [key]: e.target.value }))}
+                        readOnly={isView}
+                        className="w-full rounded-lg border border-line bg-card-2 px-2.5 py-1.5 font-mono text-[12px] text-text focus:border-accent focus:outline-none"
+                      />
+                      <p className="mt-0.5 text-[10.5px] text-text-3">{p.help}</p>
+                    </div>
+                  )
+                })}
               </div>
             )}
             {tab === 'locators' && (
@@ -787,7 +826,46 @@ function Row({ label, value }: { label: string; value: string }) {
   )
 }
 
-function Console({ open, onToggle, profile, emitted }: { open: boolean; onToggle: () => void; profile: Prof; emitted: boolean }) {
+function Console({
+  open,
+  onToggle,
+  profile,
+  emitted,
+  selected,
+  onSelect,
+}: {
+  open: boolean
+  onToggle: () => void
+  profile: Prof
+  emitted: boolean
+  selected: string | null
+  onSelect: (id: string) => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const yaml = YAML[profile]
+
+  const onCopy = () => {
+    navigator.clipboard
+      ?.writeText(yaml)
+      .then(() => {
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 1500)
+      })
+      .catch(() => {})
+  }
+
+  const onDownload = () => {
+    const blob = new Blob([yaml], { type: 'text/yaml' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'run_layout.yaml'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="shrink-0 border-t border-line bg-card">
       <button onClick={onToggle} className="flex h-9 w-full items-center gap-2 px-4 text-left">
@@ -803,28 +881,64 @@ function Console({ open, onToggle, profile, emitted }: { open: boolean; onToggle
           <div className="min-h-0 overflow-y-auto">
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.5px] text-text-3">Validation</p>
             <div className="space-y-1.5">
-              {VALIDATION.map((v) => (
-                <div key={v.code} className="flex items-start gap-2 rounded-lg border border-line bg-card px-2.5 py-2">
-                  <span className="shrink-0 rounded bg-preflight/10 px-1 py-0.5 font-mono text-[10px] font-bold text-preflight">{v.code}</span>
-                  <span className="text-[11.5px] text-text-2">{v.msg}</span>
-                </div>
-              ))}
+              {VALIDATION.map((v) => {
+                const st = SEV_STYLE[v.sev]
+                const active = v.node != null && v.node === selected
+                const inner = (
+                  <>
+                    <span className={`shrink-0 rounded px-1 py-0.5 font-mono text-[10px] font-bold ${st.chip}`}>{v.code}</span>
+                    <span className="text-[11.5px] text-text-2">{v.msg}</span>
+                  </>
+                )
+                // A check with a node is click-to-focus: selecting it opens the inspector on the node.
+                return v.node ? (
+                  <button
+                    key={v.code}
+                    onClick={() => onSelect(v.node!)}
+                    title="Focus the referenced node"
+                    className={`flex w-full items-start gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors hover:border-line-strong ${st.row} ${
+                      active ? 'ring-1 ring-accent' : ''
+                    }`}
+                  >
+                    {inner}
+                  </button>
+                ) : (
+                  <div key={v.code} className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 ${st.row}`}>
+                    {inner}
+                  </div>
+                )
+              })}
             </div>
           </div>
           <div className="flex min-h-0 flex-col">
             <div className="mb-2 flex items-center gap-2">
               <p className="text-[10px] font-semibold uppercase tracking-[0.5px] text-text-3">run_layout.yaml</p>
               <span className="ml-auto flex gap-2">
-                <button className="inline-flex cursor-default items-center gap-1 rounded border border-line px-2 py-0.5 text-[11px] text-text-2">
-                  <Copy size={12} /> Copy
+                <button
+                  onClick={onCopy}
+                  className="inline-flex items-center gap-1 rounded border border-line px-2 py-0.5 text-[11px] text-text-2 transition-colors hover:border-line-strong hover:text-text"
+                >
+                  <Copy size={12} /> {copied ? 'Copied' : 'Copy'}
                 </button>
-                <button className="inline-flex cursor-default items-center gap-1 rounded border border-line px-2 py-0.5 text-[11px] text-text-2">
+                <button
+                  onClick={onDownload}
+                  className="inline-flex items-center gap-1 rounded border border-line px-2 py-0.5 text-[11px] text-text-2 transition-colors hover:border-line-strong hover:text-text"
+                >
                   <Download size={12} /> Download
                 </button>
               </span>
             </div>
+            {emitted && (
+              <div className="mb-2 flex items-start gap-1.5 rounded-md border border-proceed-bd bg-proceed-bg px-2.5 py-1.5 text-[11px] text-proceed-fg">
+                <ShieldCheck size={13} className="mt-0.5 shrink-0" />
+                <span>
+                  Emitted <span className="font-mono">PIPEGUARD_RUN_LAYOUT={profile}</span> → <span className="font-mono">run_layout.yaml</span>. Demo build logs it
+                  to the browser console; compose never executes.
+                </span>
+              </div>
+            )}
             <pre className="min-h-0 flex-1 overflow-auto rounded-lg border border-line bg-card-2/50 p-3 font-mono text-[10.5px] leading-relaxed text-text">
-              {YAML[profile]}
+              {yaml}
             </pre>
           </div>
         </div>

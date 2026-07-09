@@ -22,6 +22,16 @@ export const VERDICT_DOT: Record<Verdict, string> = {
   escalate: 'bg-escalate',
 }
 
+// Per-verdict left border-color for a card's colored spine (pair with `border-l-[3px]`),
+// so a collapsed/compact card reads its verdict at a glance. Full static strings so the
+// Tailwind compiler emits the utilities.
+export const VERDICT_STRIPE: Record<Verdict, string> = {
+  proceed: 'border-l-proceed',
+  hold: 'border-l-hold',
+  rerun: 'border-l-rerun',
+  escalate: 'border-l-escalate',
+}
+
 // Solid verdict fills for segmented/stacked bars.
 export const VERDICT_BAR: Record<Verdict, string> = {
   proceed: 'bg-proceed',
