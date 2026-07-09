@@ -155,15 +155,27 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    `PIPEGUARD_FEEDBACK_AGENT=stub|claude` — all stub-first ($0), import `anthropic` lazily, and
    fall back to the stub on any error (incl. a safety refusal). Models via `PIPEGUARD_*_MODEL`.
 4. **Delivery layers (thin, over the core).** `app/` = Streamlit demo (kept as the
-   guaranteed-working fallback); `api/` = FastAPI read-API + **two off-gate writes**
-   (`POST /api/feedback` → `FeedbackStore`; `POST /api/pipelines` → a pluggable
-   `PipelineGraphStore` — a tolerant versioned envelope reserving a draft→approve+RBAC lifecycle,
-   T-049; both jsonl/sqlite/postgres) + the artifacts + **windowed-monitoring** endpoints
-   (`GET /api/runs/{id}/artifacts`, `GET /api/monitoring`) + runs pagination/search + honest
-   `RunSummary` status/platform/date (from the SampleSheet `[Header]`), the production seam
-   (ADR-0010/0016); `frontend/` = React + Vite + Tailwind consuming the API — the 8 operator
-   screens + the Pipeline Builder (ADR-0014). `src/pipeguard/synthetic/` drives the failure-mode
-   data generator, incl. `scale.py` for at-volume runs (`demo/scale/bulk` CLI, T-050).
+   guaranteed-working fallback); `api/` = FastAPI read-API + **off-gate writes**
+   (`POST /api/feedback` → `FeedbackStore`; `POST /api/pipelines`, now **auth-gated**
+   via `require_role` capturing `submitted_by`, → a pluggable `PipelineGraphStore` — a
+   tolerant versioned envelope reserving a draft→approve+RBAC lifecycle, T-049; both
+   jsonl/sqlite/postgres) + the artifacts + **windowed-monitoring** endpoints
+   (`GET /api/runs/{id}/artifacts`, `GET /api/monitoring`) + runs pagination/search with
+   **Tier-0 params** (status filter, platform-aware `q`, sort aliases, facet-count header) +
+   honest `RunSummary` status/platform/date (from the SampleSheet `[Header]`), the production
+   seam (ADR-0010/0016). Authz lives in the dev-shim `api/auth.py` (Role viewer|reviewer|approver
+   + `Actor` + `current_actor()` from `X-PipeGuard-Actor/-Role` headers, permissive dev-default,
+   `require_role`) — the shared authz source for the draft→approve flows and the single swap point
+   for real auth; feature-area routers under `api/routers/` (`settings.py` config-override authoring
+   T-051, `review_queue.py` ticket domain, `pipelines_lifecycle.py` submit/approve/dry-run/diff)
+   fold into `main.py`, backed by two more pluggable stores `api/settings_store.py` +
+   `api/review_store.py` (`PIPEGUARD_SETTINGS_STORE`/`PIPEGUARD_REVIEW_STORE`, jsonl/sqlite/postgres,
+   degrade-to-jsonl) joining feedback + pipeline stores; `api/card_readout.py` is an API-layer
+   QC-readout projection (card `metric_values` ⋈ runbook `QCThreshold` →
+   Metric·Observed·Threshold·Status), core card/gate untouched. `frontend/` = React + Vite +
+   Tailwind consuming the API — the 8 operator screens + the Pipeline Builder (ADR-0014).
+   `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
+   at-volume runs (`demo/scale/bulk` CLI, T-050).
 
 ## Git conventions
 

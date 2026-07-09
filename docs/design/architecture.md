@@ -76,7 +76,28 @@ Every finding and verdict is labelled with the gate it came from:
    Builder**: run overview → intake/preflight → decision cards → agent triage → review queue →
    provenance → monitoring → settings → pipeline builder (a `DecisionCard` carries `run_id`).
    The `api/` surface (all additive / backward-compatible; the core is untouched — sorting,
-   paging, aggregation, and product writes live in `api/`, never `src/pipeguard/`):
+   paging, aggregation, product writes, the draft→approve authoring lifecycle, and auth all live
+   in `api/`, never `src/pipeguard/`):
+   - **Feature-area routers (additive modularization).** New product surfaces live in `api/routers/`
+     (`settings`, `review_queue`, `pipelines_lifecycle`) + `api/card_readout.py`, each an
+     `APIRouter` mounted into `api/main.py` via `include_router` — kept **out of** `main.py` so
+     feature areas evolve independently. Purely additive: the existing `main.py` endpoints are
+     unchanged, each router computes its own data root / pulls its store via a factory (import-
+     isolated, unit-testable on a bare app), and none mutates a verdict, finding, or ledger event
+     (ADR-0001/0014).
+   - **Auth / RBAC primitive (`api/auth.py`).** One shared identity+authorization source for every
+     draft→approve flow: `Role` = `viewer` < `reviewer` < `approver` (authorization is *set-
+     membership*, not an ordinal compare), the frozen `Actor{id, role}` principal, `current_actor()`
+     (reads the `X-PipeGuard-Actor` / `X-PipeGuard-Role` headers), and `require_role(*roles)` — a
+     dependency that 403s an under-privileged caller and otherwise **returns the `Actor`** so a
+     handler gets identity + authz from one dependency (and captures `actor.id` into `*_by` audit
+     fields). **Honest posture: this is a documented DEV SHIM, not a production auth boundary.**
+     Header-trust is permissive (no headers → `Actor(id="dev", role="approver")`) so the offline
+     demo and existing tests run with zero auth wiring — any client can name itself. A real
+     deployment swaps *only* `current_actor()` for a verified identity provider (session / OIDC /
+     signed JWT) returning the same `Actor`; every `require_role(...)` gate and `actor.id` capture
+     keeps working unchanged (a single chokepoint to harden). Wholly OFF the gate: it can gate who
+     may *write* product state, never a verdict / finding / confidence / rule (ADR-0001).
    - **Runs read-API.** `GET /api/runs` (+ `/{id}`, `/{id}/cards/{sample}`, `/{id}/artifacts`).
      Each `RunSummary` now carries `platform` + `run_date` (parsed from the SampleSheet
      `[Header]`) and an **honest run-lifecycle `status`** — `running` | `needs_review` |
@@ -84,20 +105,62 @@ Every finding and verdict is labelled with the gate it came from:
      `ANALYSIS_RUN_COMPLETED` event lands, then `needs_review` if any sample is actionable, else
      `released`. It is a run-lifecycle label, **NOT** a per-sample verdict (ADR-0001), and fixes
      a bug that mislabeled a still-running / 0-attention run *Released*. `GET /api/runs` also
-     gained backward-compatible `verdict`/`q`/`sort`/`page`/`limit` params (bare call =
-     byte-identical body; pagination only when `limit` is given, totals on `X-PipeGuard-*`
-     response headers).
+     gained backward-compatible **Tier-0 list params** (bare call = byte-identical body): a
+     `status` filter on the run-lifecycle label (`running`|`needs_review`|`released`, unknown →
+     400); a **platform-aware, case-insensitive `q`** substring matching `run_id` OR `platform`
+     (so `novaseq` matches a `NovaSeq` platform); a closed `sort` vocabulary
+     ({`run_id`,`run_date`,`n_samples`,`n_attention`}, each with a `-` desc variant) plus friendly
+     **aliases** (`recent`/`urgent`/`date`) the design UI binds to; a `verdict` filter; and
+     `page`/`limit` pagination (applied only when `limit` is given). Totals + the active page/limit
+     ride `X-PipeGuard-*` response headers, and a **per-status facet count** (`X-PipeGuard-Status-
+     Counts`) is computed over the *full unfiltered* set so the All/Needs-review/Sequencing/Released
+     chips show totals independent of the active filter + page.
    - **Monitoring aggregate.** `GET /api/monitoring?window={7d|14d|30d|all}` returns one
      pre-aggregated dashboard payload (fleet KPIs, per-run rows, per-gate flagged/total, ranked
      recurring signatures) so the frontend renders from a single response instead of fanning out
      a detail fetch per run. Its `auto_proceed_pct` is a **heuristic** throughput ratio — a
      display number, not a calibrated probability (life-science guardrail 2). Aggregation
      reuses `_aggregate_metrics()` and stays in the API layer.
-   - **Off-gate product writes.** `POST /api/feedback` → a pluggable `FeedbackStore`; `POST
-     /api/pipelines` (+ `GET /api/pipelines`, `GET /api/pipelines/{name}`) → a pluggable
-     pipeline-graph store (see Swappable seams). Both are **product state OFF the decision
-     gate** — a saved graph or a feedback note never becomes a verdict, finding, or ledger
+   - **Off-gate product writes + a draft→approve authoring lifecycle.** `POST /api/feedback` → a
+     pluggable `FeedbackStore`, plus **three product stores** that now carry an audited, append-only
+     draft→approve lifecycle — each pluggable JSONL / SQLite / Postgres (degrade-to-JSONL, DSN never
+     logged), **distinct from the decision `Repository`** and never touching a verdict:
+     a. **Pipeline graphs** (`POST`/`GET /api/pipelines` + lifecycle in `api/routers/pipelines_lifecycle.py`):
+        `submit` (draft→pending_review, reviewer/approver) → `approve` (→approved, approver-only,
+        which records the emitted baseline), plus two read-only inspectors — `dry-run` (resolve the
+        graph's run-layout locators against a real run dir → `matched`|`ambiguous`|`missing`|`invalid`
+        + resolved *relative* paths) and `diff` (working vs last-emitted baseline). Dry-run is
+        **READ-ONLY: compose ≠ execute** — it globs the filesystem (traversal-hardened: absolute /
+        `..` patterns are `invalid`), never triggers a tool or orchestrator hand-off, and its
+        `executed` field is a hard-coded `False` (ADR-0001/0003).
+     b. **Settings / config overrides** (`api/routers/settings.py`): QC-threshold override drafts saved
+        under a name, approver-promotable. **It does NOT mutate the live runbook** — `DEFAULT_RUNBOOK`
+        is untouched; approving records *intent* into an override ledger, it does not change how any
+        run is gated (a future, documented-not-built step could layer the latest `approved` override
+        onto a per-run runbook *copy* at gate time). The payload is a tolerant, versioned envelope
+        stored as-is behind a **lenient sanity envelope** (reject only obviously-nonsense numbers —
+        NaN/Inf, a negative gate, a band outside [0,1]), never a field-by-field schema match, and its
+        illustrative bounds are not clinical ranges (life-science guardrail 3).
+     c. **Review-queue tickets** (`api/routers/review_queue.py`, ADR-0010): a writable HITL worklist
+        over *already-decided* samples — open (reviewer/approver), acknowledge/escalate (reviewer),
+        resolve/suppress (approver-only), reopen; RBAC + the legal-from status live in one
+        `_ACTION_RULES` table (an illegal transition → 409). A ticket **snapshots** the sample's
+        `gate`/`verdict`/`rule_id` at open-time as inert data — it never calls `run_gate` or re-enters
+        a decision.
+     Across all three, every `*_by` audit field and `actions[].actor` is **server-authored** from the
+     authenticated `Actor` (bodies are `extra="forbid"` — no client-set identity/PII), and a store
+     failure is a generic 503 that never leaks a path/DSN. A saved graph, override, or ticket (like a
+     feedback note) is **product state OFF the gate** — it never becomes a verdict, finding, or ledger
      event (ADR-0001).
+   - **Card QC-readout projection** (`api/card_readout.py`,
+     `GET /api/runs/{id}/cards/{sid}/qc-readout`): an **API-layer join** over an already-decided card
+     — the card's registry-normalized `metric_values` × the runbook's `QCThreshold`s → a gate-grouped,
+     flagged-first table of Metric · Observed · Threshold · Status. Direction (`>=`/`<=`) comes from
+     the runbook's `higher_is_better` (never guessed); an ungated metric is surfaced `not_gated`, not
+     fabricated. Its per-metric `status` is **derived to mirror the QC rule exactly** (`pass` ⟺ no
+     finding, `fail` ⟺ a CRITICAL finding, `borderline` ⟺ a WARN finding) so the readout can never
+     contradict the gate, and the **core `DecisionCard` model is untouched** — pure re-presentation,
+     off the deterministic path (ADR-0001).
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
@@ -118,7 +181,11 @@ core: it labels each run with an honest lifecycle `status` read from the provena
 filters/sorts/paginates the run list, and pre-aggregates the monitoring roll-up
 (`GET /api/monitoring`) so a dashboard renders from one response. The Pipeline Builder's
 save/version writes (`POST /api/pipelines`) land in a **separate product store**, off the gate —
-they never enter `load_run → evaluate_run` or the ledger.
+they never enter `load_run → evaluate_run` or the ledger. The same holds for the whole
+draft→approve authoring lifecycle (pipeline graphs, config-threshold overrides, review-queue
+tickets) and the per-card QC-readout: they are API-layer joins/writes over already-decided state,
+RBAC-gated by the `api/auth.py` dev shim, and never re-enter the deterministic path — an approved
+config override, notably, records intent without mutating the live runbook.
 
 ## Invariants
 
@@ -127,9 +194,16 @@ they never enter `load_run → evaluate_run` or the ledger.
 3. **Event log is authoritative**; the DB is a disposable, rebuildable projection (ADR-0002).
 4. **Core stays framework-agnostic** — no Streamlit/FastAPI/React imports in `src/pipeguard/`; ports & adapters (ADR-0003).
 5. **Findings are immutable + content-hashed**; confidence is omitted until grounded.
-6. **Off-gate product state never re-enters the gate** — in-app feedback and saved Pipeline
-   Builder graphs are written by dedicated `api/` seams to their own stores; no product write
-   becomes a verdict, finding, or authoritative ledger event (ADR-0001).
+6. **Off-gate product state never re-enters the gate** — in-app feedback, saved Pipeline Builder
+   graphs, config-threshold overrides, and review-queue tickets are written by dedicated `api/`
+   seams to their own stores (each distinct from the decision `Repository`); no product write
+   becomes a verdict, finding, or authoritative ledger event, and an approved config override never
+   mutates the live runbook (ADR-0001).
+7. **Auth is a swappable dev shim, off the gate** — `api/auth.py` is the one shared RBAC source
+   (`viewer`/`reviewer`/`approver`) for every draft→approve flow, but its header-trust
+   `current_actor()` is a permissive DEV SHIM, **not** a production auth boundary; it gates who may
+   *write* product state and never touches a verdict / finding / confidence. Hardening = swapping
+   that single function for a verified identity provider (ADR-0010).
 
 ## Swappable seams (the flex points)
 
@@ -142,6 +216,9 @@ they never enter `load_run → evaluate_run` or the ledger.
 | Repository (persistence) | `Repository` port; SqliteRepository **and** guarded PostgresRepository built (ADR-0016), `get_repository()` selects | SQLite + JSONL (Postgres off by default) |
 | Feedback sink (off-gate) | `FeedbackStore` port (`api/feedback_store.py`); jsonl/sqlite/postgres, degrade-to-JSONL (ADR-0016) | JSONL |
 | Pipeline-graph store (off-gate product) | `PIPEGUARD_PIPELINE_STORE=jsonl\|sqlite\|postgres` (`api/pipeline_store.py`); mirrors the feedback sink — degrade-to-JSONL, never logs the DSN (ADR-0016) | JSONL |
+| Settings-override store (off-gate authoring) | `PIPEGUARD_SETTINGS_STORE=jsonl\|sqlite\|postgres` (`api/settings_store.py`); config-threshold override ledger — degrade-to-JSONL, DSN never logged. Records intent; **never mutates the live runbook** (ADR-0001/0016) | JSONL |
+| Review-queue store (off-gate product) | `PIPEGUARD_REVIEW_STORE=jsonl\|sqlite\|postgres` (`api/review_store.py`); ticket lifecycle over already-decided samples — degrade-to-JSONL, DSN never logged (ADR-0010/0016) | JSONL |
+| Auth / identity (off-gate) | `api/auth.py` `current_actor()` header-shim (`X-PipeGuard-Actor`/`-Role`) → swap for a verified IdP (OIDC / signed JWT) returning the same `Actor`; one chokepoint, downstream `require_role(...)` unchanged (ADR-0010) | permissive dev shim (`id=dev`, `role=approver`) |
 | Deployment | ports & adapters; Nextflow compute portability (ADR-0003) | local |
 
 Unlike the AI/notify seams (off by default, adapter-swapped at the edge), the **metric registry

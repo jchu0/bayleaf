@@ -75,10 +75,51 @@ without a migration.
 title→slug step (`name` is charset-locked). The draft→approve UI can rely on `status` + the `*_by`
 fields existing on read; the transition endpoint is still to come.
 
+## 5. Batch 2 (later 2026-07-09) — auth, RBAC surfaces, card readout, Tier-0 params
+
+**5a. Auth headers (RBAC).** Every write/transition below is gated by a role. Send two request
+headers on those calls: `X-PipeGuard-Actor: <user-id>` + `X-PipeGuard-Role: viewer|reviewer|approver`
+(today's UI `a.rivera` / `Reviewer` becomes these). With no headers the backend uses a permissive
+**dev-default** (`dev` / `approver`) so nothing breaks — but a real deployment enforces them. Read
+the role to show/hide approve controls. Insufficient role → `403`. (Dev shim; ADR-0017.)
+
+**5b. `/api/runs` Tier-0 params** (additive on the runs list): `status=running|needs_review|released`
+filter; `q` now matches **run_id OR platform** (case-insensitive — the "search run id or platform"
+box); sort aliases `recent|urgent|date` (plus the canonical tokens). **Per-status facet counts** ride
+on an `X-PipeGuard-Status-Counts` header (JSON `{running,needs_review,released}`, CORS-exposed) — the
+All/Needs-review/Sequencing/Released chips read totals from it, independent of the active page/filter.
+Note: the backend value is `needs_review` (map to your `review` label on display).
+
+**5c. Decision-card QC readout.** `GET /api/runs/{id}/cards/{sid}/qc-readout` → `{ header, readout }`:
+`readout` is gate-grouped rows `{ metric, label, observed_display, threshold_display, status: pass|borderline|fail|not_gated, flagged }` (borderline = missed the gate but not past hard-fail); `header`
+carries sample_type / origin / library_prep + a `not_captured` list (never fabricated). This is the
+hero QC table (brief §5a). Core card unchanged — it's a projection.
+
+**5d. Settings authoring** (`/api/settings/thresholds`). `POST` (role reviewer+) saves a **draft**
+config-override `{ name (slug), payload (JSON) }` → `201 { id, name, version, status, submitted_by }`;
+`GET` = latest per name; `GET /{name}` = versions; `POST /{name}/approve` (approver-only) → approved +
+`approved_by`. Versioned, audited, sanity-guardrailed. Does **not** change the live runbook yet.
+
+**5e. Review-queue / tickets** (`/api/review/tickets`). `POST` (reviewer+) creates `{ run_id, sample_id,
+gate, verdict, rule_id, title, priority }`; `GET?status=&run_id=&rule_id=` lists; `POST /{id}/action`
+`{ action: acknowledge|resolve|escalate|suppress|reopen }` (resolve/suppress approver-only) transitions
+`open→in_review→resolved` with an actor+timestamp audit trail. Off the gate. This is the escalation
+target for Monitoring (count ≥ 3) and the triage queue.
+
+**5f. Pipeline lifecycle** (extends §4). `POST /api/pipelines/{name}/submit` (reviewer+, draft→pending_review),
+`/approve` (approver-only, → approved + diff baseline), `/dry-run?run_id=` (READ-ONLY — resolves each
+locator vs a real run dir → `matched|ambiguous|missing`; **never runs anything**), `GET /{name}/diff`
+(working vs last-emitted). Only an approved graph is "blessed."
+
 ## What is NOT built (so design plans around it)
 
-1. **Config/settings authoring store** (the Settings `draft→save→approve` + sanity-guardrails
-   backend) — deferred (T-047), because its validation is coupled to design's settings surface.
-2. **The pipeline approve transition + auth/RBAC enforcement** — fields are reserved; the state
-   machine + real principals are the next backend step once the flow is designed.
-3. Any `frontend/` change — untouched; consuming all of the above is the implementation step.
+1. **Decision-card CORE enrichment** — per-gate sub-verdict rollup, the linked-sample cross-link
+   (S4↔S5 swap), sample-provenance metadata, context-rail fields. These touch the core card and were
+   deliberately off this burst (gate-output risk); the §5c readout is the projection-safe subset that
+   shipped.
+2. **Tier-2 north-star** (T-057): run submissions/ingest + samplesheet upload, the BaseSpace connector,
+   conversational multi-turn triage chat, the pipeline-repair + archivist agents, and the run hand-off.
+   The hand-off/ingest ones must preserve **compose ≠ execute** (emit + hand off, never run).
+3. **Real auth** behind `X-PipeGuard-*` (today a dev shim) + the **median-review-time** KPI wiring
+   (the review store already records the timestamps).
+4. Any `frontend/` change — untouched; consuming all of the above is the implementation step.

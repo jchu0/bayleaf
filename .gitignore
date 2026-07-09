@@ -72,6 +72,10 @@ pipeline_graphs.sqlite
 review_tickets.jsonl
 review_tickets.jsonl.tmp
 review_tickets.sqlite
+# Settings/config-authoring override drafts (T-051) — product state, never committed.
+settings_overrides.jsonl
+settings_overrides.jsonl.tmp
+settings_overrides.sqlite
 
 # Node (in case of a web frontend)
 node_modules/

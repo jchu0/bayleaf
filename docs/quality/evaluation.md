@@ -19,15 +19,18 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **261 tests across 14 files** — 258 pass and 3 skip (the Postgres
+The offline suite is **320 tests across 19 files** — 317 pass and 3 skip (the Postgres
 live-integration checks in `test_persistence_postgres_live`, which need a reachable Postgres
 and are off by default). By collected size: `test_api` (41), `test_notify` (36),
 `test_synthetic` (32), `test_fetch_giab` (32), `test_gate` (29), `test_persistence` (17),
-`test_metrics` (17), `test_triage` (16), `test_gate_notify` (9), `test_artifacts_s3` (9),
-`test_pipelines` (8, the Pipeline Builder save/version store), `test_artifacts` (7),
-`test_metrics_mapping` (5), `test_persistence_postgres_live` (3) — all runnable offline with
-no API key (`uv sync --all-extras && uv run pytest`; the `test_api` and `test_triage` suites
-need the api/claude extras to import FastAPI).
+`test_metrics` (17), `test_triage` (16), `test_settings` (13, config-override authoring),
+`test_review_queue` (13, the ticket domain), `test_card_readout` (12, the QC-readout projection),
+`test_pipeline_lifecycle` (11, submit/approve/dry-run/diff), `test_auth` (10, the RBAC dev shim),
+`test_gate_notify` (9), `test_artifacts_s3` (9), `test_pipelines` (8, the Pipeline Builder
+save/version store), `test_artifacts` (7), `test_metrics_mapping` (5),
+`test_persistence_postgres_live` (3) — all runnable offline with no API key
+(`uv sync --all-extras && uv run pytest`; the `test_api` and `test_triage` suites need the
+api/claude extras to import FastAPI).
 
 ## What "good" means (principles)
 

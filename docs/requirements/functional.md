@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) |
 
 ## Overview
 
@@ -185,6 +185,86 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    errors, or is refused by a safety classifier, the system degrades to the stub;
    the deterministic verdict and findings still stand. *Trace:* ADR-0006,
    [demo_plan.md](../demo/demo_plan.md) §Fallbacks.
+
+## Authoring lifecycle, RBAC & operator surfaces (ADR-0010/0014/0016)
+
+Backend surfaces layered **over** the read-API, all **additive/backward-compatible**,
+**off the deterministic gate** (never set/override a verdict, confidence, or provenance
+event; ADR-0001), and **offline-testable** with no auth wiring. They realize the
+`draft→approve` review lifecycle, RBAC, and operator-workflow endpoints the
+[backend-contracts handoff](../design/frontend/handoffs/2026-07-09-backend-contracts.md)
+had reserved or listed as *not-yet-built*.
+
+1. **REQ-F-060 — Identity + RBAC primitive (DEV SHIM).** `api/auth.py` gives the
+   write/authoring surfaces one shared current-user + role source: a `Role`
+   (**viewer | reviewer | approver**), an `Actor{id, role}`, `current_actor()` reading the
+   `X-PipeGuard-Actor` / `X-PipeGuard-Role` request headers with a **permissive DEV-DEFAULT**
+   (`id=dev`, `role=approver`) so the offline demo and tests need no auth wiring, and
+   `require_role(*roles)` (raises **403** on an insufficient role). It is explicitly a
+   documented **DEV SHIM** — it *trusts* the headers, so it is trivially **spoofable** and is
+   **not** real authentication — behind a single swap point for a production identity provider.
+   It grants access only; it never touches a verdict or finding (ADR-0001). *Trace:*
+   [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md) §"NOT built #2",
+   [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md),
+   [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md),
+   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md).
+2. **REQ-F-061 — Pipeline approve lifecycle.** `api/routers/pipelines_lifecycle.py` realizes
+   the `draft→save→approve` review flow that REQ-F-045 previously only **reserved** on the
+   pipeline envelope: `POST /api/pipelines/{name}/submit` (draft → **pending_review**,
+   reviewer+), `/approve` (pending_review → **approved**, **approver-only**, stamps
+   `approved_by` + records the diff baseline), `/dry-run?run_id=…` — a **READ-ONLY** locator
+   resolver that checks a composed graph's locators against a real run directory
+   (**compose ≠ execute**: it never triggers a run — ADR-0001/0003), and
+   `GET /api/pipelines/{name}/diff` (vs the last emitted/approved version). Role gates come from
+   `require_role` (REQ-F-060). *Trace:*
+   [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md) §4/§"NOT built #2",
+   [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md),
+   [ADR-0016](../adr/ADR-0016-postgres-port.md),
+   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)/[ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md),
+   [tasks T-049](../planning/tasks.md).
+3. **REQ-F-062 — Config/settings authoring store *(wishlist T-051)*.** `api/routers/settings.py`
+   + `api/settings_store.py` add `draft→save→approve` **config-override** authoring with
+   reviewer/approver RBAC (REQ-F-060), an audit trail, and **lenient sanity guardrails** (range
+   checks, not clinical thresholds), storing each override as a **tolerant versioned envelope** in
+   a pluggable store (`PIPEGUARD_SETTINGS_STORE=jsonl|sqlite|postgres`, degrade-to-JSONL, ADR-0016),
+   mirroring the pipeline store (REQ-F-045). It **does NOT mutate the live runbook** — actually
+   applying an approved override to a run is a documented **off-gate seam**, not yet wired, so
+   REQ-F-015 (runbook profiles decide thresholds) still holds. *Trace:*
+   [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md) §"NOT built #1",
+   [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md),
+   [ADR-0016](../adr/ADR-0016-postgres-port.md),
+   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+   [tasks T-051](../planning/tasks.md).
+4. **REQ-F-063 — Review-queue / ticket domain.** `api/routers/review_queue.py` +
+   `api/review_store.py` back the review-queue screen (REQ-F-042) with a persisted ticket
+   domain: create/list tickets plus a **role-gated action lifecycle**
+   (acknowledge / resolve / escalate / suppress / reopen; **resolve & suppress are
+   approver-only**, the rest reviewer+ via `require_role`, REQ-F-060), a ticket `status`
+   ∈ **open | in_review | resolved**, and recorded review-action timestamps. It is **off-gate** —
+   a ticket, suppression, or resolution never changes a verdict or a finding (ADR-0001,
+   consistent with REQ-F-004). *Trace:*
+   [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md),
+   [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md),
+   [ADR-0016](../adr/ADR-0016-postgres-port.md),
+   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), REQ-F-042.
+5. **REQ-F-064 — Decision-card QC readout (pure projection).** `api/card_readout.py` exposes
+   `GET /api/runs/{id}/cards/{sid}/qc-readout` → an **API-layer projection** that joins the
+   card's `metric_values` with the runbook `QCThreshold`s into a **gate-grouped
+   Metric · Observed · Threshold · Status** table for the MetricsPanel (REQ-F-042 / T-045). It is
+   read-only and **derives nothing new** — the core `DecisionCard`, its findings, and the gate are
+   untouched (ADR-0001); Status is a deterministic restatement of the already-decided gate, not a
+   re-evaluation. *Trace:* [schemas.md](../data/schemas.md) §DecisionCard/QC,
+   [qc_metrics.md](../data/qc_metrics.md),
+   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [tasks T-045](../planning/tasks.md).
+6. **REQ-F-065 — Runs-list reconciliations (Tier-0).** `GET /api/runs` gains, on top of the
+   additive params in REQ-F-047: a `status` filter (**running | needs_review | released**, keyed to
+   the honest lifecycle of REQ-F-046), `q` now matching **run_id OR platform** (case-insensitive,
+   was run_id only), friendly sort aliases (**recent / urgent / date** over the raw sort keys), and
+   **per-status facet counts** returned on an `X-PipeGuard-Status-Counts` response header. All
+   optional and additive — no params still yields a byte-identical `RunSummary[]` body (REQ-F-047).
+   *Trace:* [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md) §2,
+   [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), REQ-F-046/REQ-F-047,
+   [tasks T-048](../planning/tasks.md).
 
 ## Notes / deferred
 
