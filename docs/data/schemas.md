@@ -119,8 +119,11 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
     **run_id** *(human run id, e.g. `mock_run_01`; contextual — not in `content_hash`)* ·
     sample_id · verdict (`proceed|hold|rerun|escalate`) · **confidence?** *(nullable —
     omitted until grounded)* · headline · rationale · next_steps[] · finding_ids[] ·
-    gate_results[] (GateResult) · generated_by · model · **content_hash** · created_at ·
-    supersedes_card_id?. *(`is_current` is a projection, not stored truth.)*
+    gate_results[] (GateResult) · **metric_values[]** *(MetricValue; registry-normalized QC
+    metrics for the sample, T-025 — contextual ML/audit metadata surfaced to API/frontend;
+    like `run_id`, excluded from `content_hash` — ADR-0007)* · generated_by · model ·
+    **content_hash** · created_at · supersedes_card_id?. *(`is_current` is a projection, not
+    stored truth.)*
 
 ### Provenance / events (append-only — ADR-0002)
 11. **ProvenanceEvent** (`evt_`) — event_type *(vocabulary below)* · analysis_run_id ·

@@ -52,7 +52,7 @@ e. **Live Slack ops integration.** An outbound port turns each *actionable* card
 
 ## 4. Why it's real (not a mock-up)
 
-a. **159 offline tests across 10 files**, all runnable with no API key
+a. **320 offline tests across 19 files (317 pass; 3 Postgres live-integration skips)**, all runnable with no API key
    (`uv sync --all-extras && uv run pytest`) — pinning verdicts, the ledger→DB rebuild,
    the units contract, the AI-degrades-to-stub path, and the notify seam.
 b. **Real GIAB HG002 data runs through the FULL gate** on a bioconda toolchain — the fetch is

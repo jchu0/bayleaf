@@ -5,7 +5,7 @@
 | **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043) + pluggable **pipeline-graph store BUILT (T-049)**, all OFF by default; **live-Postgres integration test BUILT + verified green** (`tests/test_persistence_postgres_live.py`, compose-gated + skip-safe); connection pooling + read-from-projection deferred |
 | **Date** | 2026-07-09 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [tasks.md](../planning/tasks.md) |
+| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [tasks.md](../planning/tasks.md) |
 
 ## Context
 
@@ -58,7 +58,10 @@ So the port must be **real but guarded** — present as a production seam, invis
    per-name `version`, and it **reserves** a `draft→save→approve` review lifecycle (`status` +
    reviewer/approver fields, server-authored, never client-set — no identity via the `extra="forbid"`
    body). This is the pattern's third instance (Repository / feedback / pipeline), so it earns a
-   note here rather than its own ADR; the approve transition + auth are a not-yet-built seam.
+   note here rather than its own ADR; the approve transition + auth are now realized —
+   `api/routers/pipelines_lifecycle.py` adds `POST /{name}/submit` (draft→pending_review) and
+   `POST /{name}/approve` (pending_review→approved, approver-only), each gated by
+   `api/auth.require_role` ([ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md)).
 
 ## Assumptions
 

@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · Notify port BUILT + wired + live-Slack verified (T-015b); read API BUILT (FastAPI, ADR-0014); off-gate feedback write BUILT (`POST /api/feedback`, T-042/W12); card status lifecycle deferred |
+| **Status** | Accepted · Notify port BUILT + wired + live-Slack verified (T-015b); read API BUILT (FastAPI, ADR-0014); off-gate feedback write BUILT (`POST /api/feedback`, T-042/W12); **review-queue Ticket status lifecycle BUILT** (`open → in_review → resolved` with reviewer/approver RBAC — `api/routers/review_queue.py` + `api/review_store.py`, [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md)); Jira write-adapter deferred |
 | **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) · 2026-07-09 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0008](ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0016](ADR-0016-postgres-port.md), [data/schemas.md](../data/schemas.md) |
+| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0008](ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0016](ADR-0016-postgres-port.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [data/schemas.md](../data/schemas.md) |
 
 ## Context
 
@@ -80,13 +80,22 @@ surface that lets operators act on surfaced outputs.
    agent** (`api/feedback_agent.py`) categorizes the corpus out-of-band. The **card
    status-transition writes** (Jira/ticketing) remain the deferred write phase — feedback is
    telemetry, not a ticket mutation.
-3. **Cards-as-tickets: partial.** `DecisionCard` is the operator-facing unit and the dashboard
-   review queue. The explicit `open → in-review → resolved` status lifecycle
-   (`ReviewItem`/`Ticket`, schemas.md §17), the **Jira** adapter (a write action that creates
-   persistent tickets — needs an idempotency guard keyed off the card `content_hash` so
-   re-runs don't spam duplicates; deferred to the ticketing/write-action phase), and the
-   resolved-cards → experience-ledger loop ([ADR-0009](ADR-0009-corpora-retrieval-upskilling.md))
-   remain MVP-deferred. (Teams/Discord notify adapters are now built — see item 1, T-035.)
+3. **Cards-as-tickets: status lifecycle now BUILT.** `DecisionCard` is the operator-facing unit and
+   the dashboard review queue. The explicit `open → in_review → resolved` status lifecycle
+   (the `Ticket` model, schemas.md §17) is now realized as a **writable review queue** with
+   reviewer/approver RBAC: `api/routers/review_queue.py` exposes a `Ticket` (`TicketStatus
+   open|in_review|resolved`) driven by a `_ACTION_RULES` state machine over
+   acknowledge/escalate/resolve/suppress/reopen, via `POST /api/review/tickets` + `GET` +
+   `POST /{id}/action`, backed by the pluggable `api/review_store.py` (jsonl/sqlite/postgres,
+   degrade-to-JSONL). It stays off the deterministic gate
+   ([ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md)) and is gated by the shared identity/RBAC
+   primitive ([ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md)). Still MVP-deferred: the
+   **Jira** write-adapter (a write action that creates persistent tickets — needs an idempotency
+   guard keyed off the card `content_hash` so re-runs don't spam duplicates), class-wide suppression
+   muting of *future* tickets for a `rule_id` (`suppress` today resolves the one ticket + marks the
+   class handled), and the resolved-cards → experience-ledger loop
+   ([ADR-0009](ADR-0009-corpora-retrieval-upskilling.md)). (Teams/Discord notify adapters are also
+   built — see item 1, T-035.)
 
 ## Revisit when
 

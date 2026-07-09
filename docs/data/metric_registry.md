@@ -32,7 +32,7 @@ metrics:
   <our_key>:
     display_name: str
     gate: preflight | qc | variant
-    category: base_quality | yield | duplication | alignment | enrichment | coverage | uniformity | identity | contamination | depth | genotype_quality | sanity
+    category: str                 # free-form descriptive label, not an enum (e.g. base_quality, yield, alignment, enrichment, coverage, identity, contamination, run_qc) — matches MetricEntry.category in registry.py
     canonical_unit: fraction | percent | x | ratio | phred | count | bool
     value_type: float | int | bool
     direction: higher_is_better | lower_is_better | target_band

@@ -128,7 +128,8 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    [demo_plan.md](../demo/demo_plan.md), [architecture.md](../design/architecture.md),
    [tasks T-022/T-022b/T-037](../planning/tasks.md).
 4. **REQ-F-044 — In-app feedback (off-gate telemetry).** The app captures product feedback
-   via the one write endpoint, `POST /api/feedback` — a per-decision agree/disagree signal
+   via the app's first write endpoint (now one of several off-gate product-domain writes),
+   `POST /api/feedback` — a per-decision agree/disagree signal
    (keyed to verdict + gate + rule ids + card hash) and a global product note, each tagged with
    the originating UI `source`. It is **off the deterministic gate** (never mutates a
    verdict/provenance event; ADR-0001), carries **no operator identity** (`extra="forbid"`
@@ -153,7 +154,9 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    storing the graph as a **tolerant versioned envelope** (arbitrary payload kept as-is) with a
    server-authored monotonic per-name version. It **reserves** a `draft→save→approve` review
    lifecycle (`status` + reviewer/approver fields, server-authored, no identity via the
-   `extra="forbid"` body); the approve transition + auth are a not-yet-built seam. *Trace:*
+   `extra="forbid"` body); the approve transition + auth are now realized in REQ-F-061
+   (`api/routers/pipelines_lifecycle.py` + `api/auth.py`,
+   [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md)). *Trace:*
    [pipeline-builder-brief.md](../design/frontend/pipeline-builder-brief.md),
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
    [tasks T-044/T-049](../planning/tasks.md).
@@ -186,7 +189,7 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    the deterministic verdict and findings still stand. *Trace:* ADR-0006,
    [demo_plan.md](../demo/demo_plan.md) §Fallbacks.
 
-## Authoring lifecycle, RBAC & operator surfaces (ADR-0010/0014/0016)
+## Authoring lifecycle, RBAC & operator surfaces (ADR-0010/0014/0016/0017)
 
 Backend surfaces layered **over** the read-API, all **additive/backward-compatible**,
 **off the deterministic gate** (never set/override a verdict, confidence, or provenance

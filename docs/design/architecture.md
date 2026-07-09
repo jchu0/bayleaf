@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [provenance.md](../data/provenance.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [provenance.md](../data/provenance.md) |
 
 ## Overview
 
@@ -165,9 +165,12 @@ Every finding and verdict is labelled with the gate it came from:
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
    the cited observed-vs-expected evidence. Like every other seam it **formats what the gate
-   decided, never a verdict** (ADR-0001): stub-first ($0, in-memory), Slack adapter off by
-   default, live post armed only by `PIPEGUARD_SLACK_LIVE`, and every send recorded as a
-   `notification.emitted` ledger event. `python -m pipeguard.notify <run_dir>` is the CLI.
+   decided, never a verdict** (ADR-0001): stub-first ($0, in-memory), with Slack / Teams /
+   Discord adapters all off by default — each armed only by its OWN live flag
+   (`PIPEGUARD_SLACK_LIVE` / `PIPEGUARD_TEAMS_LIVE` / `PIPEGUARD_DISCORD_LIVE`, the webhook
+   pair also needing `PIPEGUARD_{TEAMS,DISCORD}_WEBHOOK_URL`), so arming one channel never
+   arms another — and every send recorded as a `notification.emitted` ledger event.
+   `python -m pipeguard.notify <run_dir>` is the CLI.
 
 ## Data flow
 
@@ -190,7 +193,7 @@ config override, notably, records intent without mutating the live runbook.
 ## Invariants
 
 1. **Rules decide; AI is advisory** — never sets/overrides a verdict or confidence (ADR-0001).
-2. **AI is OFF by default** with a deterministic fallback; both AI seams flip via env, $0 by default (ADR-0006).
+2. **AI is OFF by default** with a deterministic fallback; all three AI seams flip via env, $0 by default (ADR-0006).
 3. **Event log is authoritative**; the DB is a disposable, rebuildable projection (ADR-0002).
 4. **Core stays framework-agnostic** — no Streamlit/FastAPI/React imports in `src/pipeguard/`; ports & adapters (ADR-0003).
 5. **Findings are immutable + content-hashed**; confidence is omitted until grounded.
@@ -203,7 +206,7 @@ config override, notably, records intent without mutating the live runbook.
    (`viewer`/`reviewer`/`approver`) for every draft→approve flow, but its header-trust
    `current_actor()` is a permissive DEV SHIM, **not** a production auth boundary; it gates who may
    *write* product state and never touches a verdict / finding / confidence. Hardening = swapping
-   that single function for a verified identity provider (ADR-0010).
+   that single function for a verified identity provider (ADR-0010/0017).
 
 ## Swappable seams (the flex points)
 
@@ -211,14 +214,15 @@ config override, notably, records intent without mutating the live runbook.
 |---|---|---|
 | Synthesizer (narration) | `PIPEGUARD_SYNTHESIZER=stub\|claude` | stub ($0) |
 | Triage agent | `PIPEGUARD_TRIAGE_AGENT=stub\|claude` | stub ($0) |
-| Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack`; `PIPEGUARD_SLACK_LIVE=1` to arm the live post | stub ($0, no network) |
+| Feedback-triage agent (off-gate) | `PIPEGUARD_FEEDBACK_AGENT=stub\|claude` (`PIPEGUARD_FEEDBACK_MODEL`); advisory categorization of the in-app feedback corpus (`api/feedback_agent.py`) | stub ($0) |
+| Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack\|teams\|discord`; each adapter armed by its OWN `PIPEGUARD_{SLACK,TEAMS,DISCORD}_LIVE=1` (Teams/Discord also need `PIPEGUARD_{TEAMS,DISCORD}_WEBHOOK_URL`) | stub ($0, no network) |
 | Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — add/remap a source metric without touching rules | canonical decimals; ON the critical path |
 | Repository (persistence) | `Repository` port; SqliteRepository **and** guarded PostgresRepository built (ADR-0016), `get_repository()` selects | SQLite + JSONL (Postgres off by default) |
 | Feedback sink (off-gate) | `FeedbackStore` port (`api/feedback_store.py`); jsonl/sqlite/postgres, degrade-to-JSONL (ADR-0016) | JSONL |
 | Pipeline-graph store (off-gate product) | `PIPEGUARD_PIPELINE_STORE=jsonl\|sqlite\|postgres` (`api/pipeline_store.py`); mirrors the feedback sink — degrade-to-JSONL, never logs the DSN (ADR-0016) | JSONL |
 | Settings-override store (off-gate authoring) | `PIPEGUARD_SETTINGS_STORE=jsonl\|sqlite\|postgres` (`api/settings_store.py`); config-threshold override ledger — degrade-to-JSONL, DSN never logged. Records intent; **never mutates the live runbook** (ADR-0001/0016) | JSONL |
 | Review-queue store (off-gate product) | `PIPEGUARD_REVIEW_STORE=jsonl\|sqlite\|postgres` (`api/review_store.py`); ticket lifecycle over already-decided samples — degrade-to-JSONL, DSN never logged (ADR-0010/0016) | JSONL |
-| Auth / identity (off-gate) | `api/auth.py` `current_actor()` header-shim (`X-PipeGuard-Actor`/`-Role`) → swap for a verified IdP (OIDC / signed JWT) returning the same `Actor`; one chokepoint, downstream `require_role(...)` unchanged (ADR-0010) | permissive dev shim (`id=dev`, `role=approver`) |
+| Auth / identity (off-gate) | `api/auth.py` `current_actor()` header-shim (`X-PipeGuard-Actor`/`-Role`) → swap for a verified IdP (OIDC / signed JWT) returning the same `Actor`; one chokepoint, downstream `require_role(...)` unchanged (ADR-0010/0017) | permissive dev shim (`id=dev`, `role=approver`) |
 | Deployment | ports & adapters; Nextflow compute portability (ADR-0003) | local |
 
 Unlike the AI/notify seams (off by default, adapter-swapped at the edge), the **metric registry
