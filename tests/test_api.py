@@ -53,6 +53,24 @@ def test_card_endpoint_and_404s():
     assert client.get("/api/runs/NOPE").status_code == 404
 
 
+def test_artifacts_endpoint_maps_stages_with_real_hash_and_origin():
+    arts = client.get("/api/runs/mock_run_01/artifacts").json()
+    by_name = {a["name"]: a for a in arts}
+    # The metadata artifacts map to their pipeline stages (SampleSheet is the demux barcode
+    # manifest the preflight gate consumes, not an intake input)...
+    assert by_name["SampleSheet.csv"]["stage"] == "demux"
+    assert by_name["sample_metadata.csv"]["stage"] == "intake"
+    assert by_name["demux_stats.csv"]["stage"] == "demux"
+    assert by_name["qc_metrics.csv"]["stage"] == "qc"
+    # ...each carries the run's origin tag and a real (small-file) sha256 + byte size.
+    sheet = by_name["SampleSheet.csv"]
+    assert sheet["origin"] == "contrived"
+    assert len(sheet["sha256"]) == 64 and sheet["size_bytes"] > 0
+    # The origin marker itself is never surfaced as a data artifact.
+    assert "origin" not in by_name
+    assert client.get("/api/runs/NOPE/artifacts").status_code == 404
+
+
 def test_runbook_endpoint_exposes_thresholds():
     body = client.get("/api/runbook").json()
     # Life-science guardrail: the policy must read as illustrative, never clinical.

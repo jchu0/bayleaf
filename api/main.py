@@ -10,6 +10,7 @@ Run:  uv run uvicorn api.main:app --reload --port 8010
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 from collections import Counter
@@ -61,6 +62,24 @@ class RunDetail(BaseModel):
     summary: RunSummary
     cards: list[DecisionCard]
     events: list[ProvenanceEvent]
+
+
+class RunArtifact(BaseModel):
+    """One data artifact in a run's lineage, mapped to a pipeline stage (the provenance
+    canvas's data-I/O drill-in, §5).
+
+    `sha256` + `size_bytes` are read from the actual file on disk; `origin` carries the run's
+    provenance tag so a consumer never mistakes a contrived/synthetic artifact for real
+    (CLAUDE.md data-handling). Large raw reads (BAM/VCF) are size-listed but not hashed
+    (`sha256` is null) so the endpoint never slurps a multi-GB file to compute a hash.
+    """
+
+    name: str
+    stage: str  # intake | demux | qc | align | variant | gate
+    role: str  # "input" | "output"
+    sha256: str | None
+    size_bytes: int
+    origin: str
 
 
 # Life-science guardrail (CLAUDE.md, "Runbook thresholds are illustrative/configurable, not
@@ -183,6 +202,87 @@ def get_card_triage(run_id: str, sample_id: str) -> TriageNote:
             status_code=404, detail=f"Sample '{sample_id}' is clean; no triage note"
         )
     return note
+
+
+# --- Provenance data-I/O (the §5 canvas drill-in) --------------------------------------------
+
+# Never read a raw-reads artifact (BAM/VCF, potentially GB) into memory just to hash it: above
+# this cap, `sha256` is null and only the on-disk size is reported.
+_HASH_MAX_BYTES = 8 * 1024 * 1024
+
+# Filename → (pipeline stage, I/O role). The small committed metadata artifacts map explicitly;
+# raw-read extensions fall through to the suffix rules below so a future real-reads run still
+# lands each file on the right stage instead of vanishing.
+_ARTIFACT_STAGE: dict[str, tuple[str, str]] = {
+    # SampleSheet is the barcode manifest demux consumes — the preflight (demux) gate compares
+    # it against demux_stats for index integrity — so it lands on demux, not intake.
+    "sample_metadata.csv": ("intake", "input"),
+    "samplesheet.csv": ("demux", "input"),
+    "demux_stats.csv": ("demux", "output"),
+    "qc_metrics.csv": ("qc", "output"),
+    "pipeline.log": ("gate", "input"),
+}
+_SKIP_ARTIFACTS = {"origin"}  # provenance marker, not a data artifact
+_SKIP_SUFFIXES = {".bai", ".tbi", ".csi", ".pyc"}  # index/sidecar files
+
+
+def _artifact_stage_role(name: str) -> tuple[str, str] | None:
+    lower = name.lower()
+    if lower in _ARTIFACT_STAGE:
+        return _ARTIFACT_STAGE[lower]
+    if lower.endswith((".bam", ".cram")):
+        return ("align", "output")
+    if lower.endswith((".vcf", ".vcf.gz")):
+        return ("variant", "output")
+    if lower.endswith((".fastq", ".fastq.gz", ".fq", ".fq.gz")):
+        return ("demux", "output")
+    return None
+
+
+def _sha256_of(path: Path) -> str | None:
+    """Streamed content hash for the integrity column; None above the size cap so we never
+    slurp a raw-reads file into memory."""
+    if path.stat().st_size > _HASH_MAX_BYTES:
+        return None
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+@app.get("/api/runs/{run_id}/artifacts")
+def list_run_artifacts(run_id: str) -> list[RunArtifact]:
+    """A run's data artifacts mapped to pipeline stages, each with a real integrity hash,
+    byte size, and origin tag (the provenance canvas's data-I/O drill-in, §5).
+
+    Every row carries the run's `origin` (real-giab / synthetic / contrived) so a consumer
+    never mistakes a contrived artifact for real data (CLAUDE.md data-handling). Raw reads
+    above `_HASH_MAX_BYTES` are size-listed with `sha256: null` rather than hashed.
+    """
+    run_dir = DATA_ROOT / run_id
+    if not run_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Unknown run '{run_id}'")
+    origin = _run_origin(run_id)
+    out: list[RunArtifact] = []
+    for p in sorted(run_dir.iterdir()):
+        if not p.is_file() or p.name in _SKIP_ARTIFACTS or p.suffix in _SKIP_SUFFIXES:
+            continue
+        stage_role = _artifact_stage_role(p.name)
+        if stage_role is None:
+            continue
+        stage, role = stage_role
+        out.append(
+            RunArtifact(
+                name=p.name,
+                stage=stage,
+                role=role,
+                sha256=_sha256_of(p),
+                size_bytes=p.stat().st_size,
+                origin=origin,
+            )
+        )
+    return out
 
 
 @app.get("/api/config")

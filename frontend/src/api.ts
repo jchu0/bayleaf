@@ -1,4 +1,4 @@
-import type { MetricCatalog, RunDetail, Runbook, RunSummary, TriageNote } from './types'
+import type { MetricCatalog, RunArtifact, RunDetail, Runbook, RunSummary, TriageNote } from './types'
 
 async function get<T>(url: string): Promise<T> {
   const res = await fetch(url)
@@ -10,6 +10,7 @@ async function get<T>(url: string): Promise<T> {
 export const api = {
   runs: () => get<RunSummary[]>('/api/runs'),
   run: (runId: string) => get<RunDetail>(`/api/runs/${encodeURIComponent(runId)}`),
+  artifacts: (runId: string) => get<RunArtifact[]>(`/api/runs/${encodeURIComponent(runId)}/artifacts`),
   triage: (runId: string, sampleId: string) =>
     get<TriageNote>(
       `/api/runs/${encodeURIComponent(runId)}/cards/${encodeURIComponent(sampleId)}/triage`,

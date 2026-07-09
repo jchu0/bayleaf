@@ -104,6 +104,21 @@ export type RunSummary = {
   counts: Record<string, number>
 }
 
+// The pipeline stages of the provenance canvas (§5). Fixed order: intake → demux → qc →
+// align → variant → gate; the three gate checkpoints attach to demux/qc/variant.
+export type PipelineStage = 'intake' | 'demux' | 'qc' | 'align' | 'variant' | 'gate'
+
+// One data artifact in a run's lineage (GET /api/runs/:id/artifacts). sha256 is null for
+// raw reads above the API's hash cap; origin tags where the data came from.
+export type RunArtifact = {
+  name: string
+  stage: PipelineStage
+  role: 'input' | 'output'
+  sha256: string | null
+  size_bytes: number
+  origin: string
+}
+
 export type RunDetail = {
   run_id: string
   summary: RunSummary
