@@ -1,0 +1,12 @@
+# Grafana datasource provisioning for the optional docker-compose telemetry demo.
+# Points Grafana at the Prometheus service defined in docker-compose.yml.
+
+apiVersion: 1
+
+datasources:
+  - name: PipeGuard-Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true

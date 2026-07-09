@@ -1,0 +1,27 @@
+# Prometheus scrape config for the PipeGuard read-API `/metrics` seam.
+#
+# Pull model: Prometheus periodically GETs /metrics; nothing sensitive leaves the
+# app. The exposition carries only aggregate counts and closed-enum verdict/gate
+# labels — no sample ids, no PHI (see docs/ops/telemetry-connectors.md).
+#
+# The read-API serves /metrics on port 8010 (`uv run uvicorn api.main:app --port 8010`).
+# The active target below assumes a containerized Prometheus (e.g. the sibling
+# docker-compose.yml) reaching the host via `host.docker.internal`. If you run
+# Prometheus natively on the same host as the API, comment that line out and use
+# the `localhost:8010` line instead (or point at your API host:port).
+
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: pipeguard
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - "host.docker.internal:8010"   # containerized Prometheus → host API (Docker Desktop; Linux uses extra_hosts)
+          # - "localhost:8010"            # native Prometheus on the same host as the API
+        labels:
+          service: pipeguard
+          component: read-api

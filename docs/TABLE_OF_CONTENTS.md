@@ -102,6 +102,11 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [demo/run-of-show.md](demo/run-of-show.md) | ✅ | Timed live run-of-show (5:00) — script, pre-flight checklist, fallback ladder |
 | [demo/one-pager.md](demo/one-pager.md) | ✅ | Judge-facing one-pager (problem, differentiators, why-it's-real, guardrails) |
 
+## Ops (run it in an environment)
+| Doc | Status | Purpose |
+|---|---|---|
+| [ops/telemetry-connectors.md](ops/telemetry-connectors.md) | ✅ | Point Datadog / Prometheus / OTLP APMs at the shipped `GET /metrics` seam (pull model, scrape-safe, no PHI); config bundle in [`deploy/telemetry/`](../deploy/telemetry/) |
+
 ## Meta
 | Doc | Status | Purpose |
 |---|---|---|
@@ -124,7 +129,7 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | 🟠 | `src/pipeguard/metrics/` — registry, aliases, unit, direction | `data/metric_registry.md` (+ `schemas.md` §units). |
 | 🟠 | `provenance.py` / `engine.py`, the `EventType` vocabulary, or the JSONL ledger format | `data/provenance.md` (+ `schemas.md` event vocab — **duplicated, update both**; `ADR-0002`). |
 | 🟠 | `synthesis/` or `triage/` — new agent, model tier, corpus | `design/agents.md` (roster + invariants) + the relevant ADR (`0001/0006/0009/0012`). If hub and ADR disagree, the ADR wins — update the ADR first. |
-| 🟠 | `api/` endpoint or `frontend/` screen — new/changed capability | `design/architecture.md` + `design/data-platform-and-archivist.md` + `requirements/functional.md` (REQ-F). |
+| 🟠 | `api/` endpoint or `frontend/` screen — new/changed capability | `design/architecture.md` + `design/data-platform-and-archivist.md` + `requirements/functional.md` (REQ-F). If `/metrics` / `_render_prometheus` gains or renames a series → also re-verify the exposed-series table and the no-PHI claim in `ops/telemetry-connectors.md`. |
 | ⚪ | You **make** a load-bearing decision (or realize/supersede one) | A **new `adr/ADR-NNNN-*.md`** (one decision/file) or an existing ADR's Decision/Status + a journal Decisions row. **Never bury a decision in a design-doc appendix or a "D1-Dn" list.** *(Confirmed drift: D1-D14 + a 261-line design landed as appendices.)* |
 | ⚪ | Scope / wishlist / "built" changes | `requirements/scope-and-wishlist.md` (+ mirror `functional.md`, `tasks.md`). A new wishlist item is a scope-guardrail checkpoint — push back if scope over-broadens. |
 | ⚪ | Files moved across `src/`/`app/`/`data/`/`docs/`/`tests/`, a module added, **or a trigger in this map rotted** | `CLAUDE.md` "Current code map" + **this map** (the self-referential row: when layout moves, this table's triggers go stale — fix them here). |
