@@ -109,19 +109,24 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
 ## Read API & operator screens (ADR-0010/0014)
 
 1. **REQ-F-040 — Read API.** A FastAPI read-API serves decision cards, provenance
-   events, and config over the framework-agnostic core (the production seam). *Trace:*
-   [architecture.md](../design/architecture.md), ADR-0010/0014.
+   events, run **artifacts** (`GET /api/runs/{id}/artifacts` — per-stage data I/O with real
+   sha256 + on-disk size + origin tag; raw reads above an 8 MiB cap are size-listed, not
+   hashed), export, and config over the framework-agnostic core (the production seam).
+   *Trace:* [architecture.md](../design/architecture.md), ADR-0010/0014.
 2. **REQ-F-041 — On-demand triage endpoint.** The API exposes a per-card triage call
    that invokes the advisory agent without re-entering the verdict path. *Trace:*
    [architecture.md](../design/architecture.md), ADR-0010.
-3. **REQ-F-042 — Operator screens.** The UI presents the full screen set (**all built** in
-   the React frontend): run overview (per-verdict counts + needs-attention),
-   intake/preflight (run-level sequencing QC + per-sample admission with manual override),
-   decision cards (verdict + per-gate strip + cited evidence), triage, provenance (event
-   trail), review queue, monitoring, and settings (runbook thresholds, labelled
-   illustrative). *Trace:* [demo_plan.md](../demo/demo_plan.md),
-   [architecture.md](../design/architecture.md); some screens still consume partial API
-   data pending backend wiring ([tasks T-022](../planning/tasks.md)).
+3. **REQ-F-042 — Operator screens.** The UI presents the full screen set (**all built +
+   migrated 1:1** to the design handoff's light theme, T-022b): run overview (per-verdict
+   counts + needs-attention), intake/preflight (run-level QC rollup + per-sample admission
+   with manual override), decision cards (verdict + per-gate strip + cited evidence),
+   agent triage (advisory note + citations + offline/live), provenance (pipeline
+   **compute-DAG** with a per-stage data-I/O drill-in), review queue (tickets w/
+   reviewer-vs-approver RBAC + recurring-issue banner), monitoring, and settings (runbook
+   thresholds, labelled illustrative). Screens state their data boundary rather than
+   fabricate instrument/compute artifacts the FASTQ-first build doesn't capture. *Trace:*
+   [demo_plan.md](../demo/demo_plan.md), [architecture.md](../design/architecture.md),
+   [tasks T-022/T-022b/T-037](../planning/tasks.md).
 4. **REQ-F-043 — Offline fallback view.** A Streamlit app renders the same core
    offline, in one process, as the guaranteed-working demo fallback. *Trace:*
    [demo_plan.md](../demo/demo_plan.md), ADR-0014.
