@@ -46,7 +46,7 @@ estimates — adjusted as we go.
 |---|---|---|---|---|---|
 | T-001 | Documentation workflow + ADRs 0001–0007 | 1 | done | — | — |
 | T-002 | `data/qc_metrics.md` (grounded, cited, breadth-first runbook) | 1 | done | yes | — |
-| T-002b | Concrete test-data QC profile (tune to GIAB panel subset) | 2 | todo | no | T-017 |
+| T-002b | Concrete test-data QC profile ✅ — real GIAB HG002 panel reads through the **full** gate (`scripts/gate_giab.py`): `samtools fastq \| fastp` → real Q30 88.2% / dup 0.006% / reads-PF 99.3% + `mosdepth` 55.8× coverage, gated on the four metrics a fastq+BAM actually yields (cluster-PF is run-level SAV, not gated) → PROCEED. Registry normalizes each real value from its declared unit exactly as for a mock run | 2 | done | no | T-017 |
 | T-003 | `reference/domain-primer.md` + `reference/glossary.md` | 1 | done | yes | — |
 | T-004 | `requirements/{functional,nonfunctional,constraints}.md` | 1 | done | yes | — |
 | T-005 | `design/architecture.md` ✅; the system-view slices (context, components, data-flow, interfaces, storage, workflows, deployment) are consolidated into it + the ADRs, not split into stubs (see ToC note) | 1 | done | partial | T-002 |
@@ -62,7 +62,7 @@ estimates — adjusted as we go.
 | T-015 | QC-triage agent (advisory, stub-first, corpus + retrieval, /triage API) | 3 | done | no | T-014 |
 | T-015b | Outbound notify port ✅ + wired into `run_gate` (`notifier=`; `NOTIFICATION_EMITTED` events) ✅ + live Slack send behind a `PIPEGUARD_SLACK_LIVE` opt-in, **verified end-to-end against a real workspace** + `python -m pipeguard.notify` demo CLI ✅ | 3 | done | no | T-015 |
 | T-016 | Data strategy doc + label mock_run_01 origin | 1 | done | yes | — |
-| T-017 | Real GIAB HG002 panel data through the QC gate ✅ (`scripts/gate_giab.py`): `mosdepth --by` on the fetched panel BAM → real 55.8× coverage + 99%/97% breadth → gated (PROCEED, clears the 30× gate) reusing `run_gate` + registry rules unchanged. Fetch also validated (truth VCF + `samtools -X` reads slice). Fastq metrics (Q30/dup) + contamination (verifybamid2) remain — a BAM doesn't carry them | 2 | done | partial | T-002 |
+| T-017 | Real GIAB HG002 panel data through the QC gate ✅ (`scripts/gate_giab.py`): `mosdepth --by` on the fetched panel BAM → real 55.8× coverage + 99%/97% breadth → gated (PROCEED, clears the 30× gate) reusing `run_gate` + registry rules unchanged. Fetch also validated (truth VCF + `samtools -X` reads slice). **Fastq metrics (Q30/dup/reads-PF) now added via `samtools fastq \| fastp` → T-002b.** Contamination (verifybamid2) remains | 2 | done | partial | T-002 |
 | T-018 | Frontend design brief + clickable prototype (`design/frontend/`) | 1 | done | yes | — |
 | T-019 | Align confidence to "omit until grounded" (models.py `confidence` → Optional/None, drop demo Confidence tile, update README:32/:105) — part of the models→schemas.md rework | 1 | done | no | T-008 |
 | T-020 | FastAPI read-API over the core (`api/`; production seam, ADR-0010/0014) | Port | done | no | — |
