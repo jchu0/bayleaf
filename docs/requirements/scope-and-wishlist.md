@@ -35,12 +35,18 @@ The MVP core is standing; these in-scope pieces are now built and verified (see
 3. **Outbound notify port + Slack adapter** (T-015b) — wired into `run_gate` (off by default),
    per-verdict evidence-cited messages, `notification.emitted` events, live Slack opt-in
    (`PIPEGUARD_SLACK_LIVE`), `python -m pipeguard.notify` CLI (in-scope 6).
-4. **GIAB HG002 fetch** — `scripts/fetch_giab_hg002.py` validated end-to-end on a bioconda env;
-   data never committed (in-scope 3).
+4. **Real GIAB HG002 through the FULL gate** (T-002b) — `scripts/gate_giab.py`: `samtools fastq |
+   fastp` + `mosdepth` derive real Q30 88.2% / dup 0.006% / reads-PF 99.3% / coverage 55.8× →
+   PROCEED, registry-normalized like a mock run; fetch validated end-to-end, data never committed
+   (in-scope 3).
 5. **Dashboard — all prototype screens built** in the React frontend: run overview, intake/preflight,
    decision cards + triage, review queue, provenance, monitoring, settings (in-scope 6);
    plus the Streamlit offline fallback.
 6. **Both AI seams** (synthesizer, QC-triage agent) present, stub-first ($0), env-flippable to live.
+7. **Read-API policy + telemetry seams** (T-027) — `GET /api/runbook` (flattened thresholds,
+   illustrative-not-clinical + a `units_note`) and `GET /metrics` (Prometheus text exposition;
+   verdict/gate counters; no new dependency), plus a frontend metrics panel surfacing each card's
+   registry-normalized `metric_values` (in-scope 6; base for wishlist #17).
 
 Still open in-scope: the **granular config profile** is documented, not shipped (see wishlist #1);
 the **variant gate** is Phase 2; **evaluation** vs. GIAB/synthetic truth is ongoing.
@@ -65,8 +71,10 @@ the **variant gate** is Phase 2; **evaluation** vs. GIAB/synthetic truth is ongo
 | 14 | Configurable de-identification module (HIPAA / PHI) | Med | connectors + policy | **Prerequisite** for any real patient-data integration; the demo stays public/synthetic |
 | 15 | CNV / mosaicism calling (dedicated callers) | High | callers + validation | Out of gate scope; coverage/AB signals enable *advisory* agent observations without a caller |
 | 16 | User-defined custom QC metrics | Med | config/runbook model | Adjusting thresholds is in scope; defining new metric types is future |
-| 17 | Telemetry connectors (Datadog + other APM) | Low | telemetry seam | System-telemetry export; a Prometheus `/metrics` seam on the backend is the intended base |
+| 17 | Telemetry connectors (Datadog + other APM) | Low | — (Prometheus `/metrics` seam **built**, T-027) | The `GET /metrics` base is shipped (verdict/gate counters, hand-rolled exposition, no dep); remaining is wiring APM/scrape connectors on top |
 | 18 | Multi-user / multi-tenancy (auth + RBAC + per-user/org isolation) | Low–med | read-API + user model + scoped persistence | Today is **single-user** (all runs/cards global), which is fine for the demo. A lab/org boundary would add auth on the read-API, a user/role model, and scope the ledger/DB by tenant. Complements the de-id module (#14) for real deployments; the `human:<id>` actor already in the event vocabulary is the natural attribution seam |
+| 19 | Columnar ML-serving export (Parquet/Arrow; optional DuckDB analytical layer) | Low–med | export endpoint (T-030) | **SQLite stays the operational, rebuildable projection** — row-oriented is the right shape for run/verdict lookups (OLTP-ish), and it's zero-dep + `rebuild-db`-able. The maintainer is right that ML *ingestion* prefers **columnar**; the fix is a separate serving format, not swapping the store. MVP export = long-format CSV/JSONL (pandas-ready today, fine at dozens of runs); at scale add `pyarrow` **Parquet** as the ML feature file, and optionally **DuckDB** (embedded, zero-server, columnar) as an analytical query layer over the same projection/Parquet. Circle back if time |
+| 20 | Run scheduling / cancellation / hold — **step-specific** (control plane) | Low–med | command/control API + run-state model + orchestrator hook | Today PipeGuard is **advisory / read-only** (observe + advise). This crosses into **actuation**: hold analysis auto-trigger when pre-run metrics look bad, cancel on an early-surfaced intake error, or pause at a specific pipeline step. Frame it as the **preflight gate acting as an actuator** — a deterministic HOLD (or a human hold) prevents the next step from running; step-level hold/cancel integrates with the workflow engine (Nextflow, [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)) checkpoint/resume. **Invariant preserved:** rules/human decide, the system actuates only on an explicit, recorded decision (every actuation = a ledger event); no AI auto-actuation ([ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)). Builds on the command API in #9 |
 
 ## Out of scope
 

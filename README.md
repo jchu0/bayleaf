@@ -218,7 +218,7 @@ src/pipeguard/            # framework-agnostic core (no UI dependency)
   notify/                 # outbound notify port (stub | Slack; per-verdict, evidence-cited; opt-in live send)
   synthetic/              # synthetic failure-mode run generator (mock_run_02/03)
 app/streamlit_app.py      # thin offline dashboard over the core (the fallback demo)
-api/main.py               # FastAPI read-API (health, runs, cards, triage, config)
+api/main.py               # FastAPI read-API (health, runs, cards, triage, config, runbook, /metrics)
 frontend/                 # React + Vite + Tailwind UI consuming the API
 scripts/fetch_giab_hg002.py   # idempotent, checksum-verifying GIAB HG002 fetcher (accessions only)
 data/mock_run_0{1,2,3}/   # contrived demo runs (01 hand-authored & pinned; 02/03 generated)
