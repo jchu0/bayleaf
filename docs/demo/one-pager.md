@@ -52,15 +52,18 @@ e. **Live Slack ops integration.** An outbound port turns each *actionable* card
 
 ## 4. Why it's real (not a mock-up)
 
-a. **156 offline tests across 10 files**, all runnable with no API key
+a. **159 offline tests across 10 files**, all runnable with no API key
    (`uv sync --all-extras && uv run pytest`) — pinning verdicts, the ledger→DB rebuild,
    the units contract, the AI-degrades-to-stub path, and the notify seam.
-b. **Real GIAB HG002 data runs through the gate** on a bioconda toolchain — the fetch is
+b. **Real GIAB HG002 data runs through the FULL gate** on a bioconda toolchain — the fetch is
    validated end-to-end (NIST truth VCF, a 470-record panel VCF, a 70,996-read panel BAM
-   slice), and `mosdepth` on the slice yields **real 55.8× panel coverage** which the gate
-   evaluates to **PROCEED** (clears the 30× threshold). Accessions + fetch script committed;
-   the raw bytes are git-ignored (never committed). *(Validating verdicts against the GIAB
-   truth VCF — EVAL-030 — is Phase 2.)*
+   slice), and **real QC metrics are derived from the real reads**: `samtools fastq | fastp`
+   → **Q30 88.2%, duplication 0.006%, reads-passing 99.3%**, and `mosdepth` → **55.8× panel
+   coverage**. All four clear their thresholds → **PROCEED**, and the **metric registry
+   normalizes each real value from its declared unit exactly as it does for a mock run** —
+   proving the units contract on real data, not just fixtures. Accessions + fetch script
+   committed; the raw bytes are git-ignored (never committed). *(Validating verdicts against
+   the GIAB truth VCF — EVAL-030 — is Phase 2.)*
 c. **Byte-identical reproducibility.** A fixed run + pinned runbook yield identical
    verdicts, findings, and content hashes every time; the ledger→DB rebuild is idempotent
    and hash-preserving (the DB is a pure function of the log).
