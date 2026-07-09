@@ -54,3 +54,13 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      # Soft, non-blocking doc-discipline nudge: warns once/day if code ships without a
+      # journal entry. A tripwire, not a gate (the session-end checklist is the enforcer).
+      - id: journal-freshness
+        name: journal-freshness (warn only, non-blocking)
+        entry: uv run python scripts/check_journal_freshness.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+        stages: [pre-push]

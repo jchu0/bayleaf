@@ -7,11 +7,17 @@ this repo — do not assume any global rules apply here.
 ## Start here (every session)
 
 1. **Two top-layer inputs — read both at session start:**
-   a. [docs/TABLE_OF_CONTENTS.md](docs/TABLE_OF_CONTENTS.md) — the map of what exists.
+   a. [docs/TABLE_OF_CONTENTS.md](docs/TABLE_OF_CONTENTS.md) — the map of what exists,
+      and (its **Doc-update map**) the authority on which docs a given change obligates.
    b. [docs/planning/tasks.md](docs/planning/tasks.md) — development state, timeline,
       and which work is parallel-safe (fan out subagents for non-blocking tasks).
-2. Load **only** the files relevant to the task — *unless the task genuinely needs
-   broad context*, in which case bulk-load deliberately.
+2. **Read lean, write complete.** Load **only** the files relevant to the task for
+   context — *unless it genuinely needs broad context*, then bulk-load deliberately.
+   Reading and owing are separate: before you finish, sweep the
+   [Doc-update map](docs/TABLE_OF_CONTENTS.md#doc-update-map) and update every doc your
+   change made stale — a doc you never opened can still be one you now owe. **Not
+   loading a doc is fine; leaving one your change made stale is not.** Every working
+   session also owes a `docs/journal/YYYY-MM-DD-<topic>.md` entry, whatever it touched.
 3. Follow [docs/DOCUMENTATION_HABITS.md](docs/DOCUMENTATION_HABITS.md) for anything
    documentation-related.
 4. The `why` behind the architecture lives in the ADRs at [docs/adr/](docs/adr/).
@@ -104,11 +110,14 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 
 1. Before creating a doc, check [docs/_templates/](docs/_templates/) and follow the
    matching template. If none fits, **create the template first**, then the doc.
-2. Update relevant docs in the **same change** as the code.
+2. Update every doc your change obligates, in the **same change**; the [Doc-update map](docs/TABLE_OF_CONTENTS.md#doc-update-map) is the routing authority (touch X → owe doc Y), not the set of files you opened.
 3. Date entries ISO-8601 with **MST**. Keep a session journal and distill it into
    canonical docs at session end (journal is the archive, not the source of truth).
 4. **Crosslink related sources** — fill each doc's Related field and link inline
    references (docs, ADRs, code) so navigation is one click.
+5. Before declaring a **substantive** session/PR done, run the **Session-end doc checklist**
+   ([DOCUMENTATION_HABITS.md](docs/DOCUMENTATION_HABITS.md#session-end-doc-checklist))
+   and include its CHK-1/CHK-2/CHK-3 results in the wrap-up summary.
 
 ## Design invariants (details in docs/design/)
 

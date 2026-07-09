@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-07 (MST) |
+| **Last updated** | 2026-07-08 (MST) |
 | **Audience** | all (contributors and Claude Code) |
 
 How this repository documents engineering work. The aim is narrow and practical:
@@ -46,6 +46,8 @@ obvious — for a teammate, a judge, a future maintainer, or a fresh Claude sess
 
 We keep a robust set, not a minimal one — anti-siloing is worth the pages. Each
 doc owns one question.
+
+> Routing (which change obliges which doc) lives in the ToC **[Doc-update map](TABLE_OF_CONTENTS.md#doc-update-map)**; this table lists what each doc *owns*.
 
 | Doc | Owns the question |
 |---|---|
@@ -106,6 +108,8 @@ change → the relevant doc). The journal entry then stays as the dated archive;
 is never the source of truth. This gives us traceability (the raw thought process
 is preserved) without maintaining two competing "current" versions.
 
+**Write the raw journal + Decisions rows as you go, not in an end-of-session batch** (only distillation into canonical docs is a session-end step), so an abrupt end doesn't lose the entry. Under subagent fan-out, the **top-level session owns the journal** — subagents return their touched/owed-doc deltas to the orchestrator, which consolidates.
+
 ## When to update docs
 
 Update on any of: setup change · interface/API change · architecture change · new
@@ -113,18 +117,50 @@ dependency · behavior change · demo-flow change · evaluation-criteria change 
 security or privacy assumption change · a newly discovered limitation · a major
 bug or failure worth remembering.
 
+> The **[Doc-update map](TABLE_OF_CONTENTS.md#doc-update-map)** in the ToC is the canonical, per-trigger routing table (touch X → owe doc Y); this list is its prose summary.
+
 ## Claude documentation behavior
 
 - **Write original prose.** Do not copy from other repositories, old templates, or
   prior generated material. Write for this project's actual needs.
-- **Scan, don't slurp.** At session start, read `docs/TABLE_OF_CONTENTS.md` and
-  load only the files relevant to the task — not the whole repo.
+- **Read lean, write complete.** At session start read `docs/TABLE_OF_CONTENTS.md`; load
+  only the files relevant to the task for context — but the
+  **[Doc-update map](TABLE_OF_CONTENTS.md#doc-update-map)** (not the set of files you opened)
+  decides which docs your change owes. Not loading a doc is fine; leaving one stale is not.
 - **Prefer updating over duplicating.** Extend an existing doc before adding a new one.
 - **Keep docs proportional to the project's stage.**
 - **Update docs in the same change as the code**, and include verification steps
   when a claim needs them.
 - **Document assumptions instead of inventing certainty.**
 - **Summarize** files created or changed at the end of a documentation task.
+
+## Session-end doc checklist
+
+**Gate on change size.** For a **trivial** change (no runtime or contract effect —
+typo, comment, formatting, a test-flake fix), the normal wrap-up summary is enough;
+skip this checklist. For any **substantive** session (shipped behavior, changed a
+contract/schema, made a decision, or did real design/review), paste these three
+results into the wrap-up summary CLAUDE.md Communication 1 already requires:
+
+- **CHK-1 — Journal (unconditional for a substantive session; no N/A):** created or
+  updated `docs/journal/<today>-<topic>.md` with this session's reasoning + one
+  Decisions row per decision made? Give the path.
+- **CHK-2 — Map sweep:** for each code area I touched, did I update the doc the
+  [Doc-update map](TABLE_OF_CONTENTS.md#doc-update-map) routes it to — **or** state
+  "none owed, because…"? For a high-drift trigger (schema/export, test census,
+  file-move, decision) the waiver must **name the specific map row** you are waiving
+  and why it does not apply — an unqualified "none" is a failed check.
+- **CHK-3 — Decision (only if one was made):** captured as a new/updated ADR and
+  routed via the journal Decisions table — not buried in a design-doc appendix or a
+  D-list?
+
+Notes:
+1. **Write the raw journal + decisions as you go, not in an end-of-session batch** —
+   only distillation into canonical docs is a session-end step, so an abrupt end
+   (context exhaustion, pivot, crash) doesn't lose the entry.
+2. **Under subagent fan-out, the top-level session owns the journal** at wrap-up;
+   subagents return their touched/owed-doc deltas to the orchestrator, which
+   consolidates — a subagent editing `src/` does not "end a session."
 
 ## Delivery posture (MVP-first, production-ready seams)
 

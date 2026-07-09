@@ -75,8 +75,9 @@ Source: live-recompute` honesty label.
 - **Build-now-if-time:** `gate_giab.py --call` (bcftools) + EVAL-030 (approved if time remains).
 - **Deferred:** config-for-paths loader (T-032), pipeline run-state/mission-control (T-033),
   `pct_reads_identified` rename (T-034). Agent-layer buildout tomorrow.
-- **Meta:** journal was dropped for ~72 commits — doc-update-trigger discipline being added
-  (this entry is the backfill).
+- **Meta:** journal was dropped for ~72 commits — fixed via an always-loaded **Doc-update map**
+  (ToC), a read-lean/write-complete clause + session-end checklist (CLAUDE.md), and a soft
+  pre-push journal nudge. This entry is the backfill.
 
 ## Distilled into
 

@@ -6,9 +6,11 @@
 | **Last updated** | 2026-07-08 (MST) |
 | **Audience** | all (contributors and Claude Code) |
 
-**Start here.** This index is the map of what exists. Read it first, then open
-only the files relevant to your task — bulk-load only when the task genuinely
-needs broad context. Conventions: [DOCUMENTATION_HABITS.md](DOCUMENTATION_HABITS.md).
+**Start here.** This index is the map of what exists — and its
+**[Doc-update map](#doc-update-map)** is the authority on which docs a change obligates.
+**Read lean, write complete:** open only the files relevant to your task (bulk-load only when
+it genuinely needs broad context), but before you finish, sweep the Doc-update map and update
+every doc your change made stale. Conventions: [DOCUMENTATION_HABITS.md](DOCUMENTATION_HABITS.md).
 Claimable work: [planning/tasks.md](planning/tasks.md).
 
 Status legend: ✅ written · 🚧 in progress · 📝 planned.
@@ -107,19 +109,26 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [_templates/](_templates/) | ✅ | Skeletons — check before creating any new doc |
 | [journal/](journal/) | ✅ | Dated raw session logs, distilled into the docs above |
 
-## Doc-to-code map
-Which doc to open for a given part of the system.
+## Doc-update map
 
-| If you're touching… | Read… |
-|---|---|
-| `src/pipeguard/` overall | [`design/architecture.md`](design/architecture.md) (+ ADR-0002, ADR-0013) |
-| `models.py`, `parsers.py` (artifact I/O) | `data/schemas.md` |
-| `runbook.py`, `rules.py` (QC gate) | `data/qc_metrics.md` |
-| `metrics/` (registry + `MetricValue`) | `data/metric_registry.md`, `data/schemas.md` |
-| `notify/` (outbound notify port) | ADR-0010, ADR-0001 (advisory, never decides) |
-| `scripts/fetch_giab_hg002.py` (real data) | `scripts/README.md`, `data/strategy.md`, `data/licensing.md` |
-| the event bus / ledger | `data/provenance.md`, ADR-0002 |
-| the config layer / profiles | ADR-0005 + [`architecture.md`](design/architecture.md) §Swappable seams |
-| the synthesizer / agents | [`design/agents.md`](design/agents.md) (roster + invariants), ADR-0001, ADR-0006 |
-| any machine output / log format | ADR-0007, `data/schemas.md` |
-| anything: "why is it this way?" | `adr/` |
+**This table is the single authority on which docs a change obligates** (it replaces the old "Doc-to-code map" and the two prose lists in DOCUMENTATION_HABITS). You may still **read lean**; after any change, **sweep this table and update every doc whose trigger fired, in the same change** — a doc you never had to open can still be one you now owe. Match the concrete condition in column 2. Tiers: 🔴 fires most sessions · 🟠 module-triggered · ⚪ occasional.
+
+| Tier | When you do / touch X | Owe an update to… (why) |
+|---|---|---|
+| 🔴 | **ANY working session — build, design, decision, or review (unconditional; the one row with no "N/A")** | **`journal/YYYY-MM-DD-<topic>.md`** — this session's reasoning + one Decisions row per decision made. New file per day from `_templates/journal.md`. Write it as you go; distil durable parts into the canonical docs below at session end. No journal entry = incomplete session. |
+| 🔴 | A task changes status (`todo/in-progress/blocked/done`) or is created | `planning/tasks.md` — the task row, roadmap phase, and `Last updated`. |
+| 🔴 | You create / move / rename / delete a doc, or flip its status (📝→🚧→✅) | `TABLE_OF_CONTENTS.md` — the section row, the status legend, **and this map** if a code↔doc link changed. |
+| 🔴 | `src/pipeguard/models.py`, `parsers.py`, or `persistence/` — new/renamed field, type, ID prefix, `schema_version`, missing-field semantics | `data/schemas.md` — the pydantic contract SQLAlchemy mirrors. Cross-check `provenance.md` (event vocab is duplicated) + `metric_registry.md` §units. *(Confirmed drift: the export/Parquet contract shipped without this.)* |
+| 🔴 | You add / remove / rename any test under `tests/`, or define an EVAL case | `quality/evaluation.md` — it hardcodes a test census ("N tests / M files"); any change silently falsifies it. Fix the count + per-file breakdown + any `EVAL-NNN`. |
+| 🟠 | `runbook.py` or `rules.py` — a threshold, a metric in the set, a gate assignment, verdict policy | `data/qc_metrics.md` (the decided runbook). If the *decision policy* changed → also `ADR-0013`; if grounding changed → cascade to `qc_metrics-sources.md`. |
+| 🟠 | `src/pipeguard/metrics/` — registry, aliases, unit, direction | `data/metric_registry.md` (+ `schemas.md` §units). |
+| 🟠 | `provenance.py` / `engine.py`, the `EventType` vocabulary, or the JSONL ledger format | `data/provenance.md` (+ `schemas.md` event vocab — **duplicated, update both**; `ADR-0002`). |
+| 🟠 | `synthesis/` or `triage/` — new agent, model tier, corpus | `design/agents.md` (roster + invariants) + the relevant ADR (`0001/0006/0009/0012`). If hub and ADR disagree, the ADR wins — update the ADR first. |
+| 🟠 | `api/` endpoint or `frontend/` screen — new/changed capability | `design/architecture.md` + `design/data-platform-and-archivist.md` + `requirements/functional.md` (REQ-F). |
+| ⚪ | You **make** a load-bearing decision (or realize/supersede one) | A **new `adr/ADR-NNNN-*.md`** (one decision/file) or an existing ADR's Decision/Status + a journal Decisions row. **Never bury a decision in a design-doc appendix or a "D1-Dn" list.** *(Confirmed drift: D1-D14 + a 261-line design landed as appendices.)* |
+| ⚪ | Scope / wishlist / "built" changes | `requirements/scope-and-wishlist.md` (+ mirror `functional.md`, `tasks.md`). A new wishlist item is a scope-guardrail checkpoint — push back if scope over-broadens. |
+| ⚪ | Files moved across `src/`/`app/`/`data/`/`docs/`/`tests/`, a module added, **or a trigger in this map rotted** | `CLAUDE.md` "Current code map" + **this map** (the self-referential row: when layout moves, this table's triggers go stale — fix them here). |
+
+**Catch-all** (any module not listed above whose behavior/contract you changed): update the doc that owns it — see the "Necessary documentation stack" table. **Also occasional:** demo flow / exact commands / port change → `demo/run-of-show.md` + `demo/one-pager.md` + `README.md`; a new tool/dependency → `data/licensing.md` + `requirements/constraints.md`; a new *type* of doc with no template → create `_templates/<type>.md` **first**, then the doc.
+
+**Coupled clusters — one code change moves several docs together:** `schemas.md ⇄ provenance.md` (duplicated event vocab) · `qc_metrics.md ⇄ qc_metrics-sources.md` · `scope-and-wishlist.md ⇄ functional.md ⇄ tasks.md` · `metric_registry.md ⇄ schemas.md §units`. *The journal (row 1) is the router — every session logs here, then distils into the canonical docs above; it is never itself the source of truth.*
