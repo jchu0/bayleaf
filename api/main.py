@@ -26,9 +26,11 @@ from pydantic import BaseModel
 
 from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
 from pipeguard.metrics import default_registry
-from pipeguard.models import DecisionCard, Gate, Verdict
+from pipeguard.models import DecisionCard, Gate, Sample, Verdict
 from pipeguard.provenance import ProvenanceEvent
 from pipeguard.triage import TriageNote
+
+from .deid import IDENTITY_FIELDS, DeidPolicy, default_policy, export_fields, redact
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
@@ -226,15 +228,48 @@ def _run_origin(run_id: str) -> str:
     return "unknown"
 
 
-def _decision_rows(run_ids: list[str], verdict: str | None) -> Iterator[dict[str, Any]]:
-    """One row per (run, sample): verdict + full narration + a findings summary."""
+@lru_cache(maxsize=32)
+def _sample_index(run_id: str) -> dict[str, Sample]:
+    """`sample_id` → intake `Sample` metadata, for the opt-in identity export join.
+
+    A read-only re-read of the run's `sample_metadata.csv` via `load_run` (cached per run).
+    Off the gate path entirely: identity fields never reach a rule or verdict — they only
+    ride the export row through the de-id policy (`api/deid.py`, ADR-0001).
+    """
+    return {s.sample_id: s for s in load_run(_run_dir(run_id)).samples}
+
+
+def _identity_fields(run_id: str, sample_id: str) -> dict[str, Any]:
+    """The intake-identity columns for one sample (pre-de-id); missing metadata → `None`s."""
+    sample = _sample_index(run_id).get(sample_id)
+    return {
+        "subject_id": sample.subject_id if sample else None,
+        "tissue": sample.tissue if sample else None,
+        "submitted_by": sample.submitted_by if sample else None,
+    }
+
+
+def _decision_rows(
+    run_ids: list[str],
+    verdict: str | None,
+    *,
+    include_identity: bool,
+    policy: DeidPolicy,
+) -> Iterator[dict[str, Any]]:
+    """One row per (run, sample): verdict + full narration + a findings summary.
+
+    Every row is routed through the de-id policy (`redact`), which makes the export's
+    field allow-list explicit and unit-testable: operator PII is dropped, and (only with
+    `include_identity`) intake cohort keys are origin-gated + pseudonymized. Without
+    `include_identity` no identity field is joined, so the output is unchanged from before.
+    """
     for rid in run_ids:
         detail = _evaluate(rid)
         origin = _run_origin(rid)
         for card in detail.cards:
             if verdict is not None and card.verdict.value != verdict:
                 continue
-            yield {
+            row: dict[str, Any] = {
                 "run_id": rid,
                 "sample_id": card.sample_id,
                 "verdict": card.verdict.value,
@@ -247,13 +282,23 @@ def _decision_rows(run_ids: list[str], verdict: str | None) -> Iterator[dict[str
                 "generated_by": card.generated_by,
                 "origin": origin,
             }
+            if include_identity:
+                row.update(_identity_fields(rid, card.sample_id))
+            yield redact(row, origin, policy)
 
 
-def _feature_rows(run_ids: list[str], verdict: str | None) -> Iterator[dict[str, Any]]:
+def _feature_rows(
+    run_ids: list[str],
+    verdict: str | None,
+    *,
+    include_identity: bool,
+    policy: DeidPolicy,
+) -> Iterator[dict[str, Any]]:
     """One row per `MetricValue` (long format = the ML corpus); `normalized_value` is the number.
 
     `canonical_unit` + `metric_registry_version` ride each row (ADR-0007 self-containment), so a
-    downstream consumer can interpret the value without the registry in hand.
+    downstream consumer can interpret the value without the registry in hand. Rows pass through
+    the same de-id policy as the decision grain (see `_decision_rows`).
     """
     for rid in run_ids:
         detail = _evaluate(rid)
@@ -261,8 +306,9 @@ def _feature_rows(run_ids: list[str], verdict: str | None) -> Iterator[dict[str,
         for card in detail.cards:
             if verdict is not None and card.verdict.value != verdict:
                 continue
+            identity = _identity_fields(rid, card.sample_id) if include_identity else {}
             for mv in card.metric_values:
-                yield {
+                row: dict[str, Any] = {
                     "run_id": rid,
                     "sample_id": mv.sample_id,
                     "metric_key": mv.metric_key,
@@ -275,6 +321,9 @@ def _feature_rows(run_ids: list[str], verdict: str | None) -> Iterator[dict[str,
                     "verdict": card.verdict.value,
                     "origin": origin,
                 }
+                if include_identity:
+                    row.update(identity)
+                yield redact(row, origin, policy)
 
 
 def _to_csv(fields: list[str], rows: Iterable[dict[str, Any]]) -> str:
@@ -329,6 +378,7 @@ def export(
     run_id: str | None = None,
     verdict: str | None = None,
     q: str | None = None,
+    include: str | None = None,
 ) -> Response:
     """Export the gate's decisions/metrics as one downloadable file (design doc §2.1, T-030).
 
@@ -340,6 +390,13 @@ def export(
     read it). Filter by `run_id`, `verdict`, or `q` (run-id substring). Every row carries its
     `origin`; operator PII is never emitted (D10). This is a LIVE recompute, not audit
     provenance (`X-PipeGuard-Export-Source`).
+
+    Every row is shaped by the config-driven de-id policy (`api/deid.py`, T-040) — a **demo
+    de-id seam, NOT HIPAA de-identification**: operator PII (`submitted_by`) is dropped, and
+    the opt-in `include=identity` mode joins intake cohort keys (`subject_id`/`tissue`) that
+    are **origin-gated** (withheld for `real-giab` / untagged `unknown`) and **pseudonymized**
+    (salted, non-reversible) for non-real origins. The active policy id rides
+    `X-PipeGuard-Deid-Policy` (no compliance claim).
     """
     if fmt not in ("csv", "jsonl", "parquet"):
         raise HTTPException(status_code=400, detail="format must be 'csv', 'jsonl', or 'parquet'")
@@ -347,6 +404,8 @@ def export(
         raise HTTPException(status_code=400, detail="grain must be 'decision' or 'feature'")
     if verdict is not None and verdict not in _VERDICT_ORDER:
         raise HTTPException(status_code=400, detail=f"verdict must be one of {_VERDICT_ORDER}")
+    if include is not None and include != "identity":
+        raise HTTPException(status_code=400, detail="include must be 'identity'")
 
     if run_id is not None:
         _run_dir(run_id)  # 404 if unknown
@@ -354,9 +413,12 @@ def export(
     else:
         run_ids = [r for r in _run_ids() if q is None or q in r]
 
-    fields = _DECISION_FIELDS if grain == "decision" else _FEATURE_FIELDS
+    include_identity = include == "identity"
+    policy = default_policy()
+    base_fields = _DECISION_FIELDS if grain == "decision" else _FEATURE_FIELDS
+    fields = export_fields(base_fields, IDENTITY_FIELDS if include_identity else [], policy)
     builder = _decision_rows if grain == "decision" else _feature_rows
-    rows = list(builder(run_ids, verdict))
+    rows = list(builder(run_ids, verdict, include_identity=include_identity, policy=policy))
     body, ext, media = _serialize(fmt, fields, rows)
 
     scope = run_id or (f"q-{q}" if q else "all")
@@ -370,6 +432,7 @@ def export(
             "X-PipeGuard-Export-Source": _EXPORT_SOURCE,
             "X-PipeGuard-Exported-At": stamp,
             "X-PipeGuard-Row-Count": str(len(rows)),
+            "X-PipeGuard-Deid-Policy": policy.policy_id,
         },
     )
 

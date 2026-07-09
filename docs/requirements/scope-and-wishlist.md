@@ -68,7 +68,7 @@ the **variant gate** is Phase 2; **evaluation** vs. GIAB/synthetic truth is ongo
 | 11 | Visual pipeline builder — compose tools + snap-in agents (± RNA-seq) | **High** | canvas + config + agents | **Flagship north-star** — integrates the canvas (#10), reuses provenance + logging + corpora, and answers the event's "pipeline translator" idea. The **artifact-kind → output-path config file** (a variant-gate-substrate seam, T-032) is the machine-readable base a canvas would generate. Nearly its own product |
 | 12 | In-app user feedback on the system | Low | frontend | Product-refinement telemetry to guide iteration |
 | 13 | Data-platform connectors (Box, Drive, OneDrive, S3, DNAnexus, Databricks, Snowflake, BigQuery, Redshift) | Low–med each | artifact-store port | Adapters; breadth work |
-| 14 | Configurable de-identification module (HIPAA / PHI) | Med | connectors + policy | **Prerequisite** for any real patient-data integration; the demo stays public/synthetic |
+| 14 | Configurable de-identification module (HIPAA / PHI) | Med | connectors + policy | **Prerequisite** for any real patient-data integration; the demo stays public/synthetic. **Export-seam slice shipped (T-040):** a config-driven de-id *policy* ([`api/deid.py`](../../api/deid.py)) realizes G-PII + G-DEID at `GET /api/export` — per-field `DROP`/`HASH`/`GATE_BY_ORIGIN`/`PASSTHROUGH` + an origin-gated, pseudonymized cohort-key opt-in (`include=identity`). Explicitly a **demo de-id SEAM, NOT HIPAA de-identification** (salted-hash pseudonymization ≠ Safe-Harbor scrub). **Still wishlist:** the full module — ingest-side 18-identifier scrub, free-text NLP redaction, date-shift / k-anonymity, DUA/BAA, audit trail (see data-platform §2.1d / §5.2.7) |
 | 15 | CNV / mosaicism calling (dedicated callers) | High | callers + validation | Out of gate scope; coverage/AB signals enable *advisory* agent observations without a caller |
 | 16 | User-defined custom QC metrics | Med | config/runbook model | Adjusting thresholds is in scope; defining new metric types is future |
 | 17 | Telemetry connectors (Datadog + other APM) | Low | — (Prometheus `/metrics` seam **built**, T-027) | The `GET /metrics` base is shipped (verdict/gate counters, hand-rolled exposition, no dep). **Pull/scrape connector bundle shipped** (T-036): Datadog OpenMetrics + Prometheus + OTel-Collector configs (+ optional compose demo) in [`deploy/telemetry/`](../../deploy/telemetry/), documented in [ops/telemetry-connectors.md](../ops/telemetry-connectors.md) — config + docs only, no dep. **Deferred (own task):** an in-app push exporter (ddtrace/DogStatsD or `opentelemetry-*` + OTLP) behind a `PIPEGUARD_*_LIVE` opt-in — that is where a heavy dep + credentials + outbound surface would enter |
@@ -90,7 +90,7 @@ in isolated feature branches (merge what finishes); the rest are clarified targe
 | W10 | Provenance stage/DAG canvas (read-only) | `feat/provenance-stage-canvas` | T-037 |
 | W16 | Metric-catalog read-only view | `feat/metric-catalog-view` | T-038 |
 | W13 | ArtifactStore port + Local + S3 adapter | `feat/artifact-store-port-s3` | T-039 |
-| W14 | Config-driven de-id export policy | `feat/deid-export-policy` | T-040 |
+| W14 | Config-driven de-id export policy ✅ (`api/deid.py` — per-field DROP/HASH/GATE_BY_ORIGIN + origin-gated `include=identity` cohort-key opt-in; demo seam, not HIPAA; no new dep) | `feat/deid-export-policy` | T-040 |
 | W3 | Container deploy slice (+ unapplied Terraform) | `feat/container-deploy-slice` | T-041 |
 | W12 | In-app user feedback | `feat/in-app-feedback` | T-042 |
 
