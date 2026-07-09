@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.deid import DeidAction, DeidPolicy, _pseudonymize, default_policy, export_fields, redact
+from api.feedback_agent import StubFeedbackAgent, assess_feedback
 from api.feedback_store import JsonlFeedbackStore, SqliteFeedbackStore, get_feedback_store
 from api.main import app
 
@@ -312,6 +313,29 @@ def test_feedback_store_factory_selects_and_degrades(tmp_path, monkeypatch):
     monkeypatch.setenv("PIPEGUARD_FEEDBACK_STORE", "postgres")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     assert isinstance(get_feedback_store(), JsonlFeedbackStore)
+
+
+def test_feedback_agent_categorizes_structurally():
+    # The advisory feedback agent (#3b): deterministic categorization from the structured fields,
+    # off the gate. Two threshold downvotes on the QC gate + a bug + praise.
+    recs = [
+        {"id": "a", "target": "decision", "source": "decision-card", "signal": "disagree",
+         "reason_code": "threshold_too_strict", "context": {"gate": "qc", "verdict": "escalate"}},
+        {"id": "b", "target": "decision", "source": "decision-card", "signal": "disagree",
+         "reason_code": "threshold_too_strict", "context": {"gate": "qc", "verdict": "hold"}},
+        {"id": "c", "target": "product", "source": "product-fab", "kind": "problem",
+         "context": {"screen": "Provenance"}},
+        {"id": "d", "target": "product", "source": "product-fab", "kind": "praise",
+         "context": {"screen": "Runs"}},
+    ]  # fmt: skip
+    a = assess_feedback(recs, agent=StubFeedbackAgent())
+    assert a.advisory is True and a.generated_by == "stub" and a.n_total == 4
+    assert a.by_category["threshold_tuning"] == 2 and a.by_category["bug"] == 1
+    assert a.by_priority["high"] >= 2  # disagree-on-escalate + the bug
+    assert a.by_sentiment["positive"] == 1  # the praise
+    assert any("threshold_tuning on qc gate" in t for t in a.themes)  # recurrence surfaced
+    # Advisory only — the assessment carries no verdict/priority that could feed a decision.
+    assert "verdict" not in a.model_dump()
 
 
 def test_runbook_endpoint_exposes_thresholds():
