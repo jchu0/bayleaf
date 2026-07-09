@@ -283,3 +283,26 @@ def test_postgres_and_sqlite_project_the_same_tables():
     assert set(_pg._TABLES) == set(_sq._TABLES)
     for table in _pg._TABLES:
         assert f"CREATE TABLE IF NOT EXISTS {table}" in _pg._SCHEMA
+
+
+def test_postgres_dt_normalizes_reads_to_utc():
+    # TIMESTAMPTZ reads come back in the server's session zone; _dt must normalize to UTC so a
+    # Postgres read is byte-identical to SqliteRepository (always UTC) regardless of server tz.
+    from datetime import datetime, timedelta, timezone
+
+    non_utc = datetime(2026, 7, 9, 3, 0, tzinfo=timezone(timedelta(hours=-7)))
+    got = PostgresRepository._dt(non_utc)
+    assert got is not None
+    assert got.tzinfo == timezone.utc and got == non_utc  # same instant, UTC offset
+    assert got.isoformat().endswith("+00:00")
+    assert PostgresRepository._dt(None) is None
+
+
+def test_postgres_select_tables_preserve_insertion_order():
+    # samples/findings/decision_cards/provenance_events each need a `seq` BIGSERIAL so Postgres
+    # reads preserve ledger insertion order like SqliteRepository's rowid (runs orders by
+    # started_at, so it has none) — matching the "behaviour is identical" contract.
+    assert _pg._SCHEMA.count("BIGSERIAL") == 4
+    for table in ("samples", "findings", "decision_cards", "provenance_events"):
+        block = _pg._SCHEMA.split(f"CREATE TABLE IF NOT EXISTS {table} (", 1)[1].split(");", 1)[0]
+        assert "seq" in block and "BIGSERIAL" in block, table

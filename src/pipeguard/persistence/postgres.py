@@ -23,7 +23,7 @@ extra — the import error only surfaces when a Postgres repository is actually 
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from ..identifiers import utc_now
@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS samples (
     sample_id        TEXT NOT NULL,
     analysis_run_id  TEXT,
     registered_at    TIMESTAMPTZ,
+    seq              BIGSERIAL,
     schema_version   INTEGER NOT NULL,
     PRIMARY KEY (run_id, sample_id)
 );
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS findings (
     severity         TEXT,
     signature        TEXT,
     created_at       TIMESTAMPTZ,
+    seq              BIGSERIAL,
     schema_version   INTEGER NOT NULL
 );
 
@@ -85,6 +87,7 @@ CREATE TABLE IF NOT EXISTS decision_cards (
     generated_by     TEXT,
     content_hash     TEXT,
     created_at       TIMESTAMPTZ,
+    seq              BIGSERIAL,
     schema_version   INTEGER NOT NULL,
     PRIMARY KEY (run_id, sample_id)
 );
@@ -369,32 +372,29 @@ class PostgresRepository:
     def _select(self, table: str, run_id: str | None) -> list[Any]:
         """Ordered fetch from a fixed table, optionally scoped to one run.
 
-        Insertion order is preserved by `seq` on events (a BIGSERIAL) and by the ledger's own
-        deterministic ids elsewhere; the table name is drawn from a fixed allowlist, never
-        user input.
+        Ordered by the `seq` BIGSERIAL to preserve **ledger insertion order** — the same
+        contract SqliteRepository gets from `rowid` — so both adapters read rows back
+        identically (a run whose samples register out of sample-id order must not reorder on a
+        backend swap). `_select` is only ever called for the four seq-bearing tables (runs has
+        its own started_at-ordered query in `list_runs`); the table name comes from a fixed
+        allowlist, never user input.
         """
         if table not in _TABLES:
             raise ValueError(f"unknown table {table!r}")
-        order = "seq" if table == "provenance_events" else "run_id, sample_id"
-        # Fall back to run_id ordering for tables without a sample_id column.
-        if table in ("runs",):
-            order = "started_at NULLS FIRST, run_id"
-        elif table == "findings":
-            order = "created_at NULLS FIRST, id"
         if run_id is None:
-            rows: list[Any] = self._conn.execute(
-                f"SELECT * FROM {table} ORDER BY {order}"
-            ).fetchall()
+            rows: list[Any] = self._conn.execute(f"SELECT * FROM {table} ORDER BY seq").fetchall()
         else:
             rows = self._conn.execute(
-                f"SELECT * FROM {table} WHERE run_id = %s ORDER BY {order}", (run_id,)
+                f"SELECT * FROM {table} WHERE run_id = %s ORDER BY seq", (run_id,)
             ).fetchall()
         return rows
 
     @staticmethod
     def _dt(value: Any) -> datetime | None:
-        # psycopg returns an aware datetime for TIMESTAMPTZ; pass None through.
-        return value if isinstance(value, datetime) else None
+        # psycopg returns an aware datetime for TIMESTAMPTZ, but in the server's SESSION zone —
+        # not necessarily UTC. Normalize to UTC so reads are byte-identical to SqliteRepository
+        # (always UTC via `_iso`) and the authoritative ledger, regardless of the server's zone.
+        return value.astimezone(timezone.utc) if isinstance(value, datetime) else None
 
     def _to_run(self, row: dict[str, Any]) -> RunRow:
         return RunRow(
