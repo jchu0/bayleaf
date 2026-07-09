@@ -14,6 +14,7 @@ function useCrumb(): { title: string; run: string | null } {
   if (pathname.startsWith('/settings')) return { title: 'Settings', run: null }
   if (pathname.includes('/provenance') || pathname.includes('/canvas'))
     return { title: 'Provenance', run: runId ?? null }
+  if (pathname.includes('/agent')) return { title: 'Agent triage', run: runId ?? null }
   if (runId) return { title: 'Decision cards', run: runId }
   return { title: 'Runs', run: null }
 }

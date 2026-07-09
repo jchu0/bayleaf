@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { AgentTriage } from './screens/AgentTriage'
 import { Intake } from './screens/Intake'
 import { Monitoring } from './screens/Monitoring'
 import { Provenance } from './screens/Provenance'
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/runs/:runId" element={<RunDetail />} />
           <Route path="/runs/:runId/provenance" element={<Provenance />} />
           <Route path="/runs/:runId/intake" element={<Intake />} />
+          <Route path="/runs/:runId/agent" element={<AgentTriage />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/queue" element={<ReviewQueue />} />

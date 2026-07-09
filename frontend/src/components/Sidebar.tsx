@@ -52,7 +52,12 @@ function useNav(attention: number, defaultRunId: string | null): Group[] {
           icon: GitBranch,
           active: pathname.includes('/provenance') || pathname.includes('/canvas'),
         },
-        { label: 'Agent triage', to: runHome, icon: Sparkles, active: false },
+        {
+          label: 'Agent triage',
+          to: run ? `/runs/${run}/agent` : '/',
+          icon: Sparkles,
+          active: pathname.includes('/agent'),
+        },
         { label: 'Monitoring', to: '/monitoring', icon: Activity, active: pathname.startsWith('/monitoring') },
       ],
     },

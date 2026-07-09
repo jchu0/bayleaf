@@ -272,7 +272,7 @@ function TicketCard({
           Open card
         </Link>
         <Link
-          to={`/runs/${runId}?agent=${card.sample_id}`}
+          to={`/runs/${runId}/agent?sample=${card.sample_id}`}
           className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12px] text-text-2 transition-colors hover:text-text"
         >
           <Sparkles size={13} />
