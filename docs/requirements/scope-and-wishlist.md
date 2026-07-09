@@ -67,7 +67,7 @@ the **variant gate** is Phase 2; **evaluation** vs. GIAB/synthetic truth is ongo
 | 10 | Pipeline canvas — stage/DAG view + per-run data-I/O drill-down | Low–med | frontend + provenance ledger | Read-only; visualizes provenance; a lean version may land in the MVP dashboard |
 | 11 | Visual pipeline builder — compose tools + snap-in agents (± RNA-seq) | **High** | canvas + config + agents | **Flagship north-star** — integrates the canvas (#10), reuses provenance + logging + corpora, and answers the event's "pipeline translator" idea. The **artifact-kind → output-path config file** (a variant-gate-substrate seam, T-032) is the machine-readable base a canvas would generate. Nearly its own product |
 | 12 | In-app user feedback on the system | Low | frontend | Product-refinement telemetry to guide iteration |
-| 13 | Data-platform connectors (Box, Drive, OneDrive, S3, DNAnexus, Databricks, Snowflake, BigQuery, Redshift) | Low–med each | artifact-store port | Adapters; breadth work |
+| 13 | Data-platform connectors (Box, Drive, OneDrive, S3, DNAnexus, Databricks, Snowflake, BigQuery, Redshift) | Low–med each | artifact-store port | **Port + first adapters shipped (T-039):** the `ArtifactStore` port (`src/pipeguard/artifacts/`, [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)) — a *materialize-to-local-dir* boundary UPSTREAM of the gate (locates artifacts, never touches a verdict) — with a zero-dep `LocalArtifactStore` and an **S3 adapter OFF by default** (lazy `boto3` in an optional `[s3]` extra; live pull gated by `PIPEGUARD_S3_LIVE`; degrades to local on any error, so a bucket/creds alone never pull). **Deferred (breadth, each its own task):** the other 7 connectors — each needs its own SDK + auth + fixtures before it is demo-safe, and the warehouses (Databricks/Snowflake/BigQuery/Redshift) need a **query→artifact** adapter shape, not a straight object pull. Held back deliberately to avoid heavy-SDK/scope bloat |
 | 14 | Configurable de-identification module (HIPAA / PHI) | Med | connectors + policy | **Prerequisite** for any real patient-data integration; the demo stays public/synthetic |
 | 15 | CNV / mosaicism calling (dedicated callers) | High | callers + validation | Out of gate scope; coverage/AB signals enable *advisory* agent observations without a caller |
 | 16 | User-defined custom QC metrics | Med | config/runbook model | Adjusting thresholds is in scope; defining new metric types is future |
@@ -89,7 +89,7 @@ in isolated feature branches (merge what finishes); the rest are clarified targe
 | W17 | Telemetry connector configs (over `/metrics`) | `feat/telemetry-connectors` | T-036 |
 | W10 | Provenance stage/DAG canvas (read-only) | `feat/provenance-stage-canvas` | T-037 |
 | W16 | Metric-catalog read-only view | `feat/metric-catalog-view` | T-038 |
-| W13 | ArtifactStore port + Local + S3 adapter | `feat/artifact-store-port-s3` | T-039 |
+| W13 | ArtifactStore port + Local + S3 adapter **(built ✅ — port + Local + guarded S3)** | `feat/artifact-store-port-s3` | T-039 |
 | W14 | Config-driven de-id export policy | `feat/deid-export-policy` | T-040 |
 | W3 | Container deploy slice (+ unapplied Terraform) | `feat/container-deploy-slice` | T-041 |
 | W12 | In-app user feedback | `feat/in-app-feedback` | T-042 |
