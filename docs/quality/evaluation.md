@@ -19,9 +19,9 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **156 tests across 10 files** (`test_fetch_giab` 32, `test_gate` 24,
-`test_notify` 19, `test_synthetic` 19, `test_metrics` 17, `test_triage` 16,
-`test_persistence` 11, `test_gate_notify` 9, `test_metrics_mapping` 5, `test_api` 4), all
+The offline suite is **206 tests across 12 files** (largest: `test_notify`, `test_fetch_giab`,
+`test_gate`, `test_api`, `test_metrics`, `test_triage`; plus `test_persistence`,
+`test_synthetic`, `test_artifacts`(+`_s3`), `test_gate_notify`, `test_metrics_mapping`), all
 runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `test_api`
 and `test_triage` suites need the api/claude extras to import FastAPI).
 
