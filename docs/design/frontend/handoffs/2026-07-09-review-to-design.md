@@ -103,6 +103,7 @@ Drop a tool's docs (a Nextflow module, `--help`, a `nextflow_schema.json`, or a 
 - **Advisory, never auto-wiring** — it *proposes* a card; it never draws an edge, never places the node on the gate, never touches a verdict. This mirrors the triage / feedback-agent pattern (stub-first, opt-in Claude, off-gate, degrade-to-stub).
 - **The hard part is the `ArtifactKind` mapping** — the agent *suggests* kinds for a tool's outputs; **unknown kinds are flagged for the human, never invented** (same data-honesty guardrail as everywhere else). A wrong kind is caught by typed-wiring at compose time.
 - Scope: a **phase-2 "node-authoring agent" (roster agent #5)**. It turns the builder from "configure the 7 seeded tools" into "bring your own tools," which is the real unlock behind #4/#7/#8.
+- **Now graduated** from this brief line into a tracked design item: [design/node-authoring-agent.md](../../node-authoring-agent.md) (roster #5 in [agents.md](../../agents.md), tracked as **T-046**). It reuses wishlist **#9** (the deterministic nf-core schema → param-form importer) as the $0 stub layer, with Claude added only for the `ArtifactKind` mapping.
 
 ---
 
