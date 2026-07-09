@@ -3,11 +3,19 @@
 Offline: TestClient drives the app in-process (no server, no network).
 """
 
+import csv
+import io
+import json
+
 from fastapi.testclient import TestClient
 
 from api.main import app
 
 client = TestClient(app)
+
+
+def _parse_csv(text: str) -> list[dict[str, str]]:
+    return list(csv.DictReader(io.StringIO(text)))
 
 
 def test_health():
@@ -97,3 +105,58 @@ def test_metrics_prometheus_exposition():
     assert 'pipeguard_gate_flagged_samples_total{gate="preflight"} 6' in lines
     assert 'pipeguard_gate_flagged_samples_total{gate="qc"} 4' in lines
     assert 'pipeguard_gate_flagged_samples_total{gate="variant"} 0' in lines
+
+
+def test_export_decision_csv():
+    resp = client.get(
+        "/api/export", params={"format": "csv", "grain": "decision", "run_id": "mock_run_01"}
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert "attachment" in resp.headers["content-disposition"]
+    # Honesty label: a live recompute, not audit provenance (design doc G-EXPORT-SOURCE).
+    assert resp.headers["x-pipeguard-export-source"] == "live-recompute"
+    rows = _parse_csv(resp.text)
+    assert len(rows) == 5  # five samples in mock_run_01
+    assert resp.headers["x-pipeguard-row-count"] == "5"
+    # Operator PII is never a column (D10); origin always is (D11).
+    assert "submitted_by" not in rows[0]
+    assert "origin" in rows[0]
+    s4 = next(r for r in rows if r["sample_id"] == "S4")
+    assert s4["verdict"] == "escalate" and s4["run_id"] == "mock_run_01"
+
+
+def test_export_feature_jsonl_is_the_ml_corpus():
+    resp = client.get(
+        "/api/export", params={"format": "jsonl", "grain": "feature", "run_id": "mock_run_01"}
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/x-ndjson")
+    recs = [json.loads(ln) for ln in resp.text.splitlines() if ln]
+    assert int(resp.headers["x-pipeguard-row-count"]) == len(recs)
+    # ADR-0007 self-containment: canonical_unit + registry version ride each row.
+    assert {
+        "metric_key",
+        "normalized_value",
+        "canonical_unit",
+        "metric_registry_version",
+        "origin",
+    } <= recs[0].keys()
+    # A known registry-normalized value (S5 Q30 = 0.841 fraction) is present.
+    q30 = next(r for r in recs if r["sample_id"] == "S5" and r["metric_key"] == "qc.q30")
+    assert q30["normalized_value"] == 0.841 and q30["canonical_unit"] == "fraction"
+
+
+def test_export_verdict_filter():
+    rows = _parse_csv(
+        client.get("/api/export", params={"grain": "decision", "verdict": "escalate"}).text
+    )
+    assert rows  # at least mock_run_01/S4
+    assert {r["verdict"] for r in rows} == {"escalate"}
+
+
+def test_export_validation_and_404():
+    assert client.get("/api/export", params={"format": "xml"}).status_code == 400
+    assert client.get("/api/export", params={"grain": "bogus"}).status_code == 400
+    assert client.get("/api/export", params={"verdict": "maybe"}).status_code == 400
+    assert client.get("/api/export", params={"run_id": "NOPE"}).status_code == 404

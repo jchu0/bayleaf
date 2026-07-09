@@ -9,14 +9,19 @@ Run:  uv run uvicorn api.main:app --reload --port 8010
 
 from __future__ import annotations
 
+import csv
+import io
+import json
 from collections import Counter
+from collections.abc import Iterable, Iterator
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 
 from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
@@ -181,6 +186,159 @@ def get_card_triage(run_id: str, sample_id: str) -> TriageNote:
 def get_config() -> dict[str, Any]:
     """The active runbook (thresholds + gate policy) for the settings screen."""
     return DEFAULT_RUNBOOK.model_dump()
+
+
+# --- Data export (the BUILD-NOW query + export + ML-ready slice; design doc §2.1, T-030) -----
+
+# Honesty label (design doc G-EXPORT-SOURCE): the export is a LIVE deterministic re-derivation
+# of the gate over each run's artifacts at request time — reproducible and version-stamped, but
+# NOT a read of a recorded/ledger-anchored decision. Audit-grade (projection-read) export is
+# target-state. Surfaced in the `X-PipeGuard-Export-Source` header so a consumer can't mistake
+# the demo export for audit provenance.
+_EXPORT_SOURCE = "live-recompute"
+
+# Explicit, stable column orders. Operator PII (`submitted_by`) is deliberately never a column
+# (D10) — it is not an ML feature and never leaves the machine via export.
+_DECISION_FIELDS = [
+    "run_id", "sample_id", "verdict", "is_actionable", "headline", "rationale",
+    "next_steps", "n_findings", "findings", "generated_by", "origin",
+]  # fmt: skip
+_FEATURE_FIELDS = [
+    "run_id", "sample_id", "metric_key", "gate", "raw_value", "raw_unit",
+    "normalized_value", "canonical_unit", "metric_registry_version", "verdict", "origin",
+]  # fmt: skip
+
+
+def _run_origin(run_id: str) -> str:
+    """Origin label (`real-giab` | `synthetic` | `contrived`) for a run, from a per-run marker.
+
+    Data-handling guardrail (D11): every exported row is tagged with where its data came from,
+    so a consumer never mistakes synthetic/contrived rows for real ones and identity fields stay
+    gated to non-real origins. Read from an optional single-line `origin` marker in the run dir;
+    default `unknown` (treated conservatively) until runs are tagged.
+    """
+    marker = DATA_ROOT / run_id / "origin"
+    if marker.exists():
+        text = marker.read_text(encoding="utf-8").strip()
+        if text:
+            return text
+    return "unknown"
+
+
+def _decision_rows(run_ids: list[str], verdict: str | None) -> Iterator[dict[str, Any]]:
+    """One row per (run, sample): verdict + full narration + a findings summary."""
+    for rid in run_ids:
+        detail = _evaluate(rid)
+        origin = _run_origin(rid)
+        for card in detail.cards:
+            if verdict is not None and card.verdict.value != verdict:
+                continue
+            yield {
+                "run_id": rid,
+                "sample_id": card.sample_id,
+                "verdict": card.verdict.value,
+                "is_actionable": card.is_actionable,
+                "headline": card.headline,
+                "rationale": card.rationale,
+                "next_steps": " | ".join(card.next_steps),
+                "n_findings": len(card.findings),
+                "findings": " | ".join(f"{f.rule_id}:{f.title}" for f in card.findings),
+                "generated_by": card.generated_by,
+                "origin": origin,
+            }
+
+
+def _feature_rows(run_ids: list[str], verdict: str | None) -> Iterator[dict[str, Any]]:
+    """One row per `MetricValue` (long format = the ML corpus); `normalized_value` is the number.
+
+    `canonical_unit` + `metric_registry_version` ride each row (ADR-0007 self-containment), so a
+    downstream consumer can interpret the value without the registry in hand.
+    """
+    for rid in run_ids:
+        detail = _evaluate(rid)
+        origin = _run_origin(rid)
+        for card in detail.cards:
+            if verdict is not None and card.verdict.value != verdict:
+                continue
+            for mv in card.metric_values:
+                yield {
+                    "run_id": rid,
+                    "sample_id": mv.sample_id,
+                    "metric_key": mv.metric_key,
+                    "gate": mv.gate.value,
+                    "raw_value": mv.raw_value,
+                    "raw_unit": mv.raw_unit,
+                    "normalized_value": mv.normalized_value,
+                    "canonical_unit": mv.canonical_unit.value,
+                    "metric_registry_version": mv.metric_registry_version,
+                    "verdict": card.verdict.value,
+                    "origin": origin,
+                }
+
+
+def _to_csv(fields: list[str], rows: Iterable[dict[str, Any]]) -> str:
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fields, lineterminator="\n")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    return buf.getvalue()
+
+
+def _to_jsonl(rows: Iterable[dict[str, Any]]) -> str:
+    return "".join(json.dumps(row) + "\n" for row in rows)
+
+
+@app.get("/api/export")
+def export(
+    fmt: str = Query("csv", alias="format"),
+    grain: str = "decision",
+    run_id: str | None = None,
+    verdict: str | None = None,
+    q: str | None = None,
+) -> Response:
+    """Export the gate's decisions/metrics as one downloadable file (design doc §2.1, T-030).
+
+    A read-only, deterministic re-derivation over the served runs — the whole *query + export +
+    ML-ready* story from data the API already computes, no persistence wiring. `grain=decision`
+    is one row per (run, sample) with verdict + narration + findings; `grain=feature` is one
+    registry-normalized `MetricValue` per row (long format = the ML corpus). `format=csv|jsonl`.
+    Filter by `run_id`, `verdict`, or `q` (run-id substring). Every row carries its `origin`;
+    operator PII is never emitted (D10). This is a LIVE recompute, not audit provenance
+    (`X-PipeGuard-Export-Source`).
+    """
+    if fmt not in ("csv", "jsonl"):
+        raise HTTPException(status_code=400, detail="format must be 'csv' or 'jsonl'")
+    if grain not in ("decision", "feature"):
+        raise HTTPException(status_code=400, detail="grain must be 'decision' or 'feature'")
+    if verdict is not None and verdict not in _VERDICT_ORDER:
+        raise HTTPException(status_code=400, detail=f"verdict must be one of {_VERDICT_ORDER}")
+
+    if run_id is not None:
+        _run_dir(run_id)  # 404 if unknown
+        run_ids = [run_id]
+    else:
+        run_ids = [r for r in _run_ids() if q is None or q in r]
+
+    fields = _DECISION_FIELDS if grain == "decision" else _FEATURE_FIELDS
+    builder = _decision_rows if grain == "decision" else _feature_rows
+    rows = list(builder(run_ids, verdict))
+    body = _to_csv(fields, rows) if fmt == "csv" else _to_jsonl(rows)
+
+    scope = run_id or (f"q-{q}" if q else "all")
+    ext, media = ("csv", "text/csv") if fmt == "csv" else ("jsonl", "application/x-ndjson")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    filename = f"pipeguard-{scope}-{grain}-{stamp}.{ext}"
+    return Response(
+        content=body,
+        media_type=media,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-PipeGuard-Export-Source": _EXPORT_SOURCE,
+            "X-PipeGuard-Exported-At": stamp,
+            "X-PipeGuard-Row-Count": str(len(rows)),
+        },
+    )
 
 
 @app.get("/api/runbook")
