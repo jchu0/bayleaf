@@ -55,14 +55,25 @@ surface that lets operators act on surfaced outputs.
    disclaimer. **Live Slack send is opt-in via `PIPEGUARD_SLACK_LIVE` and was verified
    end-to-end against a real workspace** (a token/channel alone never sends; any error degrades
    to the offline stub). A `python -m pipeguard.notify` demo CLI exists.
+   **Webhook adapters added (T-035):** `TeamsNotifier` + `DiscordNotifier` extend the same
+   `NotifyPort` with a stdlib `urllib.request` POST to an incoming-webhook URL — no SDK, no
+   new dependency. Each keeps Slack's safety shape but with its **own** per-adapter live flag
+   (`PIPEGUARD_TEAMS_LIVE` / `PIPEGUARD_DISCORD_LIVE`, default OFF), so arming one channel
+   never arms another; unarmed or with no URL configured, they degrade to the offline stub
+   (no socket). The webhook URL is a secret — env-only, never logged, and stripped from the
+   `notification.emitted` event payload (only `adapter/status/delivered/verdict` + the
+   payload `content_hash` are recorded). Discord's body is capped at its 2000-char limit.
+   `get_notifier()` maps `slack|teams|discord`.
 2. **Inbound read API BUILT** as the FastAPI backend (`api/`,
    [ADR-0014](ADR-0014-productionization-fastapi-react.md)) — exactly the seam this ADR
    anticipated, wrapping the framework-agnostic core.
 3. **Cards-as-tickets: partial.** `DecisionCard` is the operator-facing unit and the dashboard
    review queue. The explicit `open → in-review → resolved` status lifecycle
-   (`ReviewItem`/`Ticket`, schemas.md §17), the Jira/Teams/Discord adapters, and the
+   (`ReviewItem`/`Ticket`, schemas.md §17), the **Jira** adapter (a write action that creates
+   persistent tickets — needs an idempotency guard keyed off the card `content_hash` so
+   re-runs don't spam duplicates; deferred to the ticketing/write-action phase), and the
    resolved-cards → experience-ledger loop ([ADR-0009](ADR-0009-corpora-retrieval-upskilling.md))
-   remain MVP-deferred.
+   remain MVP-deferred. (Teams/Discord notify adapters are now built — see item 1, T-035.)
 
 ## Revisit when
 

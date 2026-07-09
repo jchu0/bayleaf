@@ -56,7 +56,7 @@ the **variant gate** is Phase 2; **evaluation** vs. GIAB/synthetic truth is ongo
 | # | Item | Research | Blocked on | Notes |
 |---|---|---|---|---|
 | 1 | Granular agent profile | Low | config layer + agents | Design captured (ADR-0005/0012); build after core |
-| 2 | Jira / Teams / Discord notify adapters | Low | — (notify port **built**, T-015b) | Port + Slack adapter shipped; remaining channels are just new `NotifyPort` adapters. Wiring notify into the read-API/ticketing flow is the follow-on |
+| 2 | Jira / Teams / Discord notify adapters | Low | — (notify port **built**, T-015b) | Port + Slack (T-015b), **Teams + Discord webhook adapters shipped (T-035)** — stdlib `urllib.request` POST, per-adapter live flag, stub-default. **Jira deferred** (a write action → needs a `content_hash` idempotency guard; ticketing/write-action phase). Wiring notify into the read-API/ticketing flow is the follow-on |
 | 3 | Cloud deploy + Terraform (AWS / HealthOmics) | Low–med | containerization | Write as target-state IaC before any apply |
 | 4 | Pipeline-repair agent (agent #2) | Low–med | QC-triage + escalation | Next agent after QC (ADR-0012) |
 | 5 | pgvector read-clustering / contaminant-QC | **High** | vector store + research | Nearly a separate project; empirical, unproven. The intended vector store is **Postgres `pgvector`** — the end-goal single store (D3/#19), not a separate system |

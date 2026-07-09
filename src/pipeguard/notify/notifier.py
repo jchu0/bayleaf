@@ -9,6 +9,10 @@ to flip on, and never on the deterministic critical path (ADR-0001):
     it to an in-memory outbox. It never opens a socket, so the whole app notifies offline.
   * :class:`SlackNotifier` is OFF by default, lazy-imports its client, and degrades to the
     stub on ANY error (mirroring `ClaudeTriageAgent`).
+  * :class:`TeamsNotifier` / :class:`DiscordNotifier` are OFF by default too — incoming-
+    webhook adapters that POST the shared body with the stdlib (``urllib.request``, no
+    SDK, no new dependency) and share :class:`_WebhookNotifier`. Each has its OWN live-arm
+    flag, so arming one channel never arms another.
 
 Notify policy
 -------------
@@ -18,23 +22,30 @@ operator inbox should carry signal (cards that need a human), not an all-clear f
 passing sample. The check is :func:`should_notify`, grounded in the card's existing
 :attr:`~pipeguard.models.DecisionCard.is_actionable`.
 
-Live send is OPT-IN (T-015b)
-----------------------------
-Payload construction, the adapter shape, the lazy import, and the fallback are always
-built; the actual outward-facing Slack post is armed only by exporting
-``PIPEGUARD_SLACK_LIVE`` (see :func:`_live_send_enabled`). Off by default and off from a
-token alone, so the default demo/tests never send. See :class:`SlackNotifier` for the seam.
+Live send is OPT-IN, per adapter (T-015b / T-035)
+-------------------------------------------------
+Payload construction, the adapter shape, and the fallback are always built; the actual
+outward-facing post is armed only by exporting that adapter's OWN ``*_LIVE`` flag
+(see :func:`_flag_enabled`). Off by default and off from creds alone, so the default
+demo/tests never send. Each adapter guards independently — arming Slack does not arm
+Teams or Discord, and vice-versa.
 
 Env knobs (mirror the synthesizer/triage seams; nothing hardcoded — see .env.example):
-  PIPEGUARD_NOTIFIER        "stub" (default, offline, $0) | "slack" (adapter)
-  PIPEGUARD_SLACK_LIVE      unset (default; never sends) | "1" to arm the live post
-  PIPEGUARD_SLACK_CHANNEL   target channel id/name for the Slack path (used when armed)
-  PIPEGUARD_SLACK_BOT_TOKEN bot token (xoxb-…, chat:write) — used only when live is armed
+  PIPEGUARD_NOTIFIER            "stub" (default, $0) | "slack" | "teams" | "discord"
+  PIPEGUARD_SLACK_LIVE          unset (default; never sends) | "1" to arm the Slack post
+  PIPEGUARD_SLACK_CHANNEL       target channel id/name for the Slack path (when armed)
+  PIPEGUARD_SLACK_BOT_TOKEN     bot token (xoxb-…, chat:write) — only used when armed
+  PIPEGUARD_TEAMS_LIVE          unset (default) | "1" to arm the Teams webhook POST
+  PIPEGUARD_TEAMS_WEBHOOK_URL   Teams incoming-webhook URL (secret) — only used when armed
+  PIPEGUARD_DISCORD_LIVE        unset (default) | "1" to arm the Discord webhook POST
+  PIPEGUARD_DISCORD_WEBHOOK_URL Discord webhook URL (secret) — only used when armed
 """
 
 from __future__ import annotations
 
+import json
 import os
+import urllib.request
 from typing import Any, Protocol
 
 from ..models import DecisionCard, Finding, Verdict
@@ -48,11 +59,36 @@ _ENV_SLACK_TOKEN = "PIPEGUARD_SLACK_BOT_TOKEN"
 # Explicit opt-in for the outward-facing live post (see _live_send_enabled).
 _ENV_SLACK_LIVE = "PIPEGUARD_SLACK_LIVE"
 
+# Webhook adapters (Teams / Discord). The URL is a SECRET (it embeds an auth token) —
+# resolved from env only, never hardcoded or logged. Each has its own live-arm flag so
+# arming one channel never arms another (mirrors PIPEGUARD_SLACK_LIVE per-adapter).
+_ENV_TEAMS_WEBHOOK = "PIPEGUARD_TEAMS_WEBHOOK_URL"
+_ENV_TEAMS_LIVE = "PIPEGUARD_TEAMS_LIVE"
+_ENV_DISCORD_WEBHOOK = "PIPEGUARD_DISCORD_WEBHOOK_URL"
+_ENV_DISCORD_LIVE = "PIPEGUARD_DISCORD_LIVE"
+
 # Placeholder channels so a payload stays deterministic when nothing is configured.
 _STUB_CHANNEL = "stub"
 _UNCONFIGURED_CHANNEL = "unconfigured"
 
+# Discord caps a message's content at 2000 chars; truncate the shared body to fit so a
+# long card can't 400 the webhook. (Slack/Teams have far higher limits.)
+_DISCORD_CONTENT_LIMIT = 2000
+# A conservative timeout on the one outward-facing POST so a hung webhook can't wedge a
+# run; any timeout is an error that degrades to the offline stub (never breaks the gate).
+_WEBHOOK_TIMEOUT_S = 10
+
 _TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _flag_enabled(env_name: str) -> bool:
+    """Whether an outward-facing live-send flag is armed (the per-adapter safety switch).
+
+    Off unless the named env var is explicitly truthy. Read from ``os.environ`` (not a
+    module constant) so it is opt-in per process and can't be silently baked in — the one
+    place every adapter's arm-check is defined, so they can't drift.
+    """
+    return os.environ.get(env_name, "").strip().lower() in _TRUTHY
 
 
 def _live_send_enabled() -> bool:
@@ -62,10 +98,29 @@ def _live_send_enabled() -> bool:
     Posting to a real workspace is outward-facing, so it never turns on by default,
     by accident, or from the presence of a token alone: the demo and the test suite
     stay offline until a maintainer deliberately exports this flag *and* supplies a
-    token + channel. Read from ``os.environ`` (not a module constant) so it is
-    opt-in per process and can't be silently baked in.
+    token + channel.
     """
-    return os.environ.get(_ENV_SLACK_LIVE, "").strip().lower() in _TRUTHY
+    return _flag_enabled(_ENV_SLACK_LIVE)
+
+
+def _post_webhook(url: str, body: dict[str, Any]) -> None:
+    """POST a JSON body to an incoming webhook via the stdlib (the one outbound seam).
+
+    Shared by every webhook adapter (Teams, Discord) so there is a single, patchable
+    ``urllib.request.urlopen`` seam — a test spies on it to prove the default path opens
+    no socket, and injects a fake opener to exercise the live shape without the wire. No
+    Teams/Discord SDK and no new dependency: an incoming webhook is just an HTTP POST.
+    Raises on any transport/HTTP error; the caller degrades to the stub so a webhook
+    problem can never break the gate (ADR-0001).
+    """
+    data = json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(
+        url, data=data, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    # Read the response so the request completes; the body is discarded (webhooks return
+    # an empty 200/204). urlopen is the seam tests patch — never reached unless armed.
+    with urllib.request.urlopen(request, timeout=_WEBHOOK_TIMEOUT_S) as response:
+        response.read()
 
 
 # A conservative disclaimer on every notification: this is a research/demo QC aid, and the
@@ -361,15 +416,121 @@ class SlackNotifier:
             return self._fallback.notify(card)
 
 
+class _WebhookNotifier:
+    """Shared base for incoming-webhook notify adapters — Teams and Discord (ADR-0010 §2).
+
+    Mirrors :class:`SlackNotifier`'s safety shape — OFF by default, live send opt-in *per
+    adapter*, degrade-to-stub on ANY error — but delivers with a stdlib
+    ``urllib.request`` POST to an incoming-webhook URL instead of an SDK client. An
+    incoming webhook is just an HTTP POST, so no per-vendor SDK and no new dependency are
+    needed. Subclasses supply only the vendor specifics: the adapter :attr:`name`, the env
+    vars for the webhook URL + the per-adapter live flag, and :meth:`_format_body` (the
+    vendor's JSON envelope around the shared payload text).
+
+    The webhook URL is a secret (it embeds an auth token): it is resolved from env, used as
+    the payload's ``channel`` for traceability, and never written to a log or the SENT
+    ``detail``. Like every notifier it only formats the already-decided card — it never
+    sets or overrides a verdict or confidence (ADR-0001).
+    """
+
+    # Subclasses MUST set these three; the base is never instantiated directly.
+    name: str
+    _webhook_env: str
+    _live_env: str
+
+    def __init__(self, webhook_url: str | None = None) -> None:
+        # Never hardcode the URL — resolve from env, else a clearly-unconfigured
+        # placeholder so the payload stays deterministic and no socket is attempted.
+        self._webhook_url = (
+            webhook_url or os.environ.get(self._webhook_env) or _UNCONFIGURED_CHANNEL
+        )
+        self._fallback = StubNotifier(channel=self._webhook_url)
+
+    def _format_body(self, text: str) -> dict[str, Any]:
+        """Wrap the shared plain-text body in the vendor's minimal JSON envelope."""
+        raise NotImplementedError
+
+    def notify(self, card: DecisionCard) -> NotifyResult:
+        if not should_notify(card):
+            return _skipped_result(self.name)
+
+        if not _flag_enabled(self._live_env) or self._webhook_url == _UNCONFIGURED_CHANNEL:
+            # PRIMARY GUARD: the live POST is opt-in per adapter (its own *_LIVE flag) and
+            # needs a configured URL. Unarmed OR misconfigured, delegate to the offline
+            # stub — it builds + records the same payload and never opens a socket, so the
+            # default demo and the test suite never send even when a URL is configured.
+            return self._fallback.notify(card)
+
+        # --- live-send seam (reached only when this adapter's *_LIVE flag is armed) ------
+        payload = build_payload(card, channel=self._webhook_url)
+        try:
+            # The one outward-facing call, via the shared stdlib POST seam.
+            _post_webhook(self._webhook_url, self._format_body(payload.text))
+            return NotifyResult(
+                status=NotifyStatus.SENT,
+                adapter=self.name,
+                payload=payload,
+                # No URL in the detail — the webhook URL is a secret and is never logged.
+                detail=f"{self.name}: posted via incoming webhook",
+            )
+        except Exception:
+            # ANY failure degrades to the offline stub — never break the gate over a
+            # notification (bad URL, network error, non-2xx, timeout).
+            return self._fallback.notify(card)
+
+
+class TeamsNotifier(_WebhookNotifier):
+    """Microsoft Teams notify adapter — OFF by default, live send opt-in (ADR-0010 §2).
+
+    Posts to a Teams *incoming webhook* (``PIPEGUARD_TEAMS_WEBHOOK_URL``) as a legacy
+    MessageCard ``{"text": ...}`` — the minimal shape every Teams connector renders. Live
+    send is armed only by ``PIPEGUARD_TEAMS_LIVE``; unarmed or unconfigured, it degrades to
+    the offline stub. Slack Block Kit ``blocks`` stay Slack-specific — the shared
+    plain-text body carries the same verdict/findings/evidence to every channel.
+    """
+
+    name = "teams"
+    _webhook_env = _ENV_TEAMS_WEBHOOK
+    _live_env = _ENV_TEAMS_LIVE
+
+    def _format_body(self, text: str) -> dict[str, Any]:
+        # Legacy MessageCard: a bare "text" is the lowest-common-denominator payload every
+        # Teams incoming-webhook connector accepts without an Adaptive Card schema.
+        return {"text": text}
+
+
+class DiscordNotifier(_WebhookNotifier):
+    """Discord notify adapter — OFF by default, live send opt-in (ADR-0010 §2).
+
+    Posts to a Discord *webhook* (``PIPEGUARD_DISCORD_WEBHOOK_URL``) as
+    ``{"content": text}``, truncated to Discord's 2000-char content limit so a long card
+    can't 400 the endpoint. Live send is armed only by ``PIPEGUARD_DISCORD_LIVE``; unarmed
+    or unconfigured, it degrades to the offline stub.
+    """
+
+    name = "discord"
+    _webhook_env = _ENV_DISCORD_WEBHOOK
+    _live_env = _ENV_DISCORD_LIVE
+
+    def _format_body(self, text: str) -> dict[str, Any]:
+        # Discord rejects content over 2000 chars — truncate the shared body to fit.
+        return {"content": text[:_DISCORD_CONTENT_LIMIT]}
+
+
 def get_notifier() -> NotifyPort:
     """Select the notifier from the environment (default: the zero-cost stub).
 
-    Set ``PIPEGUARD_NOTIFIER=slack`` to use the Slack adapter (live send still guarded
-    off; it degrades to the stub). This is the single line that flips the notify seam.
+    Set ``PIPEGUARD_NOTIFIER`` to ``slack``, ``teams``, or ``discord`` to use that adapter
+    (each adapter's live send stays guarded off behind its own ``*_LIVE`` flag; unarmed it
+    degrades to the stub). This is the single line that flips the notify seam.
     """
     choice = os.environ.get(_ENV_NOTIFIER, "stub").strip().lower()
     if choice == "slack":
         return SlackNotifier()
+    if choice == "teams":
+        return TeamsNotifier()
+    if choice == "discord":
+        return DiscordNotifier()
     return StubNotifier()
 
 
@@ -385,6 +546,8 @@ def notify_card(card: DecisionCard, notifier: NotifyPort | None = None) -> Notif
     return notifier.notify(card)
 
 
-# Static type check: both adapters satisfy the NotifyPort protocol.
+# Static type check: every adapter satisfies the NotifyPort protocol.
 _STUB: NotifyPort = StubNotifier()
 _SLACK: NotifyPort = SlackNotifier()
+_TEAMS: NotifyPort = TeamsNotifier()
+_DISCORD: NotifyPort = DiscordNotifier()
