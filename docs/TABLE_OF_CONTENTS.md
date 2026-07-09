@@ -36,6 +36,7 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 | Doc | Status | Purpose |
 |---|---|---|
 | [design/architecture.md](design/architecture.md) | ✅ | System shape: three gates, component map, data flow, invariants, swappable seams, deployment |
+| [design/agents.md](design/agents.md) | ✅ | Agent-layer hub: roster, shared invariants (captured once), intake checklist for new agent ideas |
 | [design/frontend/frontend-design-brief.md](design/frontend/frontend-design-brief.md) | ✅ | UI design brief (v1 + v2 additions) — the stable spec |
 | [design/frontend/handoffs/](design/frontend/handoffs/) | ✅ | Dated review→design handoff deltas (episodic) |
 | [design/frontend/](design/frontend/) | ✅ | Frontend prototype (`PipeGuard.html`) + design README |
@@ -118,6 +119,6 @@ Which doc to open for a given part of the system.
 | `scripts/fetch_giab_hg002.py` (real data) | `scripts/README.md`, `data/strategy.md`, `data/licensing.md` |
 | the event bus / ledger | `data/provenance.md`, ADR-0002 |
 | the config layer / profiles | ADR-0005 + [`architecture.md`](design/architecture.md) §Swappable seams |
-| the synthesizer / agents | ADR-0001, ADR-0006 |
+| the synthesizer / agents | [`design/agents.md`](design/agents.md) (roster + invariants), ADR-0001, ADR-0006 |
 | any machine output / log format | ADR-0007, `data/schemas.md` |
 | anything: "why is it this way?" | `adr/` |
