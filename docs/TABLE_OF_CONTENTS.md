@@ -41,6 +41,7 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 | [design/agents.md](design/agents.md) | ✅ | Agent-layer hub: roster, shared invariants (captured once), intake checklist for new agent ideas |
 | [design/data-platform-and-archivist.md](design/data-platform-and-archivist.md) | ✅ | Data-platform + export + run-browser + Archivist agent design (draft for review; tiered already-built / build-now / target-state) |
 | [design/frontend/frontend-design-brief.md](design/frontend/frontend-design-brief.md) | ✅ | UI design brief (v1 + v2 additions) — the stable spec |
+| [design/frontend/pipeline-builder-brief.md](design/frontend/pipeline-builder-brief.md) | ✅ | Wishlist #11 flagship — pipeline-builder design handoff (node/agent canvas → run-layout config), paste-and-go for a design tool |
 | [design/frontend/handoffs/](design/frontend/handoffs/) | ✅ | Dated review→design handoff deltas (episodic) |
 | [design/frontend/](design/frontend/) | ✅ | Frontend prototype (`PipeGuard.html`) + design README |
 
