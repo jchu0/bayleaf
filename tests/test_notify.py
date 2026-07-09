@@ -7,16 +7,20 @@ skips clean cards, the payload is deterministic, the port NEVER touches the verd
 sending. The (deferred) live-send seam is exercised with a fake client — never the wire.
 """
 
+import json
 import sys
+import urllib.request
 from pathlib import Path
 
 import pytest
 
 from pipeguard import Verdict, load_run, notify_card, run_gate
 from pipeguard.notify import (
+    DiscordNotifier,
     NotifyStatus,
     SlackNotifier,
     StubNotifier,
+    TeamsNotifier,
     build_payload,
     get_notifier,
     should_notify,
@@ -35,11 +39,13 @@ def cards():
 
 @pytest.fixture(autouse=True)
 def _disarm_live_send(monkeypatch):
-    """Belt-and-suspenders: NO notify test may post to a real workspace — even on a machine
-    whose shell or .env has PIPEGUARD_SLACK_LIVE + a real token set. The live send is
-    env-armed, so we force it off for every test; the few tests that exercise the live seam
-    re-arm it explicitly (after this autouse fixture runs)."""
+    """Belt-and-suspenders: NO notify test may post to a real workspace/channel — even on a
+    machine whose shell or .env has a ``*_LIVE`` flag + real creds set. Every adapter's live
+    send is env-armed, so we force ALL of them off for every test; the few tests that
+    exercise a live seam re-arm one explicitly (after this autouse fixture runs)."""
     monkeypatch.delenv("PIPEGUARD_SLACK_LIVE", raising=False)
+    monkeypatch.delenv("PIPEGUARD_TEAMS_LIVE", raising=False)
+    monkeypatch.delenv("PIPEGUARD_DISCORD_LIVE", raising=False)
 
 
 # --- notify policy ----------------------------------------------------------
@@ -277,6 +283,169 @@ def test_slack_never_sends_when_not_armed_even_with_creds(cards, monkeypatch):
     result = agent.notify(cards["S4"])
     assert result.delivered is False
     assert result.adapter == "stub"
+
+
+# --- the webhook adapters (Teams / Discord): OFF by default, never send unless armed ---
+
+
+class _RecordingOpener:
+    """A fake ``urllib.request.urlopen`` — records each Request and returns a 200-like
+    response. Injected as the outbound seam so the webhook live path is exercised WITHOUT
+    a socket, and so a test can prove the default path never calls it at all."""
+
+    def __init__(self) -> None:
+        self.requests: list[urllib.request.Request] = []
+
+    def __call__(self, request, timeout=None):  # matches urlopen(request, timeout=...)
+        self.requests.append(request)
+        return self
+
+    # Context-manager + read() so it slots into `with urlopen(...) as r: r.read()`.
+    def read(self) -> bytes:
+        return b""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+# (adapter class, its live-arm env var, the vendor's JSON body key) — one row per webhook
+# adapter so every guarantee below is asserted identically for Teams and Discord.
+_WEBHOOK_ADAPTERS = [
+    (TeamsNotifier, "PIPEGUARD_TEAMS_LIVE", "PIPEGUARD_TEAMS_WEBHOOK_URL", "text"),
+    (DiscordNotifier, "PIPEGUARD_DISCORD_LIVE", "PIPEGUARD_DISCORD_WEBHOOK_URL", "content"),
+]
+
+
+@pytest.mark.parametrize("adapter_cls, live_env, url_env, body_key", _WEBHOOK_ADAPTERS)
+def test_webhook_with_no_url_falls_back_to_stub_without_sending(
+    cards, monkeypatch, adapter_cls, live_env, url_env, body_key
+):
+    """Webhook adapter, no URL configured: degrades to the stub, does not raise, no send."""
+    monkeypatch.delenv(url_env, raising=False)
+    result = adapter_cls().notify(cards["S4"])
+    assert result.status is NotifyStatus.PREPARED  # payload built...
+    assert result.adapter == "stub"  # ...by the stub fallback
+    assert result.delivered is False  # never a real send
+    assert result.payload is not None
+    # Channel stays a deterministic placeholder when unconfigured (never a secret URL).
+    assert result.payload.channel == "unconfigured"
+
+
+@pytest.mark.parametrize("adapter_cls, live_env, url_env, body_key", _WEBHOOK_ADAPTERS)
+def test_webhook_never_opens_socket_when_not_armed(
+    cards, monkeypatch, adapter_cls, live_env, url_env, body_key
+):
+    """A URL is configured but the live flag is NOT armed (autouse disarms it): the urlopen
+    seam is never touched — this directly proves 'no socket', not just a stub-shaped result."""
+    opener = _RecordingOpener()
+    monkeypatch.setattr(urllib.request, "urlopen", opener)
+    result = adapter_cls(webhook_url="https://example.test/hook").notify(cards["S4"])
+    assert opener.requests == []  # the outbound seam was never reached
+    assert result.status is NotifyStatus.PREPARED and result.adapter == "stub"
+    assert result.delivered is False
+
+
+@pytest.mark.parametrize("adapter_cls, live_env, url_env, body_key", _WEBHOOK_ADAPTERS)
+def test_webhook_url_read_from_env_never_hardcoded(
+    cards, monkeypatch, adapter_cls, live_env, url_env, body_key
+):
+    """The webhook URL is resolved from env (used as the payload channel), never hardcoded."""
+    monkeypatch.setenv(url_env, "https://env.example.test/hook")
+    result = adapter_cls().notify(cards["S4"])  # unarmed → stub, but channel resolved from env
+    assert result.payload is not None
+    assert result.payload.channel == "https://env.example.test/hook"
+
+
+@pytest.mark.parametrize("adapter_cls, live_env, url_env, body_key", _WEBHOOK_ADAPTERS)
+def test_webhook_live_seam_posts_via_fake_opener(
+    cards, monkeypatch, adapter_cls, live_env, url_env, body_key
+):
+    """Prove the live wiring's SHAPE with a fake opener — no real HTTP, no wire.
+
+    This is the one place SENT can occur for a webhook adapter, and only because its live
+    flag is armed in the test AND a fake urlopen is injected. The default demo/suite never
+    reaches here.
+    """
+    monkeypatch.setenv(live_env, "1")
+    opener = _RecordingOpener()
+    monkeypatch.setattr(urllib.request, "urlopen", opener)
+
+    url = "https://example.test/hooks/abc123"
+    result = adapter_cls(webhook_url=url).notify(cards["S4"])
+
+    assert result.status is NotifyStatus.SENT
+    assert result.adapter == adapter_cls.name and result.delivered is True
+    assert result.payload is not None
+    # Exactly one POST, to the configured URL, carrying the vendor's JSON envelope.
+    assert len(opener.requests) == 1
+    req = opener.requests[0]
+    assert req.full_url == url
+    assert req.get_method() == "POST"
+    body = json.loads(req.data)
+    assert set(body) == {body_key}  # only the vendor's single body field
+    assert body[body_key] == result.payload.text  # the shared body (demo text < 2000)
+    # The webhook URL is a secret — it must never appear in the human-readable detail.
+    assert url not in result.detail
+
+
+@pytest.mark.parametrize("adapter_cls, live_env, url_env, body_key", _WEBHOOK_ADAPTERS)
+def test_webhook_live_seam_degrades_to_stub_on_error(
+    cards, monkeypatch, adapter_cls, live_env, url_env, body_key
+):
+    """With the live flag armed, any POST error still degrades to the stub — never breaks."""
+    monkeypatch.setenv(live_env, "1")
+
+    def _boom(request, timeout=None):
+        raise RuntimeError("simulated webhook failure")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _boom)
+    result = adapter_cls(webhook_url="https://example.test/hook").notify(cards["S4"])
+    assert result.status is NotifyStatus.PREPARED and result.adapter == "stub"
+    assert result.delivered is False  # degraded, never sent
+
+
+@pytest.mark.parametrize("adapter_cls, live_env, url_env, body_key", _WEBHOOK_ADAPTERS)
+def test_webhook_clean_card_is_skipped_by_policy(cards, adapter_cls, live_env, url_env, body_key):
+    """A clean PROCEED card is skipped by the shared notify policy for webhook adapters too."""
+    result = adapter_cls(webhook_url="https://example.test/hook").notify(cards["S1"])
+    assert result.status is NotifyStatus.SKIPPED
+    assert result.payload is None and result.delivered is False
+
+
+def test_webhook_payload_is_deterministic_with_url_channel(cards):
+    """Identical cards + URL yield an identical payload + content_hash (offline repro)."""
+    url = "https://example.test/hook"
+    a = build_payload(cards["S4"], channel=url)
+    b = build_payload(cards["S4"], channel=url)
+    assert a == b
+    assert a.content_hash == b.content_hash and len(a.content_hash) == 64
+    assert a.channel == url
+
+
+def test_discord_body_truncates_to_discord_2000_char_limit():
+    """Discord caps content at 2000 chars; the adapter truncates so a long card can't 400."""
+    body = DiscordNotifier(webhook_url="https://example.test/hook")._format_body("x" * 5000)
+    assert set(body) == {"content"}
+    assert len(body["content"]) == 2000
+
+
+def test_teams_body_is_legacy_messagecard_text():
+    """Teams gets the lowest-common-denominator MessageCard shape: a bare {"text": ...}."""
+    body = TeamsNotifier(webhook_url="https://example.test/hook")._format_body("hello")
+    assert body == {"text": "hello"}
+
+
+def test_get_notifier_selects_teams_from_env(monkeypatch):
+    monkeypatch.setenv("PIPEGUARD_NOTIFIER", "teams")
+    assert isinstance(get_notifier(), TeamsNotifier)
+
+
+def test_get_notifier_selects_discord_from_env(monkeypatch):
+    monkeypatch.setenv("PIPEGUARD_NOTIFIER", "discord")
+    assert isinstance(get_notifier(), DiscordNotifier)
 
 
 # --- the `python -m pipeguard.notify` CLI ------------------------------------

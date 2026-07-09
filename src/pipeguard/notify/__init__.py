@@ -3,15 +3,18 @@
 Stub-first and OFF the deterministic critical path (ADR-0001): turns a *flagged* decision
 card into an outbound notification and never sets or overrides a verdict. Public entry
 point is :func:`notify_card`; :func:`get_notifier` flips the adapter from the environment
-(``PIPEGUARD_NOTIFIER=stub|slack``, default stub). The Slack adapter's live send is opt-in
-via ``PIPEGUARD_SLACK_LIVE`` (T-015b) — unarmed, it degrades to the stub.
+(``PIPEGUARD_NOTIFIER=stub|slack|teams|discord``, default stub). Each real adapter's live
+send is opt-in via its own ``*_LIVE`` flag (``PIPEGUARD_SLACK_LIVE`` / ``PIPEGUARD_TEAMS_LIVE``
+/ ``PIPEGUARD_DISCORD_LIVE``, T-015b / T-035) — unarmed, it degrades to the stub.
 """
 
 from .models import NotifyPayload, NotifyResult, NotifyStatus
 from .notifier import (
+    DiscordNotifier,
     NotifyPort,
     SlackNotifier,
     StubNotifier,
+    TeamsNotifier,
     build_payload,
     get_notifier,
     notify_card,
@@ -19,12 +22,14 @@ from .notifier import (
 )
 
 __all__ = [
+    "DiscordNotifier",
     "NotifyPayload",
     "NotifyPort",
     "NotifyResult",
     "NotifyStatus",
     "SlackNotifier",
     "StubNotifier",
+    "TeamsNotifier",
     "build_payload",
     "get_notifier",
     "notify_card",

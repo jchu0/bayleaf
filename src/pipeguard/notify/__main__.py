@@ -3,10 +3,12 @@
     uv run python -m pipeguard.notify data/mock_run_01
 
 Loads ``.env`` (so ``PIPEGUARD_*`` are in the environment *before* the notifier resolves
-its channel/token), runs the gate, and notifies each actionable card through the notifier
-chosen by ``PIPEGUARD_NOTIFIER`` (``stub`` by default — $0, offline, nothing leaves the
-machine). Live Slack posting additionally needs ``PIPEGUARD_SLACK_LIVE=1`` + a bot
-token/channel (see ``.env.example``). Safe by default: with no env set, this only prints.
+its channel/URL/token), runs the gate, and notifies each actionable card through the
+notifier chosen by ``PIPEGUARD_NOTIFIER`` (``stub`` by default — $0, offline, nothing
+leaves the machine; ``slack`` | ``teams`` | ``discord`` are the adapters). A live post
+additionally needs that adapter's own ``*_LIVE`` flag armed (``PIPEGUARD_SLACK_LIVE`` /
+``PIPEGUARD_TEAMS_LIVE`` / ``PIPEGUARD_DISCORD_LIVE``) + its creds/URL (see
+``.env.example``). Safe by default: with no env set, this only prints.
 """
 
 from __future__ import annotations
@@ -42,7 +44,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     actionable: list[DecisionCard] = [c for c in cards if should_notify(c)]
 
     print(f"Gated {run_dir}: {len(cards)} sample(s), {len(actionable)} actionable.")
-    print(f"Notifier: {notifier.name}  (live send armed only via PIPEGUARD_SLACK_LIVE)")
+    print(f"Notifier: {notifier.name}  (live send armed only via the adapter's *_LIVE flag)")
     for card in actionable:
         print(f"  notified {card.sample_id} [{card.verdict.value}] — {card.headline}")
     if not actionable:
