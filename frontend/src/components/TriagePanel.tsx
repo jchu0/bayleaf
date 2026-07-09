@@ -1,3 +1,4 @@
+import { Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../api'
 import type { TriageNote } from '../types'
@@ -22,23 +23,24 @@ export function TriagePanel({ runId, sampleId }: { runId: string; sampleId: stri
 
   if (note) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-4">
+      <div className="rounded-lg border border-accent/25 bg-accent-weak/60 p-3.5">
         <div className="mb-2 flex items-center gap-2">
-          <span className="text-sm font-semibold">🤖 Triage</span>
-          <span className="rounded border border-border bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-dim">
+          <Sparkles size={15} className="text-accent" />
+          <span className="text-[13px] font-semibold text-text">Agent triage</span>
+          <span className="rounded border border-line bg-card px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-text-3">
             advisory · {note.generated_by}
           </span>
         </div>
-        <p className="text-sm">
-          <span className="text-ink-dim">Likely cause: </span>
+        <p className="text-[13px] text-text">
+          <span className="text-text-2">Likely cause: </span>
           {note.likely_cause}
         </p>
-        <p className="mt-1 text-sm">
-          <span className="text-ink-dim">Suggested action: </span>
+        <p className="mt-1 text-[13px] text-text">
+          <span className="text-text-2">Suggested action: </span>
           {note.suggested_action}
         </p>
         {note.citations.length > 0 && (
-          <p className="mt-2 font-mono text-xs text-ink-dim">
+          <p className="mt-2 font-mono text-[11px] text-text-3">
             cites: {note.citations.map((c) => c.ref).join(', ')}
           </p>
         )}
@@ -52,11 +54,12 @@ export function TriagePanel({ runId, sampleId }: { runId: string; sampleId: stri
         type="button"
         onClick={load}
         disabled={loading}
-        className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[13px] font-medium text-text hover:border-line-strong disabled:opacity-50"
       >
-        {loading ? 'Asking the agent…' : '🤖 Ask the triage agent'}
+        <Sparkles size={14} className="text-accent" />
+        {loading ? 'Asking the agent…' : 'Ask the triage agent'}
       </button>
-      {error && <p className="mt-1 text-xs text-escalate">{error}</p>}
+      {error && <p className="mt-1 text-[11px] text-escalate-fg">{error}</p>}
     </div>
   )
 }

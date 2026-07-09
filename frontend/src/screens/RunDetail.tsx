@@ -1,91 +1,229 @@
+import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { EvidenceTable } from '../components/EvidenceTable'
 import { GateResultStrip } from '../components/GateResultStrip'
-import { MetricsPanel } from '../components/MetricsPanel'
 import { ErrorBox, Loading } from '../components/States'
 import { TriagePanel } from '../components/TriagePanel'
 import { VerdictBadge } from '../components/VerdictBadge'
-import type { DecisionCard, RunDetail as RunDetailData } from '../types'
+import type { DecisionCard, RunDetail as RunDetailData, Verdict } from '../types'
+import { GATE_DOT, GATE_LABEL, VERDICT_TEXT } from '../verdict'
+
+type Density = 'split' | 'brief' | 'dense'
+type CardFilter = Verdict | 'all' | 'attention'
+const ORDER: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
+const TILES: { key: Verdict | 'all'; label: string }[] = [
+  { key: 'all', label: 'Samples' },
+  { key: 'proceed', label: 'Proceed' },
+  { key: 'hold', label: 'Hold' },
+  { key: 'rerun', label: 'Rerun' },
+  { key: 'escalate', label: 'Escalate' },
+]
 
 export function RunDetail() {
   const { runId = '' } = useParams()
   const [detail, setDetail] = useState<RunDetailData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState<CardFilter>('all')
+  const [density, setDensity] = useState<Density>('split')
+  const [open, setOpen] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     api
       .run(runId)
-      .then(setDetail)
+      .then((d) => {
+        setDetail(d)
+        setOpen(
+          Object.fromEntries(d.cards.filter((c) => c.verdict !== 'proceed').map((c) => [c.sample_id, true])),
+        )
+      })
       .catch((e) => setError(String(e)))
   }, [runId])
 
   if (error) return <ErrorBox message={error} />
   if (!detail) return <Loading label="Loading run…" />
 
+  const counts = detail.summary.counts
+  const cards = [...detail.cards].sort(
+    (a, b) => ORDER[a.verdict] - ORDER[b.verdict] || a.sample_id.localeCompare(b.sample_id),
+  )
+  const filtered = cards.filter((c) =>
+    filter === 'all' ? true : filter === 'attention' ? c.verdict !== 'proceed' : c.verdict === filter,
+  )
+  const chips: { key: CardFilter; label: string; count: number }[] = [
+    { key: 'all', label: 'All', count: cards.length },
+    { key: 'attention', label: 'Needs attention', count: detail.summary.n_attention },
+    { key: 'escalate', label: 'Escalate', count: counts.escalate ?? 0 },
+    { key: 'rerun', label: 'Rerun', count: counts.rerun ?? 0 },
+    { key: 'hold', label: 'Hold', count: counts.hold ?? 0 },
+    { key: 'proceed', label: 'Proceed', count: counts.proceed ?? 0 },
+  ]
+
   return (
-    <div className="max-w-4xl">
-      <Link to="/" className="text-ink-dim text-sm hover:text-ink">
-        ← All runs
-      </Link>
-      <h2 className="mt-2 text-2xl font-mono">{detail.run_id}</h2>
-      <p className="text-ink-dim text-sm mb-6">
-        {detail.summary.n_samples} samples · {detail.summary.n_attention} need attention ·{' '}
-        <Link to={`/runs/${runId}/provenance`} className="underline hover:text-ink">
-          {detail.events.length} provenance events →
-        </Link>
-      </p>
-      <div className="grid gap-4">
-        {detail.cards.map((card) => (
-          <CardView key={card.sample_id} runId={runId} card={card} />
+    <div className="mx-auto max-w-[1080px]">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[22px] font-semibold tracking-tight text-text">Decision cards</h1>
+          <p className="mt-1 font-mono text-[12.5px] text-text-2">
+            {detail.run_id} · {detail.summary.n_samples} samples · sorted most-urgent first
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-[12.5px]">
+          <span className="text-text-3">Layout</span>
+          <div className="flex overflow-hidden rounded-lg border border-line">
+            {(['split', 'brief', 'dense'] as Density[]).map((d) => (
+              <button
+                key={d}
+                onClick={() => setDensity(d)}
+                className={`px-2.5 py-1 capitalize ${
+                  density === d ? 'bg-card-2 font-medium text-text' : 'bg-card text-text-2 hover:text-text'
+                }`}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {TILES.map((t) => {
+          const n = t.key === 'all' ? detail.summary.n_samples : (counts[t.key] ?? 0)
+          return (
+            <div key={t.key} className="rounded-xl border border-line bg-card px-4 py-3 shadow-card">
+              <div
+                className={`font-mono text-[26px] font-semibold ${t.key === 'all' ? 'text-text' : VERDICT_TEXT[t.key]}`}
+              >
+                {n}
+              </div>
+              <div className="mt-0.5 text-[12px] text-text-2">{t.label}</div>
+            </div>
+          )
+        })}
+      </div>
+
+      {detail.summary.n_attention > 0 && (
+        <div className="mt-4 flex items-center gap-3 rounded-xl border border-hold-bd bg-hold-bg px-4 py-3">
+          <AlertTriangle size={16} className="shrink-0 text-hold-fg" />
+          <span className="text-[13px] text-hold-fg">
+            <b>{detail.summary.n_attention} sample(s) need operator attention</b> before this run can be released.
+          </span>
+          <Link
+            to="/queue"
+            className="ml-auto shrink-0 rounded-lg border border-hold-bd bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line-strong"
+          >
+            Open review queue
+          </Link>
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {chips.map((c) => (
+          <button
+            key={c.key}
+            onClick={() => setFilter(c.key)}
+            className={`flex items-center gap-1.5 rounded-[20px] border px-3 py-1 text-[13px] transition-colors ${
+              filter === c.key
+                ? 'border-accent bg-accent-weak font-medium text-accent-strong'
+                : 'border-line bg-card text-text-2 hover:border-line-strong'
+            }`}
+          >
+            {c.label} <span className={filter === c.key ? 'text-accent-strong/70' : 'text-text-3'}>{c.count}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {filtered.map((card) => (
+          <CardView
+            key={card.sample_id}
+            runId={runId}
+            card={card}
+            density={density}
+            open={!!open[card.sample_id]}
+            onToggle={() => setOpen((o) => ({ ...o, [card.sample_id]: !o[card.sample_id] }))}
+          />
         ))}
       </div>
     </div>
   )
 }
 
-function CardView({ runId, card }: { runId: string; card: DecisionCard }) {
-  const actionable = card.verdict !== 'proceed'
+function FlaggedChip({ card }: { card: DecisionCard }) {
+  if (card.verdict === 'proceed') return null
+  const gr = card.gate_results.find((g) => g.verdict === card.verdict) ?? card.gate_results[0]
+  const gate = gr?.gate ?? card.findings[0]?.gate
+  if (!gate) return null
   return (
-    <article className="bg-surface-2 border border-border rounded-xl p-5">
-      <div className="flex items-center gap-3">
-        <span className="font-mono text-lg">{card.sample_id}</span>
+    <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-card-2 px-2 py-0.5 text-[11px] text-text-2">
+      <span className={`h-1.5 w-1.5 rounded-full ${GATE_DOT[gate]}`} />
+      Flagged at {GATE_LABEL[gate]}
+    </span>
+  )
+}
+
+function CardView({
+  runId,
+  card,
+  density,
+  open,
+  onToggle,
+}: {
+  runId: string
+  card: DecisionCard
+  density: Density
+  open: boolean
+  onToggle: () => void
+}) {
+  const actionable = card.verdict !== 'proceed'
+  const showBody = open && density !== 'dense'
+  return (
+    <article className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
+      <button onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+        {open ? (
+          <ChevronDown size={16} className="shrink-0 text-text-3" />
+        ) : (
+          <ChevronRight size={16} className="shrink-0 text-text-3" />
+        )}
         <VerdictBadge verdict={card.verdict} />
-        <span className="text-ink-dim text-xs ml-auto font-mono" title="card content hash">
-          {card.content_hash.slice(0, 10)}
-        </span>
-      </div>
-      <p className="mt-2 font-semibold">{card.headline}</p>
-      <p className="text-ink-dim text-sm mt-1">{card.rationale}</p>
-
-      {card.gate_results.length > 0 && (
-        <div className="mt-4">
-          <GateResultStrip results={card.gate_results} />
-        </div>
-      )}
-
-      {card.next_steps.length > 0 && (
-        <ul className="mt-4 list-disc pl-5 text-sm space-y-1">
-          {card.next_steps.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ul>
-      )}
-
-      <div className="mt-4">
-        <EvidenceTable findings={card.findings} />
-      </div>
-
-      {card.metric_values && card.metric_values.length > 0 && (
-        <div className="mt-4">
-          <MetricsPanel metrics={card.metric_values} />
-        </div>
-      )}
-
-      {actionable && (
-        <div className="mt-4">
-          <TriagePanel runId={runId} sampleId={card.sample_id} />
+        <span className="shrink-0 font-mono text-[14px] font-semibold text-text">{card.sample_id}</span>
+        <span className="min-w-0 flex-1 truncate text-[13.5px] text-text">{card.headline}</span>
+        <FlaggedChip card={card} />
+      </button>
+      {showBody && (
+        <div className="border-t border-line px-4 py-4">
+          <p className="mb-3 text-[13px] text-text-2">{card.rationale}</p>
+          {card.gate_results.length > 0 && (
+            <GateResultStrip results={card.gate_results} cardVerdict={card.verdict} />
+          )}
+          {density === 'split' && (
+            <>
+              <div className="mt-4">
+                <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">
+                  QC readout by gate
+                </p>
+                <EvidenceTable findings={card.findings} />
+              </div>
+              {card.next_steps.length > 0 && (
+                <div className="mt-4">
+                  <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">
+                    Recommended next steps
+                  </p>
+                  <ul className="list-disc space-y-1 pl-5 text-[13px] text-text">
+                    {card.next_steps.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {actionable && (
+                <div className="mt-4">
+                  <TriagePanel runId={runId} sampleId={card.sample_id} />
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </article>
