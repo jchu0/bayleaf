@@ -1,0 +1,1667 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#eef1f4;font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;color:#1b232c}
+a{color:#1f5fd0;text-decoration:none}
+a:hover{color:#1a4fac;text-decoration:underline}
+button{font-family:inherit}
+@keyframes pgspin{to{transform:rotate(360deg)}}
+@keyframes pgshimmer{0%{background-position:-450px 0}100%{background-position:450px 0}}
+@keyframes pgfade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-thumb{background:#cfd6dd;border-radius:7px;border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:#b6bfc9;background-clip:padding-box;border:3px solid transparent}
+</style>
+</helmet>
+
+<template id="__bundler_thumbnail"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="18" fill="#141a21"/><rect x="30" y="30" width="40" height="40" rx="11" fill="#1f5fd0"/><g stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M42 38c0 8 16 8 16 16M58 38c0 8-16 8-16 16"/><path d="M43 41h14M44 47h12M44 53h12M43 59h14" stroke-width="1.6"/></g></svg></template>
+
+<div style="--bg:#f5f7f9;--surface:#ffffff;--surface-2:#eef1f4;--surface-3:#e6eaef;--border:#e4e8ed;--border-strong:#d2d9e0;--text:#1b232c;--text-2:#586472;--text-3:#8b95a1;--accent:#1f5fd0;--accent-weak:#eaf0fc;--accent-strong:#1a4fac;--proceed:#1a854e;--proceed-bg:#e9f6ee;--proceed-bd:#b6ddc4;--proceed-fg:#0f6b3c;--hold:#b07714;--hold-bg:#fbf2df;--hold-bd:#eed9a9;--hold-fg:#875809;--rerun:#c1560f;--rerun-bg:#fceee2;--rerun-bd:#f1cfac;--rerun-fg:#93420a;--escalate:#cf3238;--escalate-bg:#fce9ea;--escalate-bd:#f2c2c4;--escalate-fg:#a3232a;--crit:#cf3238;--warn:#c1560f;--info:#1f6feb;--mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;display:flex;height:100vh;width:100%;overflow:hidden;font-size:14px;color:var(--text)">
+
+  <!-- ================= LEFT NAV ================= -->
+  <aside style="width:236px;flex-shrink:0;background:#141a21;color:#c3ccd6;display:flex;flex-direction:column;border-right:1px solid #202832">
+    <div style="display:flex;align-items:center;gap:10px;padding:17px 18px 15px">
+      <div style="width:30px;height:30px;border-radius:8px;background:linear-gradient(155deg,#2f6bd6,#1a4fac);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M5 3c0 6 14 6 14 12M19 3c0 6-14 6-14 12M5 21c0-2 14-2 14 0M5 3c0 2 14 2 14 0"/><path d="M7 6h10M8 9.5h8M8 14.5h8M7 18h10" stroke-width="1.3"/></svg>
+      </div>
+      <div style="line-height:1.1">
+        <div style="font-weight:700;font-size:15px;color:#fff;letter-spacing:-.2px">PipeGuard</div>
+        <div style="font-size:10.5px;color:#7c8794;font-weight:500;letter-spacing:.3px">DECISION GATE</div>
+      </div>
+    </div>
+
+    <div style="padding:6px 12px 4px;font-size:10.5px;font-weight:600;letter-spacing:.6px;color:#6b7683;text-transform:uppercase;margin-top:6px">Operate</div>
+    <nav style="display:flex;flex-direction:column;gap:2px;padding:2px 12px">
+      <button style="{{ navSel.overview }}" onClick="{{ goto.overview }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10.5" width="18" height="4" rx="1"/><rect x="3" y="17" width="18" height="4" rx="1"/></svg><span>Runs</span></button>
+      <button style="{{ navSel.intake }}" onClick="{{ goto.intake }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg><span>Intake gate</span></button>
+      <button style="{{ navSel.decision }}" onClick="{{ goto.decision }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg><span>Decision cards</span><span style="{{ attnPillNav }}">{{ attnCount }}</span></button>
+      <button style="{{ navSel.queue }}" onClick="{{ goto.queue }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg><span>Review queue</span></button>
+    </nav>
+
+    <div style="padding:14px 12px 4px;font-size:10.5px;font-weight:600;letter-spacing:.6px;color:#6b7683;text-transform:uppercase">Analyze</div>
+    <nav style="display:flex;flex-direction:column;gap:2px;padding:2px 12px">
+      <button style="{{ navSel.provenance }}" onClick="{{ goto.provenance }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg><span>Provenance</span></button>
+      <button style="{{ navSel.agent }}" onClick="{{ goto.agent }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 13.9 8.6 19.5 8.6 15 12.1 16.8 17.6 12 14.2 7.2 17.6 9 12.1 4.5 8.6 10.1 8.6Z"/></svg><span>Agent triage</span></button>
+      <button style="{{ navSel.monitoring }}" onClick="{{ goto.monitoring }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span>Monitoring</span></button>
+    </nav>
+
+    <div style="padding:14px 12px 4px;font-size:10.5px;font-weight:600;letter-spacing:.6px;color:#6b7683;text-transform:uppercase">Configure</div>
+    <nav style="display:flex;flex-direction:column;gap:2px;padding:2px 12px">
+      <button style="{{ navSel.settings }}" onClick="{{ goto.settings }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1.5" y1="14" x2="6.5" y2="14"/><line x1="9.5" y1="8" x2="14.5" y2="8"/><line x1="17.5" y1="16" x2="22.5" y2="16"/></svg><span>Settings</span></button>
+    </nav>
+
+    <div style="margin-top:auto;padding:12px;border-top:1px solid #202832">
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:9px;background:#1b222b">
+        <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(150deg,#3a7,#186);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:12px;flex-shrink:0">AR</div>
+        <div style="line-height:1.25;min-width:0">
+          <div style="font-size:12.5px;color:#e7ecf1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">a.rivera</div>
+          <div style="font-size:10.5px;color:#7c8794;display:flex;align-items:center;gap:4px"><span style="width:5px;height:5px;border-radius:50%;background:#3ba55d;display:inline-block"></span>Reviewer</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)">
+
+    <!-- TOP BAR -->
+    <header style="height:56px;flex-shrink:0;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;padding:0 20px;gap:16px;z-index:5">
+      <div style="display:flex;align-items:center;gap:9px;min-width:0">
+        <sc-if value="{{ canBack }}" hint-placeholder-val="{{ false }}"><button style="{{ backStyle }}" onClick="{{ back }}" title="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button></sc-if>
+        <span style="font-size:15px;font-weight:600;color:var(--text);white-space:nowrap">{{ pageTitle }}</span>
+        <span style="color:var(--text-3);font-size:13px">/</span>
+        <button style="{{ runBtnStyle }}" onClick="{{ toggleRunMenu }}">
+          <span style="width:6px;height:6px;border-radius:50%;background:{{ curRun.dot }};display:inline-block"></span>
+          <span style="font-family:var(--mono);font-size:12.5px;font-weight:500">{{ runId }}</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      </div>
+
+      <div style="flex:1"></div>
+
+      <div style="display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;width:230px;color:var(--text-3)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.1-4.1"/></svg>
+        <span style="font-size:12.5px">Search samples, rules…</span>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:11px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 5px">/</span>
+      </div>
+
+      <!-- demo-state control -->
+      <div style="position:relative">
+        <button style="{{ demoBtnStyle }}" onClick="{{ toggleDemoMenu }}" title="Preview interface states">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg>
+          <span>State: {{ demoLabel }}</span>
+        </button>
+        <sc-if value="{{ demoMenuOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:fixed;inset:0;z-index:35" onClick="{{ closeMenus }}"></div>
+          <div style="position:absolute;top:40px;right:0;width:210px;background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;box-shadow:0 12px 32px rgba(16,24,40,.16);padding:6px;z-index:40">
+            <div style="font-size:10.5px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;padding:6px 8px 4px">Preview state</div>
+            <sc-for list="{{ demoOptions }}" as="d" hint-placeholder-count="4">
+              <button style="{{ d.style }}" onClick="{{ d.go }}"><span style="width:7px;height:7px;border-radius:50%;background:{{ d.dot }};display:inline-block"></span>{{ d.label }}<span style="margin-left:auto;color:var(--text-3);font-size:11px">{{ d.hint }}</span></button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+
+      <button style="position:relative;width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--text-2);cursor:pointer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        <span style="position:absolute;top:-3px;right:-3px;background:var(--escalate);color:#fff;font-size:9.5px;font-weight:600;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;border:1.5px solid var(--surface)">2</span>
+      </button>
+    </header>
+
+    <!-- run menu overlay -->
+    <sc-if value="{{ runMenuOpen }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closeMenus }}" style="position:absolute;inset:56px 0 0 0;z-index:20"></div>
+      <div style="position:absolute;top:52px;left:130px;width:340px;background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 16px 40px rgba(16,24,40,.18);padding:7px;z-index:30">
+        <div style="font-size:10.5px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;padding:7px 9px 5px">Switch run</div>
+        <sc-for list="{{ runsMenu }}" as="r" hint-placeholder-count="5">
+          <button style="{{ r.rowStyle }}" onClick="{{ r.pick }}">
+            <span style="width:7px;height:7px;border-radius:50%;background:{{ r.dot }};display:inline-block;flex-shrink:0"></span>
+            <span style="font-family:var(--mono);font-size:12.5px;font-weight:500;color:var(--text)">{{ r.id }}</span>
+            <span style="margin-left:auto;font-size:11.5px;color:var(--text-3)">{{ r.statusLabel }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <!-- CONTENT -->
+    <main style="flex:1;overflow-y:auto;min-height:0">
+
+      <!-- ============ SCREEN 1: RUN OVERVIEW ============ -->
+      <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+        <div style="max-width:1080px;margin:0 auto;padding:26px 28px 60px;animation:pgfade .28s ease">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:4px">
+            <div>
+              <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.3px">Sequencing runs</h1>
+              <p style="margin:5px 0 0;color:var(--text-2);font-size:13.5px;max-width:560px">Provenance &amp; QC decision gate. Each run resolves to a per-sample verdict — <strong style="color:var(--text)">proceed, hold, rerun, or escalate</strong>.</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:12px;white-space:nowrap">
+              <span style="width:7px;height:7px;border-radius:50%;background:var(--proceed);display:inline-block;box-shadow:0 0 0 3px var(--proceed-bg)"></span>Gate online
+            </div>
+          </div>
+
+          <!-- states: loading / empty / error -->
+          <sc-if value="{{ ovLoading }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:22px;display:flex;flex-direction:column;gap:12px">
+              <sc-for list="{{ skeleton }}" as="s" hint-placeholder-count="4">
+                <div style="height:78px;border:1px solid var(--border);border-radius:12px;background:linear-gradient(90deg,var(--surface-2) 25%,#f7f9fb 50%,var(--surface-2) 75%);background-size:900px 100%;animation:pgshimmer 1.3s infinite linear"></div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ ovError }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:22px;border:1px solid var(--escalate-bd);background:var(--escalate-bg);border-radius:14px;padding:34px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px">
+              <div style="width:48px;height:48px;border-radius:12px;background:#fff;border:1px solid var(--escalate-bd);display:flex;align-items:center;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--escalate)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
+              <div>
+                <div style="font-size:16px;font-weight:600;color:var(--escalate-fg)">Couldn't load run index</div>
+                <div style="font-size:13px;color:var(--text-2);margin-top:4px;max-width:420px">The artifact store returned <span style="font-family:var(--mono);font-size:12px">503</span> reading <span style="font-family:var(--mono);font-size:12px">/runs</span>. Cached verdicts may be stale.</div>
+              </div>
+              <button style="margin-top:2px;display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border-strong);color:var(--text);font-size:13px;font-weight:500;padding:8px 14px;border-radius:8px;cursor:pointer" onClick="{{ retry }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Retry</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ ovEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:22px;border:1px dashed var(--border-strong);background:var(--surface);border-radius:14px;padding:40px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px">
+              <div style="width:46px;height:46px;border-radius:12px;background:var(--surface-2);display:flex;align-items:center;justify-content:center"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>
+              <div style="font-size:16px;font-weight:600">No runs match this filter</div>
+              <div style="font-size:13px;color:var(--text-2);max-width:380px">Nothing is waiting on the gate right now. Clear the filter to see released runs.</div>
+              <button style="margin-top:4px;background:var(--accent);border:none;color:#fff;font-size:13px;font-weight:500;padding:8px 15px;border-radius:8px;cursor:pointer" onClick="{{ clearFilter }}">Show all runs</button>
+            </div>
+          </sc-if>
+
+          <!-- ready -->
+          <sc-if value="{{ ovReady }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:20px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <sc-for list="{{ ovFilters }}" as="f" hint-placeholder-count="3">
+                <button style="{{ f.style }}" onClick="{{ f.go }}">{{ f.label }}<span style="{{ f.countStyle }}">{{ f.count }}</span></button>
+              </sc-for>
+            </div>
+
+            <div style="margin-top:16px;display:flex;flex-direction:column;gap:11px">
+              <sc-for list="{{ runsList }}" as="r" hint-placeholder-count="5">
+                <div style="{{ r.cardStyle }}" onClick="{{ r.open }}">
+                  <div style="display:flex;align-items:center;gap:14px">
+                    <div style="min-width:172px">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text)">{{ r.id }}</span>
+                      </div>
+                      <div style="font-size:11.5px;color:var(--text-3);margin-top:3px">{{ r.platform }} · {{ r.date }}</div>
+                    </div>
+
+                    <div style="flex:1;min-width:0">
+                      <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                        <span style="font-size:12px;color:var(--text-2)"><strong style="color:var(--text);font-family:var(--mono)">{{ r.samples }}</strong> samples</span>
+                        <span style="{{ r.statusPill }}"><span style="width:5px;height:5px;border-radius:50%;background:{{ r.dot }};display:inline-block"></span>{{ r.statusLabel }}</span>
+                      </div>
+                      <div style="display:flex;height:8px;border-radius:5px;overflow:hidden;background:var(--surface-2);width:100%">
+                        <sc-for list="{{ r.segments }}" as="seg" hint-placeholder-count="3">
+                          <div style="width:{{ seg.w }};background:{{ seg.c }}" title="{{ seg.title }}"></div>
+                        </sc-for>
+                      </div>
+                    </div>
+
+                    <div style="width:190px;display:flex;justify-content:flex-end;align-items:center;gap:10px">
+                      <div style="{{ r.attnStyle }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>{{ r.attnLabel }}</div>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ============ INTAKE / PREFLIGHT GATE ============ -->
+      <sc-if value="{{ isIntake }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:1000px;margin:0 auto;padding:24px 28px 60px;animation:pgfade .28s ease">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+            <div>
+              <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.3px">Intake gate</h1>
+              <p style="margin:5px 0 0;color:var(--text-2);font-size:13.5px">Preflight checkpoint — <strong style="color:var(--text)">before processing</strong>. Run-level sequencing QC and which samples are admitted. <span style="font-family:var(--mono);color:var(--text)">{{ runId }}</span></p>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+              <span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:#fff;background:#1f6feb;padding:5px 11px;border-radius:20px">1 · Preflight</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              <span style="font-size:11.5px;font-weight:500;color:var(--text-3);border:1px solid var(--border);padding:5px 11px;border-radius:20px">2 · QC</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              <span style="font-size:11.5px;font-weight:500;color:var(--text-3);border:1px solid var(--border);padding:5px 11px;border-radius:20px">3 · Variant</span>
+            </div>
+          </div>
+
+          <sc-if value="{{ hasIntake }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.05)">
+              <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px">
+                <div><div style="font-size:14.5px;font-weight:600">Run sequencing QC</div><div style="font-size:12px;color:var(--text-2);margin-top:2px">Did the flow cell actually sequence? Low PhiX or PF means the run didn't sequence.</div></div>
+                <span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--proceed-fg);background:var(--proceed-bg);border:1px solid var(--proceed-bd);padding:4px 11px;border-radius:20px;flex-shrink:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Run admitted</span>
+              </div>
+              <div style="padding:16px 18px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+                <sc-for list="{{ intakeView.run }}" as="m" hint-placeholder-count="6">
+                  <div style="border:1px solid var(--border);border-radius:11px;padding:12px 14px">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:12px;color:var(--text-2)">{{ m.label }}</span><span style="{{ m.chip }}">{{ m.statusLabel }}</span></div>
+                    <div style="font-family:var(--mono);font-size:20px;font-weight:600;color:var(--text);margin-top:6px">{{ m.value }}</div>
+                    <div style="font-size:10.5px;color:var(--text-3);font-family:var(--mono);margin-top:2px">gate {{ m.gate }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="margin-top:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.05)">
+              <div style="padding:14px 18px;border-bottom:1px solid var(--border)">
+                <div style="font-size:14.5px;font-weight:600">Sample admission</div>
+                <div style="font-size:12px;color:var(--text-2);margin-top:2px">Yield target <span style="font-family:var(--mono);color:var(--text)">{{ intakeView.yieldTarget }}</span>. A genuinely-sparse sample can still be admitted with a manual override.</div>
+              </div>
+              <div style="padding:6px 18px 14px">
+                <sc-for list="{{ intakeView.samples }}" as="s" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;gap:16px;padding:13px 0;border-bottom:1px solid var(--border)">
+                    <span style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);width:32px;flex-shrink:0">{{ s.id }}</span>
+                    <div style="flex:1;min-width:0">
+                      <div style="height:8px;border-radius:5px;background:var(--surface-2);overflow:hidden"><div style="height:100%;width:{{ s.barW }};background:{{ s.barColor }}"></div></div>
+                      <div style="font-size:11px;color:var(--text-3);margin-top:5px;font-family:var(--mono)">{{ s.reads }} reads · {{ s.pct }}% of run</div>
+                    </div>
+                    <span style="{{ s.statusChip }}">{{ s.statusLabel }}</span>
+                    <sc-if value="{{ s.sparse }}" hint-placeholder-val="{{ false }}"><button style="{{ s.btnStyle }}" onClick="{{ s.toggle }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>{{ s.btnLabel }}</button></sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ noIntake }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:18px;border:1px dashed var(--border-strong);background:var(--surface);border-radius:14px;padding:38px;text-align:center"><div style="font-size:15px;font-weight:600">No intake data for this run</div><div style="font-size:13px;color:var(--text-2);margin-top:4px">Preflight QC is available for runs that have reached the gate.</div></div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ============ SCREEN 2: DECISION CARDS ============ -->
+      <sc-if value="{{ isDecision }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:1080px;margin:0 auto;padding:24px 28px 60px;animation:pgfade .28s ease">
+
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px">
+            <div>
+              <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.3px">Decision cards</h1>
+              <p style="margin:5px 0 0;color:var(--text-2);font-size:13px"><span style="font-family:var(--mono);color:var(--text)">{{ runId }}</span> · {{ curRun.platform }} · {{ curRun.date }} · sorted most-urgent first</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;flex-shrink:0">
+              <span style="font-size:11.5px;color:var(--text-3);font-weight:500">Layout</span>
+              <div style="display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:3px">
+                <sc-for list="{{ layoutOpts }}" as="o" hint-placeholder-count="3">
+                  <button style="{{ o.style }}" onClick="{{ o.go }}">{{ o.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <!-- LOADING -->
+          <sc-if value="{{ decLoading }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:22px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;gap:9px;color:var(--text-2);font-size:13px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" style="animation:pgspin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.2-8.5"/></svg>Sequencing in progress — decision gate runs once artifacts land.</div>
+              <sc-for list="{{ skeleton }}" as="s" hint-placeholder-count="3">
+                <div style="height:64px;border:1px solid var(--border);border-radius:13px;background:linear-gradient(90deg,var(--surface-2) 25%,#f7f9fb 50%,var(--surface-2) 75%);background-size:900px 100%;animation:pgshimmer 1.3s infinite linear"></div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <!-- ERROR -->
+          <sc-if value="{{ decError }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:22px;border:1px solid var(--escalate-bd);background:var(--escalate-bg);border-radius:14px;padding:30px;text-align:center">
+              <div style="font-size:16px;font-weight:600;color:var(--escalate-fg)">Synthesis failed for this run</div>
+              <div style="font-size:13px;color:var(--text-2);margin-top:5px;max-width:440px;margin-left:auto;margin-right:auto">The rule engine produced findings, but narration could not be generated. Verdicts below are rule-derived and safe to act on.</div>
+              <button style="margin-top:14px;display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border-strong);color:var(--text);font-size:13px;font-weight:500;padding:8px 14px;border-radius:8px;cursor:pointer" onClick="{{ retry }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Re-run synthesis</button>
+            </div>
+          </sc-if>
+
+          <!-- RELEASED (empty of open work) -->
+          <sc-if value="{{ decReleased }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:22px;border:1px solid var(--proceed-bd);background:var(--proceed-bg);border-radius:14px;padding:36px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px">
+              <div style="width:46px;height:46px;border-radius:12px;background:#fff;border:1px solid var(--proceed-bd);display:flex;align-items:center;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--proceed)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg></div>
+              <div style="font-size:16px;font-weight:600;color:var(--proceed-fg)">Run released</div>
+              <div style="font-size:13px;color:var(--text-2);max-width:400px">All {{ decReleasedCount }} samples cleared the gate and were released to downstream analysis. Nothing to review.</div>
+            </div>
+          </sc-if>
+
+          <!-- READY / EMPTY (has a review run) -->
+          <sc-if value="{{ decHasRun }}" hint-placeholder-val="{{ true }}">
+            <!-- summary tiles -->
+            <div style="margin-top:18px;display:grid;grid-template-columns:repeat(5,1fr);gap:11px">
+              <sc-for list="{{ decTiles }}" as="t" hint-placeholder-count="5">
+                <div style="border:1px solid var(--border);border-radius:11px;background:var(--surface);padding:13px 15px">
+                  <div style="font-size:26px;font-weight:600;font-family:var(--mono);line-height:1;color:{{ t.c }}">{{ t.value }}</div>
+                  <div style="font-size:11.5px;color:var(--text-2);margin-top:6px;font-weight:500">{{ t.label }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <!-- attention banner -->
+            <sc-if value="{{ decAttnOn }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:14px;display:flex;align-items:center;gap:13px;border:1px solid var(--hold-bd);background:var(--hold-bg);border-radius:12px;padding:13px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:#fff;border:1px solid var(--hold-bd);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--hold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
+                <div style="flex:1;font-size:13.5px;color:var(--hold-fg)"><strong>{{ attnCount }} sample(s) need operator attention</strong> before this run can be released.</div>
+                <button style="background:var(--surface);border:1px solid var(--border-strong);color:var(--text);font-size:12.5px;font-weight:500;padding:7px 13px;border-radius:8px;cursor:pointer;white-space:nowrap" onClick="{{ goto.queue }}">Open review queue</button>
+              </div>
+            </sc-if>
+
+            <!-- filters -->
+            <div style="margin-top:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <sc-for list="{{ decChips }}" as="f" hint-placeholder-count="4">
+                <button style="{{ f.style }}" onClick="{{ f.go }}">{{ f.label }}<span style="{{ f.countStyle }}">{{ f.count }}</span></button>
+              </sc-for>
+            </div>
+
+            <!-- EMPTY (filter no match) -->
+            <sc-if value="{{ decEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:16px;border:1px dashed var(--border-strong);background:var(--surface);border-radius:13px;padding:38px;text-align:center">
+                <div style="font-size:15px;font-weight:600">No samples match this filter</div>
+                <div style="font-size:13px;color:var(--text-2);margin-top:4px">Try a different verdict, or clear the filter.</div>
+              </div>
+            </sc-if>
+
+            <!-- CARDS -->
+            <sc-if value="{{ decReady }}" hint-placeholder-val="{{ true }}">
+              <div style="margin-top:16px;display:flex;flex-direction:column;gap:13px">
+                <sc-for list="{{ decCardsView }}" as="c" hint-placeholder-count="3">
+                  <div style="{{ c.cardStyle }}">
+                    <!-- header -->
+                    <button style="{{ c.headerStyle }}" onClick="{{ c.toggle }}">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="{{ c.chevStyle }}"><path d="m9 18 6-6-6-6"/></svg>
+                      <span style="{{ c.badge }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ c.dot }};display:inline-block"></span>{{ c.vs.label }}</span>
+                      <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text)">{{ c.id }}</span>
+                      <span style="font-size:13.5px;color:var(--text);font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.headline }}</span>
+                      <span style="{{ c.typeChip }}">{{ c.sampleType }}</span>
+                      <span style="{{ c.originChip }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ c.originDot }};display:inline-block"></span>{{ c.gateVerb }} {{ c.originTag }}</span>
+                    </button>
+
+                    <sc-if value="{{ c.isOpen }}" hint-placeholder-val="{{ true }}">
+                      <div style="border-top:1px solid var(--border)">
+
+                        <div style="display:flex;gap:8px;padding:13px 18px;border-bottom:1px solid var(--border);background:var(--surface-2);overflow-x:auto">
+                          <sc-for list="{{ c.gateResults }}" as="gr" hint-placeholder-count="3">
+                            <div style="flex:1;min-width:150px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+                              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--text-2)"><span style="width:6px;height:6px;border-radius:50%;background:{{ gr.dot }};display:inline-block"></span>{{ gr.tag }}</span><span style="{{ gr.chip }}">{{ gr.vLabel }}</span></div>
+                              <div style="font-size:11.5px;color:var(--text-2);line-height:1.4">{{ gr.r }}</div>
+                            </div>
+                          </sc-for>
+                        </div>
+
+                        <!-- ===== SPLIT ===== -->
+                        <sc-if value="{{ layoutSplit }}" hint-placeholder-val="{{ true }}">
+                          <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
+                            <div style="font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;margin-bottom:10px">QC readout by gate</div>
+                            <div style="display:flex;flex-direction:column;gap:12px">
+                              <sc-for list="{{ c.metricGroups }}" as="grp" hint-placeholder-count="3">
+                                <sc-if value="{{ grp.hasMetrics }}" hint-placeholder-val="{{ true }}">
+                                  <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                                    <div style="display:flex;align-items:center;gap:8px;padding:8px 13px;background:var(--surface-2);border-bottom:1px solid var(--border)"><span style="width:7px;height:7px;border-radius:50%;background:{{ grp.dot }};display:inline-block"></span><span style="font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text-2)">{{ grp.label }}</span><sc-if value="{{ grp.hasRollup }}" hint-placeholder-val="{{ false }}"><span style="{{ grp.rollupStyle }}">{{ grp.rollup }}</span></sc-if></div>
+                                    <div style="display:grid;grid-template-columns:1.7fr 0.8fr 1fr 0.7fr;font-size:9px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3)"><div style="padding:6px 13px">Metric</div><div style="padding:6px 8px">Observed</div><div style="padding:6px 8px">Threshold</div><div style="padding:6px 8px">Status</div></div>
+                                    <sc-for list="{{ grp.metrics }}" as="m" hint-placeholder-count="4">
+                                      <div style="display:grid;grid-template-columns:1.7fr 0.8fr 1fr 0.7fr;border-top:1px solid var(--border);align-items:center">
+                                        <div style="padding:8px 13px;display:flex;align-items:flex-start;gap:8px;min-width:0"><span style="width:6px;height:6px;border-radius:50%;background:{{ m.dotColor }};display:inline-block;margin-top:4px;flex-shrink:0"></span><div style="min-width:0"><div style="font-size:12px;color:var(--text)">{{ m.label }}</div><sc-if value="{{ m.noteOn }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px;color:var(--text-3)">{{ m.note }}</div></sc-if></div></div>
+                                        <div style="padding:8px 8px;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text)">{{ m.value }}</div>
+                                        <div style="padding:8px 8px;font-family:var(--mono);font-size:11px;color:var(--text-3)">{{ m.gate }}</div>
+                                        <div style="padding:8px 8px"><span style="{{ m.chip }}">{{ m.statusLabel }}</span></div>
+                                      </div>
+                                    </sc-for>
+                                    <sc-if value="{{ grp.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px;color:var(--text-3);font-style:italic;padding:8px 13px;border-top:1px solid var(--border)">{{ grp.note }}</div></sc-if>
+                                  </div>
+                                </sc-if>
+                              </sc-for>
+                            </div>
+                          </div>
+                          <div style="display:flex">
+                            <div style="flex:1;padding:17px 20px;min-width:0">
+                              <p style="margin:0;font-size:13.5px;line-height:1.6;color:var(--text)">{{ c.rationale }}</p>
+                              <div style="margin-top:15px;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase">Recommended next steps</div>
+                              <div style="margin-top:8px;display:flex;flex-direction:column;gap:7px">
+                                <sc-for list="{{ c.steps }}" as="step" hint-placeholder-count="2">
+                                  <div style="display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--text-2);line-height:1.45"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span>{{ step.t }}</span></div>
+                                </sc-for>
+                              </div>
+
+                              <sc-if value="{{ c.hasFindings }}" hint-placeholder-val="{{ true }}">
+                                <div style="margin-top:18px;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase">Supporting evidence · cited</div>
+                                <div style="margin-top:9px;display:flex;flex-direction:column;gap:10px">
+                                  <sc-for list="{{ c.findings }}" as="f" hint-placeholder-count="2">
+                                    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                                      <div style="padding:11px 13px">
+                                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                                          <span style="{{ f.sevChip }}"><span style="width:5px;height:5px;border-radius:50%;background:{{ f.dotColor }};display:inline-block"></span>{{ f.sevLabel }}</span>
+                                          <span style="font-size:13px;font-weight:600;color:var(--text)">{{ f.title }}</span>
+                                          <span style="{{ f.ruleChip }}">{{ f.rule }}</span>
+                                          <sc-if value="{{ f.hasGate }}" hint-placeholder-val="{{ true }}"><span style="{{ f.gateChip }}"><span style="width:5px;height:5px;border-radius:50%;background:{{ f.gateDot }};display:inline-block"></span>{{ f.gateTag }}</span></sc-if>
+                                        </div>
+                                        <div style="font-size:12.5px;color:var(--text-2);margin-top:6px;line-height:1.5">{{ f.detail }}</div>
+                                      </div>
+                                      <div style="display:grid;grid-template-columns:1.1fr 1fr 1.25fr 1fr;background:var(--surface-2);border-top:1px solid var(--border);font-size:9.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3)">
+                                        <div style="padding:6px 11px">Source</div><div style="padding:6px 8px">Field</div><div style="padding:6px 8px">Observed</div><div style="padding:6px 11px">Expected</div>
+                                      </div>
+                                      <sc-for list="{{ f.evidence }}" as="e" hint-placeholder-count="1">
+                                        <div style="display:grid;grid-template-columns:1.1fr 1fr 1.25fr 1fr;border-top:1px solid var(--border);align-items:center">
+                                          <div style="padding:8px 11px"><div style="font-family:var(--mono);font-size:11.5px;color:var(--accent-strong)">{{ e.source }}</div><span style="{{ e.skStyle }}">{{ e.sk }}</span></div>
+                                          <div style="padding:8px 8px;font-family:var(--mono);font-size:11px;color:var(--text-3)">{{ e.locator }}</div>
+                                          <div style="padding:8px 8px"><sc-if value="{{ e.isDiff }}" hint-placeholder-val="{{ false }}"><span style="font-family:var(--mono);font-size:11.5px"><sc-for list="{{ e.valSegs }}" as="sg" hint-placeholder-count="8"><span style="{{ sg.style }}">{{ sg.ch }}</span></sc-for></span></sc-if><sc-if value="{{ e.notDiff }}" hint-placeholder-val="{{ true }}"><span style="{{ e.valStyle }}">{{ e.value }}</span></sc-if></div>
+                                          <div style="padding:8px 11px;font-family:var(--mono);font-size:11px;color:var(--text-2)">{{ e.expected }}</div>
+                                        </div>
+                                      </sc-for>
+                                    </div>
+                                  </sc-for>
+                                </div>
+                              </sc-if>
+
+                              <sc-if value="{{ c.clean }}" hint-placeholder-val="{{ false }}">
+                                <div style="margin-top:16px;display:flex;align-items:center;gap:10px;border:1px solid var(--proceed-bd);background:var(--proceed-bg);border-radius:10px;padding:12px 14px">
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--proceed)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+                                  <span style="font-size:13px;color:var(--proceed-fg)">No provenance, metadata, or QC issues found. Every runbook check passed with margin.</span>
+                                </div>
+                              </sc-if>
+                            </div>
+
+                            <!-- right rail -->
+                            <div style="width:288px;flex-shrink:0;border-left:1px solid var(--border);background:var(--surface-2);padding:17px 18px">
+                              <div style="font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase">Sample</div>
+                              <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;font-size:12px">
+                                <div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--text-3)">Subject</span><span style="{{ c.subjectStyle }}">{{ c.subject }}</span></div>
+                                <div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--text-3)">Type</span><span style="color:var(--text)">{{ c.sampleType }}</span></div>
+                                <div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--text-3)">Library</span><span style="color:var(--text);text-align:right">{{ c.prep }}</span></div>
+                                <div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--text-3)">Reads</span><span style="font-family:var(--mono);color:var(--text)">{{ c.reads }} · {{ c.pctReads }}</span></div>
+                                <div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--text-3)">Submitted</span><span style="font-family:var(--mono);color:var(--text)">{{ c.by }}</span></div>
+                              </div>
+                              <div style="margin-top:16px;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase">Run</div>
+                              <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;font-size:12px">
+                                <div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--text-3)">Run</span><span style="font-family:var(--mono);color:var(--text);text-align:right">{{ c.runId }}</span></div>
+                                <div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--text-3)">Instrument</span><span style="color:var(--text)">{{ c.platform }}</span></div>
+                                <div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--text-3)">Date</span><span style="color:var(--text)">{{ c.date }}</span></div>
+                              </div>
+                              <sc-if value="{{ c.hasLinked }}" hint-placeholder-val="{{ false }}">
+                                <div style="margin-top:16px;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase">Linked sample</div>
+                                <div style="margin-top:8px;display:flex;align-items:center;gap:9px;border:1px solid var(--border);border-radius:9px;padding:9px 11px;background:var(--surface)"><span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">{{ c.linked }}</span><span style="font-size:11px;color:var(--text-2);line-height:1.35">{{ c.linkedNote }}</span></div>
+                              </sc-if>
+                              <div style="margin-top:16px;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase">Narration</div>
+                              <div style="margin-top:7px;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M8 8h8M8 16h5"/></svg>{{ c.narration }}</div>
+                              <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+                                <button style="display:flex;align-items:center;justify-content:center;gap:7px;width:100%;background:var(--surface);border:1px solid var(--border-strong);color:var(--text);font-size:12.5px;font-weight:500;padding:8px;border-radius:8px;cursor:pointer" onClick="{{ c.openProvenance }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>View lineage</button>
+                                <sc-if value="{{ c.actionable }}" hint-placeholder-val="{{ false }}">
+                                  <button style="display:flex;align-items:center;justify-content:center;gap:7px;width:100%;background:var(--accent);border:none;color:#fff;font-size:12.5px;font-weight:500;padding:8px;border-radius:8px;cursor:pointer" onClick="{{ c.openAgent }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 13.7 8.3 19 8.3 14.7 11.6 16.4 17 12 13.7 7.6 17 9.3 11.6 5 8.3 10.3 8.3Z"/></svg>Ask agent to triage</button>
+                                </sc-if>
+                              </div>
+                            </div>
+                          </div>
+                        </sc-if>
+
+                        <!-- ===== BRIEF (stacked) ===== -->
+                        <sc-if value="{{ layoutStacked }}" hint-placeholder-val="{{ false }}">
+                          <div style="padding:20px 24px;max-width:760px">
+                            <p style="margin:0;font-size:15px;line-height:1.6;color:var(--text)">{{ c.rationale }}</p>
+                            <div style="margin-top:16px;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase">Recommended next steps</div>
+                            <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+                              <sc-for list="{{ c.steps }}" as="step" hint-placeholder-count="2">
+                                <div style="display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--text-2);line-height:1.5"><span style="width:20px;height:20px;border-radius:6px;background:var(--accent-weak);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:600;font-family:var(--mono)">{{ step.n }}</span><span>{{ step.t }}</span></div>
+                              </sc-for>
+                            </div>
+
+                            <sc-if value="{{ c.hasFindings }}" hint-placeholder-val="{{ true }}">
+                              <div style="margin-top:20px;padding-top:18px;border-top:1px solid var(--border);font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase">Cited evidence</div>
+                              <div style="margin-top:10px;display:flex;flex-direction:column;gap:11px">
+                                <sc-for list="{{ c.findings }}" as="f" hint-placeholder-count="2">
+                                  <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                                    <div style="padding:12px 14px;display:flex;gap:12px;align-items:flex-start">
+                                      <span style="{{ f.sevChip }}"><span style="width:5px;height:5px;border-radius:50%;background:{{ f.dotColor }};display:inline-block"></span>{{ f.sevLabel }}</span>
+                                      <div style="min-width:0"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:13.5px;font-weight:600">{{ f.title }}</span><span style="{{ f.ruleChip }}">{{ f.rule }}</span><sc-if value="{{ f.hasGate }}" hint-placeholder-val="{{ true }}"><span style="{{ f.gateChip }}"><span style="width:5px;height:5px;border-radius:50%;background:{{ f.gateDot }};display:inline-block"></span>{{ f.gateTag }}</span></sc-if></div><div style="font-size:12.5px;color:var(--text-2);margin-top:5px;line-height:1.5">{{ f.detail }}</div></div>
+                                    </div>
+                                    <div style="display:grid;grid-template-columns:1fr 1fr 1.3fr 1fr;background:var(--surface-2);border-top:1px solid var(--border);font-size:9.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3)">
+                                      <div style="padding:6px 14px">Source</div><div style="padding:6px 8px">Field</div><div style="padding:6px 8px">Observed</div><div style="padding:6px 8px">Expected</div>
+                                    </div>
+                                    <sc-for list="{{ f.evidence }}" as="e" hint-placeholder-count="1">
+                                      <div style="display:grid;grid-template-columns:1fr 1fr 1.3fr 1fr;border-top:1px solid var(--border);align-items:center">
+                                        <div style="padding:9px 14px"><div style="font-family:var(--mono);font-size:11.5px;color:var(--accent-strong)">{{ e.source }}</div><span style="{{ e.skStyle }}">{{ e.sk }}</span></div>
+                                        <div style="padding:9px 8px;font-family:var(--mono);font-size:11px;color:var(--text-3)">{{ e.locator }}</div>
+                                        <div style="padding:9px 8px"><sc-if value="{{ e.isDiff }}" hint-placeholder-val="{{ false }}"><span style="font-family:var(--mono);font-size:11.5px"><sc-for list="{{ e.valSegs }}" as="sg" hint-placeholder-count="8"><span style="{{ sg.style }}">{{ sg.ch }}</span></sc-for></span></sc-if><sc-if value="{{ e.notDiff }}" hint-placeholder-val="{{ true }}"><span style="{{ e.valStyle }}">{{ e.value }}</span></sc-if></div>
+                                        <div style="padding:9px 8px;font-family:var(--mono);font-size:11px;color:var(--text-2)">{{ e.expected }}</div>
+                                      </div>
+                                    </sc-for>
+                                  </div>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+                            <sc-if value="{{ c.clean }}" hint-placeholder-val="{{ false }}">
+                              <div style="margin-top:18px;display:flex;align-items:center;gap:10px;border:1px solid var(--proceed-bd);background:var(--proceed-bg);border-radius:10px;padding:13px 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--proceed)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg><span style="font-size:13.5px;color:var(--proceed-fg)">No provenance, metadata, or QC issues found.</span></div>
+                            </sc-if>
+
+                            <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase">QC readout by gate</div>
+                            <div style="margin-top:10px;display:flex;flex-direction:column;gap:12px">
+                              <sc-for list="{{ c.metricGroups }}" as="grp" hint-placeholder-count="3">
+                                <div>
+                                  <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span style="width:7px;height:7px;border-radius:50%;background:{{ grp.dot }};display:inline-block"></span><span style="font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text-2)">{{ grp.label }}</span><sc-if value="{{ grp.hasRollup }}" hint-placeholder-val="{{ false }}"><span style="{{ grp.rollupStyle }}">{{ grp.rollup }}</span></sc-if></div>
+                                  <sc-if value="{{ grp.hasMetrics }}" hint-placeholder-val="{{ true }}">
+                                    <div style="display:flex;flex-wrap:wrap;gap:7px">
+                                      <sc-for list="{{ grp.metrics }}" as="m" hint-placeholder-count="4">
+                                        <div style="display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:8px;padding:6px 10px;background:var(--surface)"><span style="font-size:11.5px;color:var(--text-2)">{{ m.label }}</span><span style="font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--text)">{{ m.value }}</span><span style="{{ m.chip }}">{{ m.statusLabel }}</span></div>
+                                      </sc-for>
+                                    </div>
+                                  </sc-if>
+                                  <sc-if value="{{ grp.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:var(--text-3);font-style:italic">{{ grp.note }}</div></sc-if>
+                                </div>
+                              </sc-for>
+                            </div>
+                            <div style="margin-top:14px;display:flex;gap:9px">
+                              <button style="display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border-strong);color:var(--text);font-size:12.5px;font-weight:500;padding:8px 13px;border-radius:8px;cursor:pointer" onClick="{{ c.openProvenance }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>View lineage</button>
+                              <sc-if value="{{ c.actionable }}" hint-placeholder-val="{{ false }}">
+                                <button style="display:flex;align-items:center;gap:7px;background:var(--accent);border:none;color:#fff;font-size:12.5px;font-weight:500;padding:8px 13px;border-radius:8px;cursor:pointer" onClick="{{ c.openAgent }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 13.7 8.3 19 8.3 14.7 11.6 16.4 17 12 13.7 7.6 17 9.3 11.6 5 8.3 10.3 8.3Z"/></svg>Ask agent to triage</button>
+                              </sc-if>
+                            </div>
+                          </div>
+                        </sc-if>
+
+                        <!-- ===== DENSE (compact) ===== -->
+                        <sc-if value="{{ layoutCompact }}" hint-placeholder-val="{{ false }}">
+                          <div style="padding:13px 18px">
+                            <div style="font-size:12.5px;color:var(--text-2);line-height:1.5;margin-bottom:11px">{{ c.rationale }}</div>
+                            <sc-if value="{{ c.hasFindings }}" hint-placeholder-val="{{ true }}">
+                              <div style="display:flex;flex-direction:column;gap:7px">
+                                <sc-for list="{{ c.findings }}" as="f" hint-placeholder-count="2">
+                                  <div style="display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border:1px solid var(--border);border-radius:9px">
+                                    <span style="width:8px;height:8px;border-radius:50%;background:{{ f.dotColor }};margin-top:5px;flex-shrink:0;display:inline-block"></span>
+                                    <div style="min-width:0;flex:1">
+                                      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:12.5px;font-weight:600;color:var(--text)">{{ f.title }}</span><span style="{{ f.ruleChip }}">{{ f.rule }}</span></div>
+                                      <sc-for list="{{ f.evidence }}" as="e" hint-placeholder-count="1">
+                                        <div style="font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:4px"><span style="color:var(--accent-strong)">{{ e.source }}</span> · {{ e.locator }} — <span style="{{ e.valStyle }}">{{ e.value }}</span> <span style="color:var(--text-3)">exp {{ e.expected }}</span></div>
+                                      </sc-for>
+                                    </div>
+                                  </div>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+                            <sc-if value="{{ c.clean }}" hint-placeholder-val="{{ false }}">
+                              <div style="font-size:12.5px;color:var(--proceed-fg);display:flex;align-items:center;gap:7px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--proceed)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>All runbook checks passed.</div>
+                            </sc-if>
+                            <div style="margin-top:11px;display:flex;flex-direction:column;gap:7px">
+                              <sc-for list="{{ c.metricGroups }}" as="grp" hint-placeholder-count="3">
+                                <sc-if value="{{ grp.hasMetrics }}" hint-placeholder-val="{{ true }}">
+                                  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                                    <span style="display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--text-3);min-width:76px"><span style="width:6px;height:6px;border-radius:50%;background:{{ grp.dot }};display:inline-block"></span>{{ grp.label }}</span>
+                                    <sc-for list="{{ grp.metrics }}" as="m" hint-placeholder-count="4">
+                                      <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2)"><span style="color:var(--text-3)">{{ m.label }}</span><span style="font-family:var(--mono);font-weight:600;color:var(--text)">{{ m.value }}</span><span style="{{ m.chip }}">{{ m.statusLabel }}</span></span>
+                                    </sc-for>
+                                  </div>
+                                </sc-if>
+                              </sc-for>
+                            </div>
+                          </div>
+                        </sc-if>
+
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ============ SCREEN 3: REVIEW QUEUE ============ -->
+      <sc-if value="{{ isQueue }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:940px;margin:0 auto;padding:24px 28px 60px;animation:pgfade .28s ease">
+          <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.3px">Review queue</h1>
+          <p style="margin:5px 0 0;color:var(--text-2);font-size:13.5px">Flagged samples become tickets. Acknowledge, suppress an issue class, escalate, or resolve.</p>
+
+          <div style="margin-top:16px;display:flex;align-items:center;gap:11px;border:1px solid var(--border);background:var(--surface);border-radius:11px;padding:11px 14px">
+            <div style="width:30px;height:30px;border-radius:8px;background:var(--accent-weak);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+            <div style="font-size:12.5px;color:var(--text-2);line-height:1.45">Signed in as <strong style="color:var(--text);font-family:var(--mono)">a.rivera</strong> · <strong style="color:var(--text)">Reviewer</strong>. You can resolve holds and reruns; resolving an <strong style="color:var(--escalate-fg)">escalation</strong> requires an <strong style="color:var(--text)">Approver</strong>.</div>
+          </div>
+
+          <div style="margin-top:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <sc-for list="{{ qTabs }}" as="q" hint-placeholder-count="4">
+              <button style="{{ q.style }}" onClick="{{ q.go }}">{{ q.label }}<span style="{{ q.countStyle }}">{{ q.count }}</span></button>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ queueEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:16px;border:1px dashed var(--border-strong);background:var(--surface);border-radius:13px;padding:40px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px">
+              <div style="width:46px;height:46px;border-radius:12px;background:var(--proceed-bg);display:flex;align-items:center;justify-content:center"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="var(--proceed)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg></div>
+              <div style="font-size:15px;font-weight:600">Queue clear</div>
+              <div style="font-size:13px;color:var(--text-2)">Nothing in this view needs review. Nice work.</div>
+            </div>
+          </sc-if>
+
+          <div style="margin-top:16px;display:flex;flex-direction:column;gap:13px">
+            <sc-for list="{{ ticketsView }}" as="t" hint-placeholder-count="3">
+              <div style="{{ t.cardStyle }}">
+                <div style="padding:15px 17px">
+                  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">{{ t.id }}</span>
+                    <span style="{{ t.statusPill }}"><span style="width:5px;height:5px;border-radius:50%;background:{{ t.statusDot }};display:inline-block"></span>{{ t.ts.label }}</span>
+                    <span style="{{ t.verdictBadge }}"><span style="width:5px;height:5px;border-radius:50%;background:{{ t.verdictDot }};display:inline-block"></span>{{ t.vsLabel }}</span>
+                    <span style="display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:2px 7px;border-radius:5px"><span style="width:5px;height:5px;border-radius:50%;background:{{ t.gateDot }};display:inline-block"></span>{{ t.gateTag }}</span>
+                    <span style="{{ t.prioStyle }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 20V10M6 20v-4M18 20V4"/></svg>{{ t.prioLabel }}</span>
+                    <span style="margin-left:auto;font-size:11.5px;color:var(--text-3)">{{ t.run }} · {{ t.sample }} · {{ t.opened }}</span>
+                  </div>
+                  <div style="margin-top:9px;font-size:14.5px;font-weight:600;color:var(--text)">{{ t.title }}</div>
+                  <div style="margin-top:4px;font-size:12.5px;color:var(--text-2);line-height:1.5">{{ t.summary }}</div>
+                  <div style="margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span style="font-size:10.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3)">Issue class</span>
+                    <span style="font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:2px 8px;border-radius:5px">{{ t.rule }} · {{ t.issueClass }}</span>
+                    <sc-if value="{{ t.suppressed }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;color:var(--text-3);font-style:italic">suppressed — future runs won't re-prompt</span></sc-if>
+                  </div>
+                  <sc-if value="{{ t.recurrent }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:10px;display:flex;align-items:center;gap:10px;border:1px solid var(--rerun-bd);background:var(--rerun-bg);border-radius:9px;padding:9px 12px;flex-wrap:wrap">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--rerun)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
+                      <div style="flex:1;min-width:0;font-size:12px;color:var(--rerun-fg);line-height:1.4">Recurring signature — <strong>seen {{ t.recurrence.count }}× in {{ t.recurrence.window }}</strong> · {{ t.recurrence.runs }}</div>
+                      <sc-if value="{{ t.notRepairEscalated }}" hint-placeholder-val="{{ true }}"><button style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:500;color:#fff;background:var(--rerun);border:none;padding:6px 11px;border-radius:7px;cursor:pointer;white-space:nowrap" onClick="{{ t.escalateRepair }}">Escalate to repair agent</button></sc-if>
+                      <sc-if value="{{ t.repairEscalated }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--accent-strong);background:var(--accent-weak);border:1px solid #cfe0fb;padding:4px 10px;border-radius:20px;white-space:nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Sent to pipeline-repair agent</span></sc-if>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ t.repairEscalated }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:10px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                      <div style="padding:9px 12px;background:var(--accent-weak);display:flex;align-items:center;gap:8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 13.9 8.6 19.5 8.6 15 12.1 16.8 17.6 12 14.2 7.2 17.6 9 12.1 4.5 8.6 10.1 8.6Z"/></svg><span style="font-size:12px;font-weight:600;color:var(--accent-strong)">Pipeline-repair agent · proposed fix</span><span style="margin-left:auto;font-size:9.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--accent-strong)">Advisory</span></div>
+                      <div style="padding:11px 13px">
+                        <div style="font-size:12.5px;color:var(--text-2);line-height:1.5">Add an index-distance guard to the demux step (min Hamming ≥ 3) and fail closed on i5 collisions. Prevents this class of barcode mismatch on future runs.</div>
+                        <div style="margin-top:10px;display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                          <span style="{{ t.bFixLocked }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Approve fix · this instance</span>
+                          <span style="{{ t.bFixLocked }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Approve fix · issue class</span>
+                          <span style="font-size:11px;color:var(--text-3)">Approver sign-off required (see-one / fix-one or class-wide)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ t.escalated }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--escalate-fg);background:var(--escalate-bg);border:1px solid var(--escalate-bd);padding:7px 11px;border-radius:8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>Escalated to approver — awaiting sign-off from an Approver.</div>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ t.isResolved }}" hint-placeholder-val="{{ false }}">
+                  <div style="border-top:1px solid var(--border);background:var(--proceed-bg);padding:12px 17px;display:flex;align-items:flex-start;gap:10px">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--proceed)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+                    <div style="flex:1;font-size:12.5px;color:var(--proceed-fg);line-height:1.5"><strong>Resolved by {{ t.resolvedBy }}.</strong> {{ t.resolution }}</div>
+                    <button style="{{ t.bReopen }}" onClick="{{ t.reopen }}">Reopen</button>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ t.notResolved }}" hint-placeholder-val="{{ true }}">
+                  <div style="border-top:1px solid var(--border);background:var(--surface-2);padding:11px 17px;display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                    <button style="{{ t.bReopen }}" onClick="{{ t.openCard }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Open card</button>
+                    <button style="{{ t.bReopen }}" onClick="{{ t.openAgentT }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 13.7 8.3 19 8.3 14.7 11.6 16.4 17 12 13.7 7.6 17 9.3 11.6 5 8.3 10.3 8.3Z"/></svg>Ask agent</button>
+                    <div style="margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                      <button style="{{ t.bSup }}" onClick="{{ t.suppress }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a13.2 13.2 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>{{ t.supLabel }}</button>
+                      <sc-if value="{{ t.showEscalate }}" hint-placeholder-val="{{ false }}"><button style="{{ t.bEsc }}" onClick="{{ t.escalate }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>Escalate to approver</button></sc-if>
+                      <sc-if value="{{ t.canAck }}" hint-placeholder-val="{{ false }}"><button style="{{ t.bAck }}" onClick="{{ t.ack }}">Acknowledge &amp; review</button></sc-if>
+                      <sc-if value="{{ t.canResolve }}" hint-placeholder-val="{{ false }}"><button style="{{ t.bAck }}" onClick="{{ t.resolve }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Resolve</button></sc-if>
+                      <sc-if value="{{ t.resolveLocked }}" hint-placeholder-val="{{ false }}"><span style="{{ t.bResolve }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Approver sign-off to resolve</span></sc-if>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ SCREEN 4: PROVENANCE ============ -->
+      <sc-if value="{{ isProvenance }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:1080px;margin:0 auto;padding:24px 28px 60px;animation:pgfade .28s ease">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+            <div>
+              <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.3px">Provenance</h1>
+              <p style="margin:5px 0 0;color:var(--text-2);font-size:13.5px">Read-only lineage for <span style="font-family:var(--mono);color:var(--text)">{{ runId }}</span>. Click a stage to inspect its data I/O.</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text-3);flex-shrink:0">
+              <span style="display:inline-flex;align-items:center;gap:5px"><span style="font-size:9.5px;font-weight:600;text-transform:uppercase;color:var(--info);background:var(--accent-weak);border:1px solid #cfe0fb;padding:1px 7px;border-radius:5px">real-giab</span></span>
+              <span style="display:inline-flex;align-items:center;gap:5px"><span style="font-size:9.5px;font-weight:600;text-transform:uppercase;color:var(--hold-fg);background:var(--hold-bg);border:1px solid var(--hold-bd);padding:1px 7px;border-radius:5px">synthetic</span></span>
+              <span style="display:inline-flex;align-items:center;gap:5px"><span style="font-size:9.5px;font-weight:600;text-transform:uppercase;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:1px 7px;border-radius:5px">contrived</span></span>
+            </div>
+          </div>
+
+          <!-- DAG -->
+          <div style="margin-top:18px;display:grid;grid-template-columns:repeat(5, minmax(0,1fr) auto) minmax(0,1fr);gap:4px;align-items:stretch;padding:6px 2px 10px">
+            <sc-for list="{{ stagesView }}" as="s" hint-placeholder-count="6">
+              <button style="{{ s.nodeStyle }}" onClick="{{ s.select }}">
+                <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+                  <span style="{{ s.numStyle }}">{{ s.n }}</span>
+                  <span style="width:9px;height:9px;border-radius:50%;background:{{ s.dot }};display:inline-block;box-shadow:0 0 0 3px var(--bg)"></span>
+                </div>
+                <div style="font-size:12.5px;font-weight:600;color:var(--text);text-align:left;line-height:1.25">{{ s.name }}</div>
+                <div style="font-family:var(--mono);font-size:9.5px;color:var(--text-3);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">{{ s.tool }}</div>
+                <sc-if value="{{ s.gateStage }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:4px;font-size:8.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--text-2);background:var(--bg);border:1px solid var(--border);padding:2px 7px;border-radius:20px"><span style="width:5px;height:5px;border-radius:50%;background:{{ s.gateBadgeDot }};display:inline-block"></span>{{ s.gateTag }} gate</span></sc-if>
+              </button>
+              <sc-if value="{{ s.isLast }}" hint-placeholder-val="{{ false }}"></sc-if>
+              <sc-if value="{{ s.notLast }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;align-items:center;padding:0 3px;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--border-strong)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
+              </sc-if>
+            </sc-for>
+          </div>
+
+          <!-- detail -->
+          <div style="margin-top:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.05)">
+            <div style="padding:16px 20px;display:flex;align-items:center;gap:13px;border-bottom:1px solid var(--border)">
+              <div style="width:36px;height:36px;border-radius:9px;background:{{ activeStage.statusBg }};border:1px solid {{ activeStage.statusColor }};display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:15px;font-weight:600;color:{{ activeStage.statusColor }};flex-shrink:0">{{ activeStage.n }}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:16px;font-weight:600;color:var(--text)">{{ activeStage.name }}</div>
+                <div style="font-family:var(--mono);font-size:11.5px;color:var(--text-3)">{{ activeStage.tool }}</div>
+              </div>
+              <span style="font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:{{ activeStage.statusColor }};background:{{ activeStage.statusBg }};border:1px solid {{ activeStage.statusColor }};padding:4px 11px;border-radius:20px">{{ activeStage.statusLabel }}</span>
+            </div>
+            <div style="padding:11px 20px;background:var(--surface-2);border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text-2);line-height:1.5">{{ activeStage.note }}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr">
+              <div style="padding:16px 20px">
+                <div style="display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Inputs</div>
+                <div style="margin-top:6px">
+                  <sc-for list="{{ activeStage.inputs }}" as="a" hint-placeholder-count="2">
+                    <div style="padding:11px 0;border-bottom:1px solid var(--border)">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-family:var(--mono);font-size:12.5px;font-weight:500;color:var(--text);word-break:break-all">{{ a.name }}</span><span style="{{ a.originStyle }}">{{ a.originLabel }}</span></div>
+                      <div style="display:flex;align-items:center;gap:10px;margin-top:5px"><span style="font-family:var(--mono);font-size:11px;color:var(--accent-strong)">{{ a.hash }}</span><span style="font-size:11px;color:var(--text-3)">{{ a.size }}</span></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="padding:16px 20px;border-left:1px solid var(--border)">
+                <div style="display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="m8 13 4-4 4 4"/><path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/></svg>Outputs</div>
+                <div style="margin-top:6px">
+                  <sc-for list="{{ activeStage.outputs }}" as="a" hint-placeholder-count="2">
+                    <div style="padding:11px 0;border-bottom:1px solid var(--border)">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-family:var(--mono);font-size:12.5px;font-weight:500;color:var(--text);word-break:break-all">{{ a.name }}</span><span style="{{ a.originStyle }}">{{ a.originLabel }}</span></div>
+                      <div style="display:flex;align-items:center;gap:10px;margin-top:5px"><span style="font-family:var(--mono);font-size:11px;color:var(--accent-strong)">{{ a.hash }}</span><span style="font-size:11px;color:var(--text-3)">{{ a.size }}</span></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ SCREEN 5: AGENT TRIAGE ============ -->
+      <sc-if value="{{ isAgent }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:800px;margin:0 auto;padding:24px 28px 60px;animation:pgfade .28s ease">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+            <div>
+              <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.3px">Agent triage</h1>
+              <p style="margin:5px 0 0;color:var(--text-2);font-size:13.5px">AI-assisted triage to speed up diagnosis. The agent advises; the human decides.</p>
+            </div>
+            <button style="display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border-strong);background:var(--surface);border-radius:20px;padding:5px 6px 5px 12px;cursor:pointer;flex-shrink:0" onClick="{{ agent.toggleLive }}">
+              <span style="font-size:11.5px;font-weight:500;color:var(--text-2)">{{ agent.sourceLabel }}</span>
+              <span style="{{ agent.trackStyle }}"><span style="{{ agent.knobStyle }}"></span></span>
+            </button>
+          </div>
+
+          <!-- error fallback -->
+          <sc-if value="{{ agent.error }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:16px;display:flex;align-items:center;gap:11px;border:1px solid var(--hold-bd);background:var(--hold-bg);border-radius:11px;padding:12px 15px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--hold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+              <div style="font-size:12.5px;color:var(--hold-fg);line-height:1.5"><strong>Live model synthesis is unavailable.</strong> Showing rule-derived triage instead — the deterministic verdict and findings are unaffected.</div>
+            </div>
+          </sc-if>
+
+          <div style="margin-top:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.05)">
+            <!-- subject header -->
+            <div style="padding:15px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px">
+              <div style="width:34px;height:34px;border-radius:9px;background:var(--accent-weak);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 13.9 8.6 19.5 8.6 15 12.1 16.8 17.6 12 14.2 7.2 17.6 9 12.1 4.5 8.6 10.1 8.6Z"/></svg></div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--accent-strong);background:var(--accent-weak);padding:2px 8px;border-radius:5px">Advisory</span><span style="font-size:11.5px;color:var(--text-3)">{{ agent.sourceLabel }}</span></div>
+                <div style="margin-top:5px;font-size:14px;font-weight:600;color:var(--text)">{{ agent.issue }}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0"><div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">{{ agent.sample }}</div><div style="font-family:var(--mono);font-size:10.5px;color:var(--text-3)">{{ agent.run }} · {{ agent.rule }}</div></div>
+            </div>
+
+            <!-- likely cause -->
+            <div style="padding:17px 18px;border-bottom:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>Likely cause</div>
+              <p style="margin:8px 0 0;font-size:13.5px;line-height:1.6;color:var(--text)">{{ agent.likelyCause }}</p>
+            </div>
+
+            <!-- suggested action -->
+            <div style="padding:17px 18px;border-bottom:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Suggested action</div>
+              <p style="margin:8px 0 0;font-size:13.5px;line-height:1.6;color:var(--text)">{{ agent.suggestedAction }}</p>
+            </div>
+
+            <!-- citations -->
+            <div style="padding:17px 18px;background:var(--surface-2)">
+              <div style="font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3)">Citations</div>
+              <div style="margin-top:11px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                <div>
+                  <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:7px">From this run's findings</div>
+                  <div style="display:flex;flex-direction:column;gap:7px">
+                    <sc-for list="{{ agent.findingsCites }}" as="c" hint-placeholder-count="3">
+                      <div style="display:flex;gap:9px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 11px">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                        <div style="min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--text)">{{ c.label }}</div><div style="font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:2px">{{ c.src }}</div></div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:7px">Knowledge &amp; experience</div>
+                  <div style="display:flex;flex-direction:column;gap:7px">
+                    <sc-for list="{{ agent.corpusCites }}" as="c" hint-placeholder-count="3">
+                      <div style="display:flex;gap:9px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 11px">
+                        <span style="font-family:var(--mono);font-size:10px;font-weight:600;color:var(--accent-strong);background:var(--accent-weak);border-radius:5px;padding:2px 6px;flex-shrink:0">{{ c.id }}</span>
+                        <div style="min-width:0"><div style="font-size:12.5px;font-weight:500;color:var(--text);line-height:1.35">{{ c.label }}</div><div style="font-size:10.5px;color:var(--text-3);margin-top:2px">{{ c.kind }}</div></div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- footer -->
+            <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px">
+              <span style="font-size:11.5px;color:var(--text-3);line-height:1.4;flex:1">The verdict is set by the rule engine, not this note. Reviewer judgment required before any action.</span>
+              <button style="display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border-strong);color:var(--text);font-size:12.5px;font-weight:500;padding:8px 13px;border-radius:8px;cursor:pointer;flex-shrink:0" onClick="{{ goto.decision }}">Back to card</button>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.05)">
+            <div style="padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span style="font-size:13.5px;font-weight:600">Ask the agent</span>
+              <span style="margin-left:auto;font-size:11px;color:var(--text-3)">Advisory · won't change the verdict</span>
+            </div>
+            <div style="padding:16px 18px">
+              <sc-if value="{{ agent.hasThread }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:14px">
+                  <sc-for list="{{ agent.thread }}" as="m" hint-placeholder-count="2">
+                    <div style="{{ m.rowStyle }}"><div style="{{ m.bubbleStyle }}">{{ m.text }}</div></div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <div style="display:flex;flex-wrap:wrap;gap:7px">
+                <sc-for list="{{ agent.quick }}" as="q" hint-placeholder-count="3">
+                  <button style="text-align:left;font-size:12px;color:var(--accent-strong);background:var(--accent-weak);border:1px solid #cfe0fb;padding:6px 11px;border-radius:20px;cursor:pointer" onClick="{{ q.ask }}">{{ q.q }}</button>
+                </sc-for>
+              </div>
+              <div style="margin-top:12px;display:flex;gap:8px">
+                <input value="{{ agent.input }}" onChange="{{ agent.setInput }}" onKeyDown="{{ agent.onKey }}" placeholder="Ask a follow-up about this issue…" style="flex:1;font-family:inherit;font-size:13px;color:var(--text);background:var(--surface);border:1px solid var(--border-strong);border-radius:9px;padding:9px 12px;outline:none" />
+                <button style="display:inline-flex;align-items:center;gap:6px;background:var(--accent);border:none;color:#fff;font-size:12.5px;font-weight:500;padding:9px 15px;border-radius:9px;cursor:pointer" onClick="{{ agent.send }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ SCREEN 6: SETTINGS ============ -->
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:720px;margin:0 auto;padding:24px 28px 60px;animation:pgfade .28s ease">
+          <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.3px">Settings</h1>
+          <p style="margin:5px 0 0;color:var(--text-2);font-size:13.5px">Operator profile, notifications, and model tiering. Mostly informational for this pass.</p>
+
+          <!-- Profile -->
+          <div style="margin-top:18px;border:1px solid var(--border);border-radius:13px;background:var(--surface);padding:17px 18px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+              <div><div style="font-size:14.5px;font-weight:600">Operator profile</div><div style="font-size:12.5px;color:var(--text-2);margin-top:3px">How much QC and metadata detail each card surfaces by default.</div></div>
+              <div style="display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:3px;width:200px;flex-shrink:0">
+                <sc-for list="{{ profileOpts }}" as="o" hint-placeholder-count="2"><button style="{{ o.style }}" onClick="{{ o.go }}">{{ o.label }}</button></sc-for>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notifications -->
+          <div style="margin-top:14px;border:1px solid var(--border);border-radius:13px;background:var(--surface);padding:17px 18px">
+            <div style="font-size:14.5px;font-weight:600">Notifications</div>
+            <div style="font-size:12.5px;color:var(--text-2);margin-top:3px">Ping the channel when a run reaches the gate with samples needing attention.</div>
+            <div style="margin-top:13px;display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--surface-2)">
+              <div style="width:32px;height:32px;border-radius:8px;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="2" y1="15" x2="20" y2="15"/></svg></div>
+              <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">Slack · <span style="font-family:var(--mono)">#pipeguard-ops</span></div><div style="font-size:11.5px;color:var(--proceed-fg);display:flex;align-items:center;gap:5px;margin-top:2px"><span style="width:6px;height:6px;border-radius:50%;background:var(--proceed);display:inline-block"></span>Connected</div></div>
+              <span style="{{ slackTgl.track }}" onClick="{{ toggleSlack }}"><span style="{{ slackTgl.knob }}"></span></span>
+            </div>
+          </div>
+
+          <!-- Model tiering -->
+          <div style="margin-top:14px;border:1px solid var(--border);border-radius:13px;background:var(--surface);padding:17px 18px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+              <div><div style="font-size:14.5px;font-weight:600">Model tiering</div><div style="font-size:12.5px;color:var(--text-2);margin-top:3px">Narration only — verdicts stay rule-derived. Offline uses the deterministic stub at $0.</div></div>
+              <div style="display:flex;align-items:center;gap:9px;flex-shrink:0"><span style="font-size:12px;font-weight:500;color:var(--text-2)">Live synthesis</span><span style="{{ synthTgl.track }}" onClick="{{ toggleSynth }}"><span style="{{ synthTgl.knob }}"></span></span></div>
+            </div>
+            <div style="margin-top:13px;display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ modelOpts }}" as="m" hint-placeholder-count="3">
+                <div style="{{ m.rowStyle }}" onClick="{{ m.pick }}">
+                  <span style="{{ m.radioStyle }}"></span>
+                  <div style="flex:1"><div style="font-size:13.5px;font-weight:600;color:var(--text)">Claude {{ m.label }}</div><div style="font-size:11.5px;color:var(--text-2)">{{ m.note }}</div></div>
+                  <span style="font-family:var(--mono);font-size:11.5px;color:var(--text-3)">{{ m.cost }} / 1M</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- Runbook -->
+          <div style="margin-top:14px;border:1px solid var(--border);border-radius:13px;background:var(--surface);padding:17px 18px">
+            <div style="display:flex;align-items:center;gap:9px"><div style="font-size:14.5px;font-weight:600">Runbook thresholds</div><span style="font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--proceed-fg);background:var(--proceed-bg);border:1px solid var(--proceed-bd);padding:2px 7px;border-radius:5px">Editable</span></div>
+            <div style="font-size:12.5px;color:var(--text-2);margin-top:3px">Operator-adjustable, keyed on <strong style="color:var(--text)">assay × sample type</strong>. Saliva loosens mapping / on-target; contamination is unchanged.</div>
+            <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:11px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3)">Assay</span>
+              <sc-for list="{{ assayOpts }}" as="a" hint-placeholder-count="3"><button style="{{ a.style }}" onClick="{{ a.go }}">{{ a.label }}</button></sc-for>
+            </div>
+            <div style="margin-top:13px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+              <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;background:var(--surface-2);font-size:9.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3)"><div style="padding:9px 13px">Metric</div><div style="padding:9px 10px;text-align:center">Whole blood</div><div style="padding:9px 10px;text-align:center">Saliva</div></div>
+              <sc-for list="{{ configRows }}" as="r" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;border-top:1px solid var(--border);align-items:center">
+                  <div style="padding:9px 13px;font-size:12.5px;color:var(--text)">{{ r.metric }}</div>
+                  <div style="padding:7px 8px;display:flex;align-items:center;justify-content:center;gap:7px">
+                    <button style="{{ r.stepBtn }}" onClick="{{ r.decBlood }}">–</button>
+                    <span style="font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--text);min-width:58px;text-align:center">{{ r.dir }} {{ r.bloodVal }}</span>
+                    <button style="{{ r.stepBtn }}" onClick="{{ r.incBlood }}">+</button>
+                  </div>
+                  <div style="padding:7px 8px;display:flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2)">
+                    <button style="{{ r.stepBtn }}" onClick="{{ r.decSaliva }}">–</button>
+                    <span style="font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--text);min-width:58px;text-align:center">{{ r.dir }} {{ r.salivaVal }}</span>
+                    <button style="{{ r.stepBtn }}" onClick="{{ r.incSaliva }}">+</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin-top:13px;font-size:11px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3)">Required metadata</div>
+            <div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:6px">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:3px 9px;border-radius:6px">subject_id</span>
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:3px 9px;border-radius:6px">tissue</span>
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:3px 9px;border-radius:6px">library_prep</span>
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:3px 9px;border-radius:6px">submitted_by</span>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ MONITORING ============ -->
+      <sc-if value="{{ isMonitoring }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:1040px;margin:0 auto;padding:24px 28px 60px;animation:pgfade .28s ease">
+          <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.3px">Monitoring</h1>
+          <p style="margin:5px 0 0;color:var(--text-2);font-size:13.5px">Run throughput and verdict trends across recent runs. System telemetry (Prometheus) lands with the backend.</p>
+
+          <div style="margin-top:18px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+            <sc-for list="{{ mon.kpis }}" as="k" hint-placeholder-count="4">
+              <div style="border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:14px 16px">
+                <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--text);line-height:1">{{ k.value }}</div>
+                <div style="font-size:11.5px;color:var(--text-2);margin-top:6px">{{ k.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin-top:14px;display:grid;grid-template-columns:1.5fr 1fr;gap:14px">
+            <div style="border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:16px 18px">
+              <div style="font-size:13.5px;font-weight:600">Verdicts over time</div>
+              <div style="display:flex;align-items:flex-end;gap:10px;height:168px;margin-top:16px">
+                <sc-for list="{{ mon.bars }}" as="b" hint-placeholder-count="7">
+                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0;height:100%">
+                    <div style="width:26px;flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:2px">
+                      <sc-for list="{{ b.segs }}" as="sg" hint-placeholder-count="1">
+                        <div style="width:100%;height:{{ sg.h }};background:{{ sg.c }};border-radius:2px"></div>
+                      </sc-for>
+                    </div>
+                    <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);white-space:nowrap">{{ b.run }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:14px;margin-top:14px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:12px">
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2)"><span style="width:9px;height:9px;border-radius:2px;background:var(--proceed);display:inline-block"></span>Proceed</span>
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2)"><span style="width:9px;height:9px;border-radius:2px;background:var(--hold);display:inline-block"></span>Hold</span>
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2)"><span style="width:9px;height:9px;border-radius:2px;background:var(--rerun);display:inline-block"></span>Rerun</span>
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2)"><span style="width:9px;height:9px;border-radius:2px;background:var(--escalate);display:inline-block"></span>Escalate</span>
+              </div>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:16px 18px">
+              <div style="font-size:13.5px;font-weight:600">Gate pass rate · 7d</div>
+              <div style="margin-top:18px;display:flex;flex-direction:column;gap:17px">
+                <sc-for list="{{ mon.gatePass }}" as="g" hint-placeholder-count="3">
+                  <div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text)"><span style="width:8px;height:8px;border-radius:50%;background:{{ g.dot }};display:inline-block"></span>{{ g.label }}</span><span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">{{ g.pass }}%</span></div>
+                    <div style="height:8px;border-radius:5px;background:var(--surface-2);overflow:hidden"><div style="height:100%;width:{{ g.barW }};background:{{ g.dot }}"></div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:16px 18px">
+            <div style="font-size:13.5px;font-weight:600">Recurring issue signatures · 14d</div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:2px">A signature recurring 3× auto-escalates to the pipeline-repair agent.</div>
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ mon.recurring }}" as="x" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:10px;padding:11px 14px">
+                  <span style="font-family:var(--mono);font-size:12px;color:var(--text);flex:1;min-width:0">{{ x.sig }}</span>
+                  <span style="font-size:11px;color:var(--text-2);white-space:nowrap"><strong style="font-family:var(--mono);color:var(--text)">{{ x.count }}×</strong> / {{ x.window }}</span>
+                  <span style="font-size:12px;font-weight:700;color:{{ x.trendColor }};width:14px;text-align:center">
+                    <sc-if value="{{ x.trendUp }}" hint-placeholder-val="{{ false }}">▲</sc-if>
+                    <sc-if value="{{ x.trendDown }}" hint-placeholder-val="{{ false }}">▼</sc-if>
+                  </span>
+                  <sc-if value="{{ x.escalated }}" hint-placeholder-val="{{ false }}"><button style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:500;color:var(--escalate-fg);background:var(--surface);border:1px solid var(--escalate-bd);padding:5px 10px;border-radius:7px;cursor:pointer;white-space:nowrap" onClick="{{ x.goQueue }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 13.7 8.3 19 8.3 14.7 11.6 16.4 17 12 13.7 7.6 17 9.3 11.6 5 8.3 10.3 8.3Z"/></svg>Repair agent</button></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:820}}">
+class Component extends DCLogic {
+  state = {
+    view: 'overview',
+    runId: 'RUN-2026-07-07-A',
+    filter: 'all',
+    selected: 'S4',
+    open: { S4: true, S5: true, S1: false, S2: false, S3: false },
+    cardLayout: 'split',
+    stage: 'demux',
+    tickets: { 'T-1042': 'open', 'T-1041': 'in-review', 'T-1039': 'resolved', 'T-1040': 'resolved' },
+    suppressed: {},
+    escalated: {},
+    overrides: { S4: true },
+    repair: {},
+    history: [],
+    agentThread: [],
+    agentInput: '',
+    sfilter: 'all',
+    qFilter: 'all',
+    agentLive: false,
+    demo: 'ready',
+    profile: 'granular',
+    slackOn: true,
+    model: 'sonnet',
+    synth: 'stub',
+    runMenuOpen: false,
+    demoMenuOpen: false,
+  };
+
+  // ---------- palette helpers (return React style objects) ----------
+  VBADGE = {
+    proceed: { c: 'var(--proceed)', bg: 'var(--proceed-bg)', bd: 'var(--proceed-bd)', fg: 'var(--proceed-fg)', label: 'Proceed' },
+    hold: { c: 'var(--hold)', bg: 'var(--hold-bg)', bd: 'var(--hold-bd)', fg: 'var(--hold-fg)', label: 'Hold' },
+    rerun: { c: 'var(--rerun)', bg: 'var(--rerun-bg)', bd: 'var(--rerun-bd)', fg: 'var(--rerun-fg)', label: 'Rerun' },
+    escalate: { c: 'var(--escalate)', bg: 'var(--escalate-bg)', bd: 'var(--escalate-bd)', fg: 'var(--escalate-fg)', label: 'Escalate' },
+  };
+  SEV = {
+    critical: { c: 'var(--crit)', bg: 'var(--escalate-bg)', label: 'Critical' },
+    warn: { c: 'var(--warn)', bg: 'var(--rerun-bg)', label: 'Warn' },
+    info: { c: 'var(--info)', bg: 'var(--accent-weak)', label: 'Info' },
+  };
+
+  // ---------- static data ----------
+  RUNS = [
+    { id: 'RUN-2026-07-07-A', platform: 'NovaSeq X', date: 'Jul 7, 2026', samples: 5, status: 'review', counts: { proceed: 3, hold: 1, rerun: 0, escalate: 1 }, attention: 2 },
+    { id: 'RUN-2026-07-07-B', platform: 'NovaSeq X', date: 'Jul 7, 2026', samples: 8, status: 'running', counts: {}, attention: 0 },
+    { id: 'RUN-2026-07-06-A', platform: 'NextSeq 2000', date: 'Jul 6, 2026', samples: 6, status: 'released', counts: { proceed: 6 }, attention: 0 },
+    { id: 'RUN-2026-07-05-C', platform: 'NovaSeq X', date: 'Jul 5, 2026', samples: 4, status: 'review', counts: { proceed: 2, hold: 1, rerun: 1, escalate: 0 }, attention: 2 },
+    { id: 'RUN-2026-07-03-D', platform: 'NextSeq 2000', date: 'Jul 3, 2026', samples: 12, status: 'released', counts: { proceed: 12 }, attention: 0 },
+  ];
+
+  STATUS = {
+    review: { dot: 'var(--hold)', label: 'Needs review' },
+    running: { dot: 'var(--info)', label: 'Sequencing' },
+    released: { dot: 'var(--proceed)', label: 'Released' },
+  };
+
+  metric(label, value, gate, status, note) { return { label, value, gate, status, note: note || '' }; }
+
+  skOf(src) { const s = (src || '').toLowerCase(); if (s.indexOf('multiqc') > -1) return 'multiqc'; if (s.indexOf('pipeline.log') > -1 || s.indexOf('trace') > -1) return 'trace'; if (s.indexOf('params') > -1) return 'params'; if (s.indexOf('qc_metrics') > -1 || s.indexOf('ngscheckmate') > -1 || s.indexOf('mosdepth') > -1 || s.indexOf('callable') > -1) return 'metric'; if (s.indexOf('note') > -1) return 'note'; return 'artifact'; }
+
+  GATES = {
+    preflight: { tag: 'Preflight', dot: '#1f6feb' },
+    qc: { tag: 'QC gate', dot: '#1f5fd0' },
+    variant: { tag: 'Variant gate', dot: '#0e8f7e' },
+    operational: { tag: 'Operational', dot: '#c1560f' },
+    all: { tag: 'All gates', dot: '#1a854e' },
+  };
+
+  SAMPLES = {
+    'RUN-2026-07-07-A': [
+      {
+        id: 'S4', verdict: 'escalate', gateOrigin: 'preflight', subject: '— missing —', sampleType: 'Whole blood', tissue: 'blood', prep: 'TruSeq DNA PCR-Free', by: 'k.osei', reads: '9.4M', pctReads: '15.1%', linked: 'S5', linkedNote: "S4 observed S5's declared i5",
+        headline: 'Barcode does not match the declared sample sheet',
+        rationale: "S4 was demultiplexed on i5 AGGCGAAG, but the sample sheet declares GGCTCTGA — and that observed i5 is exactly S5's declared i5. This is consistent with an S4/S5 index swap during pooling, so reads may be attributed to the wrong subject. Chain of custody is not intact, and S4 is missing its subject_id. The evidence is below; the release decision is yours.",
+        steps: ['Do not release. Notify the lab lead / provenance owner.', 'Reconcile the sample sheet, barcode manifest, and LIMS record before any decision.', 'Confirm whether S4 / S5 indices were swapped during library pooling.'],
+        varNote: 'Blocked at the preflight gate — the QC and variant gates were not evaluated.',
+        gates: [ { g: 'preflight', v: 'escalate', r: 'Barcode ≠ sample sheet; subject_id missing' }, { g: 'qc', v: 'escalate', r: 'NGSCheckMate genotype inconsistent with the declared subject' }, { g: 'variant', v: 'blocked', r: 'Not evaluated — blocked upstream' } ],
+        metrics: {
+          pre: [ this.metric('Reads assigned', '9.4M', '≥ 10M', 'borderline', 'sparse — admitted at intake via manual override'), this.metric('Barcode i7-i5', 'GAGATTCC-AGGCGAAG', 'GAGATTCC-GGCTCTGA', 'fail', 'i7 matches; i5 swapped'), this.metric('Cluster PF', '86.9%', '≥ 80%', 'pass') ],
+          qc: [ this.metric('Genotype concordance · NGSCheckMate', 'No match', 'concordant', 'fail', 'sarek default · primary swap signal'), this.metric('Sex concordance', 'XY', 'concordant', 'pass'), this.metric('Q30', '89.9%', '≥ 85%', 'pass'), this.metric('% mapped', '97.8%', '≥ 95%', 'pass'), this.metric('Mean depth', '33.1×', '≥ 30×', 'pass', 'depth'), this.metric('% target ≥ 20×', '96.4%', '≥ 95%', 'pass', 'breadth / callability'), this.metric('Zero-cov targets', '0.4%', '≤ 1%', 'pass'), this.metric('Duplication', '15.2%', '≤ 30%', 'pass'), this.metric('Contamination · FREEMIX', '0.004', '≤ 0.03 · band .015–.03', 'pass', 'optional · non-sarek-default') ],
+          var: []
+        },
+        findings: [
+          { rule: 'PROV-001', gate: 'preflight', cat: 'provenance', sev: 'critical', title: 'Barcode does not match the declared sample sheet', detail: "Demultiplexed on i5 AGGCGAAG; sample sheet declares GGCTCTGA. The i7 matches — only the i5 differs, and the observed i5 belongs to S5, a probable index swap.", evidence: [
+            { source: 'demux_stats.csv', locator: 'index (i7)', value: 'GAGATTCC', expected: 'GAGATTCC', diff: true },
+            { source: 'demux_stats.csv', locator: 'index2 (i5)', value: 'AGGCGAAG', expected: 'GGCTCTGA', bad: true, diff: true },
+            { source: 'pipeline.log', locator: '02:41:53Z WARN', value: 'index2 AGGCGAAG ≠ GGCTCTGA', expected: 'no mismatch', bad: true } ] },
+          { rule: 'META-001', gate: 'preflight', cat: 'metadata', sev: 'warn', title: 'Required intake metadata is missing', detail: 'subject_id is empty — downstream traceability to a subject is blocked until it is filled in.', evidence: [
+            { source: 'sample_metadata.csv', locator: 'sample_id=S4', value: 'subject_id = (empty)', expected: 'present', bad: true } ] },
+        ],
+      },
+      {
+        id: 'S5', verdict: 'hold', gateOrigin: 'qc', subject: 'SUBJ-1005', sampleType: 'Saliva', tissue: 'saliva', prep: 'TruSeq DNA PCR-Free', by: 'm.chen', reads: '10.3M', pctReads: '16.6%',
+        headline: 'Depth and callability are borderline at the QC gate',
+        rationale: "S5 clears preflight, but at the QC gate mean depth (29.2×) and callability (% target ≥ 20× = 91.8%) both sit just under gate — distinct signals: reads are adequate, but elevated off-target content (common in saliva) has left on-target depth uneven. Q30 is also marginal. Borderline QC is a HOLD — a judgment call, not a rerun. Depth vs breadth are shown separately.",
+        steps: ['Review depth and callability against project requirements for this assay.', 'If acceptable, release; if not, request a sequencing top-up — not a rerun.'],
+        varNote: 'Provisional — variant metrics are shown for context, but the variant gate holds pending the QC decision.',
+        gates: [ { g: 'preflight', v: 'proceed', r: 'Run, barcode & yield within gate' }, { g: 'qc', v: 'hold', r: 'Depth & callability borderline (saliva off-target)' }, { g: 'variant', v: 'hold', r: 'Provisional — held pending the QC decision' } ],
+        metrics: {
+          pre: [ this.metric('Reads assigned', '10.3M', '≥ 10M', 'pass'), this.metric('Barcode i7-i5', 'ATTCAGAA-AGGCGAAG', 'matches sheet', 'pass'), this.metric('Cluster PF', '83.4%', '≥ 80%', 'pass') ],
+          qc: [ this.metric('Genotype concordance · NGSCheckMate', 'Match', 'concordant', 'pass', 'sarek default'), this.metric('Sex concordance', 'XX', 'concordant', 'pass'), this.metric('Q30', '84.1%', '≥ 85%', 'borderline'), this.metric('% mapped', '96.1%', '≥ 95%', 'pass'), this.metric('Mean depth', '29.2×', '≥ 30×', 'borderline', 'depth'), this.metric('% target ≥ 20×', '91.8%', '≥ 95%', 'borderline', 'breadth / callability'), this.metric('Zero-cov targets', '1.9%', '≤ 1%', 'borderline'), this.metric('Callable-region gaps', '148', '≤ 50', 'borderline'), this.metric('Duplication', '22.6%', '≤ 30%', 'pass'), this.metric('Contamination · FREEMIX', '0.011', '≤ 0.03 · band .015–.03', 'pass', 'optional · non-sarek-default') ],
+          var: [ this.metric('Mean variant DP', '28×', '≥ 20×', 'borderline', 'provisional'), this.metric('Ti/Tv', '2.01', '2.0–2.1', 'pass'), this.metric('Het/Hom', '1.62', '1.4–2.0', 'pass') ]
+        },
+        findings: [
+          { rule: 'QC-DEPTH', gate: 'qc', cat: 'qc', sev: 'warn', title: 'Mean depth is borderline against the QC gate', detail: 'Mean depth 29.2× is just under the 30× gate (hard-fail 15×). Adequate reads, but low per-base depth.', evidence: [ { source: 'qc_metrics.csv', locator: 'S5.mean_coverage', value: '29.2×', expected: '≥ 30×', bad: true } ] },
+          { rule: 'QC-CALLABILITY', gate: 'qc', cat: 'qc', sev: 'warn', title: 'Callability (breadth) is borderline', detail: '% target ≥ 20× is 91.8% against a 95% gate, with 148 callable-region gaps. Breadth is a distinct signal from depth — coverage is uneven across the panel.', evidence: [ { source: 'qc_metrics.csv', locator: 'S5.pct_target_20x', value: '91.8%', expected: '≥ 95%', bad: true }, { source: 'callable.bed', locator: 'S5', value: '148 gap regions', expected: '≤ 50', bad: true } ] },
+          { rule: 'QC-Q30', gate: 'qc', cat: 'qc', sev: 'warn', title: 'Q30 is borderline against the QC gate', detail: 'Q30 84.1% is just under the 85% runbook gate (hard-fail 75%).', evidence: [ { source: 'qc_metrics.csv', locator: 'S5.q30', value: '84.1%', expected: '≥ 85%', bad: true } ] },
+          { rule: 'CTX-SALIVA', gate: 'qc', cat: 'metadata', sev: 'info', title: 'Saliva input — context for the reviewer', detail: 'Saliva carries more off-target microbial DNA than blood, which can pull on-target depth and callability down; the borderline QC may be within spec for this sample type.', evidence: [ { source: 'sample_metadata.csv', locator: 'sample_id=S5', value: 'Saliva', expected: '—' } ] },
+        ],
+      },
+      { id: 'S1', verdict: 'proceed', gateOrigin: 'all', subject: 'SUBJ-1001', sampleType: 'Whole blood', tissue: 'blood', prep: 'TruSeq DNA PCR-Free', by: 'a.rivera', reads: '12.5M', pctReads: '20.1%', headline: 'Cleared all three gates', rationale: 'S1 cleared the preflight, QC, and variant gates with margin on every metric. No provenance, metadata, or QC inconsistencies.', steps: ['Release sample to downstream analysis.'], varNote: '',
+        metrics: {
+          pre: [ this.metric('Reads assigned', '12.5M', '≥ 10M', 'pass'), this.metric('Barcode i7-i5', 'ATTACTCG-TATAGCCT', 'matches sheet', 'pass'), this.metric('Cluster PF', '89.2%', '≥ 80%', 'pass') ],
+          qc: [ this.metric('Genotype concordance · NGSCheckMate', 'Match', 'concordant', 'pass', 'sarek default'), this.metric('Sex concordance', 'XY', 'concordant', 'pass'), this.metric('Q30', '92.3%', '≥ 85%', 'pass'), this.metric('% mapped', '98.9%', '≥ 95%', 'pass'), this.metric('Mean depth', '42.1×', '≥ 30×', 'pass', 'depth'), this.metric('% target ≥ 20×', '98.7%', '≥ 95%', 'pass', 'breadth'), this.metric('% target ≥ 30×', '96.2%', '≥ 90%', 'pass'), this.metric('Fold-80 uniformity', '1.3', '< 2', 'pass', 'uniformity'), this.metric('Zero-cov targets', '0.1%', '≤ 1%', 'pass'), this.metric('Duplication', '12.4%', '≤ 30%', 'pass'), this.metric('Contamination · FREEMIX', '0.003', '≤ 0.03 · band .015–.03', 'pass', 'optional · non-sarek-default') ],
+          var: [ this.metric('Mean variant DP', '41×', '≥ 20×', 'pass'), this.metric('Median GQ', '62', '≥ 40', 'pass'), this.metric('Ti/Tv', '2.05', '2.0–2.1', 'pass'), this.metric('Novel vs gnomAD', '1.8%', '≤ 5%', 'pass'), this.metric('ClinVar P/LP', '2', '—', 'pass') ]
+        }, findings: [] },
+      { id: 'S2', verdict: 'proceed', gateOrigin: 'all', subject: 'SUBJ-1002', sampleType: 'Whole blood', tissue: 'blood', prep: 'TruSeq DNA PCR-Free', by: 'a.rivera', reads: '11.8M', pctReads: '19.0%', headline: 'Cleared all three gates', rationale: 'S2 cleared all three gates with margin on every metric.', steps: ['Release sample to downstream analysis.'], varNote: '',
+        metrics: {
+          pre: [ this.metric('Reads assigned', '11.8M', '≥ 10M', 'pass'), this.metric('Barcode i7-i5', 'TCCGGAGA-ATAGAGGC', 'matches sheet', 'pass'), this.metric('Cluster PF', '88.0%', '≥ 80%', 'pass') ],
+          qc: [ this.metric('Genotype concordance · NGSCheckMate', 'Match', 'concordant', 'pass', 'sarek default'), this.metric('Sex concordance', 'XX', 'concordant', 'pass'), this.metric('Q30', '90.8%', '≥ 85%', 'pass'), this.metric('% mapped', '98.4%', '≥ 95%', 'pass'), this.metric('Mean depth', '38.7×', '≥ 30×', 'pass', 'depth'), this.metric('% target ≥ 20×', '98.1%', '≥ 95%', 'pass', 'breadth'), this.metric('Zero-cov targets', '0.2%', '≤ 1%', 'pass'), this.metric('Duplication', '14.0%', '≤ 30%', 'pass'), this.metric('Contamination · FREEMIX', '0.005', '≤ 0.03 · band .015–.03', 'pass', 'optional · non-sarek-default') ],
+          var: [ this.metric('Mean variant DP', '37×', '≥ 20×', 'pass'), this.metric('Median GQ', '59', '≥ 40', 'pass'), this.metric('Ti/Tv', '2.03', '2.0–2.1', 'pass'), this.metric('Novel vs gnomAD', '2.0%', '≤ 5%', 'pass'), this.metric('ClinVar P/LP', '1', '—', 'pass') ]
+        }, findings: [] },
+      { id: 'S3', verdict: 'proceed', gateOrigin: 'all', subject: 'SUBJ-1003', sampleType: 'Saliva', tissue: 'saliva', prep: 'Nextera DNA Flex', by: 'k.osei', reads: '13.2M', pctReads: '21.2%', headline: 'Cleared all three gates (saliva-adjusted)', rationale: 'S3 cleared all three gates. On-target and microbial-content thresholds are saliva-adjusted — saliva carries more off-target microbial DNA than blood — and S3 is within the saliva spec. FREEMIX contamination is unchanged by sample type.', steps: ['Release sample to downstream analysis.'], varNote: '',
+        metrics: {
+          pre: [ this.metric('Reads assigned', '13.2M', '≥ 10M', 'pass'), this.metric('Barcode i7-i5', 'CGCTCATT-CCTATCCT', 'matches sheet', 'pass'), this.metric('Cluster PF', '87.5%', '≥ 80%', 'pass') ],
+          qc: [ this.metric('Genotype concordance · NGSCheckMate', 'Match', 'concordant', 'pass', 'sarek default'), this.metric('Sex concordance', 'XY', 'concordant', 'pass'), this.metric('Q30', '91.5%', '≥ 85%', 'pass'), this.metric('% mapped', '89.7%', '≥ 85% (saliva)', 'pass', 'saliva-adjusted from ≥ 95%'), this.metric('On-target rate', '74.2%', '≥ 70% (saliva)', 'pass', 'saliva-adjusted from ≥ 85%'), this.metric('Mean depth', '35.2×', '≥ 30×', 'pass', 'depth'), this.metric('% target ≥ 20×', '96.9%', '≥ 95%', 'pass', 'breadth'), this.metric('Microbial content', '18.3%', '≤ 25% (saliva)', 'pass', 'saliva-adjusted'), this.metric('Duplication', '17.6%', '≤ 30%', 'pass'), this.metric('Contamination · FREEMIX', '0.006', '≤ 0.03 · band .015–.03', 'pass', 'optional · unchanged by type') ],
+          var: [ this.metric('Mean variant DP', '34×', '≥ 20×', 'pass'), this.metric('Median GQ', '57', '≥ 40', 'pass'), this.metric('Ti/Tv', '2.06', '2.0–2.1', 'pass'), this.metric('Novel vs gnomAD', '2.1%', '≤ 5%', 'pass'), this.metric('ClinVar P/LP', '0', '—', 'pass') ]
+        }, findings: [] },
+    ],
+    'RUN-2026-07-05-C': [
+      { id: 'S2', verdict: 'rerun', gateOrigin: 'qc', subject: 'SUBJ-0902', sampleType: 'Whole blood', tissue: 'blood', prep: 'TruSeq DNA PCR-Free', by: 'j.park', reads: '4.1M', pctReads: '7.2%', headline: 'Operational failure — alignment exited non-zero', rationale: 'The alignment step exited code 1 (segmentation fault) for S2; no BAM was produced. This is an operational / file-system failure, not a data-quality problem — so the recommendation is RERUN, not HOLD. No verdict can stand until the step completes.', steps: ['Requeue the sample for reprocessing (operational failure).', 'Confirm the upstream failure is resolved before rerun.'], varNote: 'Not evaluated — the pipeline did not complete.',
+        gates: [ { g: 'preflight', v: 'proceed', r: 'Admitted (sparse) via override' }, { g: 'qc', v: 'rerun', r: 'Alignment step crashed — operational, not data quality' }, { g: 'variant', v: 'blocked', r: 'Not evaluated — pipeline did not complete' } ],
+        metrics: { pre: [ this.metric('Reads assigned', '4.1M', '≥ 10M', 'fail'), this.metric('Cluster PF', '71.2%', '≥ 80%', 'borderline') ], qc: [ this.metric('Q30', '—', '≥ 85%', 'fail', 'not produced'), this.metric('Mean depth', '—', '≥ 30×', 'fail', 'not produced') ], var: [] },
+        findings: [ { rule: 'PIPE-001', gate: 'qc', operational: true, cat: 'pipeline', sev: 'critical', title: 'Pipeline logged an operational failure', detail: 'align step exited with code 1 (segmentation fault). This is an operational failure — the correct action is RERUN, not a data-quality HOLD.', evidence: [ { source: 'pipeline.log', locator: 'align.S2', value: 'exit code 1 · segmentation fault', expected: 'exit 0', bad: true } ] } ] },
+      { id: 'S4', verdict: 'hold', gateOrigin: 'qc', subject: 'SUBJ-0904', sampleType: 'Whole blood', tissue: 'blood', prep: 'Nextera DNA Flex', by: 'j.park', reads: '8.9M', pctReads: '15.4%', headline: 'Callability is borderline at the QC gate', rationale: '% target ≥ 20× is 93.0% against a 95% gate. Depth is fine (31.8×) — this is a breadth signal, so a HOLD for review rather than a rerun.', steps: ['Review callability against project requirements.', 'Release or request a top-up once a human signs off.'], varNote: 'Provisional — the variant gate holds pending the QC decision.',
+        gates: [ { g: 'preflight', v: 'proceed', r: 'Run & barcode within gate' }, { g: 'qc', v: 'hold', r: 'Callability (breadth) borderline' }, { g: 'variant', v: 'hold', r: 'Provisional — held pending the QC decision' } ],
+        metrics: { pre: [ this.metric('Reads assigned', '8.9M', '≥ 10M', 'borderline'), this.metric('Cluster PF', '84.0%', '≥ 80%', 'pass') ], qc: [ this.metric('Genotype concordance · NGSCheckMate', 'Match', 'concordant', 'pass', 'sarek default'), this.metric('Q30', '88.2%', '≥ 85%', 'pass'), this.metric('Mean depth', '31.8×', '≥ 30×', 'pass', 'depth'), this.metric('% target ≥ 20×', '93.0%', '≥ 95%', 'borderline', 'breadth / callability'), this.metric('Zero-cov targets', '1.1%', '≤ 1%', 'borderline'), this.metric('Contamination · FREEMIX', '0.007', '≤ 0.03 · band .015–.03', 'pass', 'optional · non-sarek-default'), this.metric('Duplication', '19.9%', '≤ 30%', 'pass') ], var: [] },
+        findings: [ { rule: 'QC-CALLABILITY', gate: 'qc', cat: 'qc', sev: 'warn', title: 'Callability (breadth) is borderline', detail: '% target ≥ 20× is 93.0% against a 95% gate. Depth is adequate — breadth is the issue.', evidence: [ { source: 'qc_metrics.csv', locator: 'S4.pct_target_20x', value: '93.0%', expected: '≥ 95%', bad: true } ] } ] },
+      { id: 'S1', verdict: 'proceed', gateOrigin: 'all', subject: 'SUBJ-0901', sampleType: 'Whole blood', tissue: 'blood', prep: 'TruSeq DNA PCR-Free', by: 'j.park', reads: '12.0M', pctReads: '20.8%', headline: 'Cleared all three gates', rationale: 'S1 cleared all three gates.', steps: ['Release sample to downstream analysis.'], varNote: '',
+        metrics: { pre: [ this.metric('Reads assigned', '12.0M', '≥ 10M', 'pass'), this.metric('Cluster PF', '88.4%', '≥ 80%', 'pass') ], qc: [ this.metric('Q30', '91.0%', '≥ 85%', 'pass'), this.metric('Mean depth', '40.0×', '≥ 30×', 'pass', 'depth'), this.metric('% target ≥ 20×', '98.0%', '≥ 95%', 'pass', 'breadth'), this.metric('Contamination · FREEMIX', '0.004', '≤ 0.02', 'pass'), this.metric('Duplication', '13.1%', '≤ 30%', 'pass') ], var: [ this.metric('Mean variant DP', '39×', '≥ 20×', 'pass'), this.metric('Ti/Tv', '2.04', '2.0–2.1', 'pass') ] }, findings: [] },
+      { id: 'S3', verdict: 'proceed', gateOrigin: 'all', subject: 'SUBJ-0903', sampleType: 'Saliva', tissue: 'saliva', prep: 'Nextera DNA Flex', by: 'j.park', reads: '11.1M', pctReads: '19.2%', headline: 'Cleared all three gates (saliva-adjusted)', rationale: 'S3 cleared all three gates within the saliva-adjusted spec.', steps: ['Release sample to downstream analysis.'], varNote: '',
+        metrics: { pre: [ this.metric('Reads assigned', '11.1M', '≥ 10M', 'pass'), this.metric('Cluster PF', '86.0%', '≥ 80%', 'pass') ], qc: [ this.metric('Q30', '90.2%', '≥ 85%', 'pass'), this.metric('Mean depth', '36.5×', '≥ 30×', 'pass', 'depth'), this.metric('On-target rate', '72.8%', '≥ 70% (saliva)', 'pass', 'saliva-adjusted'), this.metric('Contamination · FREEMIX', '0.006', '≤ 0.02', 'pass'), this.metric('Duplication', '16.2%', '≤ 30%', 'pass') ], var: [ this.metric('Mean variant DP', '35×', '≥ 20×', 'pass'), this.metric('Ti/Tv', '2.05', '2.0–2.1', 'pass') ] }, findings: [] },
+    ],
+  };
+
+  order = { escalate: 0, rerun: 1, hold: 2, proceed: 3 };
+
+  TICKETS = [
+    { id: 'T-1042', run: 'RUN-2026-07-07-A', sample: 'S4', gate: 'preflight', verdict: 'escalate', rule: 'PROV-001', issueClass: 'Barcode / index mismatch', title: 'Barcode does not match the declared sample sheet', opened: '12m ago', priority: 'high', summary: 'Probable S4/S5 i5 swap; subject_id also missing. Chain of custody not intact.', recurrence: { count: 3, window: '14 days', runs: 'RUN-05-C, RUN-06-A, RUN-07-A' } },
+    { id: 'T-1041', run: 'RUN-2026-07-07-A', sample: 'S5', gate: 'qc', verdict: 'hold', rule: 'QC-DEPTH', issueClass: 'Borderline QC (depth / callability)', title: 'Depth and callability are borderline', opened: '12m ago', priority: 'medium', summary: 'Mean depth 29.2× and callability 91.8% just under gate — a judgment call on saliva input.' },
+    { id: 'T-1039', run: 'RUN-2026-07-05-C', sample: 'S2', gate: 'qc', verdict: 'rerun', rule: 'PIPE-001', issueClass: 'Operational failure', title: 'Alignment exited non-zero (segfault)', opened: '2d ago', priority: 'high', summary: 'align step exited code 1; no BAM produced. Operational, not data quality.', resolvedBy: 'j.park (Approver)', resolution: 'Requeued as RUN-2026-07-05-C2; rerun cleared the gate and was released.' },
+    { id: 'T-1040', run: 'RUN-2026-07-05-C', sample: 'S4', gate: 'qc', verdict: 'hold', rule: 'QC-CALLABILITY', issueClass: 'Borderline QC (breadth)', title: 'Callability is borderline', opened: '2d ago', priority: 'low', summary: 'Callability 93.0% vs 95% gate; depth adequate.', resolvedBy: 'a.rivera (Reviewer)', resolution: 'Within spec for this panel; released after review.' },
+  ];
+
+  STAGES = [
+    { key: 'intake', n: 1, name: 'Sample intake', tool: 'LIMS export', status: 'warn', note: '5 samples registered. 1 warning: S4 missing subject_id.', inputs: [{ name: 'sample_metadata.csv', hash: 'sha256:7d2f…a91', size: '282 B', origin: 'synthetic' }], outputs: [{ name: 'samples.normalized.json', hash: 'sha256:1c04…b5e', size: '1.4 KB', origin: 'synthetic' }] },
+    { key: 'demux', n: 2, name: 'Demultiplex', tool: 'bcl-convert 4.1.7', status: 'warn', gate: 'preflight', note: '92.0% of reads assigned. 1 warning: S4 observed i5 AGGCGAAG ≠ declared GGCTCTGA — possible index misassignment.', inputs: [{ name: 'SampleSheet.csv', hash: 'sha256:3f9a…1d2', size: '393 B', origin: 'synthetic' }, { name: 'RUN-2026-07-07-A (BCL)', hash: 'sha256:8b0e…7a1', size: '42.1 GB', origin: 'synthetic' }], outputs: [{ name: 'demux_stats.csv', hash: 'sha256:c41d…07e', size: '205 B', origin: 'synthetic' }, { name: 'S1–S5.fastq.gz', hash: 'sha256:197f…2bc', size: '58.4 GB', origin: 'synthetic' }] },
+    { key: 'qc', n: 3, name: 'Quality control', tool: 'fastp 0.23 · FastQC 0.12', status: 'warn', gate: 'qc', note: 'S1–S4 pass all modules. S5 flagged: borderline depth and callability.', inputs: [{ name: 'S1–S5.fastq.gz', hash: 'sha256:197f…2bc', size: '58.4 GB', origin: 'synthetic' }], outputs: [{ name: 'qc_metrics.csv', hash: 'sha256:aa71…c09', size: '209 B', origin: 'synthetic' }, { name: 'multiqc_report.html', hash: 'sha256:5be3…9c4', size: '2.1 MB', origin: 'synthetic' }] },
+    { key: 'align', n: 4, name: 'Alignment', tool: 'BWA-MEM2 2.2', status: 'ok', note: 'Alignment complete for all 5 samples against GRCh38.p14.', inputs: [{ name: 'S1–S5.fastq.gz', hash: 'sha256:197f…2bc', size: '58.4 GB', origin: 'synthetic' }, { name: 'GRCh38.p14 (reference)', hash: 'sha256:e0a4…f77', size: '3.1 GB', origin: 'real-giab' }], outputs: [{ name: 'S1–S5.bam + .bai', hash: 'sha256:44c9…d10', size: '61.7 GB', origin: 'synthetic' }] },
+    { key: 'varcall', n: 5, name: 'Variant calling', tool: 'DeepVariant 1.6', status: 'ok', gate: 'variant', note: 'Germline calling complete. Panel: rare-disease germline v3.', inputs: [{ name: 'S1–S5.bam', hash: 'sha256:44c9…d10', size: '61.7 GB', origin: 'synthetic' }, { name: 'panel_v3.bed', hash: 'sha256:9f21…a03', size: '88 KB', origin: 'real-giab' }], outputs: [{ name: 'S1–S5.vcf.gz', hash: 'sha256:be77…512', size: '240 MB', origin: 'synthetic' }] },
+    { key: 'gate', n: 6, name: 'Decision gate', tool: 'PipeGuard', status: 'blocked', note: 'Aggregates the three gates → 3 proceed · 1 hold · 1 escalate. 2 samples awaiting operator review before release.', inputs: [{ name: 'findings (rule engine)', hash: '—', size: '—', origin: 'synthetic' }, { name: 'runbook v2026.07', hash: 'sha256:rb02…6c1', size: '2.6 KB', origin: 'contrived' }], outputs: [{ name: '5 decision cards', hash: '—', size: '—', origin: 'synthetic' }] },
+  ];
+
+  INTAKE = {
+    'RUN-2026-07-07-A': {
+      run: [
+        { label: 'PhiX aligned', value: '99.2%', gate: '> 90%', status: 'pass', hint: 'low PhiX = the run didn’t sequence' },
+        { label: 'Cluster PF', value: '82.4%', gate: '≥ 80%', status: 'pass' },
+        { label: 'Run Q30', value: '89.1%', gate: '≥ 85%', status: 'pass' },
+        { label: 'Error rate', value: '0.31%', gate: '≤ 0.50%', status: 'pass' },
+        { label: 'Cluster density', value: '248 K/mm²', gate: '170–280', status: 'pass' },
+        { label: 'Total yield', value: '1.10 Tb', gate: '≥ 0.9 Tb', status: 'pass' },
+      ],
+      yieldTarget: '10M reads',
+      samples: [
+        { id: 'S1', reads: '12.5M', pct: 20.1, sparse: false },
+        { id: 'S2', reads: '11.8M', pct: 19.0, sparse: false },
+        { id: 'S3', reads: '13.2M', pct: 21.2, sparse: false },
+        { id: 'S4', reads: '9.4M', pct: 15.1, sparse: true },
+        { id: 'S5', reads: '10.3M', pct: 16.6, sparse: false },
+      ],
+    },
+  };
+
+  CONFIG = {
+    assays: ['Rare-disease germline v3', 'Cardio panel v2', 'Exome v1'],
+    rows: [
+      { metric: 'Q30', unit: '%', dir: '≥', blood: 85, saliva: 85, step: 1 },
+      { metric: 'Mean depth', unit: '×', dir: '≥', blood: 30, saliva: 30, step: 1 },
+      { metric: '% target ≥ 20×', unit: '%', dir: '≥', blood: 95, saliva: 95, step: 1 },
+      { metric: 'On-target rate', unit: '%', dir: '≥', blood: 85, saliva: 70, step: 1 },
+      { metric: 'Contamination · FREEMIX (optional)', unit: '', dir: '≤', blood: 0.03, saliva: 0.03, step: 0.005 },
+      { metric: 'Duplication', unit: '%', dir: '≤', blood: 30, saliva: 35, step: 1 },
+    ],
+  };
+
+  MONITORING = {
+    kpis: [
+      { label: 'Runs · 7d', value: '12' },
+      { label: 'Samples · 7d', value: '74' },
+      { label: 'Auto-proceed', value: '71%' },
+      { label: 'Median review', value: '6m' },
+    ],
+    gatePass: [
+      { gate: 'preflight', label: 'Preflight', pass: 96 },
+      { gate: 'qc', label: 'QC gate', pass: 88 },
+      { gate: 'variant', label: 'Variant gate', pass: 99 },
+    ],
+    throughput: [
+      { run: '06-30-A', proceed: 8, hold: 0, rerun: 0, escalate: 0 },
+      { run: '07-01-B', proceed: 5, hold: 1, rerun: 0, escalate: 0 },
+      { run: '07-02-A', proceed: 10, hold: 1, rerun: 1, escalate: 0 },
+      { run: '07-03-D', proceed: 12, hold: 0, rerun: 0, escalate: 0 },
+      { run: '07-05-C', proceed: 2, hold: 1, rerun: 1, escalate: 0 },
+      { run: '07-06-A', proceed: 6, hold: 0, rerun: 0, escalate: 0 },
+      { run: '07-07-A', proceed: 3, hold: 1, rerun: 0, escalate: 1 },
+    ],
+    recurring: [
+      { sig: 'PROV-001 · barcode / index mismatch', count: 3, window: '14 days', trend: 'up' },
+      { sig: 'QC-DEPTH · low on-target depth (saliva)', count: 5, window: '14 days', trend: 'flat' },
+      { sig: 'PIPE-001 · align segfault', count: 2, window: '14 days', trend: 'down' },
+    ],
+  };
+
+  AGENT = {
+    sample: 'S4', run: 'RUN-2026-07-07-A', rule: 'PROV-001', verdict: 'escalate', issue: 'Barcode does not match the declared sample sheet',
+    likelyCause: "An i5 index swap between S4 and S5. S4's observed i5 (AGGCGAAG) is exactly S5's declared i5, and the pair appears transposed — the signature of two adjacent wells being swapped during index-plate setup or pooling, not a sequencing artifact.",
+    suggestedAction: 'Pull the pooling manifest for the S4/S5 pair and confirm well assignments. If a swap is confirmed, re-demultiplex with a corrected sample sheet — do not simply relabel. Hold both S4 and S5 until reconciled; neither can be trusted in isolation.',
+    findingsCites: [
+      { label: 'PROV-001 — Barcode mismatch', src: 'SampleSheet.csv · demux_stats.csv' },
+      { label: 'pipeline.log', src: '02:41:53Z WARN — index2 AGGCGAAG ≠ GGCTCTGA' },
+      { label: 'META-001 — Missing subject_id', src: 'sample_metadata.csv · sample_id=S4' },
+    ],
+    corpusCites: [
+      { id: 'KB-217', kind: 'Knowledge base', label: 'Index hopping & i5 swaps on patterned flow cells' },
+      { id: 'INC-0042', kind: 'Experience corpus', label: 'Prior incident — i5 swap S2/S3 on RUN-2026-05-C' },
+      { id: 'SOP-11', kind: 'Knowledge base', label: 'Provenance reconciliation runbook' },
+    ],
+  };
+
+  runbookRows = [
+    { metric: 'Q30', gate: '≥ 85%', hard: '75%' },
+    { metric: '% reads identified', gate: '≥ 70%', hard: '50%' },
+    { metric: 'Mean coverage', gate: '≥ 30×', hard: '15×' },
+    { metric: 'Cluster PF', gate: '≥ 80%', hard: '60%' },
+    { metric: 'Duplication rate', gate: '≤ 30%', hard: '50%' },
+  ];
+
+  // ---------- actions ----------
+  set(patch) { this.setState(patch); }
+  go(v, patch) { this.setState(s => (s.view === v ? { ...(patch || {}), runMenuOpen: false, demoMenuOpen: false } : { ...(patch || {}), view: v, history: [...(s.history || []), s.view], runMenuOpen: false, demoMenuOpen: false })); }
+  back() { this.setState(s => { const h = [...(s.history || [])]; const prev = h.pop(); return { view: prev || 'overview', history: h }; }); }
+  goView(v) { this.go(v); }
+
+  renderVals() {
+    const st = this.state;
+    const runsById = {};
+    this.RUNS.forEach(r => { runsById[r.id] = r; });
+    const curRun = runsById[st.runId] || this.RUNS[0];
+    const curStatus = this.STATUS[curRun.status];
+
+    const titles = { overview: 'Runs', intake: 'Intake gate', decision: 'Decision cards', queue: 'Review queue', provenance: 'Provenance', agent: 'Agent triage', monitoring: 'Monitoring', settings: 'Settings' };
+
+    const navBase = { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 11px', borderRadius: '8px', border: 'none', font: 'inherit', fontSize: '13.5px', cursor: 'pointer', width: '100%', textAlign: 'left', lineHeight: '1.1' };
+    const navS = (k) => st.view === k
+      ? { ...navBase, background: '#22303f', color: '#fff', fontWeight: 600 }
+      : { ...navBase, background: 'transparent', color: '#aab4bf', fontWeight: 500 };
+
+    // current run verdict counts
+    const samples = this.SAMPLES[st.runId] || [];
+    const counts = { proceed: 0, hold: 0, rerun: 0, escalate: 0 };
+    samples.forEach(s => { counts[s.verdict]++; });
+    const attnCount = counts.hold + counts.rerun + counts.escalate;
+
+    // ---- demo state control ----
+    const demoDefs = [
+      { key: 'ready', label: 'Ready', dot: 'var(--proceed)', hint: 'data' },
+      { key: 'loading', label: 'Loading', dot: 'var(--info)', hint: 'skeleton' },
+      { key: 'empty', label: 'Empty', dot: 'var(--text-3)', hint: 'no data' },
+      { key: 'error', label: 'Error', dot: 'var(--escalate)', hint: 'failure' },
+    ];
+    const demoLabelMap = { ready: 'Ready', loading: 'Loading', empty: 'Empty', error: 'Error' };
+    const demoRow = (active) => ({ display: 'flex', alignItems: 'center', gap: '9px', width: '100%', textAlign: 'left', padding: '8px 9px', borderRadius: '7px', border: 'none', cursor: 'pointer', fontSize: '13px', font: 'inherit', background: active ? 'var(--accent-weak)' : 'transparent', color: active ? 'var(--accent)' : 'var(--text)', fontWeight: active ? 600 : 500 });
+    const demoOptions = demoDefs.map(d => ({ ...d, style: demoRow(st.demo === d.key), go: () => this.setState({ demo: d.key, demoMenuOpen: false }) }));
+
+    // ---- overview filters ----
+    const isReleased = r => r.status === 'released';
+    const filterDefs = [
+      { key: 'all', label: 'All runs', count: this.RUNS.length },
+      { key: 'attention', label: 'Needs attention', count: this.RUNS.filter(r => r.attention > 0).length },
+      { key: 'released', label: 'Released', count: this.RUNS.filter(isReleased).length },
+    ];
+    const chipStyle = (active) => ({ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '6px 12px', borderRadius: '20px', border: active ? '1px solid var(--accent)' : '1px solid var(--border-strong)', background: active ? 'var(--accent-weak)' : 'var(--surface)', color: active ? 'var(--accent-strong)' : 'var(--text-2)', fontSize: '12.5px', fontWeight: active ? 600 : 500, cursor: 'pointer' });
+    const chipCount = (active) => ({ fontFamily: 'var(--mono)', fontSize: '11px', background: active ? 'var(--accent)' : 'var(--surface-3)', color: active ? '#fff' : 'var(--text-2)', borderRadius: '10px', padding: '1px 7px', fontWeight: 600 });
+    const ovFilters = filterDefs.map(f => ({ ...f, style: chipStyle(st.filter === f.key), countStyle: chipCount(st.filter === f.key), go: () => this.setState({ filter: f.key }) }));
+
+    // ---- overview run rows ----
+    let runsFiltered = this.RUNS;
+    if (st.filter === 'attention') runsFiltered = this.RUNS.filter(r => r.attention > 0);
+    else if (st.filter === 'released') runsFiltered = this.RUNS.filter(isReleased);
+
+    const runsList = runsFiltered.map(r => {
+      const total = Object.values(r.counts).reduce((a, b) => a + b, 0) || 1;
+      const segOrder = ['proceed', 'hold', 'rerun', 'escalate'];
+      const segments = segOrder.filter(v => (r.counts[v] || 0) > 0).map(v => ({ c: this.VBADGE[v].c, w: ((r.counts[v] / total) * 100).toFixed(1) + '%', title: r.counts[v] + ' ' + v }));
+      if (r.status === 'running') segments.push({ c: 'var(--surface-3)', w: '100%', title: 'sequencing' });
+      const stat = this.STATUS[r.status];
+      const attnOn = r.attention > 0;
+      return {
+        ...r, dot: stat.dot, statusLabel: stat.label,
+        cardStyle: { display: 'block', width: '100%', textAlign: 'left', border: attnOn ? '1px solid var(--border-strong)' : '1px solid var(--border)', borderLeft: attnOn ? '3px solid var(--hold)' : '3px solid var(--border)', background: 'var(--surface)', borderRadius: '12px', padding: '15px 17px', cursor: 'pointer', boxShadow: '0 1px 2px rgba(16,24,40,.04)', transition: 'box-shadow .15s' },
+        statusPill: { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: 500, color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '2px 8px', borderRadius: '20px' },
+        segments,
+        attnStyle: attnOn
+          ? { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', fontWeight: 600, color: 'var(--hold-fg)', background: 'var(--hold-bg)', border: '1px solid var(--hold-bd)', padding: '3px 9px', borderRadius: '20px' }
+          : { display: 'none' },
+        attnLabel: attnOn ? (r.attention + ' need attention') : '',
+        open: () => this.go('decision', { runId: r.id, filter: 'all' }),
+      };
+    });
+
+    // ---- run switcher menu ----
+    const runsMenu = this.RUNS.map(r => ({ ...r, dot: this.STATUS[r.status].dot, statusLabel: this.STATUS[r.status].label, rowStyle: { display: 'flex', alignItems: 'center', gap: '9px', width: '100%', textAlign: 'left', padding: '9px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: r.id === st.runId ? 'var(--accent-weak)' : 'transparent' }, pick: () => this.setState({ runId: r.id, runMenuOpen: false }) }));
+
+    // ---- decision cards view ----
+    const sfilter = st.sfilter || 'all';
+    const layout = st.cardLayout;
+    const decLoading = st.demo === 'loading' || curRun.status === 'running';
+    const decError = st.demo === 'error';
+    const decReleased = st.demo === 'ready' && curRun.status === 'released';
+    const decHasRun = !decLoading && !decError && !decReleased;
+
+    const segBtn = (active) => ({ padding: '5px 13px', fontSize: '12.5px', fontWeight: active ? 600 : 500, border: 'none', background: active ? 'var(--surface)' : 'transparent', color: active ? 'var(--text)' : 'var(--text-2)', borderRadius: '6px', cursor: 'pointer', boxShadow: active ? '0 1px 2px rgba(16,24,40,.14)' : 'none' });
+    const layoutOpts = [ { key: 'split', label: 'Split' }, { key: 'stacked', label: 'Brief' }, { key: 'compact', label: 'Dense' } ].map(o => ({ ...o, style: segBtn(layout === o.key), go: () => this.setState({ cardLayout: o.key }) }));
+
+    const decChips = [
+      { key: 'all', label: 'All', count: samples.length },
+      { key: 'attention', label: 'Needs attention', count: attnCount },
+      { key: 'escalate', label: 'Escalate', count: counts.escalate },
+      { key: 'rerun', label: 'Rerun', count: counts.rerun },
+      { key: 'hold', label: 'Hold', count: counts.hold },
+      { key: 'proceed', label: 'Proceed', count: counts.proceed },
+    ].map(f => ({ ...f, style: chipStyle(sfilter === f.key), countStyle: chipCount(sfilter === f.key), go: () => this.setState({ sfilter: f.key }) }));
+
+    const metricChip = (status) => { const m = { pass: 'proceed', borderline: 'hold', fail: 'rerun' }[status] || 'proceed'; return { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9.5px', fontWeight: 600, letterSpacing: '.3px', textTransform: 'uppercase', padding: '2px 7px', borderRadius: '20px', color: 'var(--' + m + '-fg)', background: 'var(--' + m + '-bg)', border: '1px solid var(--' + m + '-bd)', whiteSpace: 'nowrap' }; };
+    const metricLabelMap = { pass: 'Pass', borderline: 'Border', fail: 'Fail' };
+
+    let decCards = samples.slice().sort((a, b) => this.order[a.verdict] - this.order[b.verdict]);
+    if (sfilter === 'attention') decCards = decCards.filter(s => s.verdict !== 'proceed');
+    else if (sfilter !== 'all') decCards = decCards.filter(s => s.verdict === sfilter);
+
+    const decCardsView = decCards.map(s => {
+      const vs = this.VBADGE[s.verdict];
+      const isOpen = st.open[s.id] !== undefined ? st.open[s.id] : (s.verdict !== 'proceed');
+      const findings = s.findings.map(f => {
+        const sev = this.SEV[f.sev];
+        return { ...f, dotColor: sev.c,
+          hasGate: !!this.GATES[f.gate], gateTag: (this.GATES[f.gate] || {}).tag || '', gateDot: (this.GATES[f.gate] || {}).dot || 'var(--text-3)', operationalFlag: !!f.operational,
+          gateChip: { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '9.5px', fontWeight: 600, letterSpacing: '.3px', textTransform: 'uppercase', color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: '5px', flexShrink: 0 },
+          sevChip: { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '9.5px', fontWeight: 600, letterSpacing: '.4px', textTransform: 'uppercase', color: sev.c, background: sev.bg, padding: '2px 7px', borderRadius: '5px', flexShrink: 0 },
+          sevLabel: sev.label,
+          ruleChip: { fontFamily: 'var(--mono)', fontSize: '10.5px', fontWeight: 500, color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '5px', padding: '1px 6px', flexShrink: 0 },
+          evidence: f.evidence.map(e => { const exp = e.expected || ''; const seg = (str) => (str || '').split('').map((ch, i) => ({ ch, style: (e.diff && ch !== exp[i]) ? { color: 'var(--escalate-fg)', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: '2px', background: 'var(--escalate-bg)', borderRadius: '2px', padding: '0 1.5px' } : { color: 'var(--text)' } })); return { ...e, sk: this.skOf(e.source), isDiff: !!e.diff, notDiff: !e.diff, valSegs: e.diff ? seg(e.value) : null, skStyle: { fontFamily: 'var(--mono)', fontSize: '8.5px', fontWeight: 600, letterSpacing: '.2px', textTransform: 'uppercase', color: 'var(--text-3)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '0 5px', borderRadius: '4px', whiteSpace: 'nowrap' }, valStyle: { fontFamily: 'var(--mono)', fontSize: '11.5px', fontWeight: 600, color: e.bad ? 'var(--escalate-fg)' : 'var(--text)', wordBreak: 'break-all' } }; }) };
+      });
+      const mapMetric = m => ({ ...m, chip: metricChip(m.status), statusLabel: metricLabelMap[m.status], noteOn: !!m.note, dotColor: m.status === 'pass' ? 'var(--proceed)' : (m.status === 'borderline' ? 'var(--hold)' : 'var(--rerun)'), showGate: m.status !== 'pass' });
+      const mrank = { fail: 0, borderline: 1, pass: 2 };
+      const grp = (k, label, dot) => {
+        const arr = ((s.metrics && s.metrics[k]) || []).map(mapMetric).sort((a, b) => mrank[a.status] - mrank[b.status]);
+        const flagged = arr.filter(m => m.status !== 'pass').length;
+        return { key: k, label, dot, metrics: arr, hasMetrics: arr.length > 0, note: k === 'var' ? (s.varNote || '') : '', hasNote: k === 'var' && !!s.varNote,
+          hasRollup: arr.length > 0, rollup: arr.length === 0 ? '' : (flagged ? (flagged + ' flagged') : 'all clear'),
+          rollupStyle: { marginLeft: 'auto', fontSize: '9.5px', fontWeight: 600, padding: '1px 8px', borderRadius: '20px', color: flagged ? 'var(--hold-fg)' : 'var(--proceed-fg)', background: flagged ? 'var(--hold-bg)' : 'var(--proceed-bg)', border: '1px solid ' + (flagged ? 'var(--hold-bd)' : 'var(--proceed-bd)') } };
+      };
+      const metricGroups = [ grp('pre', 'Preflight gate', this.GATES.preflight.dot), grp('qc', 'QC gate', this.GATES.qc.dot), grp('var', 'Variant gate', this.GATES.variant.dot) ];
+      const GBADGE = { proceed: this.VBADGE.proceed, hold: this.VBADGE.hold, rerun: this.VBADGE.rerun, escalate: this.VBADGE.escalate, blocked: { c: 'var(--text-3)', bg: 'var(--surface-2)', bd: 'var(--border)', fg: 'var(--text-2)', label: 'Not run' } };
+      const gspec = s.gates || [ { g: 'preflight', v: 'proceed', r: 'Run, barcode & yield within gate' }, { g: 'qc', v: 'proceed', r: 'All QC metrics within gate' }, { g: 'variant', v: 'proceed', r: 'Variant metrics within gate' } ];
+      const gateResults = gspec.map(x => { const b = GBADGE[x.v] || GBADGE.proceed; return { gate: x.g, tag: (this.GATES[x.g] || {}).tag || x.g, dot: (this.GATES[x.g] || {}).dot || 'var(--text-3)', r: x.r, vLabel: b.label, chip: { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: 600, letterSpacing: '.3px', textTransform: 'uppercase', color: b.fg, background: b.bg, border: '1px solid ' + b.bd, padding: '2px 8px', borderRadius: '20px', flexShrink: 0 } }; });
+      const og = this.GATES[s.gateOrigin] || this.GATES.all;
+      return { ...s, vs, isOpen, findings, metricGroups, gateResults, steps: s.steps.map((t, i) => ({ n: i + 1, t })), hasFindings: s.findings.length > 0, clean: s.verdict === 'proceed', actionable: s.verdict !== 'proceed', subjectMissing: !s.subject || s.subject.indexOf('missing') > -1,
+        originTag: og.tag, originDot: og.dot, gateVerb: s.verdict === 'proceed' ? 'Cleared at' : (s.verdict === 'rerun' ? 'Failed at' : 'Flagged at'),
+        runId: st.runId, platform: curRun.platform, date: curRun.date, narration: 'Rule-derived · stub',
+        hasLinked: !!s.linked, linked: s.linked || '', linkedNote: s.linkedNote || '',
+        originChip: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '10.5px', fontWeight: 500, color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 10px', borderRadius: '20px', flexShrink: 0 },
+        typeChip: { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-2)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '2px 9px', borderRadius: '20px', flexShrink: 0 },
+        subjectStyle: { fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 500, color: (!s.subject || s.subject.indexOf('missing') > -1) ? 'var(--escalate-fg)' : 'var(--text)' },
+        toggle: () => { const o = { ...this.state.open }; o[s.id] = !isOpen; this.setState({ open: o }); },
+        openProvenance: () => this.go('provenance', { selected: s.id }),
+        openAgent: () => this.go('agent', { selected: s.id }),
+        cardStyle: { border: '1px solid var(--border)', borderLeft: '3px solid ' + vs.c, borderRadius: '13px', background: 'var(--surface)', boxShadow: '0 1px 2px rgba(16,24,40,.05)', overflow: 'hidden' },
+        headerStyle: { display: 'flex', alignItems: 'center', gap: '13px', width: '100%', textAlign: 'left', padding: '15px 18px', border: 'none', background: 'transparent', cursor: 'pointer' },
+        badge: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 600, letterSpacing: '.3px', textTransform: 'uppercase', color: vs.fg, background: vs.bg, border: '1px solid ' + vs.bd, padding: '4px 10px', borderRadius: '20px', flexShrink: 0 },
+        chevStyle: { transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .18s', color: 'var(--text-3)', flexShrink: 0 },
+        dot: vs.c };
+    });
+
+    const decTiles = [
+      { label: 'Samples', value: samples.length, c: 'var(--text)' },
+      { label: 'Proceed', value: counts.proceed, c: 'var(--proceed)' },
+      { label: 'Hold', value: counts.hold, c: 'var(--hold)' },
+      { label: 'Rerun', value: counts.rerun, c: 'var(--rerun)' },
+      { label: 'Escalate', value: counts.escalate, c: 'var(--escalate)' },
+    ];
+
+    // ---- review queue ----
+    const qFilter = st.qFilter || 'all';
+    const TSTAT = { open: { c: 'var(--rerun)', bg: 'var(--rerun-bg)', bd: 'var(--rerun-bd)', label: 'Open' }, 'in-review': { c: 'var(--info)', bg: 'var(--accent-weak)', bd: '#cfe0fb', label: 'In review' }, resolved: { c: 'var(--proceed)', bg: 'var(--proceed-bg)', bd: 'var(--proceed-bd)', label: 'Resolved' } };
+    const PRIO = { high: 'var(--escalate-fg)', medium: 'var(--hold-fg)', low: 'var(--text-3)' };
+    const PRIOLABEL = { high: 'High', medium: 'Medium', low: 'Low' };
+    const tCounts = { all: this.TICKETS.length, open: 0, 'in-review': 0, resolved: 0 };
+    this.TICKETS.forEach(t => { tCounts[st.tickets[t.id]]++; });
+    const qTabs = [{ key: 'all', label: 'All' }, { key: 'open', label: 'Open' }, { key: 'in-review', label: 'In review' }, { key: 'resolved', label: 'Resolved' }].map(x => ({ ...x, count: tCounts[x.key], style: chipStyle(qFilter === x.key), countStyle: chipCount(qFilter === x.key), go: () => this.setState({ qFilter: x.key }) }));
+    let tks = this.TICKETS;
+    if (qFilter !== 'all') tks = tks.filter(t => st.tickets[t.id] === qFilter);
+    const btn = (variant) => {
+      const base = { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 500, padding: '6px 11px', borderRadius: '7px', cursor: 'pointer', border: '1px solid var(--border-strong)' };
+      if (variant === 'primary') return { ...base, background: 'var(--accent)', color: '#fff', border: 'none' };
+      if (variant === 'danger') return { ...base, background: 'var(--surface)', color: 'var(--escalate-fg)', borderColor: 'var(--escalate-bd)' };
+      if (variant === 'muted') return { ...base, background: 'var(--surface)', color: 'var(--text-2)' };
+      if (variant === 'locked') return { ...base, background: 'var(--surface-2)', color: 'var(--text-3)', cursor: 'not-allowed', borderColor: 'var(--border)' };
+      return { ...base, background: 'var(--surface)', color: 'var(--text)' };
+    };
+    const ticketsView = tks.map(t => {
+      const status = st.tickets[t.id]; const ts = TSTAT[status]; const vs = this.VBADGE[t.verdict];
+      const suppressed = !!st.suppressed[t.rule]; const escalated = !!st.escalated[t.id]; const isResolved = status === 'resolved';
+      return { ...t, status, isResolved, notResolved: !isResolved, escalated, suppressed, resolveLocked: t.verdict === 'escalate' && !escalated,
+        canAck: status === 'open', canResolve: !isResolved && !(t.verdict === 'escalate' && !escalated), showEscalate: t.verdict === 'escalate' && !isResolved,
+        vsLabel: vs.label,
+        recurrent: !!t.recurrence, recurrence: t.recurrence || null,
+        gateTag: (this.GATES[t.gate] || {}).tag || '', gateDot: (this.GATES[t.gate] || {}).dot || 'var(--text-3)',
+        repairEscalated: (this.state.repair || {})[t.id] === true,
+        notRepairEscalated: !((this.state.repair || {})[t.id] === true),
+        escalateRepair: () => { const o = { ...(this.state.repair || {}) }; o[t.id] = true; this.setState({ repair: o }); },
+        bRepair: btn('danger'), bFixLocked: btn('locked'),
+        cardStyle: { border: '1px solid var(--border)', borderLeft: '3px solid ' + vs.c, borderRadius: '13px', background: 'var(--surface)', boxShadow: '0 1px 2px rgba(16,24,40,.05)', overflow: 'hidden', opacity: isResolved ? 0.86 : 1 },
+        statusPill: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 600, letterSpacing: '.3px', textTransform: 'uppercase', color: ts.c, background: ts.bg, border: '1px solid ' + ts.bd, padding: '3px 9px', borderRadius: '20px' },
+        statusDot: ts.c,
+        verdictBadge: { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10.5px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.3px', color: vs.fg, background: vs.bg, border: '1px solid ' + vs.bd, padding: '2px 8px', borderRadius: '20px' },
+        verdictDot: vs.c,
+        prioStyle: { color: PRIO[t.priority], fontSize: '11.5px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '5px' }, prioLabel: PRIOLABEL[t.priority],
+        bAck: btn('primary'), bResolve: btn(t.verdict === 'escalate' && !escalated ? 'locked' : 'default'), bEsc: btn('danger'), bSup: suppressed ? btn('muted') : btn('muted'), bReopen: btn('muted'),
+        supLabel: suppressed ? 'Suppressed — undo' : 'Suppress issue class',
+        ack: () => this.setState({ tickets: { ...st.tickets, [t.id]: 'in-review' } }),
+        resolve: () => this.setState({ tickets: { ...st.tickets, [t.id]: 'resolved' } }),
+        reopen: () => this.setState({ tickets: { ...st.tickets, [t.id]: 'open' }, escalated: { ...st.escalated, [t.id]: false } }),
+        escalate: () => this.setState({ escalated: { ...st.escalated, [t.id]: true }, tickets: { ...st.tickets, [t.id]: status === 'open' ? 'in-review' : status } }),
+        suppress: () => this.setState({ suppressed: { ...st.suppressed, [t.rule]: !st.suppressed[t.rule] } }),
+        openCard: () => this.go('decision', { runId: t.run, selected: t.sample, sfilter: 'all' }),
+        openAgentT: () => this.go('agent', { selected: t.sample }),
+      };
+    });
+
+    // ---- provenance ----
+    const STG = { ok: this.VBADGE.proceed, warn: this.VBADGE.hold, blocked: this.VBADGE.escalate };
+    const STGLABEL = { ok: 'Completed', warn: 'Completed with warnings', blocked: 'Awaiting review' };
+    const stagesView = this.STAGES.map((s, i) => {
+      const active = st.stage === s.key; const sc = STG[s.status];
+      return { ...s, active, dot: sc.c, isLast: i === this.STAGES.length - 1, notLast: i !== this.STAGES.length - 1,
+        gateStage: !!s.gate, gateTag: s.gate ? this.GATES[s.gate].tag : '', gateBadgeDot: s.gate ? this.GATES[s.gate].dot : 'var(--text-3)',
+        nodeStyle: { display: 'flex', flexDirection: 'column', gap: '7px', alignItems: 'flex-start', padding: '12px 12px', borderRadius: '12px', cursor: 'pointer', border: active ? '1px solid ' + sc.c : '1px solid var(--border)', background: active ? sc.bg : 'var(--surface)', boxShadow: active ? '0 2px 8px rgba(16,24,40,.08)' : '0 1px 2px rgba(16,24,40,.04)', minWidth: '0', width: '100%', overflow: 'hidden' },
+        numStyle: { width: '22px', height: '22px', borderRadius: '7px', background: sc.c, color: '#fff', fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+        select: () => this.setState({ stage: s.key }) };
+    });
+    const ORIGIN = { 'real-giab': { c: 'var(--info)', bg: 'var(--accent-weak)', bd: '#cfe0fb', label: 'real-giab' }, synthetic: { c: 'var(--hold-fg)', bg: 'var(--hold-bg)', bd: 'var(--hold-bd)', label: 'synthetic' }, contrived: { c: 'var(--text-2)', bg: 'var(--surface-2)', bd: 'var(--border)', label: 'contrived' } };
+    const ORIGINFALLBACK = { c: 'var(--text-2)', bg: 'var(--surface-2)', bd: 'var(--border)', label: 'synthetic' };
+    const mapIO = arr => arr.map(a => { const o = ORIGIN[a.origin] || ORIGINFALLBACK; return { ...a, originStyle: { fontSize: '9.5px', fontWeight: 600, letterSpacing: '.4px', textTransform: 'uppercase', color: o.c, background: o.bg, border: '1px solid ' + o.bd, padding: '1px 7px', borderRadius: '5px' }, originLabel: o.label }; });
+    const aS = this.STAGES.find(s => s.key === st.stage) || this.STAGES[0];
+    const activeStage = { ...aS, statusColor: STG[aS.status].c, statusBg: STG[aS.status].bg, statusBd: STG[aS.status].c, statusLabel: STGLABEL[aS.status], inputs: mapIO(aS.inputs), outputs: mapIO(aS.outputs) };
+
+    // ---- agent triage ----
+    const agLive = st.agentLive; const agError = st.demo === 'error';
+    const cannedReply = "I can only reason over this run's findings and the linked corpora — I can't change the verdict, that's the rule engine's call. For PROV-001 the fastest confirmation is reconciling the S4/S5 pooling manifest. Want me to draft the reconciliation steps?";
+    const quickDefs = [
+      { q: 'How sure are you this is a swap, not contamination?', a: "On the evidence, high: S4's observed i5 (AGGCGAAG) is exactly S5's declared i5, transposed 1:1 — contamination shows partial, mixed indices, not a clean exchange. I don't set the verdict, though; the rules flagged PROV-001 and a human confirms." },
+      { q: 'What if I re-demux with the corrected sheet?', a: 'If the swap is real, re-demultiplexing with the S4/S5 i5 corrected should recover both cleanly. Verify read counts return to ~10M each and that PROV-001 clears before release.' },
+      { q: 'Which other sample is affected?', a: 'S5 — it observed the complementary i5. Treat S4 and S5 as a pair; neither is trustworthy in isolation until the pooling manifest is reconciled.' },
+    ];
+    const appendThread = (q, a) => this.setState(s => ({ agentThread: [...(s.agentThread || []), { role: 'user', text: q }, { role: 'agent', text: a }], agentInput: '' }));
+    const agThread = (st.agentThread || []).map(m => ({ text: m.text, isUser: m.role === 'user', rowStyle: { display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }, bubbleStyle: m.role === 'user' ? { maxWidth: '84%', background: 'var(--accent)', color: '#fff', fontSize: '12.5px', lineHeight: '1.55', padding: '9px 12px', borderRadius: '13px 13px 3px 13px' } : { maxWidth: '84%', background: 'var(--surface-2)', color: 'var(--text)', fontSize: '12.5px', lineHeight: '1.55', padding: '9px 12px', borderRadius: '13px 13px 13px 3px', border: '1px solid var(--border)' } }));
+    const agentView = { ...this.AGENT, live: agLive, model: st.model, error: agError,
+      thread: agThread, hasThread: agThread.length > 0,
+      quick: quickDefs.map(x => ({ q: x.q, ask: () => appendThread(x.q, x.a) })),
+      input: st.agentInput || '',
+      setInput: (e) => this.setState({ agentInput: e.target.value }),
+      send: () => { const v = (this.state.agentInput || '').trim(); if (v) appendThread(v, cannedReply); },
+      onKey: (e) => { if (e.key === 'Enter') { const v = (this.state.agentInput || '').trim(); if (v) appendThread(v, cannedReply); } },
+      sourceLabel: agError ? 'Live synthesis unavailable — rule-derived fallback' : (agLive ? ('Claude · ' + ({ opus: 'Opus 4.8', sonnet: 'Sonnet 5', haiku: 'Haiku 4.5' }[st.model])) : 'Rule-derived triage (offline)'),
+      trackStyle: { width: '34px', height: '19px', borderRadius: '11px', background: agLive ? 'var(--accent)' : 'var(--surface-3)', position: 'relative', display: 'inline-block', transition: 'all .18s', flexShrink: 0 },
+      knobStyle: { position: 'absolute', top: '2px', left: agLive ? '17px' : '2px', width: '15px', height: '15px', borderRadius: '50%', background: '#fff', transition: 'all .18s', boxShadow: '0 1px 2px rgba(0,0,0,.25)' },
+      toggleLive: () => this.setState({ agentLive: !st.agentLive }) };
+
+    // ---- settings ----
+    const segOpt = (active) => ({ flex: 1, textAlign: 'center', padding: '8px 12px', fontSize: '12.5px', fontWeight: active ? 600 : 500, border: 'none', background: active ? 'var(--surface)' : 'transparent', color: active ? 'var(--text)' : 'var(--text-2)', borderRadius: '7px', cursor: 'pointer', boxShadow: active ? '0 1px 2px rgba(16,24,40,.14)' : 'none' });
+    const profileOpts = [{ key: 'lean', label: 'Lean' }, { key: 'granular', label: 'Granular' }].map(o => ({ ...o, style: segOpt(st.profile === o.key), go: () => this.setState({ profile: o.key }) }));
+    const modelOpts = [
+      { key: 'opus', label: 'Opus 4.8', cost: '$5 / $25', note: 'Highest-quality narration' },
+      { key: 'sonnet', label: 'Sonnet 5', cost: '$3 / $15', note: 'Recommended balance' },
+      { key: 'haiku', label: 'Haiku 4.5', cost: '$1 / $5', note: 'Cheapest; fine for short cards' },
+    ].map(o => ({ ...o, active: st.model === o.key, rowStyle: { display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 15px', borderRadius: '11px', cursor: 'pointer', border: st.model === o.key ? '1px solid var(--accent)' : '1px solid var(--border)', background: st.model === o.key ? 'var(--accent-weak)' : 'var(--surface)' }, radioStyle: { width: '17px', height: '17px', borderRadius: '50%', border: st.model === o.key ? '5px solid var(--accent)' : '2px solid var(--border-strong)', flexShrink: 0 }, pick: () => this.setState({ model: o.key }) }));
+    const synthLive = st.synth === 'claude';
+    const tgl = (on) => ({ track: { width: '38px', height: '22px', borderRadius: '12px', background: on ? 'var(--accent)' : 'var(--surface-3)', position: 'relative', display: 'inline-block', cursor: 'pointer', flexShrink: 0, transition: 'all .18s' }, knob: { position: 'absolute', top: '2px', left: on ? '18px' : '2px', width: '18px', height: '18px', borderRadius: '50%', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,.25)', transition: 'all .18s' } });
+    const slackTgl = tgl(st.slackOn); const synthTgl = tgl(synthLive);
+
+    // ---- intake / preflight gate ----
+    const intakeRaw = this.INTAKE[st.runId] || null;
+    const overrides = st.overrides || {};
+    const intakeStatusChip = (kind) => ({ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10.5px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px',
+      ...(kind === 'admit' ? { color: 'var(--proceed-fg)', background: 'var(--proceed-bg)', border: '1px solid var(--proceed-bd)' } : kind === 'override' ? { color: 'var(--accent-strong)', background: 'var(--accent-weak)', border: '1px solid #cfe0fb' } : { color: 'var(--hold-fg)', background: 'var(--hold-bg)', border: '1px solid var(--hold-bd)' }) });
+    let intakeView = null;
+    if (intakeRaw) {
+      intakeView = {
+        runPass: intakeRaw.run.every(m => m.status === 'pass'),
+        yieldTarget: intakeRaw.yieldTarget,
+        run: intakeRaw.run.map(m => ({ ...m, chip: metricChip(m.status), statusLabel: metricLabelMap[m.status] })),
+        sparseCount: intakeRaw.samples.filter(s => s.sparse).length,
+        samples: intakeRaw.samples.map(s => {
+          const admitted = s.sparse ? overrides[s.id] === true : true;
+          const kind = !s.sparse ? 'admit' : (admitted ? 'override' : 'sparse');
+          return { ...s, admitted, sparseHeld: s.sparse && !admitted,
+            barW: Math.min(100, (s.pct / 25) * 100).toFixed(0) + '%',
+            barColor: s.sparse ? (admitted ? 'var(--accent)' : 'var(--hold)') : 'var(--proceed)',
+            statusChip: intakeStatusChip(kind),
+            statusLabel: !s.sparse ? 'Admitted' : (admitted ? 'Admitted · manual override' : 'Sparse — held at intake'),
+            btnLabel: admitted ? 'Undo override' : 'Admit (override)',
+            btnStyle: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: 500, padding: '6px 11px', borderRadius: '7px', cursor: 'pointer', border: admitted ? '1px solid var(--border-strong)' : '1px solid var(--accent)', background: admitted ? 'var(--surface)' : 'var(--accent)', color: admitted ? 'var(--text-2)' : '#fff' },
+            toggle: () => { const o = { ...(this.state.overrides || {}) }; o[s.id] = !(o[s.id] === true); this.setState({ overrides: o }); } };
+        }),
+      };
+    }
+
+    // ---- monitoring ----
+    const mon = this.MONITORING;
+    const monMax = Math.max(...mon.throughput.map(r => r.proceed + r.hold + r.rerun + r.escalate));
+    const monView = {
+      kpis: mon.kpis,
+      gatePass: mon.gatePass.map(g => ({ ...g, dot: this.GATES[g.gate].dot, barW: g.pass + '%' })),
+      bars: mon.throughput.map(r => { const tot = r.proceed + r.hold + r.rerun + r.escalate; const seg = (v, c) => ({ h: (v / monMax * 100).toFixed(1) + '%', c, n: v }); return { run: r.run, total: tot, segs: [seg(r.escalate, 'var(--escalate)'), seg(r.rerun, 'var(--rerun)'), seg(r.hold, 'var(--hold)'), seg(r.proceed, 'var(--proceed)')].filter(s => s.n > 0) }; }),
+      recurring: mon.recurring.map(x => ({ ...x, trendColor: x.trend === 'up' ? 'var(--escalate)' : (x.trend === 'down' ? 'var(--proceed)' : 'var(--text-3)'), trendUp: x.trend === 'up', trendDown: x.trend === 'down', escalated: x.count >= 3, goQueue: () => this.go('queue', { qFilter: 'all' }) })),
+    };
+
+    // ---- config (settings) ----
+    const cfg = st.config || this.CONFIG.rows.map(r => ({ ...r }));
+    const editCfg = (i, key, delta) => { const base = this.state.config || this.CONFIG.rows.map(r => ({ ...r })); const nc = base.map(r => ({ ...r })); nc[i] = { ...nc[i] }; nc[i][key] = Math.max(0, +(nc[i][key] + delta).toFixed(3)); this.setState({ config: nc }); };
+    const stepBtn = { width: '22px', height: '22px', borderRadius: '6px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer', fontSize: '15px', lineHeight: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0 };
+    const configRows = cfg.map((r, i) => ({ ...r, differs: r.blood !== r.saliva, bloodVal: r.blood + r.unit, salivaVal: r.saliva + r.unit, stepBtn, incBlood: () => editCfg(i, 'blood', r.step), decBlood: () => editCfg(i, 'blood', -r.step), incSaliva: () => editCfg(i, 'saliva', r.step), decSaliva: () => editCfg(i, 'saliva', -r.step) }));
+    const assay = st.assay || this.CONFIG.assays[0];
+    const assayOpts = this.CONFIG.assays.map(a => ({ label: a, active: a === assay, style: chipStyle(a === assay), go: () => this.setState({ assay: a }) }));
+
+    // demo-state resolution for overview
+    const ovLoading = st.demo === 'loading';
+    const ovError = st.demo === 'error';
+    const ovEmpty = st.demo === 'empty' || (st.demo === 'ready' && runsFiltered.length === 0);
+    const ovReady = st.demo === 'ready' && runsFiltered.length > 0;
+
+    const V = {
+      // view flags
+      isOverview: st.view === 'overview', isDecision: st.view === 'decision', isQueue: st.view === 'queue',
+      isProvenance: st.view === 'provenance', isAgent: st.view === 'agent', isSettings: st.view === 'settings', isIntake: st.view === 'intake', isMonitoring: st.view === 'monitoring',
+      pageTitle: titles[st.view],
+      canBack: (st.history || []).length > 0,
+      back: () => this.back(),
+      backStyle: { width: '30px', height: '30px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0 },
+      runId: st.runId, curRun: { ...curRun, dot: curStatus.dot },
+
+      // nav
+      navSel: { overview: navS('overview'), intake: navS('intake'), decision: navS('decision'), queue: navS('queue'), provenance: navS('provenance'), agent: navS('agent'), monitoring: navS('monitoring'), settings: navS('settings') },
+      goto: { overview: () => this.goView('overview'), intake: () => this.goView('intake'), decision: () => this.goView('decision'), queue: () => this.goView('queue'), provenance: () => this.goView('provenance'), agent: () => this.goView('agent'), monitoring: () => this.goView('monitoring'), settings: () => this.goView('settings') },
+      attnCount,
+      attnPillNav: attnCount > 0 ? { marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '10.5px', fontWeight: 600, background: 'var(--escalate)', color: '#fff', borderRadius: '9px', minWidth: '17px', textAlign: 'center', padding: '1px 5px' } : { display: 'none' },
+
+      // top bar
+      runBtnStyle: { display: 'flex', alignItems: 'center', gap: '7px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text)', borderRadius: '8px', padding: '5px 9px', cursor: 'pointer' },
+      toggleRunMenu: () => this.setState({ runMenuOpen: !st.runMenuOpen, demoMenuOpen: false }),
+      runMenuOpen: st.runMenuOpen, runsMenu,
+      closeMenus: () => this.setState({ runMenuOpen: false, demoMenuOpen: false }),
+      demoBtnStyle: { display: 'flex', alignItems: 'center', gap: '7px', border: st.demo === 'ready' ? '1px solid var(--border)' : '1px solid var(--accent)', background: st.demo === 'ready' ? 'var(--surface)' : 'var(--accent-weak)', color: st.demo === 'ready' ? 'var(--text-2)' : 'var(--accent-strong)', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', fontSize: '12.5px', fontWeight: 500 },
+      demoLabel: demoLabelMap[st.demo], demoMenuOpen: st.demoMenuOpen, demoOptions,
+      toggleDemoMenu: () => this.setState({ demoMenuOpen: !st.demoMenuOpen, runMenuOpen: false }),
+
+      // overview
+      ovFilters, runsList,
+      ovLoading, ovError, ovEmpty, ovReady,
+      skeleton: [0, 1, 2, 3],
+      retry: () => this.setState({ demo: 'ready' }),
+      clearFilter: () => this.setState({ filter: 'all', demo: 'ready' }),
+
+      // decision cards
+      layoutSplit: layout === 'split', layoutStacked: layout === 'stacked', layoutCompact: layout === 'compact',
+      layoutOpts, decChips, decCardsView, decTiles,
+      decLoading, decError, decReleased, decHasRun,
+      decReady: decHasRun && st.demo !== 'empty' && decCardsView.length > 0,
+      decEmpty: decHasRun && (st.demo === 'empty' || decCardsView.length === 0),
+      decAttnOn: decHasRun && attnCount > 0,
+      decReleasedCount: curRun.samples,
+
+      // queue
+      qTabs, ticketsView, queueEmpty: ticketsView.length === 0,
+      roleHint: 'a.rivera',
+      // provenance
+      stagesView, activeStage,
+      // agent
+      agent: agentView,
+      // settings
+      profile: st.profile, profileOpts, modelOpts, slackOn: st.slackOn, synthLive, slackTgl, synthTgl,
+      toggleSlack: () => this.setState({ slackOn: !st.slackOn }),
+      toggleSynth: () => this.setState({ synth: st.synth === 'claude' ? 'stub' : 'claude' }),
+      runbookRows: this.runbookRows,
+
+      // intake
+      intakeView, hasIntake: !!intakeView, noIntake: !intakeView,
+      // monitoring
+      mon: monView,
+      // config
+      configRows, assay, assayOpts,
+    };
+    return V;
+  }
+}
+</script>
+</body>
+</html>
