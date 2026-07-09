@@ -8,7 +8,9 @@ event, or the EventLedger, and rules still decide (ADR-0001). The one write is
 `POST /api/feedback` — append-only PRODUCT TELEMETRY that is OFF the deterministic gate
 (`api/feedback.py`): it records operator reactions/notes to a separate, gitignored JSONL,
 never calls `run_gate`, never touches provenance, and can never set or influence a verdict.
-Ticket-transition writes still belong to a later phase.
+Other off-gate PRODUCT writes now live in dedicated auth-gated routers (`api/routers/`): the
+Pipeline save/approve lifecycle, Settings/config-authoring drafts, and Review-queue tickets —
+each append-only, RBAC-gated (`api/auth.py`), and equally incapable of touching a verdict.
 
 Run:  uv run uvicorn api.main:app --reload --port 8010
 """
@@ -27,7 +29,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
@@ -38,11 +40,16 @@ from pipeguard.models import DecisionCard, Gate, Sample, Verdict
 from pipeguard.provenance import EventType, ProvenanceEvent
 from pipeguard.triage import TriageNote
 
+from .auth import Actor, require_role
+from .card_readout import router as card_readout_router
 from .deid import IDENTITY_FIELDS, DeidPolicy, default_policy, export_fields, redact
 from .feedback import FEEDBACK_SCHEMA_VERSION, FeedbackAck, FeedbackIn
 from .feedback_store import get_feedback_store
 from .pipeline import PipelineGraph, PipelineGraphAck, PipelineGraphIn
 from .pipeline_store import get_pipeline_store
+from .routers.pipelines_lifecycle import router as pipelines_lifecycle_router
+from .routers.review_queue import router as review_router
+from .routers.settings import router as settings_router
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
@@ -62,8 +69,19 @@ app.add_middleware(
         "X-PipeGuard-Total-Count",
         "X-PipeGuard-Page",
         "X-PipeGuard-Limit",
+        "X-PipeGuard-Status-Counts",
     ],
 )
+
+# Additive product-domain surfaces, each its own auth-gated router OFF the deterministic gate
+# (ADR-0001): Settings/config authoring drafts, the Review-queue/ticket domain, the Pipeline
+# approve/dry-run/diff lifecycle, and the per-card QC-readout projection. They live in
+# api/routers/ (+ api/card_readout.py) so feature areas evolve independently of this file; none
+# mutates a verdict, finding, provenance event, or the ledger.
+app.include_router(settings_router)
+app.include_router(review_router)
+app.include_router(pipelines_lifecycle_router)
+app.include_router(card_readout_router)
 
 
 class RunSummary(BaseModel):
@@ -258,7 +276,10 @@ def submit_feedback(body: FeedbackIn) -> FeedbackAck:
 
 
 @app.post("/api/pipelines", status_code=201)
-def save_pipeline(body: PipelineGraphIn) -> PipelineGraphAck:
+def save_pipeline(
+    body: PipelineGraphIn,
+    actor: Actor = Depends(require_role("reviewer", "approver")),
+) -> PipelineGraphAck:
     """Save a Pipeline Builder graph under a name — a PRODUCT write, OFF the deterministic gate.
 
     Mints a server-authored `id` + `created_at`; the store authors the monotonic per-name
@@ -278,7 +299,7 @@ def save_pipeline(body: PipelineGraphIn) -> PipelineGraphAck:
         "id": pipeline_id,
         "created_at": created_at,
         "status": "draft",
-        "submitted_by": None,
+        "submitted_by": actor.id,
         "reviewed_by": None,
         "approved_by": None,
     }
@@ -361,11 +382,19 @@ _RUN_SORTS: dict[str, tuple[Callable[[RunSummary], Any], bool]] = {
     "-n_attention": (lambda s: s.n_attention, True),
 }
 
+# Friendly sort aliases the design UI uses ("recent"/"urgent"/"date") mapped onto the canonical
+# vocabulary above, so the frontend can bind its labels without knowing the -field spelling.
+_RUN_SORT_ALIASES = {"recent": "-run_date", "urgent": "-n_attention", "date": "run_date"}
+
+# The run-lifecycle vocabulary `status` filters on (mirrors RunSummary.status / _run_status).
+_RUN_STATUSES = frozenset({"running", "needs_review", "released"})
+
 
 @app.get("/api/runs")
 def list_runs(
     response: Response,
     verdict: str | None = None,
+    status: str | None = None,
     q: str | None = None,
     sort: str | None = None,
     page: int = Query(1, ge=1),
@@ -374,25 +403,46 @@ def list_runs(
     """All discoverable runs with their verdict counts (the run-overview + monitoring screens).
 
     Backward-compatible: with NO params the JSON body is byte-identical to before — every run
-    in run_id order, unpaginated. The optional filters reuse the export endpoint's idiom:
-    `verdict` keeps runs that contain at least one sample with that verdict (unknown value →
-    400, same closed vocabulary as `/api/export`); `q` is a run_id substring match. `sort` is a
-    closed vocabulary ({run_id,run_date,n_samples,n_attention}, each with a `-` desc variant);
-    an unknown token is a 400. Pagination applies ONLY when `limit` is given (`page` is 1-based);
-    the pre-pagination total plus the active page/limit ride response headers so the body stays
-    a plain list — an envelope would break the byte-identical contract.
+    in run_id order, unpaginated. Optional filters: `verdict` keeps runs with ≥1 sample of that
+    verdict (unknown → 400); `status` filters on the run-lifecycle label
+    (running|needs_review|released, unknown → 400); `q` is a case-insensitive substring match on
+    run_id OR platform (the design's "search run id or platform" box). `sort` is a closed
+    vocabulary ({run_id,run_date,n_samples,n_attention}, each with a `-` desc variant) plus the
+    friendly aliases recent/urgent/date; unknown → 400. Pagination applies ONLY when `limit` is
+    given (`page` is 1-based); the pre-pagination total + the per-status facet counts + the active
+    page/limit ride response headers so the body stays a plain list.
     """
     if verdict is not None and verdict not in _VERDICT_ORDER:
         raise HTTPException(status_code=400, detail=f"verdict must be one of {_VERDICT_ORDER}")
-    if sort is not None and sort not in _RUN_SORTS:
-        raise HTTPException(status_code=400, detail=f"sort must be one of {sorted(_RUN_SORTS)}")
+    if status is not None and status not in _RUN_STATUSES:
+        allowed = sorted(_RUN_STATUSES)
+        raise HTTPException(status_code=400, detail=f"status must be one of {allowed}")
+    if sort is not None:
+        sort = _RUN_SORT_ALIASES.get(sort, sort)  # normalize the design's friendly tokens
+        if sort not in _RUN_SORTS:
+            aliases = sorted(_RUN_SORTS) + sorted(_RUN_SORT_ALIASES)
+            raise HTTPException(status_code=400, detail=f"sort must be one of {aliases}")
 
-    ids = [rid for rid in _run_ids() if q is None or q in rid]
-    summaries = [_evaluate(rid).summary for rid in ids]
+    summaries = [_evaluate(rid).summary for rid in _run_ids()]
+    # Per-status facet counts over the FULL set (before any filter) so the UI's All/Needs
+    # review/Sequencing/Released chips can show totals independent of the active filter + page.
+    facets = Counter(s.status for s in summaries)
+    response.headers["X-PipeGuard-Status-Counts"] = json.dumps(
+        {st: facets.get(st, 0) for st in sorted(_RUN_STATUSES)}
+    )
+
+    if q is not None:
+        ql = q.lower()  # case-insensitive so "novaseq" matches a "NovaSeq" platform
+        summaries = [
+            s
+            for s in summaries
+            if ql in s.run_id.lower() or (s.platform is not None and ql in s.platform.lower())
+        ]
     if verdict is not None:
-        # A run "has" a verdict when at least one of its samples landed there — the run-grain
-        # analogue of the export's per-sample verdict filter.
+        # A run "has" a verdict when at least one of its samples landed there.
         summaries = [s for s in summaries if s.counts.get(verdict, 0) > 0]
+    if status is not None:
+        summaries = [s for s in summaries if s.status == status]
     if sort is not None:
         key, reverse = _RUN_SORTS[sort]
         summaries = sorted(summaries, key=key, reverse=reverse)

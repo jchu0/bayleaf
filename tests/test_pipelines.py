@@ -93,7 +93,9 @@ def test_saved_graph_reserves_draft_lifecycle_and_rbac_fields(tmp_path, monkeypa
     assert client.post("/api/pipelines", json=_pipeline_body(name="wgs")).status_code == 201
     stored = client.get("/api/pipelines/wgs").json()[0]
     assert stored["status"] == "draft"
-    assert stored["submitted_by"] is None
+    # save_pipeline is auth-gated (require_role reviewer/approver); a header-less POST resolves
+    # to the permissive dev-default actor, so submitted_by is captured as "dev" (not None).
+    assert stored["submitted_by"] == "dev"
     assert stored["reviewed_by"] is None
     assert stored["approved_by"] is None
     # A client cannot smuggle the reserved server-authored fields (extra="forbid").
