@@ -24,33 +24,33 @@ function NormalizedValue({ value, unit }: { value: number; unit: CanonicalUnit }
       return (
         <>
           {fmt(value, 2)}
-          <span className="text-ink-dim">%</span>
+          <span className="text-text-3">%</span>
         </>
       )
     case 'x':
       return (
         <>
           {fmt(value, 1)}
-          <span className="text-ink-dim">×</span>
+          <span className="text-text-3">×</span>
         </>
       )
     case 'phred':
       return (
         <>
-          <span className="text-ink-dim">Q</span>
+          <span className="text-text-3">Q</span>
           {fmt(value, 0)}
         </>
       )
     case 'fraction':
       return (
         <>
-          {fmt(value, 4)} <span className="text-ink-dim">fraction</span>
+          {fmt(value, 4)} <span className="text-text-3">fraction</span>
         </>
       )
     case 'ratio':
       return (
         <>
-          {fmt(value, 3)} <span className="text-ink-dim">ratio</span>
+          {fmt(value, 3)} <span className="text-text-3">ratio</span>
         </>
       )
     case 'bool':
@@ -75,13 +75,13 @@ export function MetricsPanel({ metrics }: { metrics: MetricValue[] }) {
 
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-dim">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-3">
         QC metrics · registry-normalized
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-ink-dim text-left text-xs uppercase tracking-wide">
+            <tr className="text-text-3 text-left text-xs uppercase tracking-wide">
               <th className="py-2 pr-3 font-medium">Gate</th>
               <th className="py-2 pr-3 font-medium">Metric</th>
               <th className="py-2 pr-3 font-medium">Value (canonical)</th>
@@ -90,13 +90,13 @@ export function MetricsPanel({ metrics }: { metrics: MetricValue[] }) {
           </thead>
           <tbody>
             {sorted.map((m) => (
-              <tr key={m.id} className="border-t border-border align-top">
-                <td className="py-2 pr-3 text-ink-dim text-xs uppercase">{GATE_LABEL[m.gate]}</td>
+              <tr key={m.id} className="border-t border-line align-top">
+                <td className="py-2 pr-3 text-text-3 text-xs uppercase">{GATE_LABEL[m.gate]}</td>
                 <td className="py-2 pr-3 font-mono text-xs">{m.metric_key}</td>
                 <td className="py-2 pr-3 font-mono">
                   <NormalizedValue value={m.normalized_value} unit={m.canonical_unit} />
                 </td>
-                <td className="py-2 pr-3 font-mono text-xs text-ink-dim">
+                <td className="py-2 pr-3 font-mono text-xs text-text-3">
                   {fmt(m.raw_value)}
                   {m.raw_unit ? ` ${m.raw_unit}` : ''}
                 </td>
