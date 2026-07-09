@@ -1,32 +1,98 @@
 @import "tailwindcss";
 
-/* Design tokens (from the prototype's design system, docs/design/frontend/README.md).
-   Tailwind v4 @theme turns these into utilities: bg-surface, text-escalate, font-mono, … */
+/* Design tokens — VERBATIM from the design handoff (docs/design/frontend/README.md
+   §Design tokens; exact values in source/PipeGuard.dc.html). Light content (#eef1f4 shell,
+   white cards, #1f5fd0 accent) + a dark left nav (#141a21). Tailwind v4 @theme → utilities
+   (bg-page, bg-card, text-text, border-line, bg-nav, bg-proceed-bg, text-escalate-fg, …). */
 @theme {
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* Verdict semantics: proceed=green · hold=amber · rerun=orange · escalate=red */
-  --color-proceed: #2ea043;
-  --color-hold: #d4a72c;
-  --color-rerun: #e16f24;
-  --color-escalate: #f85149;
+  /* Light content surface */
+  --color-page: #eef1f4;
+  --color-card: #ffffff;
+  --color-card-2: #eef1f4;
+  --color-card-3: #e6eaef;
+  --color-line: #e4e8ed;
+  --color-line-strong: #d2d9e0;
+  --color-text: #1b232c;
+  --color-text-2: #586472;
+  --color-text-3: #8b95a1;
+  --color-accent: #1f5fd0;
+  --color-accent-weak: #eaf0fc;
+  --color-accent-strong: #1a4fac;
 
-  /* Dark operator surface */
-  --color-surface: #0d1117;
-  --color-surface-2: #161b22;
+  /* Dark left nav */
+  --color-nav: #141a21;
+  --color-nav-hover: #1b232c;
+  --color-nav-border: #202832;
+  --color-nav-text: #c3ccd6;
+  --color-nav-label: #6b7683;
+
+  /* Verdicts — base / bg / border / fg */
+  --color-proceed: #1a854e;
+  --color-proceed-bg: #e9f6ee;
+  --color-proceed-bd: #b6ddc4;
+  --color-proceed-fg: #0f6b3c;
+  --color-hold: #b07714;
+  --color-hold-bg: #fbf2df;
+  --color-hold-bd: #eed9a9;
+  --color-hold-fg: #875809;
+  --color-rerun: #c1560f;
+  --color-rerun-bg: #fceee2;
+  --color-rerun-bd: #f1cfac;
+  --color-rerun-fg: #93420a;
+  --color-escalate: #cf3238;
+  --color-escalate-bg: #fce9ea;
+  --color-escalate-bd: #f2c2c4;
+  --color-escalate-fg: #a3232a;
+
+  /* Gate accents + finding severity */
+  --color-preflight: #1f6feb;
+  --color-qc: #1f5fd0;
+  --color-variant: #0e8f7e;
+  --color-crit: #cf3238;
+  --color-warn: #c1560f;
+  --color-info: #1f6feb;
+
+  /* Elevation (card + popover shadows from the handoff) */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-pop: 0 14px 36px rgba(16, 24, 40, 0.17);
+
+  /* LEGACY dark tokens — kept only so not-yet-migrated screens still render during the
+     light-theme migration. Remove once every screen is converted. */
+  --color-surface: #161b22;
+  --color-surface-2: #21262d;
+  --color-surface-3: #2d333b;
   --color-border: #30363d;
   --color-ink: #e6edf3;
   --color-ink-dim: #8b949e;
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-family: var(--font-sans);
+  font-size: 14px;
 }
 
 body {
   margin: 0;
-  background: var(--color-surface);
-  color: var(--color-ink);
+  background: var(--color-page);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* fade-rise on mount (~.28s ease) — subtle, per the handoff motion spec */
+@keyframes pgfade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.pg-fade {
+  animation: pgfade 0.28s ease both;
 }
