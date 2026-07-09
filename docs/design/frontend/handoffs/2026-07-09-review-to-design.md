@@ -9,13 +9,20 @@
 
 ## 0. How to read this
 
+> **These are observations of the live local React app, not a prototype diff.** The maintainer
+> evaluated the *running app* as a product. The prototype (`PipeGuard.html`) is a reference **only**
+> for the items explicitly tagged "see PipeGuard.html" (e.g. the console side-by-side layout, the
+> port-linked edges, the Decision-card layout) — it is **not** a gold standard. Several gaps here
+> (Tidy, drag-and-drop, the static canvas, no-op export verbs, read-only locators) exist in the
+> prototype **too** — it's an MVP mockup as well — so those are **build-forward**, not a copy-back.
+
 Every item is tagged one of three ways so you can triage effort:
 
-- **`fix-now`** — a fidelity regression from the working prototype or a small missing control. Cheap; recover it in the existing codebase.
+- **`fix-now`** — a small, cheap gap in the live app. Some are **prototype-referenced** (recover the affordance the prototype already shows); others are **build-forward** (the prototype has the same limitation) — both are low effort, just don't assume "copy the prototype" always fixes it.
 - **`phase-2`** — a real feature the handoff itself defers, or that needs backend support (a new field/endpoint) before the UI can be honest.
 - **`design-question`** — needs a product/design decision; this is where your input matters most. Consolidated in §6.
 
-**The through-line:** the app faithfully reproduces the *low-volume* prototype, and three systemic things break — (a) **no scale affordances anywhere**, (b) **the controls meant to absorb volume are inert or broken**, and (c) **several hero surfaces are display-only** (Settings can't edit, Pipeline Builder can't emit, Decision cards' density lever produces empty bodies). Fixing (b) is nearly free and is the highest-leverage work.
+**The through-line:** the live app reproduces the prototype's *low-volume* design and inherits its limitations, and three systemic things break as a product — (a) **no scale affordances anywhere**, (b) **the controls meant to absorb volume are inert or broken**, and (c) **several hero surfaces are display-only** (Settings can't edit, Pipeline Builder can't emit, Decision cards' density lever produces empty bodies). Fixing (b) is nearly free and is the highest-leverage work.
 
 ---
 
@@ -59,11 +66,11 @@ This is partly a **data-model** ask (see Runs / Monitoring below): `RunSummary` 
 
 The MVP renders the seeded germline chain faithfully but is a **static mockup**: hardcoded 2560×460 canvas with literal node coords + 16 static edge paths, read-only locators, inert params, and no-op export verbs — it cannot produce `run_layout.yaml`. The design goal is to make it a real, scalable authoring surface while keeping the load-bearing invariants (composes ≠ executes; gate terminal + no verdict control; agents port-less).
 
-### 4a. Fix-now fidelity regressions (recover from the prototype)
-- **#2 Port-anchored edges.** The build dropped the prototype's `-12px` port margins, so port dots sit ~12–16px *inside* the card padding and every edge stops short. Fix: restore the port offsets **and** compute edge endpoints from actual port anchor positions (not hardcoded `d` strings) so edges visibly link an **output port → the next node's input port**, and recompute on zoom/move. (This also unblocks #7/#3.)
-- **Validation rows** are inert single-color `<div>`s that ignore each row's `sev`. Make them severity-grouped (critical/warn/info), colored, and **click-to-focus** onto the offending node.
-- **#1 Console layout.** Validation list and `run_layout.yaml` should sit **side-by-side** (see prototype), the console should be **height-adjustable** (drag handle) and **pop-out** (detach to a modal / new window) for large YAML. Today it's a fixed 240px pane.
-- **Palette search** is a decorative `<div>` — make it a real filtering input. **Params** are uncontrolled `defaultValue` — make them controlled and reflected in the emitted YAML. **Copy/Download/Emit** are no-ops — wire them to actually export the YAML.
+### 4a. Fix-now gaps (some prototype-referenced, some build-forward)
+- **#2 Port-anchored edges** *(prototype-referenced — "see PipeGuard.html")*. The build dropped the prototype's `-12px` port margins, so port dots sit ~12–16px *inside* the card padding and every edge stops short. Fix: restore the port offsets **and** compute edge endpoints from actual port anchor positions (not hardcoded `d` strings) so edges visibly link an **output port → the next node's input port**, and recompute on zoom/move. (This also unblocks #7/#3.)
+- **Validation rows** are inert single-color `<div>`s that ignore each row's `sev` *(the prototype colors them by severity — recoverable)*. Make them severity-grouped (critical/warn/info), colored, and **click-to-focus** onto the offending node.
+- **#1 Console layout** *(side-by-side is prototype-referenced; adjustable + pop-out are build-forward)*. Validation list and `run_layout.yaml` should sit **side-by-side** (see prototype); the console should also be **height-adjustable** (drag handle) and **pop-out** (detach to a modal / new window) for large YAML — neither the app nor the prototype does that yet. Today it's a fixed 240px pane.
+- **Palette search** is a decorative `<div>` — make it a real filtering input. **Params** are uncontrolled `defaultValue`. **Copy/Download/Emit** are no-ops. Note: **these are no-ops in the prototype too** (`bCopy`/`bDownload`/`bTidy` are empty in the source) — so this is **build-forward** (make the deliverable-producing verbs actually work), not a copy-back from the prototype.
 
 ### 4b. #3 Real interactivity + the authoring model
 The MVP is "configure a known pipeline." Layer up in this order:
@@ -132,7 +139,7 @@ The audit fully confirms it. **Fix-now:** add the **"Repair agent" escalation** 
 
 ## 7. Suggested sequencing
 
-1. **Fidelity recovery (fix-now, cheap):** the Decision-cards density lever + left-stripe/chips/evidence, the Pipeline-Builder port edges + validation coloring + wired export/params, Runs skeletons/Retry/status-pill, Settings toggle + editable steppers + honest copy, Monitoring's repair-agent button + window labels. These are regressions from a working prototype.
+1. **Fix-now cleanup (cheap):** the Decision-cards density lever + left-stripe/chips/evidence, the Pipeline-Builder port edges + validation coloring + wired export/params, Runs skeletons/Retry/status-pill, Settings toggle + editable steppers + honest copy, Monitoring's repair-agent button + window labels. A mix of prototype-recoverable affordances and small build-forward wiring — all low-effort live-app gaps.
 2. **The scale kit + synthetic volume** (§2/§3) — one component + a data-model + a large synthetic run; the single highest-leverage design investment.
 3. **The hero build:** the Decision-card **QC metric readout** (§5a) — the reason that screen exists.
 4. **Backend-enabled phase-2:** windowed Monitoring aggregate, `RunSummary` status/date/platform, paginated list endpoints.
