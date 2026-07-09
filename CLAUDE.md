@@ -80,6 +80,10 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 **Delivery posture**
 1. MVP-first with production-ready seams. Optimize for a working, understandable core
    flow — but run major tradeoff decisions by the maintainer first. Prefer boring, robust choices.
+2. **Do not foreground time/deadline pressure until Fri Jul 10 (MST).** Budget is ample
+   (weekly + 5-hour caps well under limit); build steadily, pursue the maintainer's wishlist
+   features, and drop deadline hedging. Reassess scope at the **Fri Jul 10** checkpoint
+   (Sun Jul 12 is a flex day). This governs framing only — the *guardrails above still hold*.
 
 **Communication**
 1. Summarize what changed, list files modified, state how it was verified, and note
