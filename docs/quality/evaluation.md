@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / all |
 | **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
 
@@ -19,11 +19,15 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **206 tests across 12 files** (largest: `test_notify`, `test_fetch_giab`,
-`test_gate`, `test_api`, `test_metrics`, `test_triage`; plus `test_persistence`,
-`test_synthetic`, `test_artifacts`(+`_s3`), `test_gate_notify`, `test_metrics_mapping`), all
-runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `test_api`
-and `test_triage` suites need the api/claude extras to import FastAPI).
+The offline suite is **261 tests across 14 files** — 258 pass and 3 skip (the Postgres
+live-integration checks in `test_persistence_postgres_live`, which need a reachable Postgres
+and are off by default). By collected size: `test_api` (41), `test_notify` (36),
+`test_synthetic` (32), `test_fetch_giab` (32), `test_gate` (29), `test_persistence` (17),
+`test_metrics` (17), `test_triage` (16), `test_gate_notify` (9), `test_artifacts_s3` (9),
+`test_pipelines` (8, the Pipeline Builder save/version store), `test_artifacts` (7),
+`test_metrics_mapping` (5), `test_persistence_postgres_live` (3) — all runnable offline with
+no API key (`uv sync --all-extras && uv run pytest`; the `test_api` and `test_triage` suites
+need the api/claude extras to import FastAPI).
 
 ## What "good" means (principles)
 

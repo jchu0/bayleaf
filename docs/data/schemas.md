@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Audience** | bioinformatics / software |
 | **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md) |
 
@@ -31,7 +31,10 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 
 ### Inputs
 1. **Run** (`run_`) — external_run_id · instrument · instrument_id · read_length ·
-   workflow_id (run type) · created_at · completed_at · loaded_at · origin · status.
+   workflow_id (run type) · created_at · completed_at · loaded_at · origin · status ·
+   **platform** · **run_date** · **run_name** *(run-level `[Header]` context the
+   `RunArtifacts` intake bundle carries — all `str | None`, default `None`; see the
+   header-context note below)*.
 2. **Sample** (`samp_`) — run_id · subject_key *(from sarek `patient`; **not PHI-free by
    construction** — real deployments route through de-id)* · external_sample_id *(sarek
    `sample`)* · sex_declared (`XX|XY|NA|unknown`) · **sarek_status_raw** (`"0"|"1"|…`) ·
@@ -45,6 +48,17 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
    **hash_algorithm** · size_bytes · caller · stage · pipeline_version · **source_contract**
    (ingest priority: `csv_recap > samplesheet > pipeline_info > filesystem`) · source_row ·
    source_column · origin.
+
+> **Run-level header context — `RunArtifacts.platform` / `.run_date` / `.run_name`.** Parsed
+> tolerantly from the Illumina v2 SampleSheet `[Header]` block (keys `InstrumentPlatform` /
+> `Date` / `RunName`) by `parsers.parse_sample_sheet_header` → `SampleSheetHeader`, and threaded
+> onto the `RunArtifacts` intake bundle by `load_run`. All three are **`str | None`, default
+> `None`**: a sheet may omit any key (or the whole sheet), and a **missing key stays `None`**
+> rather than being invented — the tolerant-boundary principle (a missing field is a signal, not
+> a crash), same as the other intake parsers. `run_date` is the **raw header date string exactly
+> as written** (e.g. `"2026-07-07"`), **not** a parsed/normalized `datetime`: the intake layer
+> deliberately does not coerce it, so an absent or malformed value degrades to `None` instead of
+> failing — contrast Convention 2, which governs *stored* run timestamps (`created_at`, etc.).
 
 ### Analysis
 4. **AnalysisRun** (`arun_`) — one gate execution over a sample under pinned versions.

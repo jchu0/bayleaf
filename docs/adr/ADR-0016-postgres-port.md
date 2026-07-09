@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043), OFF by default; **live-Postgres integration test BUILT + verified green** (`tests/test_persistence_postgres_live.py`, compose-gated + skip-safe); connection pooling + read-from-projection deferred |
+| **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043) + pluggable **pipeline-graph store BUILT (T-049)**, all OFF by default; **live-Postgres integration test BUILT + verified green** (`tests/test_persistence_postgres_live.py`, compose-gated + skip-safe); connection pooling + read-from-projection deferred |
 | **Date** | 2026-07-09 (MST) |
 | **Deciders** | James Hu, Claude Code |
 | **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [tasks.md](../planning/tasks.md) |
@@ -49,6 +49,16 @@ So the port must be **real but guarded** — present as a production seam, invis
    stub-first / opt-in Claude, mirroring the triage seam) categorizes the corpus structurally
    (category / area / sentiment / priority + themes) out-of-band — no HTTP surface, and the
    Claude path is sent only the anonymous aggregate rollup, never raw messages.
+6. **The pluggable-store pattern generalizes to a second product domain (T-049).** Saved
+   Pipeline Builder graphs use the same seam: a `PipelineGraphStore` (`jsonl` default | `sqlite` |
+   `postgres` via `PIPEGUARD_PIPELINE_STORE`, degrade-to-JSONL, its own `pipeline_graphs` table,
+   never the `Repository`, never imports the core) with the identical DSN-safety discipline (item
+   4). It stores a **tolerant versioned envelope** — the graph payload is arbitrary JSON kept
+   as-is, so the builder's shape can churn without a migration — with a server-authored monotonic
+   per-name `version`, and it **reserves** a `draft→save→approve` review lifecycle (`status` +
+   reviewer/approver fields, server-authored, never client-set — no identity via the `extra="forbid"`
+   body). This is the pattern's third instance (Repository / feedback / pipeline), so it earns a
+   note here rather than its own ADR; the approve transition + auth are a not-yet-built seam.
 
 ## Assumptions
 
@@ -71,7 +81,7 @@ So the port must be **real but guarded** — present as a production seam, invis
 | | |
 |---|---|
 | **Gains** | The anticipated production DB seam is real + guarded; feedback lands in a queryable DB; a backend swap is one env var; the offline demo/tests are untouched (no new dep, no socket). |
-| **Costs** | A second SQL dialect to keep in parity with `SqliteRepository`; `psycopg` connect logic exists in two off-gate places (repo + feedback store); the Postgres SQL is not in the default-green CI path (it needs docker + the extra) — covered by the compose-gated live test + offline dialect review + parity tests. |
+| **Costs** | A second SQL dialect to keep in parity with `SqliteRepository`; `psycopg` connect logic exists in three off-gate places (repo + feedback + pipeline store); the Postgres SQL is not in the default-green CI path (it needs docker + the extra) — covered by the compose-gated live test + offline dialect review + parity tests. |
 | **Follow-ups** | ~~A live-Postgres integration test~~ **DONE** (`tests/test_persistence_postgres_live.py` — compose-gated, skip-safe; verified green against real Postgres 16: projection byte-parity vs SQLite, idempotent replay, feedback JSONB round-trip; the review's UTC + `seq` fixes hold). Still open: connection pooling; Alembic-style migrations if the layout ever needs a non-disposable change; wiring the read-API to read the projection (today it recomputes). |
 
 ## Revisit when

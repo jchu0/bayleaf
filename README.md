@@ -155,6 +155,11 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
   _, cards = run_gate_from_dir('data/mock_run_01'); \
   print([(c.sample_id, c.verdict.value) for c in cards])"
 # -> [('S4', 'escalate'), ('S5', 'hold'), ('S1', 'proceed'), ('S2', 'proceed'), ('S3', 'proceed')]
+
+# Regenerate the committed demo data (offline, deterministic):
+uv run python -m pipeguard.synthetic          # demo (default): all committed runs, incl. the 30-sample scale run
+uv run python -m pipeguard.synthetic scale    # one large run (default: the 30-sample showcase)
+uv run python -m pipeguard.synthetic bulk --count 24 --samples 12   # many runs -> git-ignored data/synthetic_bulk/
 ```
 
 ### Enabling live Claude (optional)
@@ -216,20 +221,23 @@ src/pipeguard/            # framework-agnostic core (no UI dependency)
   persistence/            # Repository port + event→row projector + SqliteRepository + rebuild-db
   metrics/                # versioned canonical metric vocabulary (registry.yaml + loader)
   notify/                 # outbound notify port (stub | Slack; per-verdict, evidence-cited; opt-in live send)
-  synthetic/              # synthetic failure-mode run generator (mock_run_02/03)
+  synthetic/              # contrived failure-mode run generator + scale/bulk drivers (mock_run_02/03, scale_30)
 app/streamlit_app.py      # thin offline dashboard over the core (the fallback demo)
 api/main.py               # FastAPI read-API (health, runs, cards, triage, config, runbook, /metrics)
 frontend/                 # React + Vite + Tailwind UI consuming the API
 scripts/fetch_giab_hg002.py   # idempotent, checksum-verifying GIAB HG002 fetcher (accessions only)
 data/mock_run_0{1,2,3}/   # contrived demo runs (01 hand-authored & pinned; 02/03 generated)
+data/mock_run_scale_30/   # contrived 30-sample scale showcase (generated; all four verdicts)
 tests/                    # offline tests pinning the demo scenario
 ```
 
-**Data posture** — `mock_run_01` is hand-authored and pinned; `mock_run_02/03` are
-reproducible from the synthetic generator (`uv run python -m pipeguard.synthetic`). Real
-GIAB HG002 truth data is **fetched, never committed** — the repo carries the accession
-manifest + fetch script, and the bytes land in a git-ignored `data/real-giab/`. See
-[data/README.md](data/README.md) and [scripts/README.md](scripts/README.md).
+**Data posture** — `mock_run_01` is hand-authored and pinned; `mock_run_02/03` and the
+30-sample scale showcase `mock_run_scale_30` are reproducible from the synthetic generator
+(`uv run python -m pipeguard.synthetic`), which also drives on-demand bulk volume into a
+git-ignored `data/synthetic_bulk/`. Real GIAB HG002 truth data is **fetched, never
+committed** — the repo carries the accession manifest + fetch script, and the bytes land in a
+git-ignored `data/real-giab/`. See [data/README.md](data/README.md) and
+[scripts/README.md](scripts/README.md).
 
 ---
 

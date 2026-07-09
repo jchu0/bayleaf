@@ -147,8 +147,32 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    primary action is Emit, never Run), and renders the load-bearing invariants as visible
    guarantees: agents are port-less side-nodes (an agent→gate data edge is unrepresentable),
    the deterministic gate is a terminal locked node with no verdict control, and every emitted
-   locator's `origin` is `unknown` (config locates, never relabels provenance). *Trace:*
-   [pipeline-builder-brief.md](../design/frontend/pipeline-builder-brief.md), [tasks T-044](../planning/tasks.md).
+   locator's `origin` is `unknown` (config locates, never relabels provenance). A composed graph
+   **saves + versions** via `POST/GET /api/pipelines` — a **product-domain store off the gate**
+   (pluggable JSONL/SQLite/Postgres, `PIPEGUARD_PIPELINE_STORE`, degrade-to-JSONL, ADR-0016),
+   storing the graph as a **tolerant versioned envelope** (arbitrary payload kept as-is) with a
+   server-authored monotonic per-name version. It **reserves** a `draft→save→approve` review
+   lifecycle (`status` + reviewer/approver fields, server-authored, no identity via the
+   `extra="forbid"` body); the approve transition + auth are a not-yet-built seam. *Trace:*
+   [pipeline-builder-brief.md](../design/frontend/pipeline-builder-brief.md),
+   [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
+   [tasks T-044/T-049](../planning/tasks.md).
+7. **REQ-F-046 — Honest run lifecycle status + run metadata.** `RunSummary` carries a real
+   `status` — `running` (no completion event yet) / `needs_review` (completed, actionable
+   samples) / `released` (completed, none) — derived from the provenance ledger, **not** inferred
+   from `n_attention` (which mislabeled a still-running, 0-attention run as Released). It also
+   surfaces `platform` + `run_date`, parsed tolerantly from the SampleSheet `[Header]`. `status`
+   is a run-lifecycle label, never a per-sample verdict (REQ-F-003 holds). *Trace:*
+   [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
+   [schemas.md](../data/schemas.md), [tasks T-047](../planning/tasks.md).
+8. **REQ-F-047 — Server-side monitoring aggregate + runs pagination.** `GET /api/monitoring`
+   returns a pre-aggregated, optionally time-windowed (7d/14d/30d/all) dashboard payload (KPIs,
+   per-run rows, per-gate pass-rate, ranked recurring signatures) so the UI needn't fan out every
+   run's detail; its throughput ratio is a labelled **heuristic**, not a calibrated value.
+   `GET /api/runs` accepts additive `verdict/q/sort/page/limit` (no params → byte-identical body;
+   count/page/limit on response headers). *Trace:*
+   [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
+   [architecture.md](../design/architecture.md), [tasks T-048](../planning/tasks.md).
 
 ## AI configurability (ADR-0006)
 

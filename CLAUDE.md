@@ -155,10 +155,15 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    `PIPEGUARD_FEEDBACK_AGENT=stub|claude` — all stub-first ($0), import `anthropic` lazily, and
    fall back to the stub on any error (incl. a safety refusal). Models via `PIPEGUARD_*_MODEL`.
 4. **Delivery layers (thin, over the core).** `app/` = Streamlit demo (kept as the
-   guaranteed-working fallback); `api/` = FastAPI read-API + the one off-gate write
-   (`POST /api/feedback` → a pluggable `FeedbackStore` jsonl/sqlite/postgres) + the artifacts
-   endpoint (`GET /api/runs/{id}/artifacts`), the production seam (ADR-0010/0016); `frontend/` =
-   React + Vite + Tailwind consuming the API — the 8 operator screens + the Pipeline Builder (ADR-0014).
+   guaranteed-working fallback); `api/` = FastAPI read-API + **two off-gate writes**
+   (`POST /api/feedback` → `FeedbackStore`; `POST /api/pipelines` → a pluggable
+   `PipelineGraphStore` — a tolerant versioned envelope reserving a draft→approve+RBAC lifecycle,
+   T-049; both jsonl/sqlite/postgres) + the artifacts + **windowed-monitoring** endpoints
+   (`GET /api/runs/{id}/artifacts`, `GET /api/monitoring`) + runs pagination/search + honest
+   `RunSummary` status/platform/date (from the SampleSheet `[Header]`), the production seam
+   (ADR-0010/0016); `frontend/` = React + Vite + Tailwind consuming the API — the 8 operator
+   screens + the Pipeline Builder (ADR-0014). `src/pipeguard/synthetic/` drives the failure-mode
+   data generator, incl. `scale.py` for at-volume runs (`demo/scale/bulk` CLI, T-050).
 
 ## Git conventions
 

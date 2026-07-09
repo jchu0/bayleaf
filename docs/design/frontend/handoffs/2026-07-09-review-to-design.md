@@ -54,6 +54,14 @@ these to ground it — in order. Nothing needs to travel with this file; the who
    (rules decide / AI advises; agents advisory + off the gate).
 8. `docs/design/node-authoring-agent.md` — only for the §4h / §6-Q6 **node-authoring agent** (roster #5, T-046).
 
+> **Backend update (2026-07-09) — several data-blocked items are now shipped.** The backend halves
+> of the phase-2 items this brief tagged "needs a new field/endpoint" are built and tested; design
+> against the **real** names in [2026-07-09-backend-contracts.md](2026-07-09-backend-contracts.md):
+> `RunSummary.status/platform/run_date` (fixes the §5b Released-mislabel), `GET /api/monitoring` +
+> `GET /api/runs` pagination/search (§1/§5d scale kit), and `POST/GET /api/pipelines` save/version
+> with a reserved draft→approve+RBAC lifecycle (§4b–§4h). The Settings authoring backend is *not*
+> built yet (deferred — T-051).
+
 ---
 
 ## 1. Cross-cutting themes (the "why" behind the per-screen list)

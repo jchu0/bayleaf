@@ -71,11 +71,33 @@ Every finding and verdict is labelled with the gate it came from:
    ADR-0009/0012) grounds a `TriageNote` in a curated corpus; the off-gate feedback-triage agent
    (`api/feedback_agent.py`, ADR-0016) categorizes the in-app feedback corpus.
 4. **Delivery layers (thin, over the core).** `app/` Streamlit (offline demo / fallback);
-   `api/` FastAPI read-API + the one off-gate write (`POST /api/feedback` → a pluggable
-   `FeedbackStore`) + the artifacts endpoint — the production seam (ADR-0010/0016); `frontend/`
-   React — **all 8 operator screens built + migrated to the light-theme handoff, plus the
-   Pipeline Builder**: run overview → intake/preflight → decision cards → agent triage → review
-   queue → provenance → monitoring → settings → pipeline builder (a `DecisionCard` carries `run_id`).
+   `api/` FastAPI — the production read-API seam (ADR-0010/0014/0016); `frontend/` React —
+   **all 8 operator screens built + migrated to the light-theme handoff, plus the Pipeline
+   Builder**: run overview → intake/preflight → decision cards → agent triage → review queue →
+   provenance → monitoring → settings → pipeline builder (a `DecisionCard` carries `run_id`).
+   The `api/` surface (all additive / backward-compatible; the core is untouched — sorting,
+   paging, aggregation, and product writes live in `api/`, never `src/pipeguard/`):
+   - **Runs read-API.** `GET /api/runs` (+ `/{id}`, `/{id}/cards/{sample}`, `/{id}/artifacts`).
+     Each `RunSummary` now carries `platform` + `run_date` (parsed from the SampleSheet
+     `[Header]`) and an **honest run-lifecycle `status`** — `running` | `needs_review` |
+     `released`, derived from provenance (`_run_status`): `running` until the run's
+     `ANALYSIS_RUN_COMPLETED` event lands, then `needs_review` if any sample is actionable, else
+     `released`. It is a run-lifecycle label, **NOT** a per-sample verdict (ADR-0001), and fixes
+     a bug that mislabeled a still-running / 0-attention run *Released*. `GET /api/runs` also
+     gained backward-compatible `verdict`/`q`/`sort`/`page`/`limit` params (bare call =
+     byte-identical body; pagination only when `limit` is given, totals on `X-PipeGuard-*`
+     response headers).
+   - **Monitoring aggregate.** `GET /api/monitoring?window={7d|14d|30d|all}` returns one
+     pre-aggregated dashboard payload (fleet KPIs, per-run rows, per-gate flagged/total, ranked
+     recurring signatures) so the frontend renders from a single response instead of fanning out
+     a detail fetch per run. Its `auto_proceed_pct` is a **heuristic** throughput ratio — a
+     display number, not a calibrated probability (life-science guardrail 2). Aggregation
+     reuses `_aggregate_metrics()` and stays in the API layer.
+   - **Off-gate product writes.** `POST /api/feedback` → a pluggable `FeedbackStore`; `POST
+     /api/pipelines` (+ `GET /api/pipelines`, `GET /api/pipelines/{name}`) → a pluggable
+     pipeline-graph store (see Swappable seams). Both are **product state OFF the decision
+     gate** — a saved graph or a feedback note never becomes a verdict, finding, or ledger
+     event (ADR-0001).
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
@@ -91,7 +113,12 @@ Every finding and verdict is labelled with the gate it came from:
 trail; anchor cards to the `AnalysisRun`; optionally dispatch actionable cards through an
 injected `notifier`) → the FastAPI read-API serves cards + events + config → the React
 frontend renders them. The triage agent is invoked on demand per flagged card and never
-re-enters the verdict path.
+re-enters the verdict path. The read-API shapes those cards for screens without re-entering the
+core: it labels each run with an honest lifecycle `status` read from the provenance trail,
+filters/sorts/paginates the run list, and pre-aggregates the monitoring roll-up
+(`GET /api/monitoring`) so a dashboard renders from one response. The Pipeline Builder's
+save/version writes (`POST /api/pipelines`) land in a **separate product store**, off the gate —
+they never enter `load_run → evaluate_run` or the ledger.
 
 ## Invariants
 
@@ -100,6 +127,9 @@ re-enters the verdict path.
 3. **Event log is authoritative**; the DB is a disposable, rebuildable projection (ADR-0002).
 4. **Core stays framework-agnostic** — no Streamlit/FastAPI/React imports in `src/pipeguard/`; ports & adapters (ADR-0003).
 5. **Findings are immutable + content-hashed**; confidence is omitted until grounded.
+6. **Off-gate product state never re-enters the gate** — in-app feedback and saved Pipeline
+   Builder graphs are written by dedicated `api/` seams to their own stores; no product write
+   becomes a verdict, finding, or authoritative ledger event (ADR-0001).
 
 ## Swappable seams (the flex points)
 
@@ -111,6 +141,7 @@ re-enters the verdict path.
 | Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — add/remap a source metric without touching rules | canonical decimals; ON the critical path |
 | Repository (persistence) | `Repository` port; SqliteRepository **and** guarded PostgresRepository built (ADR-0016), `get_repository()` selects | SQLite + JSONL (Postgres off by default) |
 | Feedback sink (off-gate) | `FeedbackStore` port (`api/feedback_store.py`); jsonl/sqlite/postgres, degrade-to-JSONL (ADR-0016) | JSONL |
+| Pipeline-graph store (off-gate product) | `PIPEGUARD_PIPELINE_STORE=jsonl\|sqlite\|postgres` (`api/pipeline_store.py`); mirrors the feedback sink — degrade-to-JSONL, never logs the DSN (ADR-0016) | JSONL |
 | Deployment | ports & adapters; Nextflow compute portability (ADR-0003) | local |
 
 Unlike the AI/notify seams (off by default, adapter-swapped at the edge), the **metric registry

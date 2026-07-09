@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Audience** | all (contributors and Claude Code) |
 | **Related** | [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md), [licensing.md](licensing.md), [schemas.md](schemas.md), [tasks T-013](../planning/tasks.md) |
 
@@ -52,9 +52,14 @@ requirement for a provenance tool.
    emits labeled failure-mode run directories (sample swap, duplicate/missing barcodes, low
    reads-PF, low Q30, coverage dropout, low-support variant, contamination, step failure). It
    is **`contrived`, not `synthetic`**: values are invented (realistic Illumina shapes), *not*
-   perturbed from a real sample, so every run carries an in-band `pipeguard-synthetic`
-   origin tag and is reproducible under `data/`. Perturbing real GIAB bundles into `synthetic`
-   failure modes remains the aspirational upgrade (see origin labels below).
+   perturbed from a real sample. Each run self-declares that origin **end-to-end** — both
+   in-band (a `pipeguard-synthetic` line in `pipeline.log`) and out-of-band (an `origin`
+   marker file), both derived from one `ORIGIN_LABEL="contrived"` constant so they can never
+   disagree — and is reproducible under `data/`. A thin scale driver
+   ([`pipeguard.synthetic.scale`](../../src/pipeguard/synthetic/scale.py)) runs the same
+   generator at volume (one large N-sample run + many-run batches) without adding any rule
+   logic or new failure modes. Perturbing real GIAB bundles into `synthetic` failure modes
+   remains the aspirational upgrade (see origin labels below).
 
 ## Layout
 
@@ -66,10 +71,18 @@ requirement for a provenance tool.
 
 Per-track status (each artifact labeled by origin):
 
-1. **`contrived` — done.** `data/mock_run_01/` is hand-authored (realistic Illumina formats,
-   invented values, two planted issues: S4 barcode swap, S5 borderline QC), labeled in
-   [`data/README.md`](../../data/README.md). The [`pipeguard.synthetic`](../../src/pipeguard/synthetic/)
-   generator now also emits `contrived` failure-mode runs programmatically (Sources 3).
+1. **`contrived` — done, and now at scale.** `data/mock_run_01/` is hand-authored (realistic
+   Illumina formats, invented values, two planted issues: S4 barcode swap, S5 borderline QC),
+   labeled in [`data/README.md`](../../data/README.md). The
+   [`pipeguard.synthetic`](../../src/pipeguard/synthetic/) generator also emits `contrived`
+   failure-mode runs programmatically (`mock_run_02/03`; Sources 3) and, via its scale driver,
+   a committed 30-sample showcase run (`mock_run_scale_30/`, spanning all four verdicts) plus
+   on-demand bulk volume regenerated into a git-ignored `data/synthetic_bulk/` (never
+   committed). Every generated run now carries its `contrived` label end-to-end (in-band tag +
+   `origin` marker, both from one `ORIGIN_LABEL`); the older `mock_run_02/03` `origin` markers
+   were reconciled `synthetic` -> `contrived` to match. The `contrived`/`synthetic`
+   **definitions are unchanged** — only those two marker files were corrected onto the right
+   side of the existing line.
 2. **`real-giab` — fetch validated end-to-end.** The GIAB HG002 fetch script
    ([`scripts/fetch_giab_hg002.py`](../../scripts/fetch_giab_hg002.py)) runs end-to-end on a
    bioconda env (real truth VCF + panel-region reads slice); data stays git-ignored
