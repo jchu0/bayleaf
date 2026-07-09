@@ -3,6 +3,7 @@ import { Layout } from './components/Layout'
 import { AgentTriage } from './screens/AgentTriage'
 import { Intake } from './screens/Intake'
 import { Monitoring } from './screens/Monitoring'
+import { PipelineBuilder } from './screens/PipelineBuilder'
 import { Provenance } from './screens/Provenance'
 import { ReviewQueue } from './screens/ReviewQueue'
 import { RunDetail } from './screens/RunDetail'
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/queue" element={<ReviewQueue />} />
+          <Route path="/builder" element={<PipelineBuilder />} />
         </Route>
       </Routes>
     </BrowserRouter>

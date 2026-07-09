@@ -64,6 +64,7 @@ function useNav(attention: number, defaultRunId: string | null): Group[] {
     {
       heading: 'Configure',
       items: [
+        { label: 'Pipeline builder', to: '/builder', icon: GitBranch, active: pathname.startsWith('/builder') },
         { label: 'Settings', to: '/settings', icon: SlidersHorizontal, active: pathname.startsWith('/settings') },
       ],
     },

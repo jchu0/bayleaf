@@ -11,6 +11,7 @@ function useCrumb(): { title: string; run: string | null } {
   if (pathname.includes('/intake')) return { title: 'Intake gate', run: runId ?? null }
   if (pathname.startsWith('/queue')) return { title: 'Review queue', run: null }
   if (pathname.startsWith('/monitoring')) return { title: 'Monitoring', run: null }
+  if (pathname.startsWith('/builder')) return { title: 'Pipeline builder', run: null }
   if (pathname.startsWith('/settings')) return { title: 'Settings', run: null }
   if (pathname.includes('/provenance') || pathname.includes('/canvas'))
     return { title: 'Provenance', run: runId ?? null }
