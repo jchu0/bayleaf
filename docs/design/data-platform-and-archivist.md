@@ -524,6 +524,248 @@ Sizing frame: target host is an M4 Mac Mini / 32 GB running **panel slices, not 
 
 ---
 
+## Appendix D — Variant-gate substrate (panel · pluggable caller · VCF ingest · GIAB-truth eval · run-layout config)
+
+**Status:** design proposal (substrate + read-side plumbing only). **Date:** 2026-07-08 MST.
+**Add-to:** new appendix of the data-platform design doc.
+**Crosslinks:** ADR-0013 (three checkpoints; variant gate = per-variant confidence + annotation), ADR-0004 (origin labels / no invented pathogenicity), ADR-0002 (provenance ledger), ADR-0001 (rules decide, AI narrates), ADR-0005 (config layer + profiles), wishlist #11 (no-code pipeline-builder canvas).
+
+**What this appendix does and does not do.** It defines the *regions*, *fixtures*, *read-side ingest*, *demo caller*, *truth-evaluation*, and *run-layout config seam* that a future variant gate will consume. It does **not** build the gate. Per ADR-0013 §Realized(1) the variant gate is "modeled but no variant rules fire yet"; confirmed in code — `models.py` wires `Gate.VARIANT`/`Category.VARIANT` and `DecisionCard.gate_results` iterates all three gates, but `rules.py` emits **zero** `Category.VARIANT` findings. The deterministic VARIANT rules are **Phase 2**. Nothing in this appendix fires a verdict on its own.
+
+---
+
+### 0. Framing contract (load-bearing — read first)
+
+This is the guardrail, not decoration. It operationalizes CLAUDE.md life-science guardrails 1–5 and ADR-0004.
+
+**0a. HG002 is a consented benchmark genome, not a patient.** HG002/NA24385 is the healthy son of the GIAB Ashkenazi trio, PGP-consented for open, unrestricted dissemination, and is NIST Reference Material RM 8391/8392. It is git-ignored under `data/real-giab/` and never committed. **No phenotype or diagnosis is attached** — nothing in the substrate says "this genome has disease X." Per data-platform §2.1d (G-DEID), the only "real" data here is a publicly consented reference genome, not PHI.
+
+**0b. The truth VCF is a genotype truth set, not a pathogenicity annotation.** It records SNV + small indel positions where HG002 differs from GRCh38, with truth genotypes (0/1, 1/1). It contains benign and non-benign alleles alike. It is **not** annotated for pathogenicity.
+
+**0c. Any ClinVar-P/LP allele HG002 carries is a carrier / low-penetrance / pharmacogenomic allele — not "disease-causing."** In a healthy benchmark genome these are almost all recessive carrier (heterozygous), low-penetrance risk, or PGx alleles.
+
+**0d. The only defensible claim under test** (never a claim about HG002's health):
+> *"Can the pipeline correctly call and surface a variant that carries a ClinVar P/LP label, inside a region where GIAB/CMRG truth can score it?"*
+
+**0e. Never invent pathogenicity or coordinates.** All pathogenicity is imported from ClinVar `CLNSIG` (grounded); no concrete variant coordinate is quoted anywhere in this doc. Any unconfirmed gene/coordinate/version carries a `(VERIFY)` tag (see §10). Clinical claims stay grounded in ClinVar/GIAB truth (ADR-0004).
+
+**0f. Standard phrasing (use everywhere; the compressed form is banned).** Never write "HG002's pathogenic variant," "HG002 ClinVar P/LP fixture," "disease-causing variant," or a bare clinical "finding." Always write:
+> *"a ClinVar-P/LP-labeled variant that HG002 genuinely carries in truth, used as a positive **test fixture** for the variant gate."*
+
+---
+
+### 1. Panel basis — recommendation (DESIGN-NOW)
+
+The choice is among three bases; they are not mutually exclusive. The honest answer is a **layered panel** with a CMRG truth spine.
+
+| Basis | Truth-backing on HG002 | Medical legibility | Weakness |
+|---|---|---|---|
+| **(a) GIAB CMRG v1.00** (VERIFY: ~273 genes, autosomal-only) | **Strongest** — ships its *own* curated small-variant truth VCF + BED | High (curated medically-relevant genes) | Fixed curated set; build/scope to VERIFY |
+| **(b) ACMG-SF** (VERIFY: v3.2 = 81 genes) | **Partial** — only the fraction inside a truth BED is gradeable | **Highest** — recognizable "actionable disease genes" | Not self-sufficient for truth; needs intersection |
+| **(c) Small curated rare-disease sub-panel** | Depends on gene choice | Medium/high | Arbitrary unless anchored to (a) or (b) |
+
+**Recommendation — layered, CMRG-spine first:**
+1. **Layer A — CMRG truth spine.** CMRG v1.00 ships its own BED + truth VCF, so it is the low-risk path *and* the only source that restores trustworthy curated truth **into** the difficult medically-relevant genes (segmental duplications, high-homology paralogs, tandem repeats) that the standard v4.2.1 benchmark deliberately excludes. Fixtures here grade against the **CMRG truth VCF**.
+2. **Layer B — ACMG-SF framing.** Adds legibility ("we cover the actionable disease genes ACMG recommends reporting"). Grade only the portion inside a truth BED. The **per-gene callable fraction is itself an honest QC signal**, consistent with PipeGuard's breadth-not-just-depth doctrine.
+3. **Layer C — demo sub-panel.** A small subset of Layer A guaranteed truth-backed and carrying ≥1 confirmed fixture (see 0f / §6d) so a future gate has something concrete to fire on.
+
+**Why not ACMG-SF alone:** a meaningful fraction of SF genes are exactly the hard genes v4.2.1 cannot score, so an SF-only panel would surface regions where a call cannot be honestly graded TP/FP/FN — silently undercutting the "truth-backed" claim. CMRG is the spine, not an afterthought.
+
+**Load-bearing correctness — two truths, two BEDs.** A region inherits its truth source from which BED it fell into:
+- Region ∩ **v4.2.1 high-conf BED** → grade against the **v4.2.1 truth VCF**.
+- Region ∩ **CMRG v1.00 BED** → grade against the **CMRG truth VCF**.
+
+Never grade a CMRG region against v4.2.1 truth or vice-versa — outside its own BED each benchmark asserts nothing, so a call there is unscorable. **Tag each surviving interval with its truth source** (5th BED column or encoded label, e.g. `BRCA1|highconf`, `CYP21A2|cmrg` — gene names illustrative, VERIFY membership) so the future gate reads the right answer key.
+
+#### 1.1 How to build the panel BED (concretely)
+1. **CMRG spine — no coordinate resolution.** Take the CMRG v1.00 GRCh38 BED (VERIFY exact filename/accession/md5), optionally restrict by gene name. Truth-backed regions, essentially free.
+2. **ACMG-SF layer — symbol → coordinate → BED → intersect.** (a) Symbols → **HGNC IDs** first (defeat alias ambiguity). (b) HGNC → GRCh38 intervals via **MANE Select + MANE Plus Clinical** (Plus Clinical adds transcripts carrying clinical variants off the single Select); parse the MANE/GENCODE/RefSeq **GFF3 on the GRCh38 no-alt analysis set**. (c) Pad splice sites `bedtools slop -b <pad>` (VERIFY: settle on one value, ±10–20 bp; record it in the header). (d) `bedtools sort | merge`. (e) Intersect with truth so every region is gradeable:
+   ```bash
+   bedtools intersect -a panel.padded.merged.bed \
+     -b HG002_GRCh38_1_22_v4.2.1_benchmark_noinconsistent.bed > panel.highconf.bed
+   bedtools intersect -a panel.padded.merged.bed \
+     -b HG002_GRCh38_CMRG_v1.00.bed > panel.cmrg.bed   # VERIFY exact CMRG BED filename
+   ```
+   The shippable panel is the **union** `panel.highconf.bed ∪ panel.cmrg.bed`, each interval tagged by truth source. Anything surviving **neither** intersect is **off-benchmark / ungradeable** — keep it out of the graded panel but **report its per-gene fraction** as the callable-fraction QC signal.
+3. **Two traps that silently corrupt the panel.** (a) **Contig naming** — GIAB artifacts are `chr`-prefixed GRCh38; MANE/GENCODE/RefSeq vary (`chr1` vs `1`). Force `chr`-prefixed before any intersect or every intersect returns empty. (b) **Reference build** — stay on the **GRCh38 no-alt analysis set**; do not mix in alt-contigs or CHM13/T2T without a deliberate decision (CMRG also has a CHM13 release — VERIFY which build).
+4. **Format — match `scripts/panel_regions.example.bed`.** 0-based half-open, `chr`-prefixed, 4th column = gene symbol / region label; add truth-source tag. This preserves `scripts/gate_giab.py -L <panel.bed>` slicing (`samtools view -M -L`) with no new slicing code.
+
+---
+
+### 2. Pluggable caller + caller-agnostic VCF ingest (DESIGN-NOW; parser build DEFERs to Phase 2)
+
+**2a. Contract — PipeGuard is the reader, not the caller.** A variant caller (DeepVariant, GATK HaplotypeCaller, bcftools, FreeBayes) runs inside *someone's* Nextflow pipeline and drops a standard VCF into a run directory. PipeGuard points at that folder and ingests whatever VCF is there. The caller is **BYO**; PipeGuard owns only the read + gate (maintainer's verbatim intent).
+
+**2b. Config-driven path resolution.** Extend the existing directory entrypoint (`run_gate_from_dir('data/mock_run_01')`) — do not invent a new one. Resolve the VCF via the run-layout config (§5), keyed by a stable artifact-kind (`vcf`), by explicit path or glob (`*.vcf.gz`). No caller name, no caller flags — just a location.
+
+**2c. Same discipline as the metric registry.** `metrics/registry.py` keys metrics by *semantic identity* (`q30`, `mean_coverage`, `dup_rate`), not by emitting tool; the gate reads **standard VCF FORMAT/INFO fields** (`DP`, `GQ`, `FILTER`, allele depths), which are caller-independent, not caller-specific quirks.
+
+**2d. Tolerant parsing at the boundary (data-handling guardrail 2).** `DP`/`FILTER` are near-universal; `GQ` usual; **allele balance is derived from `AD`** (`AD_alt/(AD_ref+AD_alt)`) for GATK/bcftools but emitted directly as `VAF` by DeepVariant. `QUAL` is **caller-dependent** (ADR-0013) and therefore a weak cross-caller signal. A **missing field is a signal, not a crash** — record it absent, let the gate down-weight, never raise.
+
+**2e. New code surface (scope-honest).** Today there is **no VCF handle anywhere in `parsers.py`** (data-platform §3.6 — the panel VCF/BAM are index-only pointers). Ingest would add one tolerant reader (`parse_vcf` → per-variant records) plus the deferred `parse_vcf_stats` (bcftools stats → `ts_tv_ratio`/`n_variants`/`het_hom_ratio`). Keep it on the **bioconda side** of the two-toolchain split (`pysam`/`cyvcf2` or shell `bcftools`), not a new `uv` app dependency, unless a pure-Python reader is justified. **Scope note:** `parse_vcf`'s only consumer is the Phase-2 rules; it is designed now but is **not** on the build-now-if-time path (the eval in §4 needs no core parser — see §4/§8).
+
+#### 2.1 Demo caller — make the loop real
+- **(Recommended) bcftools on the existing panel BAM slice → a genuine called VCF.** The panel slice **already exists on disk** (`data/real-giab/HG002.GRCh38.panel.bam(.bai)`, verified 2026-07-08). ~3 shell lines, tools already in the machine-local `hackathon` conda env:
+  ```bash
+  bcftools mpileup -f <GRCh38_no_alt_ref> -R scripts/panel_regions.example.bed \
+      data/real-giab/HG002.GRCh38.panel.bam \
+    | bcftools call -mv -Oz -o data/real-giab/HG002.GRCh38.panel.calls.vcf.gz
+  bcftools index -t data/real-giab/HG002.GRCh38.panel.calls.vcf.gz
+  ```
+  Wire as a new `--call` step in `scripts/gate_giab.py` (it has a `main()` but **no `--call` today** — a small new flag, not a free ride). Independent of the truth VCF → the eval in §4 is **not circular**. Tag output `real-giab` (a real call on real reads), distinct from the truth VCF (the answer key).
+- **(Fallback, smoke-only)** feed the on-disk panel-sliced truth VCF as "the caller's output" to exercise the *reader* only. **Circular for evaluation** (P/R/F1 = 1.0) — never the EVAL-030 subject.
+- **(BYO, higher fidelity — CUT to a doc sentence)** DeepVariant is the drop-in upgrade a user brings (better SNV/indel accuracy; emits `GQ`+`VAF` directly). It changes nothing about PipeGuard: same folder, same standard VCF. Name it in docs; do not build it.
+
+---
+
+### 3. What the gate reads (Phase 2 — deterministic rules NOT built)
+
+**3a. Per-variant fields consumed:** `DP`, `GQ`, **allele balance** (from `AD`, or `VAF`), and **`FILTER == PASS`**. Optionally `QUAL` (flagged caller-dependent) and cohort `parse_vcf_stats` sanity signals (`ts_tv_ratio`, `het_hom_ratio`, `n_variants`). **No gnomAD AF / ClinVar significance in the gate** — annotation, not gating (strategy.md).
+
+**3b. Routed through the metric registry.** The keys **already exist** (see §8): `variant.dp`, `variant.gq`, `variant.allele_balance` (parser `vcf_allele_balance`), `variant.titv` (source `bcftools_stats`), each `gate: variant`. They are inert vocabulary — no locator, no parser wired, no rule consuming them. Phase 2 wires them; the registry needs no schema change.
+
+**3c. Granularity — the real design decision.** Existing QC metrics are **per-sample scalars**; variant metrics are **per-variant** (~470 rows for the chr20 smoke panel). The gate must **aggregate per-variant → per-sample `Finding`s** — e.g. "12 / 470 panel variants have DP < 10× (min 4×)" → `Category.VARIANT` → `Gate.VARIANT`, cited and content-hashed like every `Finding` (`synthesis/base.py` aggregates; the LLM never sets a verdict, ADR-0001). **This aggregation IS the Phase-2 gate — registering keys is inert; *consuming* them is building the gate.** `DecisionCard.gate_results` already iterates all three gates, so a VARIANT finding lights up the modeled-but-empty gate with no schema change.
+
+**3d. Surface-and-decide, no pathogenicity call.** The gate reports *technical call quality* (low-DP / low-GQ / skewed-AB / non-PASS) and contributes a RERUN/HOLD/PASS-style signal — **no claim about pathogenicity, actionability, or diagnosis** (ADR-0013 verdict policy). Thresholds are runbook-configurable, **illustrative not clinical**.
+
+**3e. UI terminology — "call-quality finding."** Because the core emits objects named `Finding` and §0f bans the bare clinical "finding," the UI must render variant `Finding`s as **"call-quality finding"** (technical), never bare "finding," so a low-DP signal is never read as a clinical finding about the variant's meaning.
+
+---
+
+### 4. GIAB-truth evaluation (EVAL-030) — the credibility proof (BUILD-NOW-IF-TIME)
+
+Compare the **called VCF** (§2.1) against the **GIAB truth VCF**, inside where truth is valid, and report SNV/indel-stratified precision / recall / F1. This is what proves the caller path works on real data — **zero core code, all bioconda.**
+
+**4a. Confine to where truth is valid.** Truth (presence *and* absence) holds **only inside the high-confidence BED**:
+```bash
+bedtools intersect \
+  -a scripts/panel_regions.example.bed \
+  -b data/real-giab/HG002_GRCh38_1_22_v4.2.1_benchmark_noinconsistent.bed \
+  > eval/gradeable_regions.bed
+```
+For a future disease-gene panel, add the **CMRG v1.00 BED** to this union so difficult medically-relevant genes (segdups/paralogs — *PMS2, CYP21A2, SMN1, HBA1/2* — VERIFY membership) that fall **outside** v4.2.1 high-conf become gradeable; report the **callable fraction** per gene as its own honest QC signal.
+
+**4b. Normalize both sides — mandatory.** Representation differences (indel left-alignment, multiallelic packing) cause false mismatches. Run `bcftools norm -f <ref> -m -` on **both** called and truth VCFs, and confirm **contig naming matches** (`chr20` vs `20`) against the GRCh38 no-alt analysis set.
+
+**4c. First cut — `bcftools isec`, restricted to the gradeable BED (guardrail fix).** `isec` inputs **must be restricted to `gradeable_regions.bed` first**, or every call *outside* the high-conf BED is miscounted as a false positive — but outside the BED GIAB asserts nothing, so such a call is **unscorable, not an FP**. Restrict both normalized VCFs, then intersect:
+```bash
+bcftools view -R eval/gradeable_regions.bed -Oz eval/calls.norm.vcf.gz  > eval/calls.graded.vcf.gz
+bcftools view -R eval/gradeable_regions.bed -Oz eval/truth.norm.vcf.gz  > eval/truth.graded.vcf.gz
+bcftools isec -p eval/isec eval/calls.graded.vcf.gz eval/truth.graded.vcf.gz
+# 0000=FP(call-only) 0001=FN(truth-only) 0002/0003=TP(shared)
+```
+Derive `precision=TP/(TP+FP)`, `recall=TP/(TP+FN)`, `F1`. **Report calls falling outside `gradeable_regions.bed` as a separate "not-truth-backed / ungradeable" count — never folded into P/R/F1.** Caveat: `isec` is position/representation-sensitive and **undercounts** matches vs. haplotype-aware tools, especially for indels — quote it as an approximation.
+
+**4d. Real number — hap.py or vcfeval** (GA4GH-standard, haplotype-aware). Grade `calls.vcf.gz` against the truth VCF restricted by `eval/gradeable_regions.bed`, stratified SNV vs. indel. This is the defensible headline P/R/F1. (hap.py already passes the confident regions, so it does not need the 4c pre-restriction fix.)
+
+**4e. Register as EVAL-030.** Emit a **dated, `real-giab`-tagged** evaluation artifact whose **required output fields include the graded BED path and the fraction of the panel graded** (not just prose). Faithfulness claims are valid **only** inside the graded BED — state it explicitly on the artifact.
+
+---
+
+### 5. Run-layout config — the artifact-kind → path seam (schema DESIGN-NOW; loader/refactor DEFER)
+
+**5a. The problem.** `load_run` (`parsers.py:187-217`) reads exactly one physical layout — five literal filenames at the run root. `scripts/gate_giab.py` hard-codes `mosdepth/`, `fastq/`, `run/` and *reshapes* a real layout into that flat contract (that reshaping is exactly what a config should absorb). Real pipelines (nf-core/sarek) scatter outputs by tool/caller. And the registry already declares `variant.*` with `source_file: vcf` but **nothing knows where the VCF is** — the path map is the missing half.
+
+**5b. Design — a typed, profiled, tolerant `run_layout.yaml`** shipped in-package, mirroring `metric_registry.yaml` (frozen pydantic models, `importlib.resources`, versioned, pinned on `AnalysisRun`) and the ADR-0005 config layer. A **profile** is one named artifact-kind → locator map. `default` reproduces today's flat five-file contract **byte-for-byte** (offline suite + demo unchanged). `giab_panel` maps the on-disk `gate_giab.py` layout. `sarek` is illustrative/target-state (not wired). Locator fields: `path | glob`, `parser` (dispatch key; `null` = pointer-only, never opened), `required`, `role: output|reference` (reference never gated), `on_multiple: first|all|error`, `origin`. Selection follows the existing env pattern: `PIPEGUARD_RUN_LAYOUT=default|giab_panel|/path/to/custom.yaml`, default `default`. Missing **optional** artifact → `[]`/`None` (absence is a signal); missing **required** → deterministic "missing input" finding (never fabricates a pass).
+
+**5c. Composition.**
+- **With the metric registry:** clean split joined on the shared `parser` name. Registry = vocabulary of **values** (`variant.dp` = genotype depth, `parser: vcf_format`); layout = vocabulary of **locations** (where `vcf` physically sits). Neither can set a verdict.
+- **With ADR-0005 profiles:** a layout *is* a profile — `default` = lean/demo; `giab_panel`/`sarek` = granular real-pipeline. Same typed-settings + env selector, no new config mechanism.
+- **With wishlist #11 canvas:** this YAML is precisely the machine-readable seam a no-code builder would emit (wiring tool-nodes → output-folders *is* an artifact-kind → path map). Defining the schema now fixes the canvas's target: canvas becomes "a GUI that writes this file," not a parallel system. **Cross-reference wishlist #11; do not build the canvas here.**
+
+**5d. Guardrails — this locates inputs, never judges them.** (i) **Read-side only** — no path triggers tool execution (running tools stays in bioconda/Nextflow, ADR-0003). (ii) **Cannot move a verdict** — a verdict is a pure function of parsed values through rules + runbook (ADR-0001); repointing a path changes inputs, not thresholds. (iii) **Origin travels** — resolving a path never strips provenance; the `origin` field is **declarative annotation, surfaced, never a gate input**; `role: reference` artifacts (truth VCF, panel BED) are pointers never gated. (iv) **Auditability** — every resolved absolute path is recorded as a provenance-ledger event (ADR-0002); `on_multiple: error` refuses ambiguity for must-be-unique kinds.
+
+**5e. PHI enforcement at the ingest seam (forward-looking, required).** The caller-ingest seam (§2) and the `sarek`/glob layout are exactly where a **non-GIAB** VCF can enter. The moment a non-GIAB sample enters, the G-DEID / consent guardrails (data-platform §2.1d) are no longer hypothetical. Therefore: **origin must be enforced at ingest, not assumed.** A VCF resolved by glob has **unknown origin until tagged**; it may **not** be auto-tagged `real-giab`. Unknown-origin inputs default to a **non-real, PHI-guarded posture**, and a non-`real-giab` origin must trigger the de-id/consent path before any display. Config must not be able to relabel provenance to launder it.
+
+**5f. Scope.** **Schema is DESIGN-NOW** (paste the YAML into this doc as the target seam — it is the right shape for wishlist #11). The **loader + `load_run` refactor + `PIPEGUARD_RUN_LAYOUT` selector are DEFER**: they refactor the one tested, offline-suite-pinned working path (`parsers.py:187`) for **zero demo-visible gain**, and `PIPEGUARD_RUN_LAYOUT` would be **pydantic-settings' first use in `src/`** (a crunch-week first-use risk to raise with the maintainer, per CLAUDE.md coding-standard 4 — named but not yet used in `src/`). If ever built, ship only `default` + `giab_panel` and wire the parser-dispatch table only for kinds with a real parser today (the five CSVs + `mosdepth_summary`); leave `vcf_stats`/`bam` as `parser: null` pointer-only; `sarek` + canvas are CUT.
+
+---
+
+### 6. Honest framing — exact labels the doc/UI must use (required)
+
+**6a. Panel-level banner (always visible, inseparable from the panel):**
+> *"Regions are a disease-gene panel evaluated on GIAB HG002, a consented benchmark reference genome — not a patient. Variants shown are test fixtures for the variant gate, not diagnoses."*
+
+**6b. Per-variant fixture label (never omit, inseparable from the row):** **"ClinVar-labeled test fixture (HG002 benchmark)"** — never "HG002's pathogenic variant," never "disease-causing variant," never a bare clinical "finding." Call-quality signals render as **"call-quality finding"** (§3e). **The fixture label + banner must be inseparable from any rendered variant row — the variant cannot render without them** (highest screenshot-out-of-context risk).
+
+**6c. Do not headline the most alarming actionable-cancer genes.** Do **not** headline *BRCA1/2* or *TP53* as demo fixtures unless HG002 is **confirmed** to carry a qualifying P/LP allele there (§6d) — "PipeGuard found a pathogenic BRCA1 variant in this genome" is the single highest misread risk.
+
+**6d. Fixture selection must be allele-level, and no concrete fixture ships unconfirmed (hard rule).** Positional overlap is insufficient. **Normalize both sides** (`bcftools norm -f <ref> -m -`), then confirm HG002's ALT equals the ClinVar ALT. Gate ClinVar on `CLNSIG ∈ {Pathogenic, Likely_pathogenic}` **and** `CLNREVSTAT` **≥1★ (prefer ≥2★ = `criteria_provided,_multiple_submitters,_no_conflicts`)**. **Record the ClinVar release date** (it changes weekly). **No specific variant may be displayed as a positive fixture until confirmed against a dated ClinVar release *and* HG002 truth GT, allele-level, normalized.** P/LP positions HG002 does **not** carry are kept explicitly as **true-negative fixtures** (the gate must not fabricate them). Carry the full provenance every time a fixture is displayed: ClinVar accession (VCV/RCV) + `CLNSIG` + `CLNREVSTAT` star level + HG002 truth GT (0/1 or 1/1) + truth source (v4.2.1 or CMRG). Evidence, assumptions, and AI narration stay in **separate fields** (ADR-0001).
+
+**6e. ClinVar has exactly two uses — they must never merge (required).** (1) **Eval-time fixture *selection*** (§6d) — legitimate; builds the test set. (2) **Runtime gate input** — **forbidden.** State explicitly: *"ClinVar is consumed only at evaluation / fixture-build time and as displayed annotation; it must never enter the runtime verdict path for a production sample."* Without this a future contributor could wire the fixture selector into the gate and smuggle pathogenicity into the verdict while nominally satisfying surface-and-decide.
+
+**6f. Confidence wording.** Any confidence the future gate emits is a **heuristic, not a calibrated probability** — label it as such; thresholds are illustrative/configurable, not clinical.
+
+---
+
+### 7. Origin + provenance
+
+Follows the strategy.md origin-labels table, ADR-0002, ADR-0004/0007.
+
+1. **Committed, cited artifacts (derived region/fixture definitions — no reads, no PHI):**
+   a. The **panel BED** (union of `highconf` + `cmrg` intervals, truth-source-tagged). Origin: **`derived`** with an explicit source list in the provenance header — it is computed from ACMG-SF + MANE + ClinVar (non-GIAB public sources) intersected with GIAB/CMRG BEDs, so tagging it bare `real-giab` would launder its mixed provenance. Header states: source gene list + version (ACMG-SF vX.Y / CMRG v1.00), MANE/GENCODE/RefSeq version + date, GRCh38 no-alt build, splice-padding value, the two truth BEDs + versions, build date (ISO-8601 MST).
+   b. A small **fixtures manifest** (positions + ClinVar accession + `CLNSIG`/star + expected HG002 GT + truth source). Origin **`derived`** (ClinVar-sourced). Accessions and expected genotypes only — **no ClinVar or GIAB payload copied in.**
+2. **Fetched, git-ignored artifacts (accessions + fetch script, never committed):** extend `scripts/giab_hg002_manifest.json` + `scripts/fetch_giab_hg002.py` to add the **CMRG v1.00 truth VCF + tbi + BED** (origin `real-giab`, public/open, md5-enforced — VERIFY exact GIAB FTP paths/filenames/md5s). The **ClinVar GRCh38 VCF** is a new fetched input (record release date). The v4.2.1 truth VCF/BED are already manifested and on disk.
+3. **Boundary discipline:** the truth VCFs and ClinVar VCF stay **INDEX-/input-only** (data-platform §3.6) until a real `parse_vcf` / `parse_vcf_stats` path is built. The committed panel + fixtures manifest are the only new *repo* artifacts; everything with a payload stays under git-ignored `data/real-giab/`.
+
+---
+
+### 8. Registry-state reconciliation (correcting GROUND 1 §4)
+
+GROUND 1 §4 states no per-variant metrics are defined; **this is now stale.** Verified 2026-07-08: `src/pipeguard/metrics/metric_registry.yaml` declares `variant.dp`, `variant.gq`, `variant.allele_balance` (parser `vcf_allele_balance`), `variant.titv` (source `bcftools_stats`), each `gate: variant`. They are **inert vocabulary** — no locator (§5), no parser wired, no rule in `rules.py` consuming them (grep confirms zero `Category.VARIANT` findings fire). Leaving them declared-but-inert is correct; *finishing* them (locator + parser + aggregation rule) is Phase 2.
+
+**Invariant (must be stated wherever the registry is documented):** the variant metric keys are **all technical** (`dp / gq / allele_balance / titv`). **No `clinvar_significance` or `gnomad_af` metric may ever be registered as a gating metric.** ClinVar/gnomAD are annotation and evidence only (§3a, §6e), never a gate input.
+
+---
+
+### 9. Tiering — design-now / build-now-if-time / phase-2 / cut
+
+| # | Item | Source | Tier | Why |
+|---|---|---|---|---|
+| 1 | Framing contract + exact UI labels (§0, §6) | D1 §3 | **DESIGN-NOW** | Highest-value output; pure prose guardrail |
+| 2 | Two-truths / two-BEDs routing (§1) | D1 §1 | **DESIGN-NOW** | Load-bearing correctness; prevents a real future bug |
+| 3 | Caller-agnostic contract + two traps (§2) | D2 §1 | **DESIGN-NOW** | Right architecture; document, don't wire |
+| 4 | Run-layout YAML **schema** as documented seam (§5b) | D3 §2 | **DESIGN-NOW** | Right shape for sarek/canvas; fix the target without building |
+| 5 | Panel basis recommendation (§1) | D1 §1 | **DESIGN-NOW** | Standalone recommendation to hand off |
+| 6 | Demo caller (`gate_giab.py --call`, bcftools on the on-disk panel BAM) | D2 §2.1 | **BUILD-NOW-IF-TIME** | ~3 shell lines, external, non-circular |
+| 7 | GIAB-truth eval EVAL-030 (norm → gradeable BED → isec/hap.py → dated `real-giab` artifact) | D2 §4 | **BUILD-NOW-IF-TIME** | **Zero core code**; turns "we plan a gate" into "we call real variants, here's the measured accuracy vs NIST truth" |
+| 8 | `parse_vcf` VCF reader into core | D2 §2e | **DEFER (→Phase 2)** | Only consumer is the Phase-2 rules; eval (7) needs no core parser |
+| 9 | Fetch + register **CMRG v1.00 BED** (ships own truth) | D1 §1.1 | **DEFER** | Cheapest *truth-backed* panel option, but no consumer this week |
+| 10 | Run-layout **loader + `load_run` refactor + `PIPEGUARD_RUN_LAYOUT`** | D3 §5 | **DEFER** | Refactors the one tested path for zero demo gain; pydantic-settings first use in `src/` |
+| 11 | Wire `variant.*` keys as live inputs; per-variant→per-sample `Finding` aggregation | D2 §3 | **DEFER (→Phase 2)** | This *is* the gate |
+| 12 | ACMG-SF layer (HGNC→MANE GFF3→slop/merge→intersect) | D1 §1.1 | **DEFER (→Phase 2)** | Multi-step pipeline, ~4 VERIFY items, no consumer |
+| 13 | ClinVar P/LP fixture extraction (download/star-filter/norm/allele-match/intersect) | D1 §6d | **DEFER (→Phase 2)** | Correct method; weeks-of-polish for a manifest nothing reads yet |
+| 14 | Variant-gate **RULES** (DP/GQ/AB/FILTER thresholds → cited `Finding`s → verdict) | D2 §3 | **PHASE-2** | The real work; runbook-sourced, surface-and-decide, ADR-0001 |
+| 15 | `sarek` profile, `vcf_stats`/`bam` parsers, canvas generation | D3 §5 | **CUT** | Explicitly out of hackathon scope; name once |
+| 16 | DeepVariant BYO path | D2 §2.1 | **CUT (to a doc sentence)** | One sentence in the caller-agnostic doc; not a task |
+
+**Corrected build-order dependency (important):** Design 2's proposed `parser → caller → eval → rules` has a wrong edge — the eval (7) does **not** depend on the core parser (8). `hap.py`/`vcfeval`/`bcftools isec` are external CLIs that eat VCFs and emit P/R/F1 with **zero `src/` change**. So the parser (8) belongs **with** the rules (14) in Phase 2, not on the build-now path. The honest build-now-if-time is **caller (6) → eval (7), then stop.** The committed **BUILD-NOW remains the `/api/export` + RunsBrowser slice** — it owns the build budget; the variant thread touches `src/` only in Phase 2.
+
+---
+
+### 10. Items to VERIFY before shipping as hard claims
+
+1. **GIAB HG002/GRCh38 small-variant version** — v4.2.1 assumed current; a T2T "Q100"/v5 draft is emerging (VERIFY latest for this build). Exact variant count (~4M) and BED coverage % (~94–95%) are approximate.
+2. **CMRG** — `(VERIFY: 273 genes, autosomal-only)`, build (GRCh38 vs CHM13/T2T); exact FTP accession paths, filenames, md5s for the truth VCF/tbi/BED.
+3. **ACMG-SF** — per-version gene counts `(VERIFY: v3.0=73 / v3.1=78 / v3.2=81; possible v3.3)`; pick and cite one version.
+4. **Specific gene memberships** — *PMS2, CYP21A2, SMN1, HBA1/HBA2, STRC, GBA, NEB* as CMRG members and *BRCA1/2, MLH1, MSH2, LDLR, MYH7, MYBPC3, KCNQ1, RYR1/2, TP53* as ACMG-SF — all `(VERIFY membership)`, including at the §4a eval example genes.
+5. **Specific HG002 P/LP fixtures** — **hard rule (§6d):** do not quote or display any concrete reportable/PGx variant for HG002 until confirmed against a dated ClinVar release + normalized, allele-level HG002 truth GT.
+6. **Splice-padding policy** — settle on one value (±10–20 bp) and record it in the panel header.
+7. **CMRG BED filename/accession** used in the §1.1 intersect (`HG002_GRCh38_CMRG_v1.00.bed` is a placeholder).
+
+---
+
+### 11. Relevant repo paths
+
+- Existing smoke-test BED to augment: `/Users/jchu/IdeaProjects/claude_life_science_hackathon/scripts/panel_regions.example.bed`
+- Manifest + fetch to extend (CMRG + ClinVar): `/Users/jchu/IdeaProjects/claude_life_science_hackathon/scripts/giab_hg002_manifest.json`, `/Users/jchu/IdeaProjects/claude_life_science_hackathon/scripts/fetch_giab_hg002.py`
+- Panel-slice driver (reuse `-L`; add `--call`/`--eval`): `/Users/jchu/IdeaProjects/claude_life_science_hackathon/scripts/gate_giab.py`
+- On-disk panel slice (verified 2026-07-08): `/Users/jchu/IdeaProjects/claude_life_science_hackathon/data/real-giab/HG002.GRCh38.panel.bam(.bai)`, `.../HG002_GRCh38_1_22_v4.2.1_benchmark.panel.vcf.gz(.tbi)`, `.../HG002_GRCh38_1_22_v4.2.1_benchmark_noinconsistent.bed`
+- Core seams for Phase 2: `/Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/models.py` (`Gate.VARIANT`/`Category.VARIANT` defined), `.../src/pipeguard/rules.py` (no VARIANT findings yet), `.../src/pipeguard/metrics/metric_registry.yaml` (`variant.*` keys declared, lines ~290-352, no locator/parser/rule), `.../src/pipeguard/parsers.py:187` (hard-coded five-file `load_run`)
+- Proposed new committed artifacts: `scripts/panel_regions.disease.bed` (+ provenance header), a fixtures manifest, `src/pipeguard/layout/run_layout.yaml` (schema only, DESIGN-NOW)
+
+---
+
 ## Open questions for the maintainer
 
 *Each carries a recommendation; the workflow's own resolution is noted where it took one.*
@@ -564,6 +806,25 @@ Decisions to escalate to the maintainer (each is target-state or a naming/semant
 8. **`run_id` identity.** The target per-run root keys on the `analysis_run` UUIDv7 and assumes multi-sample runs share a root with per-sample subdirs. Confirm the 1:1 mapping (one filesystem run root ↔ one `analysis_run` event) before any per-run layout is built.
 
 9. **Unverified sarek filenames.** `<sample>.md.cram` / `.md.cram.metrics`, `joint_germline.vcf.gz`, `.recal.cram`, VEP/snpEff outputs, Picard `hs_metrics.txt`, and the `preprocessing/`/`variant_calling/` dir names are tagged `(VERIFY)` — confirm against a real sarek output tree before any of them is cited as canonical. Likewise, fastp/mosdepth/samtools/bcftools/MultiQC/sarek licenses are "reported, not verified" in-repo — do not assert them.
+
+
+**Variant-gate substrate (from the design workflow) — additional questions (none block build-now; the export slice owns the build budget):**
+
+**Escalate to the maintainer before any variant build:**
+
+1. **Attempt any variant-gate MVP this weekend? (the load-bearing decision.)** Recommendation: **no gate rules.** The deterministic VARIANT rules are the only piece that makes the panel/parser/config/fixtures pay off in the demo, and they are correctly Phase 2. The three designs collectively *are* the variant subsystem sliced into "small" hats; every slice's payoff is locked behind the deferred rules. Confirm you agree the committed BUILD-NOW stays `/api/export` + RunsBrowser and the variant thread stays out of `src/` until Phase 2.
+
+2. **If any variant time remains after export lands, spend it on the eval — confirm.** The single highest-leverage, zero-`src/`-code item is EVAL-030: bcftools-call the on-disk panel BAM → grade vs NIST truth inside the high-conf BED → one dated `real-giab` P/R/F1 number. Confirm this (not the parser, not the config refactor, not the panel pipeline) is where surplus hours go. Caveat: it competes directly with export for the last hours — if export is not rock-solid, this waits.
+
+3. **Demo caller choice.** Recommendation: **bcftools `mpileup | call`** on the existing panel BAM (real call, independent of truth → non-circular, tools already in the `hackathon` conda env). Alternatives: feed the on-disk truth panel VCF as input (smoke-test the reader only — circular, never for eval); DeepVariant BYO (higher fidelity, but a doc sentence, not a task). Confirm bcftools.
+
+4. **Panel basis + whether to fetch CMRG now.** Recommendation: **CMRG v1.00 spine + ACMG-SF framing + tiny demo sub-panel**, but ship it as *design* — for the demo use the existing chr20 smoke panel (~470 truth records / ~71k reads). If you want a concrete "disease-gene" artifact, the bounded option is fetch+register the **CMRG v1.00 BED only** (no MANE, no ClinVar, no ACMG-SF). Decide: chr20 smoke panel only, or also fetch the CMRG BED (bounded, but no consumer this week)?
+
+5. **pydantic-settings first use in `src/`.** The run-layout `PIPEGUARD_RUN_LAYOUT` selector would be the **first** pydantic-settings use in `src/` (CLAUDE.md coding-standard 4 names it as intended but it is unused today). Introducing a new config mechanism in crunch week is a poor bet — recommendation is DEFER the loader/refactor and ship only the schema in the doc. Confirm, or approve introducing pydantic-settings now.
+
+6. **PHI posture at the ingest seam.** The caller-ingest / glob-layout seam is exactly where a non-GIAB patient VCF could enter, at which point G-DEID/consent stop being hypothetical. Recommendation: enforce origin **at ingest** — an ingested VCF may never be auto-tagged `real-giab`; unknown-origin inputs default to a PHI-guarded posture and trigger the de-id/consent path before display. Confirm this is the required posture (it keeps the HG002-only demo clean while making the production seam honest).
+
+7. **ClinVar release pinning + splice padding (only if the panel/fixtures are pursued).** Which dated ClinVar release do we pin, and what star threshold (≥1★ vs ≥2★)? And settle one splice-padding value (±10–20 bp) recorded in the panel header. Plus resolve the open `(VERIFY)` items before any gene/coordinate/version ships as a hard claim: GIAB v4.2.1 currency (vs emerging Q100/v5), CMRG gene count/build/autosomal scope, ACMG-SF per-version counts, and specific gene memberships.
 
 ---
 
