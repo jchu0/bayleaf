@@ -129,11 +129,15 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    [tasks T-022/T-022b/T-037](../planning/tasks.md).
 4. **REQ-F-044 — In-app feedback (off-gate telemetry).** The app captures product feedback
    via the one write endpoint, `POST /api/feedback` — a per-decision agree/disagree signal
-   (keyed to verdict + gate + rule ids + card hash) and a global product note — appended to a
-   gitignored JSONL. It is **off the deterministic gate** (never mutates a verdict/provenance
-   event; ADR-0001), carries **no operator identity** (`extra="forbid"` structural guard), and
-   resolves `origin` server-side. *Trace:* [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md),
-   [tasks T-042](../planning/tasks.md).
+   (keyed to verdict + gate + rule ids + card hash) and a global product note, each tagged with
+   the originating UI `source`. It is **off the deterministic gate** (never mutates a
+   verdict/provenance event; ADR-0001), carries **no operator identity** (`extra="forbid"`
+   structural guard), and resolves `origin` server-side. The sink is a **pluggable store**
+   (JSONL default / SQLite / Postgres, `PIPEGUARD_FEEDBACK_STORE`) with its own table, separate
+   from the decision projection and degrading to JSONL (ADR-0016). An **advisory feedback agent**
+   (`python -m api.feedback_agent`, stub/claude) categorizes the corpus structurally out-of-band.
+   *Trace:* [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md),
+   [ADR-0016](../adr/ADR-0016-postgres-port.md), [tasks T-042/T-043](../planning/tasks.md).
 5. **REQ-F-043 — Offline fallback view.** A Streamlit app renders the same core
    offline, in one process, as the guaranteed-working demo fallback. *Trace:*
    [demo_plan.md](../demo/demo_plan.md), ADR-0014.

@@ -1,0 +1,81 @@
+# ADR-0016 — Postgres port for persistence + feedback (guarded, off by default)
+
+| Field | Value |
+|---|---|
+| **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043), OFF by default; live-server integration test + connection pooling deferred |
+| **Date** | 2026-07-09 (MST) |
+| **Deciders** | James Hu, Claude Code |
+| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [tasks.md](../planning/tasks.md) |
+
+## Context
+
+Two pulls converged: (1) in-app feedback (W12, [ADR-0010](ADR-0010-ticketing-notify-read-api.md))
+was landing in a flat JSONL file and should go into a real, queryable database; (2) the
+`Repository` persistence port ([ADR-0003](ADR-0003-deployment-agnostic-ports.md)) has always
+documented `SqliteRepository → Postgres later` — the Postgres adapter was the anticipated
+production seam, not yet built. The maintainer asked to **scope out the full port to Postgres**.
+
+The constraint that shapes everything: the demo is offline-first, single-process, zero-dep
+(uv single-source; `sqlite3` is stdlib "no new dependency"). A hard dependency on a running
+Postgres would break the guaranteed-working offline fallback ([ADR-0014](ADR-0014-productionization-fastapi-react.md)).
+So the port must be **real but guarded** — present as a production seam, invisible to the demo.
+
+## Decision
+
+1. **`PostgresRepository` implements the `Repository` port** over Postgres, behaviourally
+   identical to `SqliteRepository`: the same five projection tables, **idempotent upserts**
+   (`INSERT … ON CONFLICT (pk) DO UPDATE`) so a ledger replay stays a no-op (ADR-0002),
+   `JSONB` + `TIMESTAMPTZ` columns, and a `pipeguard_meta` row for the table-layout version
+   (Postgres has no `PRAGMA user_version`). It is a projection of the authoritative ledger,
+   never a source of truth (ADR-0002), so it is disposable + rebuildable regardless of backend.
+2. **Off by default, degrade never crash.** `get_repository()` reads `PIPEGUARD_REPOSITORY`
+   (`sqlite` default | `postgres`) and, on **any** failure constructing the Postgres adapter
+   (missing extra, no DSN, unreachable server), **degrades to SQLite** — the single line that
+   flips the seam, mirroring `get_artifact_store()` (S3, [ADR-0003](ADR-0003-deployment-agnostic-ports.md)).
+   `psycopg` is a **lazy import** behind the optional `[postgres]` extra, so the module imports
+   and the demo runs with no Postgres dependency and no socket.
+3. **Feedback is a separate concern from the decision projection.** Its store is a pluggable
+   `FeedbackStore` (`jsonl` default | `sqlite` | `postgres`) with its **own `feedback` table**,
+   never the `Repository`, and its writer **never imports the `pipeguard` core** — feedback
+   stays off the deterministic gate (ADR-0001). `PIPEGUARD_FEEDBACK_STORE` selects the adapter;
+   the DB options degrade to JSONL. `SqliteFeedbackStore` is exercised end-to-end in tests, so
+   "feedback in a database" is proven without a live Postgres.
+4. **Never leak the DSN.** `DATABASE_URL` carries a password; degradation logs the exception
+   **type** only (`type(exc).__name__`), never `str(exc)`, and a write failure maps to a
+   generic 503 that leaks neither the path nor the message.
+5. **Trace + advisory categorization.** A required `source` field on the feedback contract
+   records the exact UI surface (`decision-card` | `product-fab` | …), distinct from `target`,
+   so every reaction is traceable. An **advisory feedback agent** (`api/feedback_agent.py`,
+   stub-first / opt-in Claude, mirroring the triage seam) categorizes the corpus structurally
+   (category / area / sentiment / priority + themes) out-of-band — no HTTP surface, and the
+   Claude path is sent only the anonymous aggregate rollup, never raw messages.
+
+## Assumptions
+
+- The projection is disposable and rebuildable from the ledger, so a backend swap is safe and
+  needs no data migration — `rebuild-db` replays into whichever adapter the factory selects.
+- Feedback telemetry is best-effort: a degraded write (DB down → JSONL, or a 503) is acceptable;
+  it never blocks or influences a decision.
+
+## Alternatives considered
+
+| Option | Why not chosen |
+|---|---|
+| Make Postgres a hard dependency / the default | Breaks the offline, single-process, zero-dep demo + the guaranteed fallback (ADR-0014). The guarded, degrade-to-SQLite seam gives the production path without that cost. |
+| Put feedback rows in the `Repository`/decision projection | Feedback is off-gate telemetry; mixing it with runs/cards/events couples it to the decision domain and risks it re-entering a view. A separate table + store keeps the boundary. |
+| One shared Postgres connection/pool object | Deferred: per-op short-lived connections are simplest + thread-safe for the demo scale; a pool is the documented next step. |
+| Skip SQLite, only build Postgres | Postgres can't be exercised offline (no server), so the DB path would be untested. SQLite is the offline-testable DB that proves the seam; Postgres is the same code in a different dialect. |
+
+## Consequences
+
+| | |
+|---|---|
+| **Gains** | The anticipated production DB seam is real + guarded; feedback lands in a queryable DB; a backend swap is one env var; the offline demo/tests are untouched (no new dep, no socket). |
+| **Costs** | A second SQL dialect to keep in parity with `SqliteRepository`; `psycopg` connect logic exists in two off-gate places (repo + feedback store); the Postgres SQL is not exercised by CI (no live server) — covered by dialect review + parity tests instead. |
+| **Follow-ups** | A live-Postgres integration test (compose-gated, opt-in); connection pooling; Alembic-style migrations if the layout ever needs a non-disposable change; wiring the read-API to read the projection (today it recomputes). |
+
+## Revisit when
+
+- The read-API needs to serve from the projection (not recompute) — then Postgres read
+  performance + pooling matter and the live integration test becomes load-bearing.
+- Feedback volume warrants indexed queries / retention policy on the `feedback` table.
