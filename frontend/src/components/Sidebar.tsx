@@ -15,11 +15,12 @@ type Item = { label: string; to: string; icon: LucideIcon; active: boolean; badg
 type Group = { heading: string; items: Item[] }
 
 // Grouped nav (Operate / Analyze / Configure), per the handoff. Per-run views (decision
-// cards, provenance, triage) resolve to the run currently in context.
-function useNav(attention: number): Group[] {
+// cards, provenance, triage) resolve to the run currently in context, else the first run —
+// so they always navigate somewhere useful instead of dead-ending.
+function useNav(attention: number, defaultRunId: string | null): Group[] {
   const { pathname } = useLocation()
   const { runId } = useParams()
-  const run = runId ?? null
+  const run = runId ?? defaultRunId
   const runHome = run ? `/runs/${run}` : '/'
   return [
     {
@@ -59,8 +60,14 @@ function useNav(attention: number): Group[] {
   ]
 }
 
-export function Sidebar({ attention = 0 }: { attention?: number }) {
-  const groups = useNav(attention)
+export function Sidebar({
+  attention = 0,
+  defaultRunId = null,
+}: {
+  attention?: number
+  defaultRunId?: string | null
+}) {
+  const groups = useNav(attention, defaultRunId)
   return (
     <aside className="flex w-[236px] shrink-0 flex-col border-r border-nav-border bg-nav text-nav-text">
       <Link to="/" className="flex items-center gap-2.5 px-[18px] pb-[15px] pt-[17px]">
