@@ -141,6 +141,14 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
 5. **REQ-F-043 — Offline fallback view.** A Streamlit app renders the same core
    offline, in one process, as the guaranteed-working demo fallback. *Trace:*
    [demo_plan.md](../demo/demo_plan.md), ADR-0014.
+6. **REQ-F-045 — Pipeline Builder (compose ≠ execute).** An editable node-graph screen
+   (the superset of the Provenance canvas) lets an operator configure the germline pipeline
+   and **emit `run_layout.yaml`** across profiles. It **composes, never executes** (the
+   primary action is Emit, never Run), and renders the load-bearing invariants as visible
+   guarantees: agents are port-less side-nodes (an agent→gate data edge is unrepresentable),
+   the deterministic gate is a terminal locked node with no verdict control, and every emitted
+   locator's `origin` is `unknown` (config locates, never relabels provenance). *Trace:*
+   [pipeline-builder-brief.md](../design/frontend/pipeline-builder-brief.md), [tasks T-044](../planning/tasks.md).
 
 ## AI configurability (ADR-0006)
 
