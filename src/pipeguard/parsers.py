@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
+from typing import NamedTuple
 
 import pandas as pd
 
@@ -84,6 +85,58 @@ def parse_sample_metadata(path: Path) -> list[Sample]:
             )
         )
     return samples
+
+
+class SampleSheetHeader(NamedTuple):
+    """The run-level lifecycle context carried in a sample sheet's [Header] block.
+
+    Every field is optional: a sheet may omit any row, and a missing key stays
+    `None` rather than being invented — "missing metadata" is itself a signal the
+    gate is meant to surface, not a parse error.
+    """
+
+    platform: str | None  # InstrumentPlatform, e.g. "NovaSeq"
+    run_date: str | None  # Date, kept as the raw ISO string (never coerced to a datetime)
+    run_name: str | None  # RunName, e.g. "RUN-2026-07-07-A"
+
+
+def parse_sample_sheet_header(path: Path) -> SampleSheetHeader:
+    """Parse the [Header] block of an Illumina v2 sample sheet.
+
+    Extracts the run-level context the [BCLConvert_Data] rows lack — instrument
+    platform, run date, and run name — from Illumina v2 "Key,Value" header rows
+    (`InstrumentPlatform,NovaSeq` / `Date,2026-07-07` / `RunName,RUN-2026-07-07-A`).
+    The date is preserved as the raw string on purpose: we do NOT fabricate a
+    datetime when the field is absent or malformed. Any missing key -> `None`
+    (a missing field is a signal, not a crash), mirroring the other parsers here.
+    """
+    if not path.exists():
+        return SampleSheetHeader(None, None, None)
+    lines = path.read_text().splitlines()
+    header_start: int | None = None
+    for i, line in enumerate(lines):
+        if line.strip().lower().strip("[]") == "header":
+            header_start = i + 1
+            break
+    if header_start is None:
+        return SampleSheetHeader(None, None, None)
+
+    # Collect Key->Value pairs until the next [Section] or EOF. Keys are matched
+    # case-insensitively so a differently-cased sheet still resolves.
+    fields: dict[str, str | None] = {}
+    for line in lines[header_start:]:
+        if line.strip().startswith("["):
+            break
+        if not line.strip():
+            continue
+        # Split on the FIRST comma only, so a value containing a comma survives intact.
+        key, _, value = line.partition(",")
+        fields[key.strip().lower()] = _clean(value)
+    return SampleSheetHeader(
+        platform=fields.get("instrumentplatform"),
+        run_date=fields.get("date"),
+        run_name=fields.get("runname"),
+    )
 
 
 def parse_sample_sheet(path: Path) -> list[SampleSheetEntry]:
@@ -198,9 +251,11 @@ def load_run(run_dir: str | Path, run_id: str | None = None) -> RunArtifacts:
         if _maybe("sample_metadata.csv").exists()
         else []
     )
-    sheet = (
-        parse_sample_sheet(_maybe("SampleSheet.csv")) if _maybe("SampleSheet.csv").exists() else []
-    )
+    sheet_path = _maybe("SampleSheet.csv")
+    sheet = parse_sample_sheet(sheet_path) if sheet_path.exists() else []
+    # The [Header] block carries run-level lifecycle context (platform/date/name) the
+    # per-sample rows lack; parse_sample_sheet_header tolerates an absent sheet itself.
+    header = parse_sample_sheet_header(sheet_path)
     demux = (
         parse_demux_stats(_maybe("demux_stats.csv")) if _maybe("demux_stats.csv").exists() else []
     )
@@ -214,4 +269,7 @@ def load_run(run_dir: str | Path, run_id: str | None = None) -> RunArtifacts:
         demux=demux,
         qc=qc,
         log_lines=log,
+        platform=header.platform,
+        run_date=header.run_date,
+        run_name=header.run_name,
     )

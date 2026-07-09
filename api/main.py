@@ -21,8 +21,8 @@ import io
 import json
 import uuid
 from collections import Counter
-from collections.abc import Iterable, Iterator
-from datetime import datetime, timezone
+from collections.abc import Callable, Iterable, Iterator
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -35,12 +35,14 @@ from pydantic import BaseModel
 from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
 from pipeguard.metrics import default_registry
 from pipeguard.models import DecisionCard, Gate, Sample, Verdict
-from pipeguard.provenance import ProvenanceEvent
+from pipeguard.provenance import EventType, ProvenanceEvent
 from pipeguard.triage import TriageNote
 
 from .deid import IDENTITY_FIELDS, DeidPolicy, default_policy, export_fields, redact
 from .feedback import FEEDBACK_SCHEMA_VERSION, FeedbackAck, FeedbackIn
 from .feedback_store import get_feedback_store
+from .pipeline import PipelineGraph, PipelineGraphAck, PipelineGraphIn
+from .pipeline_store import get_pipeline_store
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
@@ -54,16 +56,32 @@ app.add_middleware(
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
+    # The run-list keeps its JSON body a plain list (backward-compat) and carries pagination
+    # metadata on headers; a browser fetch can only read those cross-origin if they're exposed.
+    expose_headers=[
+        "X-PipeGuard-Total-Count",
+        "X-PipeGuard-Page",
+        "X-PipeGuard-Limit",
+    ],
 )
 
 
 class RunSummary(BaseModel):
-    """The run-overview row: per-run verdict counts and attention flag."""
+    """The run-overview row: per-run verdict counts, attention flag, and lifecycle state.
+
+    `platform`/`run_date` come from the sample sheet's [Header] block (Illumina v2);
+    both are optional because a sheet may omit them, and `run_date` is the raw ISO
+    string, never a fabricated datetime. `status` is a run-LIFECYCLE label derived
+    honestly from provenance (see `_run_status`) — NOT a per-sample verdict.
+    """
 
     run_id: str
     n_samples: int
     n_attention: int
     counts: dict[str, int]
+    platform: str | None = None
+    run_date: str | None = None
+    status: str  # "running" | "needs_review" | "released"
 
 
 class RunDetail(BaseModel):
@@ -155,17 +173,40 @@ def _run_ids() -> list[str]:
     )
 
 
+def _run_status(*, completed: bool, n_attention: int) -> str:
+    """Derive a run's LIFECYCLE label from provenance + the attention count.
+
+    This is a run-lifecycle status, NOT a per-sample verdict (ADR-0001, rules decide):
+    a run is 'running' until its ANALYSIS_RUN_COMPLETED event lands, so a still-executing
+    run with zero flags is never mislabeled 'released' (the bug this fixes). Once the gate
+    completes it is 'needs_review' if any sample is actionable, else 'released'. Kept a pure
+    function of (completed, n_attention) so the tri-state is unit-testable without a ledger.
+    """
+    if not completed:
+        return "running"
+    return "needs_review" if n_attention > 0 else "released"
+
+
 @lru_cache(maxsize=32)
 def _evaluate(run_id: str) -> RunDetail:
     """Run the gate once per run (cached); captures cards + the event trail."""
     ledger = EventLedger()
-    cards = run_gate(load_run(_run_dir(run_id)), ledger=ledger)
+    artifacts = load_run(_run_dir(run_id))
+    cards = run_gate(artifacts, ledger=ledger)
     counts = Counter(c.verdict.value for c in cards)
+    n_attention = sum(1 for c in cards if c.is_actionable)
+    # Honest lifecycle state from the authoritative event trail (ADR-0002): a run counts as
+    # finished only once its ANALYSIS_RUN_COMPLETED event is on the ledger — not inferred from
+    # a zero attention count, which conflates "still running" with "released clean".
+    completed = any(e.event_type is EventType.ANALYSIS_RUN_COMPLETED for e in ledger.events)
     summary = RunSummary(
         run_id=run_id,
         n_samples=len(cards),
-        n_attention=sum(1 for c in cards if c.is_actionable),
+        n_attention=n_attention,
         counts={v: counts.get(v, 0) for v in ("proceed", "hold", "rerun", "escalate")},
+        platform=artifacts.platform,
+        run_date=artifacts.run_date,
+        status=_run_status(completed=completed, n_attention=n_attention),
     )
     return RunDetail(run_id=run_id, summary=summary, cards=cards, events=ledger.events)
 
@@ -208,10 +249,162 @@ def submit_feedback(body: FeedbackIn) -> FeedbackAck:
     )
 
 
+# --- Pipeline Builder save/version (ADR-0014): PRODUCT state, OFF the deterministic gate ------
+# A saved builder graph is product state, NOT a decision: these three endpoints never call
+# `run_gate`, touch the EventLedger/projection, or set a verdict (ADR-0001). The graph payload is
+# a tolerant, versioned envelope (`api/pipeline.py`) stored as-is via a pluggable, env-selected
+# sink (`api/pipeline_store.py`) — distinct from the decision Repository port. Additive: no
+# existing endpoint's response changes.
+
+
+@app.post("/api/pipelines", status_code=201)
+def save_pipeline(body: PipelineGraphIn) -> PipelineGraphAck:
+    """Save a Pipeline Builder graph under a name — a PRODUCT write, OFF the deterministic gate.
+
+    Mints a server-authored `id` + `created_at`; the store authors the monotonic per-name
+    `version` (max existing + 1) atomically under its write lock, so re-saving a name yields
+    2, 3, …. The client cannot set the server-authored fields (`PipelineGraphIn` is
+    `extra="forbid"`), and the `graph` payload is stored AS-IS — never validated node-by-node
+    or fed to a rule/verdict. A write that fails (disk full, DB down mid-flight) maps to a
+    generic 503 — never leaking the path, DSN, or the payload (mirrors POST /api/feedback).
+    """
+    pipeline_id = uuid.uuid4().hex  # stdlib uuid on purpose — no coupling to the core's ids
+    created_at = datetime.now(timezone.utc).isoformat()
+    # Everything but `version`, which the store authors atomically under its lock. A save mints a
+    # `draft`; the reviewer/approver fields are reserved-null now (server-authored once auth lands,
+    # never client-set — the draft→save→approve flow the builder-versioning decision reserves).
+    record: dict[str, Any] = {
+        **body.model_dump(),
+        "id": pipeline_id,
+        "created_at": created_at,
+        "status": "draft",
+        "submitted_by": None,
+        "reviewed_by": None,
+        "approved_by": None,
+    }
+    try:
+        stored = get_pipeline_store().append(record)
+    except Exception:
+        raise HTTPException(status_code=503, detail="pipeline store unavailable") from None
+    return PipelineGraphAck(
+        id=stored["id"],
+        name=stored["name"],
+        version=stored["version"],
+        schema_version=stored["schema_version"],
+        created_at=stored["created_at"],
+        status=stored["status"],
+    )
+
+
+@app.get("/api/pipelines")
+def list_pipelines() -> list[PipelineGraph]:
+    """The saved-pipeline catalog: the LATEST version of each distinct name, sorted by name.
+
+    Read-only over product state (never the decision domain). The store keeps every revision;
+    collapsing to the latest per name is a presentation concern kept in the API layer (CLAUDE.md
+    architecture guardrail 1) so the catalog shows each pipeline once — use
+    `GET /api/pipelines/{name}` for a name's full version history.
+    """
+    try:
+        records = get_pipeline_store().list()
+    except Exception:
+        raise HTTPException(status_code=503, detail="pipeline store unavailable") from None
+    latest: dict[str, dict[str, Any]] = {}
+    for r in records:
+        name = str(r["name"])
+        if name not in latest or int(r["version"]) > int(latest[name]["version"]):
+            latest[name] = r
+    return [PipelineGraph.model_validate(latest[name]) for name in sorted(latest)]
+
+
+@app.get("/api/pipelines/{name}")
+def get_pipeline_versions(name: str) -> list[PipelineGraph]:
+    """One pipeline's full version history, ascending by `version` (the save/version timeline).
+
+    Read-only over product state. 404 if the name has no saved revisions (mirrors the run
+    endpoints' unknown-id 404). The store-read is wrapped so a backend failure maps to a
+    generic 503 without leaking the path/DSN; the 404 is raised outside that guard so it is
+    never masked as a 503.
+    """
+    try:
+        records = get_pipeline_store().get_versions(name)
+    except Exception:
+        raise HTTPException(status_code=503, detail="pipeline store unavailable") from None
+    if not records:
+        raise HTTPException(status_code=404, detail=f"Unknown pipeline '{name}'")
+    return [PipelineGraph.model_validate(r) for r in records]
+
+
+# --- Run-list filtering / ordering / paging (the run-overview + monitoring screens) ----------
+# Presentation concerns kept in the API layer, never the framework-agnostic core (CLAUDE.md
+# architecture guardrail 1): the core emits runs; sorting/paging shape them for a screen.
+
+
+def _run_order_key(summary: RunSummary) -> tuple[str, str]:
+    """Chronological sort key for a run: its [Header] date when present, else the run_id as a
+    stable fallback (per the schema, run_date is a real ISO date or None, never empty). run_id
+    is the tiebreaker so same-date runs (e.g. two 2026-07-08 runs) keep a deterministic order.
+    """
+    return (summary.run_date or summary.run_id, summary.run_id)
+
+
+# Closed `sort` vocabulary → (key, reverse). Mirrors the export endpoint's closed-enum + 400
+# idiom for `verdict`: an unknown token is a 400, never a silent fallback to the default order.
+_RUN_SORTS: dict[str, tuple[Callable[[RunSummary], Any], bool]] = {
+    "run_id": (lambda s: s.run_id, False),
+    "-run_id": (lambda s: s.run_id, True),
+    "run_date": (_run_order_key, False),
+    "-run_date": (_run_order_key, True),
+    "n_samples": (lambda s: s.n_samples, False),
+    "-n_samples": (lambda s: s.n_samples, True),
+    "n_attention": (lambda s: s.n_attention, False),
+    "-n_attention": (lambda s: s.n_attention, True),
+}
+
+
 @app.get("/api/runs")
-def list_runs() -> list[RunSummary]:
-    """All discoverable runs with their verdict counts (the run-overview screen)."""
-    return [_evaluate(rid).summary for rid in _run_ids()]
+def list_runs(
+    response: Response,
+    verdict: str | None = None,
+    q: str | None = None,
+    sort: str | None = None,
+    page: int = Query(1, ge=1),
+    limit: int | None = Query(None, ge=1),
+) -> list[RunSummary]:
+    """All discoverable runs with their verdict counts (the run-overview + monitoring screens).
+
+    Backward-compatible: with NO params the JSON body is byte-identical to before — every run
+    in run_id order, unpaginated. The optional filters reuse the export endpoint's idiom:
+    `verdict` keeps runs that contain at least one sample with that verdict (unknown value →
+    400, same closed vocabulary as `/api/export`); `q` is a run_id substring match. `sort` is a
+    closed vocabulary ({run_id,run_date,n_samples,n_attention}, each with a `-` desc variant);
+    an unknown token is a 400. Pagination applies ONLY when `limit` is given (`page` is 1-based);
+    the pre-pagination total plus the active page/limit ride response headers so the body stays
+    a plain list — an envelope would break the byte-identical contract.
+    """
+    if verdict is not None and verdict not in _VERDICT_ORDER:
+        raise HTTPException(status_code=400, detail=f"verdict must be one of {_VERDICT_ORDER}")
+    if sort is not None and sort not in _RUN_SORTS:
+        raise HTTPException(status_code=400, detail=f"sort must be one of {sorted(_RUN_SORTS)}")
+
+    ids = [rid for rid in _run_ids() if q is None or q in rid]
+    summaries = [_evaluate(rid).summary for rid in ids]
+    if verdict is not None:
+        # A run "has" a verdict when at least one of its samples landed there — the run-grain
+        # analogue of the export's per-sample verdict filter.
+        summaries = [s for s in summaries if s.counts.get(verdict, 0) > 0]
+    if sort is not None:
+        key, reverse = _RUN_SORTS[sort]
+        summaries = sorted(summaries, key=key, reverse=reverse)
+
+    # Total is the filtered count BEFORE the page slice, so a client can size its pager.
+    response.headers["X-PipeGuard-Total-Count"] = str(len(summaries))
+    if limit is not None:
+        start = (page - 1) * limit
+        summaries = summaries[start : start + limit]
+        response.headers["X-PipeGuard-Page"] = str(page)
+        response.headers["X-PipeGuard-Limit"] = str(limit)
+    return summaries
 
 
 @app.get("/api/runs/{run_id}")
@@ -701,18 +894,24 @@ _VERDICT_ORDER: tuple[str, ...] = ("proceed", "hold", "rerun", "escalate")
 _GATE_ORDER: tuple[Gate, ...] = (Gate.PREFLIGHT, Gate.QC, Gate.VARIANT)
 
 
-def _aggregate_metrics() -> tuple[int, int, dict[str, int], dict[str, int]]:
-    """Roll up run / sample / verdict / per-gate counts across every served run.
+def _aggregate_metrics(
+    run_ids: list[str] | None = None,
+) -> tuple[int, int, dict[str, int], dict[str, int]]:
+    """Roll up run / sample / verdict / per-gate counts across a set of runs.
 
     Pure aggregation over the gate's own outputs (the `_evaluate` cards) — no metrics code
     leaks into `src/pipeguard/` (CLAUDE.md architecture guardrail 1). A sample counts as
     "flagged" at a gate when that gate's rollup verdict is actionable (non-proceed).
+
+    `run_ids` defaults to every served run (the Prometheus `/metrics` seam's fleet-wide view);
+    the monitoring endpoint passes a windowed subset so the SAME roll-up powers both. The
+    return tuple shape is unchanged, keeping the `/metrics` caller byte-stable.
     """
-    run_ids = _run_ids()
+    ids = _run_ids() if run_ids is None else run_ids
     verdict_counts = dict.fromkeys(_VERDICT_ORDER, 0)
     gate_flagged = {g.value: 0 for g in _GATE_ORDER}
     total_cards = 0
-    for rid in run_ids:
+    for rid in ids:
         detail = _evaluate(rid)
         total_cards += detail.summary.n_samples
         for verdict, n in detail.summary.counts.items():
@@ -721,7 +920,203 @@ def _aggregate_metrics() -> tuple[int, int, dict[str, int], dict[str, int]]:
             for gr in card.gate_results:
                 if gr.verdict is not Verdict.PROCEED:
                     gate_flagged[gr.gate.value] += 1
-    return len(run_ids), total_cards, verdict_counts, gate_flagged
+    return len(ids), total_cards, verdict_counts, gate_flagged
+
+
+# --- Monitoring dashboard (pre-aggregated; the §7 screen) ------------------------------------
+# One response replaces the frontend's N-fan-out (a detail fetch per run). Aggregation stays in
+# the API layer, never the framework-agnostic core (CLAUDE.md architecture guardrail 1).
+
+# Supported time windows. A dated window keeps runs whose [Header] date is within the last N
+# days of "now"; "all" applies no date filter (and admits undated runs).
+_WINDOW_DAYS: dict[str, int] = {"7d": 7, "14d": 14, "30d": 30}
+_WINDOWS: tuple[str, ...] = ("7d", "14d", "30d", "all")
+
+
+def _in_window(run_date: str | None, window: str, *, now: date) -> bool | None:
+    """Tri-state window membership for a run's [Header] date.
+
+    Returns True (inside the window, or any run under "all"), False (dated but older than the
+    window), or None (no / unparseable date → the run can't be placed on the time axis). A dated
+    window is inclusive of its `now - Nd` cutoff. Pure and `now`-injected so the boundary is
+    unit-testable without leaning on the wall clock (mirrors `_run_status`'s pure-function style).
+    """
+    if window == "all":
+        return True
+    if run_date is None:
+        return None
+    try:
+        parsed = date.fromisoformat(run_date)
+    except ValueError:
+        # Tolerant boundary (CLAUDE.md data-handling 2): a malformed date is a signal the run
+        # can't be windowed, not a crash — treat it exactly like a missing date.
+        return None
+    return parsed >= now - timedelta(days=_WINDOW_DAYS[window])
+
+
+class MonitoringOverall(BaseModel):
+    """Fleet-wide KPI roll-up for the in-window run set (the monitoring header tiles).
+
+    `auto_proceed_pct` is a throughput ratio (share of samples the gate cleared with no human
+    touch), a heuristic display number — not a calibrated rate or a confidence (CLAUDE.md
+    life-science guardrail 2); None when the window has no samples.
+    """
+
+    n_runs: int
+    n_samples: int
+    n_attention: int
+    verdict_counts: dict[str, int]
+    auto_proceed_pct: float | None
+
+
+class MonitoringRunRow(BaseModel):
+    """One run's throughput + verdict split (the verdicts-over-time bars)."""
+
+    run_id: str
+    run_date: str | None
+    n_samples: int
+    counts: dict[str, int]
+
+
+class MonitoringGate(BaseModel):
+    """Per-gate flagged / total for the pass-rate bars (pass% = (total - flagged) / total)."""
+
+    gate: str
+    flagged: int
+    total: int
+
+
+class MonitoringSignature(BaseModel):
+    """One recurring issue signature, ranked by its count within the window."""
+
+    signature: str
+    rule_id: str
+    title: str
+    gate: str
+    count: int
+
+
+class MonitoringMetrics(BaseModel):
+    """Pre-aggregated monitoring payload (the §7 screen) so the frontend renders from ONE
+    response instead of fanning out a detail fetch per run.
+
+    `window` echoes the requested view. `n_runs_excluded_no_date` is honest bookkeeping: under
+    a dated window, runs with no [Header] date can't be placed on the time axis and are dropped
+    from the aggregate, so a consumer can surface how many were set aside. `n_signatures_total`
+    is the full distinct-signature count before `signatures_limit` caps the list, so a
+    "show all (N)" affordance stays honest. Counts are lifetime tallies over the in-window runs,
+    not calibrated rates (CLAUDE.md life-science guardrail 2).
+    """
+
+    window: str
+    n_runs_excluded_no_date: int
+    n_signatures_total: int
+    overall: MonitoringOverall
+    runs: list[MonitoringRunRow]
+    gates: list[MonitoringGate]
+    signatures: list[MonitoringSignature]
+
+
+@app.get("/api/monitoring")
+def get_monitoring(
+    window: str = "all",
+    sig_limit: int | None = Query(None, ge=1, alias="signatures_limit"),
+) -> MonitoringMetrics:
+    """Pre-aggregated monitoring dashboard metrics (the §7 screen).
+
+    Rolls up throughput, verdict distribution, per-gate pass rate, and recurring issue
+    signatures across the served runs so the frontend renders from ONE response instead of
+    N-fanning-out a detail fetch per run. Reuses `_aggregate_metrics` (the same roll-up the
+    Prometheus `/metrics` seam uses) for the KPI + per-gate group; the aggregation lives in the
+    API layer, never the framework-agnostic core (CLAUDE.md architecture guardrail 1).
+
+    `window` ∈ {7d,14d,30d,all} filters runs by their [Header] date relative to today; an
+    unknown value is a 400. Under a dated window a run with no date can't be placed on the time
+    axis, so it is excluded and counted in `n_runs_excluded_no_date`. `signatures_limit` caps
+    the ranked signature list (uncapped by default); `n_signatures_total` always reports the
+    full distinct count. Counts are lifetime tallies, not calibrated rates (life-science
+    guardrail 2).
+    """
+    if window not in _WINDOWS:
+        raise HTTPException(status_code=400, detail=f"window must be one of {list(_WINDOWS)}")
+
+    today = datetime.now(timezone.utc).date()
+    kept: list[str] = []
+    excluded = 0
+    for rid in _run_ids():
+        member = _in_window(_evaluate(rid).summary.run_date, window, now=today)
+        if member is None:
+            excluded += 1  # dated window + undated run → set aside, counted honestly
+            continue
+        if member:
+            kept.append(rid)
+    # Chronological order for the time-series bars (fallback to run_id when a run has no date).
+    kept.sort(key=lambda rid: _run_order_key(_evaluate(rid).summary))
+
+    n_runs, n_cards, verdict_counts, gate_flagged = _aggregate_metrics(kept)
+    proceed = verdict_counts.get("proceed", 0)
+    overall = MonitoringOverall(
+        n_runs=n_runs,
+        n_samples=n_cards,
+        # Attention == every non-proceed sample; equals the sum of the per-run n_attention.
+        n_attention=sum(n for v, n in verdict_counts.items() if v != "proceed"),
+        verdict_counts=verdict_counts,
+        auto_proceed_pct=(100.0 * proceed / n_cards) if n_cards else None,
+    )
+
+    rows: list[MonitoringRunRow] = []
+    sig_counts: dict[str, int] = {}
+    sig_meta: dict[str, tuple[str, str, str]] = {}  # signature -> (rule_id, title, gate)
+    for rid in kept:
+        detail = _evaluate(rid)
+        summary = detail.summary
+        rows.append(
+            MonitoringRunRow(
+                run_id=summary.run_id,
+                run_date=summary.run_date,
+                n_samples=summary.n_samples,
+                counts=summary.counts,
+            )
+        )
+        for card in detail.cards:
+            for finding in card.findings:
+                sig_counts[finding.signature] = sig_counts.get(finding.signature, 0) + 1
+                # First sighting fixes the display metadata; the signature key is stable across
+                # rule versions (models.Finding.signature), so any occurrence carries the same.
+                sig_meta.setdefault(
+                    finding.signature, (finding.rule_id, finding.title, finding.gate.value)
+                )
+
+    # Rank by count desc, then rule_id / title / signature so ties order deterministically.
+    ranked = sorted(
+        sig_counts, key=lambda sig: (-sig_counts[sig], sig_meta[sig][0], sig_meta[sig][1], sig)
+    )
+    if sig_limit is not None:
+        ranked = ranked[:sig_limit]
+    signatures = [
+        MonitoringSignature(
+            signature=sig,
+            rule_id=sig_meta[sig][0],
+            title=sig_meta[sig][1],
+            gate=sig_meta[sig][2],
+            count=sig_counts[sig],
+        )
+        for sig in ranked
+    ]
+
+    gates = [
+        MonitoringGate(gate=g.value, flagged=gate_flagged[g.value], total=n_cards)
+        for g in _GATE_ORDER
+    ]
+    return MonitoringMetrics(
+        window=window,
+        n_runs_excluded_no_date=excluded,
+        n_signatures_total=len(sig_counts),
+        overall=overall,
+        runs=rows,
+        gates=gates,
+        signatures=signatures,
+    )
 
 
 def _render_prometheus() -> str:

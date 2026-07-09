@@ -21,7 +21,7 @@ from pipeguard.models import (
     Severity,
     SourceKind,
 )
-from pipeguard.parsers import parse_sample_sheet
+from pipeguard.parsers import parse_sample_sheet, parse_sample_sheet_header
 from pipeguard.provenance import EventLedger, EventType
 from pipeguard.rules import _evaluate_metric
 from pipeguard.synthesis import StubSynthesizer, aggregate_verdict
@@ -154,6 +154,42 @@ def test_sample_sheet_tolerates_short_rows(tmp_path: Path) -> None:
     assert set(by_id) == {"S1", "S2"}  # blank-id row skipped, short row kept
     assert by_id["S2"].index is None  # missing trailing cell -> None, no crash
     assert by_id["S1"].index == "ACGTACGT"
+
+
+def test_sample_sheet_header_parses_platform_date_and_run_name():
+    """The [Header] block yields the run's platform / raw ISO date / run name, and
+    the parsed values are threaded onto RunArtifacts by load_run."""
+    header = parse_sample_sheet_header(DATA / "SampleSheet.csv")
+    assert header.platform == "NovaSeq"
+    assert header.run_date == "2026-07-07"  # kept as the raw string, not a datetime
+    assert header.run_name == "RUN-2026-07-07-A"
+    # load_run threads the same values onto the model the API/frontend consume.
+    art = load_run(DATA)
+    assert art.platform == "NovaSeq"
+    assert art.run_date == "2026-07-07"
+    assert art.run_name == "RUN-2026-07-07-A"
+
+
+def test_sample_sheet_header_missing_keys_are_none_not_a_crash(tmp_path: Path) -> None:
+    """Missing [Header] rows -> None (a missing field is a signal), and a sheet with no
+    [Header] section at all still parses without raising."""
+    partial = tmp_path / "SampleSheet.csv"
+    partial.write_text(
+        "[Header]\n"
+        "FileFormatVersion,2\n"
+        "InstrumentPlatform,MiSeq\n"  # only the platform is present
+        "\n"
+        "[BCLConvert_Data]\n"
+        "Sample_ID,index\n"
+        "S1,ACGTACGT\n"
+    )
+    header = parse_sample_sheet_header(partial)
+    assert header.platform == "MiSeq"
+    assert header.run_date is None and header.run_name is None
+
+    headerless = tmp_path / "NoHeader.csv"
+    headerless.write_text("[BCLConvert_Data]\nSample_ID,index\nS1,ACGTACGT\n")
+    assert parse_sample_sheet_header(headerless) == (None, None, None)
 
 
 def test_finding_gate_is_derived_from_category(findings):

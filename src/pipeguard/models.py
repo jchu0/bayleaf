@@ -416,6 +416,12 @@ class RunArtifacts(BaseModel):
     demux: list[DemuxRecord] = Field(default_factory=list)
     qc: list[QCMetrics] = Field(default_factory=list)
     log_lines: list[str] = Field(default_factory=list)
+    # Run-level context parsed from the sample sheet's [Header] block (Illumina v2).
+    # All optional: a sheet may omit any of them, and `run_date` stays the raw ISO
+    # string — we never fabricate a datetime when the field is absent.
+    platform: str | None = None
+    run_date: str | None = None
+    run_name: str | None = None
 
     def sample_ids(self) -> list[str]:
         """Union of sample IDs seen across all artifacts, order-stable."""

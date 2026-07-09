@@ -34,6 +34,33 @@ def test_list_runs_returns_mock_run():
     assert mr["counts"] == {"proceed": 3, "hold": 1, "rerun": 0, "escalate": 1}
 
 
+def test_run_summary_surfaces_platform_date_and_lifecycle_status():
+    """The summary carries the sample sheet's [Header] platform/date and an honest
+    lifecycle status. mock_run_01 completes with actionable samples -> needs_review
+    (NOT inferred from n_attention alone — a completed run with flags)."""
+    mr = next(r for r in client.get("/api/runs").json() if r["run_id"] == "mock_run_01")
+    assert mr["platform"] == "NovaSeq"
+    assert mr["run_date"] == "2026-07-07"  # raw ISO string from the [Header] block
+    # mock_run_01 has n_attention == 2 and a completed gate, so it needs review.
+    assert mr["status"] == "needs_review"
+    # The same status rides the run-detail summary (single source: _evaluate).
+    assert client.get("/api/runs/mock_run_01").json()["summary"]["status"] == "needs_review"
+
+
+def test_run_status_tri_state_is_honest_about_lifecycle():
+    """The lifecycle label is a pure function of (completed, n_attention): a run with no
+    ANALYSIS_RUN_COMPLETED event is 'running' even at zero attention — the exact case the
+    old n_attention==0 => 'Released' inference mislabeled."""
+    from api.main import _run_status
+
+    # Not yet completed: 'running' regardless of the (interim) attention count.
+    assert _run_status(completed=False, n_attention=0) == "running"
+    assert _run_status(completed=False, n_attention=3) == "running"
+    # Completed: attention decides between needs_review and released.
+    assert _run_status(completed=True, n_attention=2) == "needs_review"
+    assert _run_status(completed=True, n_attention=0) == "released"
+
+
 def test_run_detail_serializes_cards_events_and_computed_fields():
     d = client.get("/api/runs/mock_run_01").json()
     assert len(d["cards"]) == 5
@@ -414,21 +441,30 @@ def test_metrics_prometheus_exposition():
     ):
         assert any(ln.startswith(f"# HELP {name} ") for ln in lines), name
         assert f"# TYPE {name} counter" in lines, name
-    # Aggregate scalars across the 3 committed mock runs (17 total cards). These are pinned to
-    # the committed fixtures; data/real-giab/ does NOT register (its SampleSheet is nested a
-    # level deeper than the data/*/ discovery glob), so the GIAB pipeline can't perturb them.
-    assert "pipeguard_runs_total 3" in lines
-    assert "pipeguard_samples_total 17" in lines
-    # Per-verdict counts (mock_run_01: S4 escalate, S5 hold, S1-S3 proceed; +02/+03).
-    verdicts = {"proceed": 7, "hold": 5, "rerun": 2, "escalate": 3}
+    # Cross-path consistency instead of magic pins: the exposition must AGREE with the /api/runs
+    # summary aggregates — a genuinely separate code path (per-run `_evaluate` vs the
+    # `_aggregate_metrics` roll-up). This is fixture-count-independent, so committing a new run
+    # (e.g. the scale-30 fixture) can't silently falsify a hardcoded census (Doc map row 130).
+    summaries = client.get("/api/runs").json()
+    n_runs = len(summaries)
+    n_samples = sum(s["n_samples"] for s in summaries)
+    assert f"pipeguard_runs_total {n_runs}" in lines
+    assert f"pipeguard_samples_total {n_samples}" in lines
+    # Per-verdict totals == the summed per-run counts; every verdict series stays present.
+    verdicts = {"proceed": 0, "hold": 0, "rerun": 0, "escalate": 0}
+    for s in summaries:
+        for v in verdicts:
+            verdicts[v] += s["counts"].get(v, 0)
     for v, n in verdicts.items():
         assert f'pipeguard_cards_total{{verdict="{v}"}} {n}' in lines
-    # Internal consistency, independent of how many runs exist: samples == sum of verdicts.
-    assert sum(verdicts.values()) == 17
-    # Per-gate flagged-sample counts; variant gate is present-and-zero for series stability.
-    assert 'pipeguard_gate_flagged_samples_total{gate="preflight"} 6' in lines
-    assert 'pipeguard_gate_flagged_samples_total{gate="qc"} 4' in lines
-    assert 'pipeguard_gate_flagged_samples_total{gate="variant"} 0' in lines
+    assert sum(verdicts.values()) == n_samples  # samples == sum of verdicts, whatever the fixtures
+    # Per-gate flagged-sample series: present + a non-negative integer, variant always
+    # present-and-≥0 for series stability. Exact counts are data-driven — assert the shape.
+    for gate in ("preflight", "qc", "variant"):
+        prefix = f'pipeguard_gate_flagged_samples_total{{gate="{gate}"}} '
+        series = next((ln for ln in lines if ln.startswith(prefix)), None)
+        assert series is not None, gate
+        assert int(series.rsplit(" ", 1)[1]) >= 0
 
 
 def test_export_decision_csv():
@@ -606,3 +642,154 @@ def test_export_identity_mode_feature_grain_and_validation():
     assert "SUBJ-1001" not in resp.text
     # An unknown include mode is a 400 (closed vocabulary).
     assert client.get("/api/export", params={"include": "everything"}).status_code == 400
+
+
+# --- Run-list filter / sort / paginate (the run-overview + monitoring screens) ----------------
+
+
+# These tests anchor on the known per-run fixtures (mock_run_01/02/03) and use relative /
+# internal-consistency checks for fleet totals, so they stay green whether or not extra run
+# fixtures (e.g. a scale run) are present in data/ — mirroring test_list_runs_returns_mock_run.
+
+
+def test_list_runs_no_params_is_backward_compatible():
+    # The byte-identical contract: no params → every run in run_id (sorted) order, unpaginated.
+    resp = client.get("/api/runs")
+    runs = resp.json()
+    ids = [r["run_id"] for r in runs]
+    assert ids == sorted(ids)  # same order _run_ids() has always returned
+    assert {"mock_run_01", "mock_run_02", "mock_run_03"} <= set(ids)
+    # The pre-pagination total rides a header so the body stays a plain list; the page/limit
+    # headers appear only when paginating.
+    assert resp.headers["x-pipeguard-total-count"] == str(len(runs))
+    assert "x-pipeguard-page" not in resp.headers and "x-pipeguard-limit" not in resp.headers
+
+
+def test_list_runs_q_and_verdict_filters_mirror_export_idiom():
+    # q = run_id substring (same idiom as /api/export).
+    only01 = client.get("/api/runs", params={"q": "run_01"}).json()
+    assert [r["run_id"] for r in only01] == ["mock_run_01"]
+    # verdict = runs that contain a sample with that verdict (mock_run_01 has S4 escalate).
+    esc = client.get("/api/runs", params={"verdict": "escalate"}).json()
+    assert "mock_run_01" in {r["run_id"] for r in esc}
+    assert all(r["counts"]["escalate"] > 0 for r in esc)
+    # A run with zero of that verdict is filtered out (rerun is absent from mock_run_01).
+    rerun_ids = {r["run_id"] for r in client.get("/api/runs", params={"verdict": "rerun"}).json()}
+    assert "mock_run_01" not in rerun_ids
+    # Unknown verdict is a 400 (closed vocabulary, same as /api/export).
+    assert client.get("/api/runs", params={"verdict": "maybe"}).status_code == 400
+
+
+def test_list_runs_sort_vocabulary_and_default_order():
+    # Default order (no sort) is run_id ascending — unchanged from before.
+    default_ids = [r["run_id"] for r in client.get("/api/runs").json()]
+    assert default_ids == sorted(default_ids)
+    # -run_date sorts descending by [Header] date (every fixture is dated).
+    dates = [r["run_date"] for r in client.get("/api/runs", params={"sort": "-run_date"}).json()]
+    assert dates == sorted(dates, reverse=True)
+    # -n_attention ranks the most-flagged runs first.
+    ranked = client.get("/api/runs", params={"sort": "-n_attention"}).json()
+    atts = [r["n_attention"] for r in ranked]
+    assert atts == sorted(atts, reverse=True)
+    # An unknown sort token is a 400, never a silent default.
+    assert client.get("/api/runs", params={"sort": "bogus"}).status_code == 400
+
+
+def test_list_runs_pagination_slices_and_reports_total():
+    # Pagination is a plain slice over the (unpaginated) run list; the header carries the total.
+    full = [r["run_id"] for r in client.get("/api/runs").json()]
+    total = len(full)
+    resp1 = client.get("/api/runs", params={"limit": 2, "page": 1})
+    assert [r["run_id"] for r in resp1.json()] == full[0:2]
+    assert resp1.headers["x-pipeguard-total-count"] == str(total)  # total is pre-slice
+    assert resp1.headers["x-pipeguard-limit"] == "2" and resp1.headers["x-pipeguard-page"] == "1"
+    p2 = client.get("/api/runs", params={"limit": 2, "page": 2}).json()
+    assert [r["run_id"] for r in p2] == full[2:4]
+    # A page past the end is an empty slice, not an error.
+    assert client.get("/api/runs", params={"limit": 2, "page": 999}).json() == []
+    # The limit/page floors are enforced by the query constraint (422, not a crash).
+    assert client.get("/api/runs", params={"limit": 0}).status_code == 422
+    assert client.get("/api/runs", params={"page": 0}).status_code == 422
+
+
+# --- Monitoring dashboard (pre-aggregated; the §7 screen) -------------------------------------
+
+
+def test_in_window_is_pure_and_tolerant():
+    # The date predicate is a pure, now-injected function so its boundary is clock-independent.
+    from datetime import date
+
+    from api.main import _in_window
+
+    now = date(2026, 7, 9)
+    assert _in_window("2026-07-08", "7d", now=now) is True
+    assert _in_window("2026-07-02", "7d", now=now) is True  # cutoff (now - 7d) is inclusive
+    assert _in_window("2026-07-01", "7d", now=now) is False  # just outside the window
+    assert _in_window("2026-06-20", "30d", now=now) is True
+    assert _in_window(None, "7d", now=now) is None  # undated → can't be placed on the axis
+    assert _in_window("not-a-date", "30d", now=now) is None  # tolerant parse, not a crash
+    assert _in_window(None, "all", now=now) is True  # "all" admits undated runs
+    assert _in_window("2020-01-01", "all", now=now) is True  # "all" ignores the date entirely
+
+
+def test_monitoring_default_window_is_internally_consistent():
+    body = client.get("/api/monitoring").json()
+    assert body["window"] == "all" and body["n_runs_excluded_no_date"] == 0
+    over = body["overall"]
+    rows = body["runs"]
+    verdicts = over["verdict_counts"]
+    # The overall roll-up is internally consistent with the per-run rows + verdict split.
+    assert over["n_runs"] == len(rows)
+    assert over["n_samples"] == sum(r["n_samples"] for r in rows) == sum(verdicts.values())
+    assert set(verdicts) == {"proceed", "hold", "rerun", "escalate"}
+    assert over["n_attention"] == verdicts["hold"] + verdicts["rerun"] + verdicts["escalate"]
+    assert abs(over["auto_proceed_pct"] - 100.0 * verdicts["proceed"] / over["n_samples"]) < 1e-9
+    # Per-gate rows carry flagged/total for the pass-rate bars; total == the sample count.
+    gates = {g["gate"]: g for g in body["gates"]}
+    assert set(gates) == {"preflight", "qc", "variant"}
+    for g in gates.values():
+        assert g["total"] == over["n_samples"] and 0 <= g["flagged"] <= g["total"]
+    # Rows are chronological (dates non-decreasing); the known mock_run_01 row is exact.
+    dates = [r["run_date"] for r in rows]
+    assert dates == sorted(dates)
+    r01 = next(r for r in rows if r["run_id"] == "mock_run_01")
+    assert r01["run_date"] == "2026-07-07" and r01["n_samples"] == 5
+    assert r01["counts"] == {"proceed": 3, "hold": 1, "rerun": 0, "escalate": 1}
+    # Recurring signatures are ranked count-desc and fully described.
+    sigs = body["signatures"]
+    assert body["n_signatures_total"] == len(sigs)  # uncapped by default
+    assert [s["count"] for s in sigs] == sorted((s["count"] for s in sigs), reverse=True)
+    assert all(s["count"] >= 1 for s in sigs)
+    assert {"signature", "rule_id", "title", "gate", "count"} == set(sigs[0])
+
+
+def test_monitoring_signature_cap_reports_full_total():
+    uncapped = client.get("/api/monitoring").json()
+    total = uncapped["n_signatures_total"]
+    assert total == len(uncapped["signatures"]) and total > 3  # fixtures have several signatures
+    capped = client.get("/api/monitoring", params={"signatures_limit": 3}).json()
+    assert len(capped["signatures"]) == 3  # the ranked list is capped ...
+    assert capped["n_signatures_total"] == total  # ... but the full distinct count is reported
+    # The highest-count signature survives the cap (ranking is applied before the slice).
+    assert capped["signatures"][0]["count"] == uncapped["signatures"][0]["count"]
+    # signatures_limit floor is enforced by the query constraint.
+    assert client.get("/api/monitoring", params={"signatures_limit": 0}).status_code == 422
+
+
+def test_monitoring_window_validation_and_invariants():
+    assert client.get("/api/monitoring", params={"window": "bogus"}).status_code == 400
+    body = client.get("/api/monitoring", params={"window": "7d"}).json()
+    assert body["window"] == "7d"
+    # Every mock run is dated, so none are ever set aside for lacking a date — a clock-independent
+    # invariant regardless of which runs the window admits.
+    assert body["n_runs_excluded_no_date"] == 0
+    over = body["overall"]
+    # Internal consistency holds for whatever subset the window admits at test time.
+    assert over["n_runs"] == len(body["runs"])
+    assert over["n_samples"] == sum(r["n_samples"] for r in body["runs"])
+    for g in body["gates"]:
+        assert g["total"] == over["n_samples"] and 0 <= g["flagged"] <= g["total"]
+    if over["n_samples"]:
+        assert 0.0 <= over["auto_proceed_pct"] <= 100.0
+    else:
+        assert over["auto_proceed_pct"] is None
