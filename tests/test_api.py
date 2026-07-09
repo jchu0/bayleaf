@@ -41,3 +41,47 @@ def test_card_endpoint_and_404s():
     assert client.get("/api/runs/mock_run_01/cards/S4").json()["verdict"] == "escalate"
     assert client.get("/api/runs/mock_run_01/cards/NOPE").status_code == 404
     assert client.get("/api/runs/NOPE").status_code == 404
+
+
+def test_runbook_endpoint_exposes_thresholds():
+    body = client.get("/api/runbook").json()
+    # Life-science guardrail: the policy must read as illustrative, never clinical.
+    assert "NOT clinical" in body["disclaimer"]
+    assert body["run_id_field"] == "run_id"
+    assert body["required_metadata_fields"] == [
+        "subject_id",
+        "tissue",
+        "library_prep",
+        "submitted_by",
+    ]
+    # A known threshold flows through with its canonical-unit gate + direction.
+    q30 = next(t for t in body["thresholds"] if t["our_key"] == "qc.q30")
+    assert q30["metric"] == "q30"
+    assert q30["gate"] == 0.85 and q30["hard_fail"] == 0.75
+    assert q30["unit"] == "%" and q30["direction"] == "higher_is_better"
+    # A lower-is-better metric reports the flipped comparison sense.
+    dup = next(t for t in body["thresholds"] if t["our_key"] == "qc.duplication")
+    assert dup["direction"] == "lower_is_better"
+
+
+def test_metrics_prometheus_exposition():
+    resp = client.get("/metrics")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/plain; version=0.0.4")
+    body = resp.text
+    assert body.endswith("\n")
+    # Well-formed exposition: HELP/TYPE headers present for a labelled metric.
+    assert "# HELP pipeguard_cards_total" in body
+    assert "# TYPE pipeguard_cards_total counter" in body
+    # Aggregate scalars across the 3 committed mock runs (17 total cards).
+    assert "pipeguard_runs_total 3" in body
+    assert "pipeguard_samples_total 17" in body
+    # Per-verdict counts (mock_run_01: S4 escalate, S5 hold, S1-S3 proceed; +02/+03).
+    assert 'pipeguard_cards_total{verdict="proceed"} 7' in body
+    assert 'pipeguard_cards_total{verdict="hold"} 5' in body
+    assert 'pipeguard_cards_total{verdict="rerun"} 2' in body
+    assert 'pipeguard_cards_total{verdict="escalate"} 3' in body
+    # Per-gate flagged-sample counts; variant gate is present-and-zero for series stability.
+    assert 'pipeguard_gate_flagged_samples_total{gate="preflight"} 6' in body
+    assert 'pipeguard_gate_flagged_samples_total{gate="qc"} 4' in body
+    assert 'pipeguard_gate_flagged_samples_total{gate="variant"} 0' in body
