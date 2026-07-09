@@ -88,3 +88,7 @@ metrics:
    threshold and the value it gates are always on the same scale (the fuller
    `RunbookProfile.thresholds` config record in [schemas.md](schemas.md) #19 keeps the same
    rule).
+
+## Read endpoint (W16/T-038)
+
+`GET /api/metrics/registry` exposes the registered metric vocabulary read-only (every type + whether it is **gated** by the runbook today or **registered-but-not-yet-gated**), reading `default_registry()` / `DEFAULT_RUNBOOK`. Surfaced in the Settings "Metric catalog" panel. It never authors or edits a metric/threshold (ADR-0001).
