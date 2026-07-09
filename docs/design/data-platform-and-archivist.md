@@ -32,6 +32,55 @@ Related: [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules de
 
 ---
 
+## Decisions taken (2026-07-08 maintainer review)
+
+The maintainer reviewed this design + the §3 output-layout expansion and settled the open
+questions. **This is the authoritative record** (it supersedes the *Open questions* section
+below where they conflict; the questions are kept for traceability).
+
+1. **Build now (D1/D2).** The only hackathon build is the read-only `GET /api/export` +
+   month-scoped `RunsBrowser` + download button. Agents stay **spec-only** today; the
+   agent-layer buildout is tomorrow.
+2. **Persistence direction (D3 — proposed, confirm).** SQLite stays the operational projection
+   now. **End-goal = Postgres as the single operational store, using its built-in `pgvector`
+   as the vector store** (subsumes wishlist #5) — *not* Postgres **plus** a separate DuckDB.
+   The export is a **single tabular/columnar file on demand** (CSV / JSONL / **Parquet**),
+   never "masses of loose files": the DB is the store, the file is a disposable export
+   artifact. **DuckDB is demoted to optional** (a local-analytics convenience). See wishlist
+   #19/#5.
+3. **Pipeline state → "mission control" (Re:1a).** Capture **per-step pipeline execution
+   state, start→end**, as append-only ledger events, projected to the dashboard — the OLTP
+   substrate that lets the dashboard evolve into a mission-control view. Target-state; pairs
+   with run-control (wishlist #20).
+4. **Durable metrics (D4/D5).** One `metric.parsed` event **per sample**; `metric_values`
+   primary key = composite `(run_id, sample_id, metric_key)` with `content_hash` as an indexed
+   column.
+5. **Export honesty + PII (D6/D10/D11).** Two export paths, two honesty labels; drop/hash
+   `submitted_by` even for HG002; carry **origin** from a per-run marker (default `unknown`),
+   which gates whether intake-identity fields are exported (§2.1d).
+6. **Output layout + archive (D7/D8).** Keep the `fastq/` `mosdepth/` `run/` names.
+   **BAM→CRAM for archiving is CONFIRMED** (overrides the earlier "defer"). A run's **archive**
+   = FASTQ(`.gz`) · CRAM(+`.crai`) · VCF output(s)(+`.tbi`) · QC metrics — **plus, do not
+   forget:** the intake sheets (`SampleSheet.csv` + `sample_metadata.csv`), pipeline provenance
+   (software versions + params + execution trace), the MultiQC report, a `MANIFEST.sha256`
+   carrying origin labels, and the **reference identity (genome build + per-`@SQ` M5) required
+   to decode the CRAM later**. A **config file maps artifact-kind → output path** so PipeGuard
+   reads any layout (ties to the config layer [ADR-0005](../adr/ADR-0005-config-layer-and-profiles.md)
+   + the canvas builder, wishlist #11).
+7. **Variant-gate substrate (General + D8/D13).** Add a **real disease-gene panel** over GIAB
+   HG002 (truth-backed) + a **simple, pluggable caller** — PipeGuard mostly *reads* the VCFs a
+   caller emits (point it at the VCF folder; the caller is bring-your-own). The variant **gate
+   rules stay Phase 2**; the panel + caller + VCF ingest are design-now (build-now-if-time).
+   Design in progress (a dedicated workflow). **Guardrail (load-bearing):** HG002 is a
+   *benchmark genome, not a patient*; any surfaced variant is a ClinVar-classified **test
+   fixture**, never a diagnosis, and truth claims hold only inside the high-confidence BED.
+8. **Naming (D14).** `pct_reads_identified` is a fastp pass-filter rate, not a barcode-ID
+   metric — document now, rename the metric key eventually.
+9. **Run-control (D12) + agent slot (D9).** Run-control stays wishlist #20 (revisit flex day).
+   QC-triage (not agent #2) is the agent focus; test it live at end-of-day after the build.
+
+---
+
 ## 1. (A) Already built — reuse, do not re-design
 
 The event→projection machinery and the ML-record shapes exist and are tested. Documenting them so no one re-proposes them:
