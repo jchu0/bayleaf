@@ -1,4 +1,4 @@
-import type { RunDetail, Runbook, RunSummary, TriageNote } from './types'
+import type { MetricCatalog, RunDetail, Runbook, RunSummary, TriageNote } from './types'
 
 async function get<T>(url: string): Promise<T> {
   const res = await fetch(url)
@@ -15,4 +15,5 @@ export const api = {
       `/api/runs/${encodeURIComponent(runId)}/cards/${encodeURIComponent(sampleId)}/triage`,
     ),
   config: () => get<Runbook>('/api/config'),
+  metricsRegistry: () => get<MetricCatalog>('/api/metrics/registry'),
 }

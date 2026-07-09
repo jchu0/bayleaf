@@ -25,6 +25,7 @@ from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 
 from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
+from pipeguard.metrics import default_registry
 from pipeguard.models import DecisionCard, Gate, Verdict
 from pipeguard.provenance import ProvenanceEvent
 from pipeguard.triage import TriageNote
@@ -400,6 +401,90 @@ def get_runbook() -> RunbookPolicy:
         run_id_field=DEFAULT_RUNBOOK.run_id_field,
         required_metadata_fields=DEFAULT_RUNBOOK.require_metadata_fields,
         thresholds=thresholds,
+    )
+
+
+# --- Metric catalog (read-only registry view; W16/T-038) -------------------------------------
+
+# Life-science guardrail (CLAUDE.md 2/3): the registry is a versioned, operator-configurable
+# metric VOCABULARY — not a calibrated or validated clinical panel. Kept parallel to
+# `_RUNBOOK_DISCLAIMER` (both carry the verbatim "NOT clinical" phrase) so an integrator reading
+# either surface can't mistake tool metadata for a medical claim.
+_CATALOG_DISCLAIMER = (
+    "Illustrative / operator-configurable metric vocabulary — NOT clinical. Registry entries are "
+    "versioned tool metadata (metric_registry_version); the registered set is not a calibrated or "
+    "validated clinical panel, and a 'registered' metric is not a gate until the runbook adds it."
+)
+
+
+class MetricCatalogEntry(BaseModel):
+    """One registered metric type, flattened from the registry for the settings catalog.
+
+    A read-only projection of a `MetricEntry`. `gated` reports whether the ACTIVE runbook
+    currently gates on this `our_key`; registered-but-ungated entries are the extensibility
+    surface (a metric can be described in the vocabulary before any threshold gates on it).
+    """
+
+    our_key: str
+    display_name: str
+    category: str
+    canonical_unit: str  # registry CanonicalUnit value (e.g. "fraction", "x")
+    direction: str  # "higher_is_better" | "lower_is_better" | "target_band"
+    gate: str  # which gate this metric belongs to ("preflight" | "qc" | "variant")
+    source_module: str  # tool/MultiQC module the value is parsed from
+    aliases: list[str]
+    gated: bool
+
+
+class MetricCatalog(BaseModel):
+    """The registered metric vocabulary plus which entries the live runbook gates on.
+
+    `disclaimer` is load-bearing, not decoration: this is versioned, configurable vocabulary,
+    never a calibrated or clinical panel (CLAUDE.md life-science guardrails 2/3). `n_gated`
+    (< `n_registered`) makes the extensibility story explicit at the API boundary.
+    """
+
+    disclaimer: str
+    metric_registry_version: int
+    n_registered: int
+    n_gated: int
+    entries: list[MetricCatalogEntry]
+
+
+@app.get("/api/metrics/registry")
+def get_metric_catalog() -> MetricCatalog:
+    """The registered metric vocabulary + which entries the live runbook gates on (read-only).
+
+    Reads `default_registry()` and `DEFAULT_RUNBOOK` and flattens each registered `MetricEntry`
+    to `{our_key, display_name, category, canonical_unit, direction, gate, source_module,
+    aliases, gated}`. `gated` is true when the active runbook has a QC threshold on that
+    `our_key` — the registered-but-ungated entries are the extensibility surface. This is a pure
+    READ over the versioned registry: it never authors or edits a metric type or a gate (ADR-0001,
+    rules decide). Entries are illustrative, configurable vocabulary — never calibrated or
+    clinical (see `disclaimer`). Complements `GET /api/runbook` (the gated thresholds' policy).
+    """
+    registry = default_registry()
+    gated_keys = {t.our_key for t in DEFAULT_RUNBOOK.qc_thresholds}
+    entries = [
+        MetricCatalogEntry(
+            our_key=entry.our_key,
+            display_name=entry.display_name,
+            category=entry.category,
+            canonical_unit=entry.canonical_unit.value,
+            direction=entry.direction.value,
+            gate=entry.gate.value,
+            source_module=entry.source.module,
+            aliases=list(entry.aliases),
+            gated=entry.our_key in gated_keys,
+        )
+        for entry in registry.entries.values()
+    ]
+    return MetricCatalog(
+        disclaimer=_CATALOG_DISCLAIMER,
+        metric_registry_version=registry.version,
+        n_registered=len(entries),
+        n_gated=sum(1 for e in entries if e.gated),
+        entries=entries,
     )
 
 

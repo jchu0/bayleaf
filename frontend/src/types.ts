@@ -147,3 +147,28 @@ export type Runbook = {
   qc_thresholds: QCThreshold[]
   log_failure_markers: string[]
 }
+
+// One registered metric type from the canonical registry (GET /api/metrics/registry).
+// Read-only vocabulary: `gated` reports whether the live runbook currently gates on this
+// `our_key` — registered-but-ungated entries are the extensibility surface.
+export type MetricCatalogEntry = {
+  our_key: string
+  display_name: string
+  category: string
+  canonical_unit: CanonicalUnit
+  direction: 'higher_is_better' | 'lower_is_better' | 'target_band'
+  gate: Gate
+  source_module: string
+  aliases: string[]
+  gated: boolean
+}
+
+// The registered metric vocabulary + which entries the live runbook gates on. Versioned,
+// operator-configurable tool metadata — never a calibrated or clinical panel (see `disclaimer`).
+export type MetricCatalog = {
+  disclaimer: string
+  metric_registry_version: number
+  n_registered: number
+  n_gated: number
+  entries: MetricCatalogEntry[]
+}

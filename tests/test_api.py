@@ -75,6 +75,43 @@ def test_runbook_endpoint_exposes_thresholds():
     assert dup["direction"] == "lower_is_better"
 
 
+def test_metric_catalog_lists_registered_metrics_and_gated_flag():
+    body = client.get("/api/metrics/registry").json()
+    # Life-science guardrail: the catalog reads as illustrative vocabulary, never clinical.
+    assert "NOT clinical" in body["disclaimer"]
+    assert body["metric_registry_version"] == 1
+    # Every registered metric type is listed (the extensibility story lives here).
+    assert body["n_registered"] == 20
+    assert len(body["entries"]) == 20
+    # Exactly the five runbook keys are gated; the other 15 are registered-but-ungated.
+    assert body["n_gated"] == 5
+    gated = {e["our_key"] for e in body["entries"] if e["gated"]}
+    assert gated == {
+        "qc.q30",
+        "qc.reads_passing_filter",
+        "qc.mean_target_coverage",
+        "qc.cluster_pf",
+        "qc.duplication",
+    }
+    assert sum(1 for e in body["entries"] if not e["gated"]) == 15
+    # Each entry carries the flattened vocabulary fields the settings catalog renders.
+    q30 = next(e for e in body["entries"] if e["our_key"] == "qc.q30")
+    assert q30["gated"] is True and q30["gate"] == "qc"
+    assert {
+        "our_key",
+        "display_name",
+        "category",
+        "canonical_unit",
+        "direction",
+        "gate",
+        "source_module",
+        "aliases",
+    } <= q30.keys()
+    # A registered-but-ungated entry reports the flag as false (not absent).
+    ungated = next(e for e in body["entries"] if not e["gated"])
+    assert ungated["gated"] is False
+
+
 def test_metrics_prometheus_exposition():
     resp = client.get("/metrics")
     assert resp.status_code == 200
