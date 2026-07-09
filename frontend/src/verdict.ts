@@ -22,6 +22,15 @@ export const VERDICT_BADGE: Record<Verdict, string> = {
   escalate: 'bg-escalate/15 text-escalate border-escalate/40',
 }
 
+// Solid verdict fills for proportion/stacked bars. Full static strings so Tailwind's
+// compiler can see them (no `bg-${v}`); same tokens as the badges, just at full opacity.
+export const VERDICT_BAR: Record<Verdict, string> = {
+  proceed: 'bg-proceed',
+  hold: 'bg-hold',
+  rerun: 'bg-rerun',
+  escalate: 'bg-escalate',
+}
+
 export const SEVERITY_ICON: Record<Severity, string> = {
   critical: '🔴',
   warn: '🟡',

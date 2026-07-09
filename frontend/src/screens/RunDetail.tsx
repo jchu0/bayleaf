@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { EvidenceTable } from '../components/EvidenceTable'
 import { GateResultStrip } from '../components/GateResultStrip'
+import { MetricsPanel } from '../components/MetricsPanel'
 import { ErrorBox, Loading } from '../components/States'
 import { TriagePanel } from '../components/TriagePanel'
 import { VerdictBadge } from '../components/VerdictBadge'
@@ -75,6 +76,12 @@ function CardView({ runId, card }: { runId: string; card: DecisionCard }) {
       <div className="mt-4">
         <EvidenceTable findings={card.findings} />
       </div>
+
+      {card.metric_values && card.metric_values.length > 0 && (
+        <div className="mt-4">
+          <MetricsPanel metrics={card.metric_values} />
+        </div>
+      )}
 
       {actionable && (
         <div className="mt-4">

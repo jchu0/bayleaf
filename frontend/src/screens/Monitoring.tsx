@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
-import { ErrorBox, Loading } from '../components/States'
+import { Empty, ErrorBox, Loading } from '../components/States'
 import type { RunDetail, RunSummary } from '../types'
-import { GATE_LABEL, VERDICT_TEXT } from '../verdict'
+import { GATE_LABEL, VERDICT_BAR, VERDICT_LABEL, VERDICT_TEXT } from '../verdict'
 
 const VERDICTS = ['proceed', 'hold', 'rerun', 'escalate'] as const
 const GATES = ['preflight', 'qc', 'variant'] as const
@@ -30,6 +30,7 @@ export function Monitoring() {
 
   if (error) return <ErrorBox message={error} />
   if (!runs) return <Loading />
+  if (runs.length === 0) return <Empty message="No runs to monitor yet." />
 
   const totalSamples = runs.reduce((a, r) => a + r.n_samples, 0)
   const totalAttention = runs.reduce((a, r) => a + r.n_attention, 0)
@@ -70,6 +71,35 @@ export function Monitoring() {
         ))}
       </div>
 
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-dim">
+        Verdict distribution
+      </h3>
+      <div className="mb-2 flex h-3 w-full overflow-hidden rounded bg-surface-2">
+        {VERDICTS.map((v) => {
+          const n = verdictTotals[v] ?? 0
+          if (n === 0) return null
+          return (
+            <div
+              key={v}
+              className={VERDICT_BAR[v]}
+              style={{ width: pct(n, totalSamples) }}
+              title={`${VERDICT_LABEL[v]}: ${n} (${pct(n, totalSamples)})`}
+            />
+          )
+        })}
+      </div>
+      <div className="mb-6 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-dim">
+        {VERDICTS.map((v) => (
+          <span key={v} className="flex items-center gap-1.5">
+            <span className={`inline-block h-2 w-2 rounded-sm ${VERDICT_BAR[v]}`} />
+            {VERDICT_LABEL[v]}
+            <span className="font-mono">
+              {verdictTotals[v] ?? 0} · {pct(verdictTotals[v] ?? 0, totalSamples)}
+            </span>
+          </span>
+        ))}
+      </div>
+
       <p className="mb-6 text-sm">
         <span className="font-semibold text-hold">{totalAttention}</span>
         <span className="text-ink-dim">
@@ -88,8 +118,9 @@ export function Monitoring() {
             <div className="h-2 flex-1 overflow-hidden rounded bg-surface-2">
               <div className="h-full bg-hold" style={{ width: pct(gateFlagged[g], cardCount) }} />
             </div>
-            <span className="w-28 text-right text-xs text-ink-dim">
-              {gateFlagged[g]} / {cardCount} flagged
+            <span className="w-36 text-right text-xs text-ink-dim">
+              <span className="font-mono">{pct(gateFlagged[g], cardCount)}</span> ·{' '}
+              {gateFlagged[g]}/{cardCount} flagged
             </span>
           </div>
         ))}

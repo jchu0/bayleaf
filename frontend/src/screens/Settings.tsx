@@ -24,9 +24,15 @@ export function Settings() {
         ← All runs
       </Link>
       <h2 className="mt-2 text-2xl font-semibold">Runbook</h2>
-      <p className="text-ink-dim text-sm mb-6">
-        The active QC policy (read-only for now). Thresholds are illustrative and
-        operator-configurable per assay × sample type — not clinical thresholds.
+      <p className="text-ink-dim text-sm mb-3">
+        The active QC policy (read-only for now), keyed per assay × sample type.
+      </p>
+      {/* Life-science guardrail: these are operator-tunable QC gates, never clinical
+          thresholds — keep the label visible so no one reads them as a medical cutoff. */}
+      <p className="mb-6">
+        <span className="inline-flex items-center rounded border border-hold/40 bg-hold/10 px-2 py-1 text-xs font-medium uppercase tracking-wide text-hold">
+          Illustrative · configurable · not clinical
+        </span>
       </p>
 
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-dim">
@@ -37,7 +43,9 @@ export function Settings() {
           <thead>
             <tr className="bg-surface-2 text-left text-xs uppercase tracking-wide text-ink-dim">
               <th className="p-3 font-medium">Metric</th>
+              <th className="p-3 font-medium">Unit</th>
               <th className="p-3 font-medium">Gate</th>
+              <th className="p-3 font-medium">Borderline band</th>
               <th className="p-3 font-medium">Hard-fail</th>
               <th className="p-3 font-medium">Direction</th>
             </tr>
@@ -48,8 +56,13 @@ export function Settings() {
                 <td className="p-3">
                   {t.label} <span className="font-mono text-xs text-ink-dim">{t.metric}</span>
                 </td>
+                <td className="p-3 font-mono text-xs text-ink-dim">{t.unit || '—'}</td>
                 <td className="p-3 font-mono">
                   {t.gate}
+                  {t.unit}
+                </td>
+                <td className="p-3 font-mono text-ink-dim">
+                  ±{t.borderline_band}
                   {t.unit}
                 </td>
                 <td className="p-3 font-mono text-ink-dim">
