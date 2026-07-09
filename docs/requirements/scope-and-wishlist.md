@@ -76,6 +76,32 @@ the **variant gate** is Phase 2; **evaluation** vs. GIAB/synthetic truth is ongo
 | 19 | **Postgres/`pgvector` as the single end-goal store** (D3) — columnar Parquet export **shipped** (T-030) | Low–med | Repository→Postgres | SQLite stays the operational projection **now**. Export is a **single file on demand** — CSV/JSONL/**Parquet all shipped** (Parquet via an optional `pyarrow` extra) so a user brings any reader (pandas/polars/DuckDB), *not* masses of loose files. **End-goal (D3): Postgres as the single operational + vector store** — its built-in `pgvector` subsumes #5 — not Postgres **+** a separate DuckDB (**DuckDB demoted to optional**) |
 | 20 | Run scheduling / cancellation / hold — **step-specific** (control plane) | Low–med | command/control API + run-state model + orchestrator hook | Today PipeGuard is **advisory / read-only** (observe + advise). This crosses into **actuation**: hold analysis auto-trigger when pre-run metrics look bad, cancel on an early-surfaced intake error, or pause at a specific pipeline step. Frame it as the **preflight gate acting as an actuator** — a deterministic HOLD (or a human hold) prevents the next step from running; step-level hold/cancel integrates with the workflow engine (Nextflow, [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)) checkpoint/resume. **Invariant preserved:** rules/human decide, the system actuates only on an explicit, recorded decision (every actuation = a ledger event); no AI auto-actuation ([ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)). The dashboard evolves into a **mission-control** view; a prerequisite is capturing **per-step pipeline execution state (start→end) as ledger events** projected to the UI (the OLTP substrate, Re:1a). *Interact* with Nextflow (resume/checkpoint) — don't reinvent it. Builds on the command API in #9 |
 
+## Scoping pass — 2026-07-08 (non-agent wishlist)
+
+A fanout scoped every non-agent wishlist item against the real seams. **8 are being built now**
+in isolated feature branches (merge what finishes); the rest are clarified target-state.
+
+**BUILD (feature branches, none touches the deterministic core):**
+
+| # | Item | Branch | Tracker |
+|---|---|---|---|
+| W2 | Notify webhook adapters (Teams/Discord) | `feat/notify-webhook-adapters` | T-035 |
+| W17 | Telemetry connector configs (over `/metrics`) | `feat/telemetry-connectors` | T-036 |
+| W10 | Provenance stage/DAG canvas (read-only) | `feat/provenance-stage-canvas` | T-037 |
+| W16 | Metric-catalog read-only view | `feat/metric-catalog-view` | T-038 |
+| W13 | ArtifactStore port + Local + S3 adapter | `feat/artifact-store-port-s3` | T-039 |
+| W14 | Config-driven de-id export policy | `feat/deid-export-policy` | T-040 |
+| W3 | Container deploy slice (+ unapplied Terraform) | `feat/container-deploy-slice` | T-041 |
+| W12 | In-app user feedback | `feat/in-app-feedback` | T-042 |
+
+**SCOPE-ONLY (documented target-state, not built now):** W5 (contaminant-QC, High research),
+W6 (variant-miner, High research), W7 (RNA-seq modality, XL new pipeline+gate), W8 (LoRA
+fine-tuning, needs ledger scale), W9 (nf-core schema form, XL), W11 (visual pipeline builder —
+flagship, nearly its own product), W15 (CNV/mosaicism calling, needs callers+validation), W18
+(multi-tenancy — touches the core, XL), W19 (Postgres adapter — needs a running DB, XL), W20
+(run-control/mission-control — needs a Nextflow hook + command API). These stay as the wishlist
+rows above; the Jira ticket-create half of W2 is deferred to the ticketing/write-action phase.
+
 ## Out of scope
 
 1. Any **clinical / diagnostic / therapeutic** decision-making — this is a research/demo tool with production intent, not a clinical system.
