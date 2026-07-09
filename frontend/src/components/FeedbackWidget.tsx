@@ -164,15 +164,20 @@ export function FeedbackWidget() {
           </div>
         </>
       )}
+      {/* Icon-only by default; the label slides out to the left of the icon on hover
+          (icon stays anchored at the fixed bottom-right corner). */}
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="Share feedback"
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="relative z-50 inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-2.5 text-[13px] font-medium text-text-2 shadow-pop transition-colors hover:border-line-strong hover:text-text"
+        title="Share feedback"
+        className="group relative z-50 flex items-center rounded-full border border-line bg-card p-3 text-[13px] font-medium text-text-2 shadow-pop transition-all hover:border-line-strong hover:pl-4 hover:text-text"
       >
-        <MessageSquarePlus size={17} className="text-accent" />
-        Feedback
+        <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 group-hover:mr-1.5 group-hover:max-w-[72px] group-hover:opacity-100">
+          Feedback
+        </span>
+        <MessageSquarePlus size={18} className="shrink-0 text-accent" />
       </button>
     </div>
   )
