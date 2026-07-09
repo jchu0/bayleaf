@@ -16,10 +16,10 @@ export default function App() {
           <Route path="/" element={<RunOverview />} />
           <Route path="/runs/:runId" element={<RunDetail />} />
           <Route path="/runs/:runId/provenance" element={<Provenance />} />
+          <Route path="/runs/:runId/intake" element={<Intake />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/queue" element={<ReviewQueue />} />
-          <Route path="/intake" element={<Intake />} />
         </Route>
       </Routes>
     </BrowserRouter>

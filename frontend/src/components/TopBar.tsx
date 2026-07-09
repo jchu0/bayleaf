@@ -8,7 +8,7 @@ function useCrumb(): { title: string; run: string | null } {
   const { pathname } = useLocation()
   const { runId } = useParams()
   if (pathname === '/') return { title: 'Runs', run: null }
-  if (pathname.startsWith('/intake')) return { title: 'Intake gate', run: null }
+  if (pathname.includes('/intake')) return { title: 'Intake gate', run: runId ?? null }
   if (pathname.startsWith('/queue')) return { title: 'Review queue', run: null }
   if (pathname.startsWith('/monitoring')) return { title: 'Monitoring', run: null }
   if (pathname.startsWith('/settings')) return { title: 'Settings', run: null }

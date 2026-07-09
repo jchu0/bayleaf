@@ -27,7 +27,12 @@ function useNav(attention: number, defaultRunId: string | null): Group[] {
       heading: 'Operate',
       items: [
         { label: 'Runs', to: '/', icon: Rows3, active: pathname === '/' },
-        { label: 'Intake gate', to: '/intake', icon: Filter, active: pathname.startsWith('/intake') },
+        {
+          label: 'Intake gate',
+          to: run ? `/runs/${run}/intake` : '/',
+          icon: Filter,
+          active: pathname.includes('/intake'),
+        },
         {
           label: 'Decision cards',
           to: runHome,
