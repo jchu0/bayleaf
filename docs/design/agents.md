@@ -56,7 +56,7 @@ of them is a bug, not a variant.
 |---|---|---|---|---|---|
 | 1 | **QC-triage** | On a flagged card, suggest a likely cause + next action, cited | **done** (T-015) | [`triage/`](../../src/pipeguard/triage/), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) | mid |
 | 2 | **Pipeline-repair** | On a pipeline failure, propose a concrete remediation | planned (agent #2) | [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) | mid–high |
-| 3 | **Archivist** | Index / organize / summarize / prepare exports across runs (the "librarian" over the data platform) | proposed — design in progress | [data-platform-and-archivist.md](data-platform-and-archivist.md) *(pending review)* | low (organizational, not diagnostic) |
+| 3 | **Archivist** | Index / organize / summarize / prepare exports across runs (the "librarian" over the data platform) | proposed — **design ready for review** | [data-platform-and-archivist.md](data-platform-and-archivist.md) §5 + Appendix A | low / Haiku (organizational, not diagnostic) |
 
 New ideas land as a roster row first (see intake below), then graduate to a design
 doc / ADR + implementation.
