@@ -346,7 +346,9 @@ Landed additively in `api/` (the core untouched; aggregation stays in the API la
 
 ---
 
-## 5. The Archivist agent (#3) — design-now / build-later
+## 5. The Archivist agent (#3) — **BUILT (T-059, 2026-07-09)**
+
+> **Built** as [`api/archivist.py`](../../api/archivist.py) (mirroring the feedback agent), realizing this design. Stub-first / $0 offline (`PIPEGUARD_ARCHIVIST_AGENT=stub|claude`, Haiku tier); advisory, off the gate. It takes a least-privilege `RunArchiveInput` (no `subject_id`/`tissue`/`submitted_by`) built from the projection and emits an `ArchiveDigest` (digest + export manifest + cross-run index); it never opens/moves/deletes a file or relabels an origin, and carries no verdict. Endpoints: `GET /api/runs/{id}/archive-digest` + `GET /api/archive/index`. The findability/registry pieces in §3.5 remain deferred; the sections below are the built agent's rationale + guardrail proof.
 
 *Specced strictly within the existing agent model — advisory, off-path, off-by-default, stub-first — mirroring the QC-triage agent (`src/pipeguard/triage/`). See the standalone roster block for the drop-in version; this section carries the rationale and the guardrail proof.*
 
