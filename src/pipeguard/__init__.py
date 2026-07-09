@@ -37,6 +37,12 @@ from .persistence import (
     project_events,
     rebuild_db,
 )
+from .pipeline_repair import (
+    RecurringSignature,
+    RepairProposal,
+    get_repair_agent,
+    propose_repair,
+)
 from .provenance import (
     AnalysisRun,
     EntityRef,
@@ -76,6 +82,8 @@ __all__ = [
     "NotifyResult",
     "NotifyStatus",
     "ProvenanceEvent",
+    "RecurringSignature",
+    "RepairProposal",
     "Repository",
     "RunArtifacts",
     "RunBundle",
@@ -91,11 +99,13 @@ __all__ = [
     "evaluate_run",
     "evaluate_sample",
     "get_notifier",
+    "get_repair_agent",
     "get_synthesizer",
     "get_triage_agent",
     "load_run",
     "notify_card",
     "project_events",
+    "propose_repair",
     "rebuild_db",
     "run_gate",
     "run_gate_from_dir",

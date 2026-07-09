@@ -37,9 +37,11 @@ from pydantic import BaseModel
 from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
 from pipeguard.metrics import default_registry
 from pipeguard.models import DecisionCard, Gate, Sample, Verdict
+from pipeguard.pipeline_repair import RepairProposal, propose_repair, recurring_signature
 from pipeguard.provenance import EventType, ProvenanceEvent
 from pipeguard.triage import TriageNote
 
+from .archivist import ArchiveDigest, ArtifactRef, RunArchiveInput, _classify_kind, archive_digest
 from .auth import Actor, require_role
 from .card_readout import router as card_readout_router
 from .deid import IDENTITY_FIELDS, DeidPolicy, default_policy, export_fields, redact
@@ -1167,6 +1169,78 @@ def get_monitoring(
         gates=gates,
         signatures=signatures,
     )
+
+
+# --- Advisory agents over the read-API (roster #2 pipeline-repair, #3 archivist) -------------
+# On-demand, read-only, OFF the deterministic gate (ADR-0001): each invokes an advisory agent
+# that narrates/organizes over already-decided artifacts; neither sets/routes a verdict, and both
+# use the offline stub by default (PIPEGUARD_PIPELINE_REPAIR_AGENT / PIPEGUARD_ARCHIVIST_AGENT
+# = claude to go live). They mirror the GET .../triage surface.
+
+
+@app.get("/api/monitoring/signatures/{signature}/repair")
+def get_signature_repair(signature: str, window: str = "all") -> RepairProposal:
+    """Advisory pipeline-repair proposal for a recurring issue signature (agent #2; ADR-0008/0012).
+
+    Assembles the recurring signature from the served runs (the same rollup `/api/monitoring`
+    shows, windowed the same way) and returns a proposed, HUMAN-REVIEWED remediation. On-demand
+    and off the gate — it never edits a pipeline or sets a verdict; the ~3x auto-escalation is a
+    separate, not-yet-built trigger. 404 if the signature does not recur in the window.
+    """
+    if window not in _WINDOWS:
+        raise HTTPException(status_code=400, detail=f"window must be one of {list(_WINDOWS)}")
+    today = datetime.now(timezone.utc).date()
+    runs = {
+        rid: _evaluate(rid).cards
+        for rid in _run_ids()
+        if _in_window(_evaluate(rid).summary.run_date, window, now=today)
+    }
+    sig = recurring_signature(runs, signature)
+    if sig is None:
+        raise HTTPException(
+            status_code=404, detail=f"Signature not recurring in window: '{signature}'"
+        )
+    return propose_repair(sig)
+
+
+def _archive_input(run_id: str) -> RunArchiveInput:
+    """Build the archivist's least-privilege input from the cached projection (no gate re-run)."""
+    detail = _evaluate(run_id)
+    artifacts = [
+        ArtifactRef(
+            name=a.name,
+            kind=_classify_kind(a.name),
+            sha256=a.sha256,
+            size_bytes=a.size_bytes,
+            origin=a.origin,
+        )
+        for a in list_run_artifacts(run_id)
+    ]
+    return RunArchiveInput(
+        run_id=run_id,
+        status=detail.summary.status,
+        run_date=detail.summary.run_date,
+        platform=detail.summary.platform,
+        origin=_run_origin(run_id),
+        cards=detail.cards,
+        artifacts=artifacts,
+    )
+
+
+@app.get("/api/runs/{run_id}/archive-digest")
+def get_archive_digest(run_id: str) -> ArchiveDigest:
+    """Advisory organizational digest + export manifest for one run (agent #3, off the gate).
+
+    Indexes/summarizes an already-decided run and PROPOSES an archival/organization action; it
+    never opens/moves/deletes a file or relabels an origin, and carries no verdict (ADR-0001).
+    """
+    return archive_digest([_archive_input(run_id)])
+
+
+@app.get("/api/archive/index")
+def get_archive_index() -> ArchiveDigest:
+    """Advisory cross-run organizational index over every served run (agent #3, off the gate)."""
+    return archive_digest([_archive_input(rid) for rid in _run_ids()])
 
 
 def _render_prometheus() -> str:

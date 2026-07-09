@@ -56,10 +56,14 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-# Ship the curated triage knowledge corpus (ADR-0009) and the versioned metric
-# registry inside the wheel so importlib.resources can load them in a non-editable
+# Ship the curated triage + pipeline-repair knowledge corpora (ADR-0009) and the versioned
+# metric registry inside the wheel so importlib.resources can load them in a non-editable
 # install.
-pipeguard = ["triage/knowledge/*.jsonl", "metrics/*.yaml"]
+pipeguard = [
+    "triage/knowledge/*.jsonl",
+    "pipeline_repair/knowledge/*.jsonl",
+    "metrics/*.yaml",
+]
 
 [tool.pytest.ini_options]
 # `pipeguard` is imported from the editable install (no src shim). "." puts the
