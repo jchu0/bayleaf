@@ -29,6 +29,10 @@ slack = ["slack-sdk>=3.27", "python-dotenv>=1.0"]
 # parquet = columnar ML export for GET /api/export?format=parquet (pandas/polars/DuckDB read
 # it). Optional + lazily imported; absent -> a clear 501 pointing here. CSV/JSONL always work.
 parquet = ["pyarrow>=16"]
+# s3 = the S3 artifact-store adapter (OFF by default — see pipeguard.artifacts; needs
+# PIPEGUARD_S3_LIVE armed + a bucket + AWS creds). boto3 is lazily imported and absent ->
+# the store degrades to the local adapter. Same optional-extra shape as slack/parquet.
+s3 = ["boto3>=1.34"]
 
 [dependency-groups]
 # Dev toolchain (PEP 735; installed by default on `uv sync`).
@@ -98,4 +102,11 @@ follow_imports = "skip"
 # resolve it — treat it as opaque at that single deferred boundary.
 [[tool.mypy.overrides]]
 module = ["slack_sdk.*"]
+ignore_missing_imports = true
+
+# boto3 is an OPTIONAL [s3] extra, lazy-imported inside S3ArtifactStore and off by default
+# (PIPEGUARD_S3_LIVE). It ships its own stubs only via the separate boto3-stubs package, which
+# we don't pull for a single deferred boundary — treat it as opaque here, mirroring slack_sdk.
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*"]
 ignore_missing_imports = true
