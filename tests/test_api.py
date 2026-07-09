@@ -10,6 +10,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from api.deid import DeidAction, DeidPolicy, _pseudonymize, default_policy, export_fields, redact
 from api.main import app
 
 client = TestClient(app)
@@ -212,3 +213,111 @@ def test_export_feature_parquet_roundtrips():
     table = pq.read_table(io.BytesIO(resp.content))
     assert int(resp.headers["x-pipeguard-row-count"]) == table.num_rows
     assert {"metric_key", "normalized_value", "canonical_unit", "origin"} <= set(table.column_names)
+
+
+# --- De-identification policy at the export seam (T-040 / W14) --------------------------------
+# Demo de-id SEAM, NOT HIPAA de-identification: hashing here is salted pseudonymization, a
+# non-reversible heuristic — the tests assert the *field-class behavior*, not any compliance.
+
+
+def test_deid_pseudonymize_is_stable_salted_and_non_reversible():
+    # Stable: same (salt, value) → same token, so a cohort key joins across rows/files.
+    assert _pseudonymize("SUBJ-1001", "s") == _pseudonymize("SUBJ-1001", "s")
+    # Non-reversible + not the raw value: the plaintext never appears in the token.
+    tok = _pseudonymize("SUBJ-1001", "s")
+    assert tok.startswith("pseudo_") and "SUBJ-1001" not in tok
+    # Salted: a different salt yields a different pseudonym for the same value.
+    assert _pseudonymize("SUBJ-1001", "s") != _pseudonymize("SUBJ-1001", "other-salt")
+    # Distinct values yield distinct tokens (no accidental collapse).
+    assert _pseudonymize("SUBJ-1001", "s") != _pseudonymize("SUBJ-1002", "s")
+
+
+def test_deid_redact_field_classes():
+    policy = DeidPolicy(
+        field_actions={
+            "submitted_by": DeidAction.DROP,
+            "subject_id": DeidAction.GATE_BY_ORIGIN,
+            "tissue": DeidAction.GATE_BY_ORIGIN,
+        },
+        salt="test-salt",
+    )
+    row = {"run_id": "r", "subject_id": "SUBJ-1001", "tissue": "blood", "submitted_by": "a.rivera"}
+
+    # DROP removes operator PII entirely (the key is gone, not blanked).
+    non_real = redact(row, "synthetic", policy)
+    assert "submitted_by" not in non_real
+    # PASSTHROUGH leaves operational fields untouched.
+    assert non_real["run_id"] == "r"
+    # GATE_BY_ORIGIN on a non-real origin emits a hashed cohort key (never raw).
+    assert non_real["subject_id"] == _pseudonymize("SUBJ-1001", "test-salt")
+    assert non_real["subject_id"] != "SUBJ-1001" and non_real["tissue"] != "blood"
+
+    # GATE_BY_ORIGIN on a PHI-guarded origin drops the cohort keys outright.
+    real = redact(row, "real-giab", policy)
+    assert "subject_id" not in real and "tissue" not in real
+    assert "submitted_by" not in real  # still dropped
+    # Untagged `unknown` is guarded conservatively — cohort keys withheld there too.
+    assert "subject_id" not in redact(row, "unknown", policy)
+
+
+def test_deid_default_policy_and_export_fields():
+    policy = default_policy()
+    assert policy.action_for("submitted_by") is DeidAction.DROP
+    assert policy.action_for("subject_id") is DeidAction.GATE_BY_ORIGIN
+    assert policy.action_for("origin") is DeidAction.PASSTHROUGH  # unnamed → passthrough
+    # The identity header carries the gated cohort keys but never the DROP'd operator PII.
+    fields = export_fields(["run_id", "origin"], ["subject_id", "tissue", "submitted_by"], policy)
+    assert fields == ["run_id", "origin", "subject_id", "tissue"]
+
+
+def test_export_default_omits_all_identity_columns():
+    # Without include=identity the export is unchanged: no cohort keys, no operator PII.
+    resp = client.get("/api/export", params={"grain": "decision", "run_id": "mock_run_01"})
+    assert resp.status_code == 200
+    assert resp.headers["x-pipeguard-deid-policy"] == "demo-deid-v1"
+    rows = _parse_csv(resp.text)
+    for col in ("submitted_by", "subject_id", "tissue"):
+        assert col not in rows[0]
+
+
+def test_export_identity_mode_gates_and_hashes_cohort_keys():
+    # mock_run_01 origin = contrived (non-real) → cohort keys are exported, but hashed.
+    resp = client.get(
+        "/api/export",
+        params={"grain": "decision", "run_id": "mock_run_01", "include": "identity"},
+    )
+    assert resp.status_code == 200
+    rows = _parse_csv(resp.text)
+    # Cohort-key columns are present; operator PII is still never a column (DROP).
+    assert "subject_id" in rows[0] and "tissue" in rows[0]
+    assert "submitted_by" not in rows[0]
+    salt = default_policy().salt
+    s1 = next(r for r in rows if r["sample_id"] == "S1")
+    # S1 subject SUBJ-1001 → pseudonymized, never raw; tissue likewise.
+    assert s1["subject_id"] == _pseudonymize("SUBJ-1001", salt)
+    assert "SUBJ-1001" not in resp.text and "a.rivera" not in resp.text
+    assert s1["tissue"] == _pseudonymize("blood", salt)
+    # Missing metadata stays a signal, not a crash: S4 has no subject_id → empty cell.
+    s4 = next(r for r in rows if r["sample_id"] == "S4")
+    assert s4["subject_id"] == ""
+    # Rules decide, de-id only shapes export: the verdict is byte-for-byte untouched.
+    assert s4["verdict"] == "escalate"
+
+
+def test_export_identity_mode_feature_grain_and_validation():
+    # Identity join also rides the feature (ML-corpus) grain, hashed + origin-gated.
+    resp = client.get(
+        "/api/export",
+        params={
+            "format": "jsonl",
+            "grain": "feature",
+            "run_id": "mock_run_01",
+            "include": "identity",
+        },
+    )
+    assert resp.status_code == 200
+    recs = [json.loads(ln) for ln in resp.text.splitlines() if ln]
+    assert "subject_id" in recs[0] and "submitted_by" not in recs[0]
+    assert "SUBJ-1001" not in resp.text
+    # An unknown include mode is a 400 (closed vocabulary).
+    assert client.get("/api/export", params={"include": "everything"}).status_code == 400
