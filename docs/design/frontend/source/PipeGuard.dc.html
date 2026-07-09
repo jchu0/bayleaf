@@ -60,6 +60,7 @@ button{font-family:inherit}
 
     <div style="padding:14px 12px 4px;font-size:10.5px;font-weight:600;letter-spacing:.6px;color:#6b7683;text-transform:uppercase">Configure</div>
     <nav style="display:flex;flex-direction:column;gap:2px;padding:2px 12px">
+      <button style="{{ navSel.builder }}" onClick="{{ goto.builder }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="8" r="3"/><path d="M18 11a9 9 0 0 1-9 9"/><path d="M6 9v6"/></svg><span>Pipeline builder</span></button>
       <button style="{{ navSel.settings }}" onClick="{{ goto.settings }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1.5" y1="14" x2="6.5" y2="14"/><line x1="9.5" y1="8" x2="14.5" y2="8"/><line x1="17.5" y1="16" x2="22.5" y2="16"/></svg><span>Settings</span></button>
     </nav>
 
@@ -1039,6 +1040,308 @@ button{font-family:inherit}
         </div>
       </sc-if>
 
+      <!-- ============ PIPELINE BUILDER ============ -->
+      <sc-if value="{{ isBuilder }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Pipeline builder" style="height:100%;display:flex;flex-direction:column;overflow:hidden;background:var(--surface-2);animation:pgfade .28s ease">
+
+          <!-- SUB-HEADER TOOLBAR -->
+          <div style="height:44px;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px;padding:0 14px;z-index:4">
+            <div style="display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:2px;flex-shrink:0">
+              <button style="{{ bModeEdit }}" onClick="{{ setBEdit }}">Edit</button>
+              <button style="{{ bModeView }}" onClick="{{ setBView }}">View</button>
+            </div>
+            <span style="font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">{{ bGraphId }}</span>
+            <span style="{{ bStateBadge }}"><span style="{{ bStateDot }}"></span>{{ bStateLabel }}</span>
+            <div style="flex:1;min-width:8px"></div>
+            <div style="display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:2px;flex-shrink:0">
+              <sc-for list="{{ bProfileOpts }}" as="p" hint-placeholder-count="3">
+                <button style="{{ p.style }}" onClick="{{ p.go }}">{{ p.l }}</button>
+              </sc-for>
+            </div>
+            <button style="{{ bBtnGhost }}" onClick="{{ bTidy }}" title="Auto-layout — Phase 2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>Tidy</button>
+            <button style="{{ bBtnStyle }}" onClick="{{ bValidate }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>Validate</button>
+            <button style="{{ bEmitStyle }}" onClick="{{ bEmit }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>Emit</button>
+          </div>
+
+          <!-- LINKED-RUN STRIP (VIEW only) -->
+          <sc-if value="{{ bIsView }}" hint-placeholder-val="{{ false }}">
+            <div style="height:48px;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 16px">
+              <span style="font-size:12px;color:var(--text-2);white-space:nowrap">Linked to <span style="font-family:var(--mono);color:var(--text);font-weight:600">{{ runId }}</span></span>
+              <div style="display:flex;height:8px;width:170px;border-radius:5px;overflow:hidden;background:var(--surface-3)">
+                <sc-for list="{{ bStripSegs }}" as="s" hint-placeholder-count="3"><div style="width:{{ s.w }};background:{{ s.c }}"></div></sc-for>
+              </div>
+              <span style="font-size:11.5px;color:var(--text-3)">{{ bStripCount }}</span>
+              <div style="flex:1"></div>
+              <button style="{{ bBtnGhost }}" onClick="{{ bOpenProv }}">Open Provenance</button>
+              <button style="{{ bBtnGhost }}" onClick="{{ bOpenDec }}">Open Decision cards</button>
+              <button style="{{ bBtnStyle }}" onClick="{{ bFork }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="8" r="3"/><path d="M18 11a9 9 0 0 1-9 9M6 9v6"/></svg>Fork to new draft</button>
+            </div>
+          </sc-if>
+
+          <!-- THREE PANES -->
+          <div style="flex:1;display:flex;min-height:0">
+
+            <!-- PALETTE (open) -->
+            <sc-if value="{{ bPaletteOpen }}" hint-placeholder-val="{{ true }}">
+              <aside style="width:240px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0">
+                <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+                  <div style="flex:1;display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:5px 8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.1-4.1"/></svg><span style="font-size:11.5px;color:var(--text-3)">Search nodes…</span></div>
+                  <button style="width:27px;height:27px;border:1px solid var(--border);background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-3);flex-shrink:0" onClick="{{ togglePalette }}" title="Collapse"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                </div>
+                <div style="flex:1;overflow-y:auto;padding:11px 12px;display:flex;flex-direction:column;gap:14px">
+                  <sc-for list="{{ bPaletteSections }}" as="sec" hint-placeholder-count="4">
+                    <div>
+                      <div style="font-size:10px;font-weight:600;letter-spacing:.5px;color:var(--text-3);text-transform:uppercase;margin-bottom:7px">{{ sec.label }}</div>
+                      <div style="display:flex;flex-direction:column;gap:6px">
+                        <sc-for list="{{ sec.items }}" as="t" hint-placeholder-count="3">
+                          <div style="{{ t.style }}">
+                            <div style="{{ t.iconTile }}"><sc-if value="{{ t.gS }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg></sc-if><sc-if value="{{ t.gM }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg></sc-if><sc-if value="{{ t.gC }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></sc-if><sc-if value="{{ t.gB }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></sc-if><sc-if value="{{ t.gD }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3c0 6 16 6 16 12M20 3c0 6-16 6-16 12"/><path d="M7 5h10M8 9h8M8 15h8M7 19h10"/></svg></sc-if><sc-if value="{{ t.gF }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/></svg></sc-if><sc-if value="{{ t.gL }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></sc-if><sc-if value="{{ t.gA }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></sc-if><sc-if value="{{ t.gW }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-2.5 2.5-2.5z"/></svg></sc-if><sc-if value="{{ t.gAr }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg></sc-if><sc-if value="{{ t.gSh }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></sc-if></div>
+                            <div style="min-width:0;flex:1"><div style="font-size:11.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.name }}</div><div style="font-family:var(--mono);font-size:9px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.sub }}</div></div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </sc-for>
+                  <div style="font-size:10.5px;color:var(--text-3);line-height:1.55;border-top:1px solid var(--border);padding-top:11px">MVP configures the seeded chain. Free drag-to-canvas is Phase 2.</div>
+                </div>
+              </aside>
+            </sc-if>
+            <!-- PALETTE (collapsed rail) -->
+            <sc-if value="{{ bPaletteClosed }}" hint-placeholder-val="{{ false }}">
+              <aside style="width:44px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:12px">
+                <button style="width:27px;height:27px;border:1px solid var(--border);background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-3)" onClick="{{ togglePalette }}" title="Expand palette"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+                <div style="width:22px;height:1px;background:var(--border)"></div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+              </aside>
+            </sc-if>
+
+            <!-- CANVAS -->
+            <div style="flex:1;position:relative;min-width:0">
+              <div style="position:absolute;inset:0;overflow:auto" onClick="{{ bClearSel }}">
+                <div style="{{ bCanvasInner }}">
+                  <svg style="position:absolute;left:0;top:0;width:2560px;height:460px;overflow:visible;pointer-events:none">
+                    <sc-for list="{{ bEdges }}" as="e" hint-placeholder-count="12">
+                      <path d="{{ e.d }}" fill="none" stroke="{{ e.s }}" stroke-width="{{ e.w }}" stroke-dasharray="{{ e.dash }}"></path>
+                    </sc-for>
+                  </svg>
+
+                  <div style="position:absolute;left:40px;top:140px;font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);text-transform:uppercase">Composed tool nodes</div>
+
+                  <!-- ingest band -->
+                  <div style="{{ ingestWrap }}">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+                    <div style="font-size:10px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.3px">Deterministic ingest</div>
+                    <div style="font-family:var(--mono);font-size:9.5px;color:var(--text-3);line-height:1.55">write_run_dir<br>→ run/ (5 CSVs)</div>
+                    <div style="font-size:9px;color:var(--text-3);font-style:italic">non-composable</div>
+                  </div>
+
+                  <!-- tool nodes -->
+                  <sc-for list="{{ bNodes }}" as="n" hint-placeholder-count="7">
+                    <div style="{{ n.wrap }}" onClick="{{ n.select }}">
+                      <div style="display:flex;align-items:center;gap:8px;padding:8px 9px 7px 10px">
+                        <div style="{{ n.iconTile }}"><sc-if value="{{ n.gS }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg></sc-if><sc-if value="{{ n.gM }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg></sc-if><sc-if value="{{ n.gC }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></sc-if><sc-if value="{{ n.gB }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></sc-if><sc-if value="{{ n.gD }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3c0 6 16 6 16 12M20 3c0 6-16 6-16 12"/><path d="M7 5h10M8 9h8M8 15h8M7 19h10"/></svg></sc-if><sc-if value="{{ n.gF }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/></svg></sc-if><sc-if value="{{ n.gL }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></sc-if></div>
+                        <div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.tool }}</div><div style="font-family:var(--mono);font-size:9.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.version }}</div></div>
+                        <span style="{{ n.pgStyle }}">{{ n.pgLabel }}</span>
+                      </div>
+                      <div style="display:flex;gap:6px;padding:2px 9px 6px">
+                        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+                          <sc-for list="{{ n.inputs }}" as="p" hint-placeholder-count="1">
+                            <div style="display:flex;align-items:center;gap:5px;margin-left:-12px"><span style="{{ p.dot }}"></span><span style="{{ p.label }}">{{ p.kind }}</span></div>
+                          </sc-for>
+                        </div>
+                        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+                          <sc-for list="{{ n.outputs }}" as="p" hint-placeholder-count="1">
+                            <div style="display:flex;align-items:center;gap:5px;margin-right:-12px;max-width:100%"><span style="{{ p.label }}">{{ p.kind }}</span><span style="{{ p.dot }}"></span></div>
+                          </sc-for>
+                        </div>
+                      </div>
+                      <div style="padding:0 10px 8px"><span style="{{ n.draftStyle }}"><span style="{{ n.draftDot }}"></span>{{ n.draftLabel }}</span></div>
+                    </div>
+                  </sc-for>
+
+                  <!-- reference nodes -->
+                  <sc-for list="{{ bRefs }}" as="r" hint-placeholder-count="3">
+                    <div style="{{ r.wrap }}">
+                      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="width:9px;height:9px;border-radius:50%;border:1.5px solid var(--text-3);box-sizing:border-box;flex-shrink:0"></span><span style="font-size:10.5px;font-weight:600;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.label }}</span></div>
+                      <div style="font-family:var(--mono);font-size:9.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.file }}</div>
+                      <div style="font-size:9px;color:var(--text-3);margin-top:3px;font-style:italic">reference · never gated</div>
+                    </div>
+                  </sc-for>
+
+                  <!-- gate node -->
+                  <div style="{{ gateWrap }}" onClick="{{ gateSelect }}">
+                    <div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid var(--border)">
+                      <div style="width:28px;height:28px;border-radius:8px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text-2)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
+                      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">Decision gate</div><div style="font-family:var(--mono);font-size:9.5px;color:var(--text-3)">terminal · reads run/</div></div>
+                      <span title="non-removable" style="display:inline-flex;color:var(--text-3)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+                    </div>
+                    <div style="padding:9px 10px;display:flex;flex-direction:column;gap:5px">
+                      <sc-for list="{{ gateCheckpoints }}" as="c" hint-placeholder-count="3">
+                        <div style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:{{ c.c }};display:inline-block"></span><span style="font-size:11px;color:var(--text-2);font-weight:500">{{ c.label }}</span></div>
+                      </sc-for>
+                    </div>
+                    <div style="padding:8px 10px;border-top:1px solid var(--border);background:var(--surface-2)">
+                      <sc-if value="{{ bIsView }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:var(--surface-3);margin-bottom:6px">
+                          <sc-for list="{{ gSegs }}" as="s" hint-placeholder-count="3"><div style="width:{{ s.w }};background:{{ s.c }}"></div></sc-for>
+                        </div>
+                      </sc-if>
+                      <div style="font-size:10px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.3px">{{ gateVerdictLabel }}</div>
+                    </div>
+                  </div>
+
+                  <!-- agent pill -->
+                  <div style="{{ agentWrap }}" onClick="{{ agentSelect }}">
+                    <div style="font-size:8.5px;font-weight:700;letter-spacing:.5px;color:var(--accent-strong);text-transform:uppercase;margin-bottom:2px">Advisory</div>
+                    <div style="display:flex;align-items:center;gap:7px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-strong)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span style="font-size:12px;font-weight:600;color:var(--accent-strong);flex:1">QC-triage</span><span style="{{ agentModeDot }}"></span><span style="font-family:var(--mono);font-size:9.5px;color:var(--text-2)">stub</span></div>
+                    <div style="font-size:9.5px;color:var(--text-2);margin-top:2px">observes <span style="font-family:var(--mono)">qc</span> · no data ports</div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- zoom controls -->
+              <div style="position:absolute;left:14px;bottom:14px;display:flex;align-items:center;gap:2px;background:var(--surface);border:1px solid var(--border-strong);border-radius:9px;padding:3px;box-shadow:0 2px 8px rgba(16,24,40,.1)">
+                <button style="width:28px;height:28px;border:none;background:transparent;border-radius:6px;cursor:pointer;color:var(--text-2);display:flex;align-items:center;justify-content:center" onClick="{{ bZoomOut }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+                <span style="font-family:var(--mono);font-size:11px;color:var(--text-2);min-width:38px;text-align:center">{{ bZoomPct }}</span>
+                <button style="width:28px;height:28px;border:none;background:transparent;border-radius:6px;cursor:pointer;color:var(--text-2);display:flex;align-items:center;justify-content:center" onClick="{{ bZoomIn }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+                <div style="width:1px;height:18px;background:var(--border);margin:0 2px"></div>
+                <button style="height:28px;padding:0 9px;border:none;background:transparent;border-radius:6px;cursor:pointer;color:var(--text-2);font-size:11px;font-weight:500" onClick="{{ bZoomFit }}">Fit</button>
+              </div>
+            </div>
+
+            <!-- INSPECTOR -->
+            <sc-if value="{{ bInspectorOn }}" hint-placeholder-val="{{ true }}">
+              <aside style="width:360px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;min-height:0;animation:pgfade .22s ease">
+                <div style="padding:13px 15px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px">
+                  <div style="width:34px;height:34px;border-radius:9px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)"><sc-if value="{{ bSelHdr.gS }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg></sc-if><sc-if value="{{ bSelHdr.gM }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg></sc-if><sc-if value="{{ bSelHdr.gC }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></sc-if><sc-if value="{{ bSelHdr.gB }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></sc-if><sc-if value="{{ bSelHdr.gD }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3c0 6 16 6 16 12M20 3c0 6-16 6-16 12"/><path d="M7 5h10M8 9h8M8 15h8M7 19h10"/></svg></sc-if><sc-if value="{{ bSelHdr.gF }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/></svg></sc-if><sc-if value="{{ bSelHdr.gL }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></sc-if><sc-if value="{{ bSelHdr.gA }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></sc-if><sc-if value="{{ bSelHdr.gSh }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></sc-if></div>
+                  <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ bSelHdr.title }}</div><div style="font-family:var(--mono);font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ bSelHdr.sub }}</div></div>
+                  <button style="width:28px;height:28px;border:1px solid var(--border);background:var(--surface);border-radius:7px;cursor:pointer;color:var(--text-2);display:flex;align-items:center;justify-content:center;flex-shrink:0" onClick="{{ bInspClose }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                </div>
+
+                <!-- TOOL NODE: tabs -->
+                <sc-if value="{{ bIsToolSel }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;border-bottom:1px solid var(--border)">
+                    <sc-for list="{{ bTabs }}" as="t" hint-placeholder-count="4"><button style="{{ t.style }}" onClick="{{ t.go }}">{{ t.l }}</button></sc-for>
+                  </div>
+                  <div style="flex:1;overflow-y:auto;padding:15px">
+                    <sc-if value="{{ bTabParams }}" hint-placeholder-val="{{ false }}">
+                      <sc-for list="{{ bParams }}" as="p" hint-placeholder-count="3">
+                        <div style="margin-bottom:13px">
+                          <div style="font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--text);margin-bottom:2px">{{ p.k }}</div>
+                          <div style="font-size:10.5px;color:var(--text-3);margin-bottom:5px">{{ p.help }}</div>
+                          <div style="font-family:var(--mono);font-size:11.5px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:6px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.v }}</div>
+                        </div>
+                      </sc-for>
+                      <div style="font-size:10.5px;color:var(--text-3);line-height:1.55;border-top:1px solid var(--border);padding-top:11px;margin-top:3px">Schema-driven form from the bundled <span style="font-family:var(--mono)">nextflow_schema.json</span> — no code editor, no live fetch.</div>
+                    </sc-if>
+                    <sc-if value="{{ bTabLocators }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:11px;color:var(--text-2);line-height:1.5;background:var(--accent-weak);border:1px solid #d5e2fb;border-radius:8px;padding:9px 11px;margin-bottom:12px">Repointing a path changes <strong>inputs</strong>, not thresholds. The config <strong>locates inputs; it never judges them.</strong></div>
+                      <sc-for list="{{ bLocators }}" as="l" hint-placeholder-count="2">
+                        <div style="border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin-bottom:11px">
+                          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px"><span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text)">{{ l.kind }}</span><span style="font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:2px 6px">{{ l.role }}</span></div>
+                          <div style="display:flex;flex-direction:column;gap:7px">
+                            <div><div style="font-size:9.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px">{{ l.field }}</div><div style="font-family:var(--mono);font-size:11px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.loc }}</div></div>
+                            <div style="display:flex;gap:8px">
+                              <div style="flex:1"><div style="font-size:9.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px">parser</div><div style="font-family:var(--mono);font-size:11px;color:var(--text-2)">{{ l.parser }}</div></div>
+                              <div style="flex:1"><div style="font-size:9.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px">on_multiple</div><div style="font-family:var(--mono);font-size:11px;color:var(--text-2)">{{ l.on }}</div></div>
+                              <div style="flex:1"><div style="font-size:9.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px">required</div><div style="font-family:var(--mono);font-size:11px;color:var(--text-2)">{{ l.reqLabel }}</div></div>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:6px 8px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span style="font-size:9.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.3px">origin</span><span style="font-family:var(--mono);font-size:11px;color:var(--text-2)">unknown</span><span style="margin-left:auto;font-size:9.5px;color:var(--text-3)">stamped at ingest</span></div>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </sc-if>
+                    <sc-if value="{{ bTabIo }}" hint-placeholder-val="{{ false }}">
+                      <sc-for list="{{ bIo }}" as="r" hint-placeholder-count="2">
+                        <div style="border:1px solid var(--border);border-radius:9px;padding:10px 11px;margin-bottom:9px">
+                          <div style="font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--text);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</div>
+                          <div style="display:flex;gap:10px"><span style="font-family:var(--mono);font-size:10px;color:var(--text-3)">{{ r.sha }}</span><span style="font-family:var(--mono);font-size:10px;color:var(--text-3)">{{ r.size }}</span><span style="font-family:var(--mono);font-size:10px;color:var(--text-3);margin-left:auto">{{ r.origin }}</span></div>
+                        </div>
+                      </sc-for>
+                      <sc-if value="{{ bIoDraft }}" hint-placeholder-val="{{ true }}"><div style="font-size:10.5px;color:var(--text-3);line-height:1.55;border-top:1px solid var(--border);padding-top:11px;margin-top:3px">Declared ports — no bytes yet. Hashes, sizes &amp; origin fill in from the ledger in linked <strong>View</strong>.</div></sc-if>
+                    </sc-if>
+                    <sc-if value="{{ bTabAgents }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin-bottom:11px">
+                        <div style="width:30px;height:30px;border-radius:8px;background:var(--accent-weak);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-strong)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+                        <div style="flex:1"><div style="font-size:12.5px;font-weight:600">QC-triage</div><div style="font-size:10.5px;color:var(--text-3)">advisory · off critical path</div></div>
+                        <div style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:3px 10px"><span style="width:6px;height:6px;border-radius:50%;background:#8b95a1;display:inline-block"></span>stub · $0</div>
+                      </div>
+                      <div style="font-size:10.5px;color:var(--text-3);line-height:1.55">Snap-in observes this node's checkpoint output. It has <strong>no data ports</strong> — it can never set, route, or delay a verdict. Flip to <span style="font-family:var(--mono)">claude</span> via <span style="font-family:var(--mono)">PIPEGUARD_TRIAGE_AGENT</span>; any error degrades to the stub.</div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <!-- GATE inspector -->
+                <sc-if value="{{ bIsGateSel }}" hint-placeholder-val="{{ false }}">
+                  <div style="flex:1;overflow-y:auto;padding:15px">
+                    <div style="font-size:11px;color:var(--text-2);line-height:1.5;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:13px">The gate reads the frozen five <span style="font-family:var(--mono)">run/</span> CSVs — <strong>not</strong> raw tool outputs. Its verdict is computed by rules + runbook. Thresholds are <strong>read-only</strong> here.</div>
+                    <div style="font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--text-3);text-transform:uppercase;margin-bottom:8px">Runbook thresholds (read-only)</div>
+                    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:13px">
+                      <sc-for list="{{ runbookRows }}" as="rb" hint-placeholder-count="5">
+                        <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border)"><span style="flex:1;font-size:11.5px;color:var(--text)">{{ rb.metric }}</span><span style="font-family:var(--mono);font-size:11px;color:var(--text-2)">{{ rb.gate }}</span><span style="font-family:var(--mono);font-size:10px;color:var(--text-3)">hard {{ rb.hard }}</span></div>
+                      </sc-for>
+                    </div>
+                    <button style="{{ bBtnStyle }}" onClick="{{ bOpenRunbook }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1.5" y1="14" x2="6.5" y2="14"/><line x1="9.5" y1="8" x2="14.5" y2="8"/><line x1="17.5" y1="16" x2="22.5" y2="16"/></svg>Open runbook in Settings</button>
+                  </div>
+                </sc-if>
+
+                <!-- AGENT inspector -->
+                <sc-if value="{{ bIsAgentSel }}" hint-placeholder-val="{{ false }}">
+                  <div style="flex:1;overflow-y:auto;padding:15px">
+                    <div style="font-size:11px;color:var(--text-2);line-height:1.5;background:var(--accent-weak);border:1px solid #d5e2fb;border-radius:8px;padding:10px 12px;margin-bottom:13px">Advisory snap-in. <strong>No data ports</strong>, so it can never sit on the path to the gate — "off the critical path" is enforced by shape, not a lint rule.</div>
+                    <div style="display:flex;flex-direction:column;gap:9px">
+                      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text-3);width:78px">attachTo</span><span style="font-family:var(--mono);font-size:11.5px;color:var(--text)">g_gate</span></div>
+                      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text-3);width:78px">scope</span><span style="font-family:var(--mono);font-size:11.5px;color:var(--text)">qc</span></div>
+                      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text-3);width:78px">tier</span><span style="font-family:var(--mono);font-size:11.5px;color:var(--text)">sonnet-mid</span></div>
+                      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text-3);width:78px">mode</span><span style="display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:3px 10px"><span style="width:6px;height:6px;border-radius:50%;background:#8b95a1;display:inline-block"></span>stub · $0</span></div>
+                    </div>
+                  </div>
+                </sc-if>
+              </aside>
+            </sc-if>
+          </div>
+
+          <!-- VALIDATE / EMIT CONSOLE -->
+          <div style="flex-shrink:0;background:var(--surface);border-top:1px solid var(--border)">
+            <button style="height:36px;width:100%;border:none;background:transparent;display:flex;align-items:center;gap:9px;padding:0 16px;cursor:pointer" onClick="{{ toggleDrawer }}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--proceed)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+              <span style="font-size:12.5px;font-weight:600;color:var(--text)">Validate &amp; emit console</span>
+              <span style="font-size:11.5px;color:var(--proceed-fg);background:var(--proceed-bg);border:1px solid var(--proceed-bd);border-radius:20px;padding:1px 9px;font-weight:500">Ready to emit</span>
+              <div style="flex:1"></div>
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">{{ bEnvHint }}</span>
+            </button>
+            <sc-if value="{{ bDrawerOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="height:240px;display:flex;min-height:0;border-top:1px solid var(--border)">
+                <div style="flex:1;min-width:0;overflow-y:auto;padding:14px 16px;border-right:1px solid var(--border)">
+                  <div style="display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--proceed-bd);background:var(--proceed-bg);border-radius:9px;margin-bottom:11px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--proceed)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span style="font-size:12.5px;font-weight:600;color:var(--proceed-fg)">Typed I/O connects · config ready to emit</span></div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <sc-for list="{{ bValRows }}" as="v" hint-placeholder-count="8">
+                      <button style="{{ v.rowStyle }}" onClick="{{ v.go }}"><span style="{{ v.codeStyle }}">{{ v.code }}</span><span style="font-size:11.5px;color:var(--text-2);line-height:1.4">{{ v.msg }}</span></button>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="width:47%;flex-shrink:0;display:flex;flex-direction:column;min-height:0;background:var(--surface-2)">
+                  <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                    <span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text)">run_layout.yaml</span>
+                    <div style="flex:1"></div>
+                    <button style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2);background:var(--surface);border:1px solid var(--border-strong);border-radius:7px;padding:4px 9px;cursor:pointer" onClick="{{ bCopy }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button>
+                    <button style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2);background:var(--surface);border:1px solid var(--border-strong);border-radius:7px;padding:4px 9px;cursor:pointer" onClick="{{ bDownload }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>Download</button>
+                  </div>
+                  <div style="flex:1;overflow:auto;padding:12px 14px">
+                    <sc-if value="{{ bIsSarek }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px;color:var(--hold-fg);background:var(--hold-bg);border:1px solid var(--hold-bd);border-radius:7px;padding:7px 10px;margin-bottom:10px">sarek profile is illustrative / target-state — not yet wired end-to-end.</div></sc-if>
+                    <pre style="margin:0;font-family:var(--mono);font-size:10.5px;line-height:1.6;color:var(--text);white-space:pre">{{ bYaml }}</pre>
+                    <sc-if value="{{ bEmitted }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px;display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--proceed-fg);background:var(--proceed-bg);border:1px solid var(--proceed-bd);border-radius:8px;padding:9px 11px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M20 6 9 17l-5-5"/></svg><span>Wrote <span style="font-family:var(--mono)">{{ bEmitPath }}</span>. Emit writes the config only — no tool runs. The live gate's consumption of an arbitrary layout is Phase 2.</span></div></sc-if>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+        </div>
+      </sc-if>
+
     </main>
   </div>
 </div>
@@ -1071,6 +1374,15 @@ class Component extends DCLogic {
     synth: 'stub',
     runMenuOpen: false,
     demoMenuOpen: false,
+    // pipeline builder
+    builderMode: 'edit',   // 'edit' (draft) | 'view' (linked run)
+    bProfile: 'giab_panel',
+    bSelected: null,
+    bTab: 'locators',
+    bPaletteOpen: true,
+    bDrawerOpen: false,
+    bZoom: 1,
+    bEmitted: false,
   };
 
   // ---------- palette helpers (return React style objects) ----------
@@ -1306,7 +1618,7 @@ class Component extends DCLogic {
     const curRun = runsById[st.runId] || this.RUNS[0];
     const curStatus = this.STATUS[curRun.status];
 
-    const titles = { overview: 'Runs', intake: 'Intake gate', decision: 'Decision cards', queue: 'Review queue', provenance: 'Provenance', agent: 'Agent triage', monitoring: 'Monitoring', settings: 'Settings' };
+    const titles = { overview: 'Runs', intake: 'Intake gate', decision: 'Decision cards', queue: 'Review queue', provenance: 'Provenance', agent: 'Agent triage', monitoring: 'Monitoring', settings: 'Settings', builder: 'Pipeline builder' };
 
     const navBase = { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 11px', borderRadius: '8px', border: 'none', font: 'inherit', fontSize: '13.5px', cursor: 'pointer', width: '100%', textAlign: 'left', lineHeight: '1.1' };
     const navS = (k) => st.view === k
@@ -1598,10 +1910,266 @@ class Component extends DCLogic {
     const ovEmpty = st.demo === 'empty' || (st.demo === 'ready' && runsFiltered.length === 0);
     const ovReady = st.demo === 'ready' && runsFiltered.length > 0;
 
+    // ===================== PIPELINE BUILDER =====================
+    const bMode = st.builderMode || 'edit';
+    const bIsView = bMode === 'view';
+    const bIsEdit = !bIsView;
+    const bProf = st.bProfile || 'giab_panel';
+    const bZoomV = st.bZoom || 1;
+
+    const mkIcon = (name, o) => {
+      o = o || {}; const s = o.size || 17, k = o.stroke || 'currentColor', w = o.sw || 1.7;
+      const e = (t, a) => React.createElement(t, a);
+      const G = {
+        scissors: [e('circle',{key:1,cx:6,cy:6,r:3}), e('circle',{key:2,cx:6,cy:18,r:3}), e('path',{key:3,d:'M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12'})],
+        merge: [e('circle',{key:1,cx:18,cy:18,r:3}), e('circle',{key:2,cx:6,cy:6,r:3}), e('path',{key:3,d:'M6 21V9a9 9 0 0 0 9 9'})],
+        copy: [e('rect',{key:1,x:9,y:9,width:12,height:12,rx:2}), e('path',{key:2,d:'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'})],
+        bars: [e('path',{key:1,d:'M18 20V10M12 20V4M6 20v-6'})],
+        dna: [e('path',{key:1,d:'M4 3c0 6 16 6 16 12M20 3c0 6-16 6-16 12'}), e('path',{key:2,d:'M7 5h10M8 9h8M8 15h8M7 19h10',opacity:0.55})],
+        funnel: [e('path',{key:1,d:'M3 4h18l-7 8v6l-4 2v-8L3 4z'})],
+        layers: [e('path',{key:1,d:'M12 2 2 7l10 5 10-5-10-5z'}), e('path',{key:2,d:'M2 17l10 5 10-5M2 12l10 5 10-5'})],
+        shield: [e('path',{key:1,d:'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'}), e('path',{key:2,d:'m9 12 2 2 4-4'})],
+        lock: [e('rect',{key:1,x:5,y:11,width:14,height:10,rx:2}), e('path',{key:2,d:'M8 11V7a4 4 0 0 1 8 0v4'})],
+        activity: [e('path',{key:1,d:'M22 12h-4l-3 9L9 3l-3 9H2'})],
+        sliders: [e('path',{key:1,d:'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6'})],
+        db: [e('ellipse',{key:1,cx:12,cy:5,rx:8,ry:3}), e('path',{key:2,d:'M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6'})],
+        wrench: [e('path',{key:1,d:'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-2.5 2.5-2.5z'})],
+        archive: [e('rect',{key:1,x:3,y:4,width:18,height:4,rx:1}), e('path',{key:2,d:'M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4'})],
+        search: [e('circle',{key:1,cx:11,cy:11,r:7}), e('path',{key:2,d:'m21 21-4.1-4.1'})],
+        link: [e('path',{key:1,d:'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1'}), e('path',{key:2,d:'M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1'})],
+      };
+      return e('svg', { width: s, height: s, viewBox: '0 0 24 24', fill: 'none', stroke: k, strokeWidth: w, strokeLinecap: 'round', strokeLinejoin: 'round' }, G[name] || G.bars);
+    };
+
+    const NS = { ours:{label:'ours',c:'#1f5fd0',bg:'#eaf0fc'}, full:{label:'consumes',c:'#0e8f7e',bg:'#e2f4f0'}, partial:{label:'substitute',c:'#c1560f',bg:'#fceee2'} };
+    const VST = { ok:{c:'#1a854e',label:'ok'}, warn:{c:'#b07714',label:'warn'}, blocked:{c:'#cf3238',label:'blocked'} };
+    const gflags = (nm) => ({ gS:nm==='scissors', gM:nm==='merge', gC:nm==='copy', gB:nm==='bars', gD:nm==='dna', gF:nm==='funnel', gL:nm==='layers', gA:nm==='activity', gW:nm==='wrench', gAr:nm==='archive', gSh:nm==='shield' });
+
+    const bTools = [
+      { id:'n_fastp', tool:'fastp', version:'0.23.4', stage:'read_qc', stageLabel:'Read QC + trim', pg:'ours', g:'scissors', x:40, y:180, vstatus:'ok',
+        inputs:[{kind:'fastq'}], outputs:[{kind:'fastp_json'},{kind:'fastq'}],
+        params:[{k:'qualified_quality_phred',v:'15',help:'Per-base quality floor'},{k:'length_required',v:'50',help:'Min read length after trim'},{k:'detect_adapter_for_pe',v:'true',help:'Auto-detect adapters (PE)'}],
+        locators:[{kind:'fastp_json',pg:'path',loc:'qc/HG002.fastp.json',parser:'fastp_json',required:true,role:'output',on:'error'},{kind:'fastq',pg:'glob',loc:'*.trim.fastq.gz',parser:'null',required:true,role:'output',on:'all'}],
+        io:[{name:'HG002.fastp.json',sha:'sha256:5f2a…c81',size:'18 KB',origin:'real-giab'},{name:'HG002.R1.trim.fastq.gz',sha:'sha256:9b04…7de',size:'1.9 GB',origin:'real-giab'}] },
+      { id:'n_bwa', tool:'bwa-mem2', version:'2.2.1', stage:'align', stageLabel:'Alignment', pg:'partial', g:'merge', x:340, y:180, vstatus:'ok',
+        inputs:[{kind:'fastq'},{kind:'reference_fasta',ref:true}], outputs:[{kind:'bam'},{kind:'bai'}],
+        params:[{k:'read_group',v:'@RG\\tID:HG002\\tSM:HG002',help:'Read-group header'},{k:'sort',v:'coordinate',help:'Output sort order'}],
+        locators:[{kind:'bam',pg:'glob',loc:'align/*.md.bam',parser:'null',required:true,role:'output',on:'error'}],
+        io:[{name:'HG002.bam',sha:'sha256:44c9…d10',size:'31 GB',origin:'real-giab'},{name:'HG002.bam.bai',sha:'sha256:1e77…4a2',size:'8 MB',origin:'real-giab'}] },
+      { id:'n_markdup', tool:'samtools markdup', version:'1.20', stage:'markdup', stageLabel:'Duplicate marking', pg:'full', g:'copy', x:640, y:180, vstatus:'ok',
+        inputs:[{kind:'bam'}], outputs:[{kind:'bam'},{kind:'markdup_metrics'},{kind:'samtools_stats'}],
+        params:[{k:'remove_duplicates',v:'false',help:'Mark, do not drop'}],
+        locators:[{kind:'markdup_metrics',pg:'path',loc:'qc/HG002.markdup.txt',parser:'markdup_metrics',required:false,role:'output',on:'error'}],
+        io:[{name:'HG002.md.bam',sha:'sha256:7a11…4c2',size:'32 GB',origin:'real-giab'},{name:'HG002.markdup.txt',sha:'sha256:c93e…08a',size:'2 KB',origin:'real-giab'}] },
+      { id:'n_mosdepth', tool:'mosdepth', version:'0.3.8', stage:'coverage', stageLabel:'Coverage', pg:'ours', g:'bars', x:940, y:180, vstatus:'warn',
+        inputs:[{kind:'bam'},{kind:'panel_bed',ref:true}], outputs:[{kind:'mosdepth_summary'}],
+        params:[{k:'by',v:'panel.bed',help:'Regions to summarise'},{k:'thresholds',v:'1,10,20,30',help:'Breadth thresholds (×)'},{k:'mapq',v:'20',help:'Min mapping quality'},{k:'no_per_base',v:'true',help:'Summary only'}],
+        locators:[{kind:'mosdepth_summary',pg:'path',loc:'mosdepth/HG002.panel.mosdepth.summary.txt',parser:'mosdepth_summary',required:true,role:'output',on:'error'}],
+        io:[{name:'HG002.panel.mosdepth.summary.txt',sha:'sha256:aa71…c09',size:'4 KB',origin:'real-giab'}] },
+      { id:'n_call', tool:'bcftools call', version:'1.20', stage:'variant_call', stageLabel:'Variant calling', pg:'partial', g:'dna', x:1240, y:180, vstatus:'ok',
+        inputs:[{kind:'bam'},{kind:'reference_fasta',ref:true}], outputs:[{kind:'vcf'}],
+        params:[{k:'min_MQ',v:'20',help:'mpileup min mapping quality'},{k:'min_BQ',v:'20',help:'mpileup min base quality'},{k:'variants_only',v:'true',help:'Emit variant sites only'}],
+        locators:[{kind:'vcf',pg:'glob',loc:'variants/*.bcftools.vcf.gz',parser:'vcf',required:false,role:'output',on:'error'}],
+        io:[{name:'HG002.bcftools.vcf.gz',sha:'sha256:be77…512',size:'128 MB',origin:'real-giab'}] },
+      { id:'n_norm', tool:'bcftools norm', version:'1.20', stage:'filter', stageLabel:'Filter / normalize', pg:'partial', g:'funnel', x:1540, y:180, vstatus:'ok',
+        inputs:[{kind:'vcf'},{kind:'reference_fasta',ref:true},{kind:'panel_bed',ref:true}], outputs:[{kind:'filtered_vcf'}],
+        params:[{k:'regions_file',v:'panel.bed',help:'Restrict to panel'},{k:'norm',v:'-m -both',help:'Split multiallelics'}],
+        locators:[{kind:'filtered_vcf',pg:'glob',loc:'variants/*.norm.filtered.vcf.gz',parser:'vcf',required:true,role:'output',on:'error'}],
+        io:[{name:'HG002.norm.filtered.vcf.gz',sha:'sha256:12ab…9f0',size:'44 MB',origin:'real-giab'}] },
+      { id:'n_multiqc', tool:'MultiQC', version:'1.21', stage:'qc_aggregate', stageLabel:'QC aggregation', pg:'full', g:'layers', x:1840, y:180, vstatus:'ok',
+        inputs:[{kind:'fastp_json'},{kind:'markdup_metrics'},{kind:'samtools_stats'},{kind:'mosdepth_summary'}], outputs:[{kind:'multiqc_json'}],
+        params:[{k:'force',v:'true',help:'Overwrite existing report'}],
+        locators:[{kind:'multiqc_json',pg:'path',loc:'multiqc_data/multiqc_data.json',parser:'null',required:false,role:'output',on:'error'}],
+        io:[{name:'multiqc_data.json',sha:'sha256:5be3…9c4',size:'2.1 MB',origin:'real-giab'}] },
+    ];
+
+    const portDot = (isRef) => isRef
+      ? { width:'9px', height:'9px', borderRadius:'50%', border:'1.5px solid var(--text-3)', background:'transparent', flexShrink:0, boxSizing:'border-box' }
+      : { width:'7px', height:'7px', borderRadius:'50%', background:'var(--text-3)', flexShrink:0 };
+    const portLabelS = { fontFamily:'var(--mono)', fontSize:'10px', color: bIsView ? 'var(--text-2)' : 'var(--text-3)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' };
+
+    const bNodes = bTools.map(n => {
+      const sel = st.bSelected === n.id;
+      const ns = NS[n.pg]; const vs = VST[n.vstatus];
+      const railC = bIsView ? vs.c : '#c6ced7';
+      return {
+        id:n.id, tool:n.tool, version:n.version, ...gflags(n.g),
+        wrap: { position:'absolute', left:n.x+'px', top:n.y+'px', width:'208px',
+          background: bIsView ? 'var(--surface)' : 'var(--surface-3)',
+          border: sel ? '1px solid var(--accent)' : (bIsView ? '1px solid var(--border)' : '1px dashed var(--border-strong)'),
+          borderLeft: '3px solid '+railC, borderRadius:'12px',
+          boxShadow: sel ? '0 0 0 2px var(--accent-weak),0 6px 18px rgba(16,24,40,.13)' : '0 1px 2px rgba(16,24,40,.05)',
+          cursor:'pointer', overflow:'hidden', color: bIsView ? 'var(--text)' : 'var(--text-2)' },
+        iconTile: { width:'28px', height:'28px', borderRadius:'8px', background: bIsView ? 'var(--surface-2)' : '#dde3e9', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, color: bIsView ? 'var(--text)' : 'var(--text-3)' },
+        pgLabel: ns.label, pgStyle: { fontSize:'9px', fontWeight:700, letterSpacing:'.3px', textTransform:'uppercase', color: ns.c, background: ns.bg, borderRadius:'5px', padding:'2px 6px', whiteSpace:'nowrap', flexShrink:0 },
+        inputs: n.inputs.map(p => ({ kind:p.kind, dot:portDot(!!p.ref), label:portLabelS })),
+        outputs: n.outputs.map(p => ({ kind:p.kind, dot:portDot(false), label:portLabelS })),
+        draftLabel: bIsView ? vs.label : 'draft',
+        draftStyle: { display:'inline-flex', alignItems:'center', gap:'5px', fontSize:'9.5px', fontWeight:700, color: bIsView ? vs.c : 'var(--text-3)', textTransform:'uppercase', letterSpacing:'.4px' },
+        draftDot: { width:'6px', height:'6px', borderRadius:'50%', background: bIsView ? vs.c : 'var(--text-3)', display:'inline-block' },
+        select: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState({ bSelected: n.id }); },
+      };
+    });
+
+    const EN = '#c6ced7', EM = '#d3dae1', ER = '#9aa4b0';
+    const bEdges = [
+      { d:'M248 232 L340 232', s:EN, w:1.5, dash:'' },
+      { d:'M548 232 L640 232', s:EN, w:1.5, dash:'' },
+      { d:'M848 232 L940 232', s:EN, w:1.5, dash:'' },
+      { d:'M1448 232 L1540 232', s:EN, w:1.5, dash:'' },
+      { d:'M848 250 L878 250 L878 340 L1218 340 L1218 232 L1240 232', s:EN, w:1.5, dash:'' },
+      { d:'M248 214 L266 214 L266 150 L1822 150 L1822 214 L1840 214', s:EM, w:1.25, dash:'' },
+      { d:'M848 214 L866 214 L866 158 L1814 158 L1814 222 L1840 222', s:EM, w:1.25, dash:'' },
+      { d:'M1148 232 L1166 232 L1166 166 L1806 166 L1806 230 L1840 230', s:EM, w:1.25, dash:'' },
+      { d:'M248 252 L288 252 L288 388 L2082 388 L2082 232 L2100 232', s:EM, w:1.25, dash:'5 4' },
+      { d:'M1148 252 L1188 252 L1188 380 L2074 380 L2074 232 L2100 232', s:EM, w:1.25, dash:'5 4' },
+      { d:'M1748 232 L1788 232 L1788 372 L2066 372 L2066 232 L2100 232', s:EM, w:1.25, dash:'5 4' },
+      { d:'M2260 232 L2300 232', s:EN, w:1.5, dash:'' },
+      { d:'M410 372 L410 322 L444 322 L444 300', s:ER, w:1, dash:'4 4' },
+      { d:'M1010 372 L1010 322 L1044 322 L1044 300', s:ER, w:1, dash:'4 4' },
+      { d:'M410 372 L410 352 L1344 352 L1344 300', s:ER, w:1, dash:'4 4' },
+      { d:'M1010 372 L1010 344 L1644 344 L1644 300', s:ER, w:1, dash:'4 4' },
+    ];
+
+    // gate + agent + ingest
+    const gateSel = st.bSelected === 'g_gate';
+    const gCounts = counts;
+    const gTotal = samples.length || 1;
+    const gSegs = ['proceed','hold','rerun','escalate'].filter(v => (gCounts[v]||0) > 0).map(v => ({ c:this.VBADGE[v].c, w:((gCounts[v]/gTotal)*100)+'%' }));
+    const gateWrap = { position:'absolute', left:'2300px', top:'180px', width:'208px',
+      background:'var(--surface)', border: gateSel ? '1px solid var(--accent)' : '1.5px solid var(--border-strong)',
+      borderLeft: '3px solid '+(bIsView ? 'var(--escalate)' : '#c6ced7'), borderRadius:'12px',
+      boxShadow: gateSel ? '0 0 0 2px var(--accent-weak),0 8px 22px rgba(16,24,40,.16)' : '0 3px 12px rgba(16,24,40,.09)', cursor:'pointer', overflow:'hidden' };
+    const gateCheckpoints = [ {label:'preflight', c:'#1f6feb'}, {label:'qc', c:'#1f5fd0'}, {label:'variant', c:'#0e8f7e'} ];
+    const agentSel = st.bSelected === 'a_qc_triage';
+    const agentWrap = { position:'absolute', left:'2300px', top:'92px', width:'208px', boxSizing:'border-box',
+      background:'var(--accent-weak)', border:'1.5px dashed var(--accent)', borderRadius:'16px', padding:'8px 12px', cursor:'pointer',
+      boxShadow: agentSel ? '0 0 0 2px var(--accent-weak),0 5px 14px rgba(31,95,208,.2)' : 'none' };
+    const ingestWrap = { position:'absolute', left:'2100px', top:'180px', width:'160px', height:'150px',
+      background:'var(--surface-3)', border:'1.5px dashed var(--border-strong)', borderRadius:'10px',
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'7px', padding:'14px', textAlign:'center' };
+
+    const bRefs = [
+      { id:'r_fasta', label:'Reference genome', kind:'reference_fasta', file:'reference/GRCh38.fa', x:340 },
+      { id:'r_bed', label:'Panel BED', kind:'panel_bed', file:'reference/panel.bed', x:940 },
+      { id:'r_truth', label:'Truth VCF', kind:'truth_vcf', file:'HG002…benchmark.vcf.gz', x:2300 },
+    ].map(r => ({ ...r, icon: mkIcon('db',{size:12, stroke:'var(--text-3)'}),
+      wrap:{ position:'absolute', left:r.x+'px', top:'372px', width:'150px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', padding:'8px 10px', boxShadow:'0 1px 2px rgba(16,24,40,.04)' } }));
+
+    // canvas frame
+    const bCanvasInner = { position:'relative', width:'2560px', height:'460px', zoom: bZoomV,
+      backgroundImage:'radial-gradient(#dbe1e8 1px, transparent 1px)', backgroundSize:'20px 20px', backgroundPosition:'12px 12px' };
+    const bZoomPct = Math.round(bZoomV*100)+'%';
+
+    // toolbar
+    const bSegBtn = (active) => ({ border:'none', background: active?'var(--surface)':'transparent', color: active?'var(--text)':'var(--text-2)', fontSize:'12px', fontWeight:600, padding:'5px 13px', borderRadius:'6px', cursor:'pointer', boxShadow: active?'0 1px 2px rgba(16,24,40,.14)':'none', transition:'all .12s' });
+    const bProfileOpts = [ {k:'default',l:'default'}, {k:'giab_panel',l:'giab_panel'}, {k:'sarek',l:'sarek'} ].map(p => ({ ...p, style: bSegBtn(bProf===p.k), go: () => this.setState({ bProfile:p.k }) }));
+    const bBtnStyle = { display:'inline-flex', alignItems:'center', gap:'6px', border:'1px solid var(--border-strong)', background:'var(--surface)', color:'var(--text)', fontSize:'12.5px', fontWeight:500, padding:'6px 12px', borderRadius:'8px', cursor:'pointer' };
+    const bBtnGhost = { ...bBtnStyle, border:'1px solid var(--border)', color:'var(--text-2)' };
+    const bEmitStyle = { display:'inline-flex', alignItems:'center', gap:'6px', border:'none', background:'var(--accent)', color:'#fff', fontSize:'12.5px', fontWeight:600, padding:'7px 15px', borderRadius:'8px', cursor:'pointer', boxShadow:'0 1px 2px rgba(31,95,208,.3)' };
+
+    // palette
+    const paletteOpen = st.bPaletteOpen !== false;
+    const tileMk = (icon,name,sub,dis) => ({ ...gflags(icon), name, sub, dis:!!dis,
+      style:{ display:'flex', alignItems:'center', gap:'9px', padding:'7px 9px', border:'1px solid var(--border)', borderRadius:'9px', background: dis?'var(--surface-2)':'var(--surface)', cursor: dis?'not-allowed':'grab', opacity: dis?0.65:1 },
+      iconTile:{ width:'26px', height:'26px', borderRadius:'7px', background:'var(--surface-2)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, color: dis?'var(--text-3)':'var(--text-2)' } });
+    const bPaletteSections = [
+      { label:'Tool nodes', items:[ tileMk('scissors','fastp','fastq · fastp_json'), tileMk('merge','bwa-mem2','bam · bai'), tileMk('copy','samtools markdup','bam · metrics'), tileMk('bars','mosdepth','mosdepth_summary'), tileMk('dna','bcftools call','vcf'), tileMk('funnel','bcftools norm','filtered_vcf'), tileMk('layers','MultiQC','multiqc_json') ] },
+      { label:'Contamination', items:[ tileMk('activity','NGSCheckMate','ngscheckmate · optional') ] },
+      { label:'Agents', items:[ tileMk('activity','QC-triage','advisory · MVP'), tileMk('wrench','Pipeline-repair','planned · needs trace',true), tileMk('archive','Archivist','spec-only',true) ] },
+      { label:'Gate', items:[ tileMk('shield','Decision gate','terminal · pinned',true) ] },
+    ];
+
+    // inspector
+    const selNode = bTools.find(t => t.id === st.bSelected);
+    const bIsGateSel = st.bSelected === 'g_gate';
+    const bIsAgentSel = st.bSelected === 'a_qc_triage';
+    const bInspectorOn = !!(selNode || bIsGateSel || bIsAgentSel);
+    const tab = st.bTab || 'locators';
+    const bTabs = [ {k:'params',l:'Params'}, {k:'locators',l:'Locators'}, {k:'io',l:'I/O'}, {k:'agents',l:'Agents'} ].map(t => ({ ...t,
+      style:{ flex:1, textAlign:'center', border:'none', background:'transparent', borderBottom: tab===t.k?'2px solid var(--accent)':'2px solid var(--border)', color: tab===t.k?'var(--accent-strong)':'var(--text-3)', fontSize:'12px', fontWeight:600, padding:'9px 0', cursor:'pointer' }, go:()=>this.setState({ bTab:t.k }) }));
+    let bSelHdr = null;
+    if (selNode) bSelHdr = { ...gflags(selNode.g), title:selNode.tool, sub:selNode.version+' · '+selNode.stageLabel };
+    else if (bIsGateSel) bSelHdr = { ...gflags('shield'), title:'Decision gate', sub:'terminal · reads run/ CSVs' };
+    else if (bIsAgentSel) bSelHdr = { ...gflags('activity'), title:'QC-triage agent', sub:'advisory · sonnet-mid' };
+    const bParams = selNode ? selNode.params.map(p => ({ k:p.k, v:p.v, help:p.help })) : [];
+    const bLocators = selNode ? selNode.locators.map(l => ({ kind:l.kind, field:l.pg, loc:l.loc, parser:l.parser, req:l.required, reqLabel:l.required?'required':'optional', role:l.role, on:l.on,
+      isRef: l.role==='reference' })) : [];
+    const bIo = selNode ? selNode.io.map(r => ({ name:r.name, sha: bIsView?r.sha:'—', size: bIsView?r.size:'—', origin: bIsView?r.origin:'unknown' })) : [];
+    const bTabParams = tab==='params', bTabLocators = tab==='locators', bTabIo = tab==='io', bTabAgents = tab==='agents';
+
+    // validate / emit console
+    const drawerOpen = !!st.bDrawerOpen;
+    const sevMap = { ok:{c:'#1a854e',bg:'#e9f6ee'}, info:{c:'#1f6feb',bg:'var(--accent-weak)'}, warn:{c:'#c1560f',bg:'#fceee2'}, critical:{c:'#cf3238',bg:'#fce9ea'} };
+    const bValRows = [
+      { sev:'ok', code:'V1', msg:'Typed ports — all edges kind-matched' },
+      { sev:'ok', code:'V2', msg:'Required config satisfied on every node' },
+      { sev:'ok', code:'V3', msg:'Gate reachable via ingest — fastp_json · mosdepth_summary · filtered_vcf present' },
+      { sev:'ok', code:'V4', msg:'Gate terminal, singular, non-removable' },
+      { sev:'ok', code:'V5', msg:'Agents off the critical path (0 data ports)' },
+      { sev:'ok', code:'V6', msg:'origin = unknown on every emitted locator' },
+      { sev:'info', code:'V7', msg:'variants/*.norm.filtered.vcf.gz · on_multiple:error — ambiguity resolves at ingest' },
+      { sev:'ok', code:'V8', msg:'Acyclic (DAG)' },
+    ].map(v => ({ ...v, dotC:sevMap[v.sev].c, chipBg:sevMap[v.sev].bg,
+      rowStyle:{ display:'flex', alignItems:'flex-start', gap:'9px', padding:'8px 10px', borderRadius:'8px', border:'1px solid var(--border)', background:'var(--surface)', cursor:'pointer', width:'100%', textAlign:'left' },
+      codeStyle:{ fontFamily:'var(--mono)', fontSize:'10px', fontWeight:700, color:sevMap[v.sev].c, background:sevMap[v.sev].bg, borderRadius:'4px', padding:'1px 5px', flexShrink:0 },
+      go:()=>this.setState({ bSelected: v.code==='V3'||v.code==='V7' ? 'n_norm' : (st.bSelected || 'n_fastp') }) }));
+
+    const yamlGiab = 'schema_version: run_layout/1\nprofile: giab_panel                  # PIPEGUARD_RUN_LAYOUT=giab_panel\nlocators:\n  # origin is unknown for EVERY locator at emit — compose != execute.\n  # guarded origins are stamped only at ingest; config cannot launder provenance.\n  fastq:            { glob: "fastq/*_R{1,2}_001.fastq.gz",  parser: null,             required: true,  role: output,    on_multiple: all,   origin: unknown }\n  fastp_json:       { path: "qc/HG002.fastp.json",           parser: fastp_json,       required: true,  role: output,    on_multiple: error, origin: unknown }\n  bam:              { glob: "align/*.md.bam",                parser: null,             required: true,  role: output,    on_multiple: error, origin: unknown }\n  markdup_metrics:  { path: "qc/HG002.markdup.txt",          parser: markdup_metrics,  required: false, role: output,    on_multiple: error, origin: unknown }\n  mosdepth_summary: { path: "mosdepth/HG002.summary.txt",    parser: mosdepth_summary, required: true,  role: output,    on_multiple: error, origin: unknown }\n  filtered_vcf:     { glob: "variants/*.norm.filtered.vcf.gz", parser: vcf,            required: true,  role: output,    on_multiple: error, origin: unknown }\n  multiqc_json:     { path: "multiqc_data/multiqc_data.json", parser: null,            required: false, role: output,    on_multiple: error, origin: unknown }\n  reference_fasta:  { path: "reference/GRCh38.fa",           parser: null,             required: true,  role: reference, on_multiple: error, origin: unknown }\n  panel_bed:        { path: "reference/panel.bed",           parser: null,             required: true,  role: reference, on_multiple: error, origin: unknown }\n  truth_vcf:        { path: "reference/HG002_benchmark.vcf.gz", parser: null,          required: false, role: reference, on_multiple: error, origin: unknown }';
+    const yamlDefault = 'schema_version: run_layout/1\nprofile: default                     # PIPEGUARD_RUN_LAYOUT=default\nlocators:\n  fastp_json:       { path: "qc/{sample}.fastp.json",        parser: fastp_json,       required: true,  role: output,    on_multiple: error, origin: unknown }\n  recal_cram:       { glob: "preprocessing/**/*.recal.cram", parser: null,             required: true,  role: output,    on_multiple: error, origin: unknown }\n  recal_table:      { glob: "preprocessing/**/*.recal.table",parser: null,             required: false, role: output,    on_multiple: error, origin: unknown }\n  mosdepth_summary: { path: "reports/mosdepth/{sample}.summary.txt", parser: mosdepth_summary, required: true, role: output, on_multiple: error, origin: unknown }\n  vcf:              { glob: "variant_calling/**/*.vcf.gz",   parser: vcf,              required: true,  role: output,    on_multiple: error, origin: unknown }\n  reference_fasta:  { path: "reference/GRCh38.fa",           parser: null,             required: true,  role: reference, on_multiple: error, origin: unknown }\n  # default profile shape uses recal_cram — never coerced to bam.';
+    const yamlSarek = '# sarek profile — illustrative / target-state (not yet wired end-to-end)\nschema_version: run_layout/1\nprofile: sarek                       # PIPEGUARD_RUN_LAYOUT=sarek\nlocators:\n  fastp_json:       { glob: "**/fastp/*.json",              parser: fastp_json,       required: true,  role: output,    on_multiple: error, origin: unknown }\n  recal_cram:       { glob: "preprocessing/recalibrated/**/*.cram", parser: null,      required: true,  role: output,    on_multiple: error, origin: unknown }\n  mosdepth_summary: { glob: "reports/mosdepth/**/*.summary.txt", parser: mosdepth_summary, required: true, role: output, on_multiple: error, origin: unknown }\n  joint_vcf:        { glob: "variant_calling/haplotypecaller/**/*.vcf.gz", parser: vcf, required: true, role: output, on_multiple: error, origin: unknown }\n  reference_fasta:  { path: "igenomes/GRCh38/genome.fasta", parser: null,             required: true,  role: reference, on_multiple: error, origin: unknown }';
+    const bYaml = bProf==='giab_panel' ? yamlGiab : (bProf==='sarek' ? yamlSarek : yamlDefault);
+    const bIsSarek = bProf === 'sarek';
+
+    const builderPayload = {
+      bIsEdit, bIsView, bMode,
+      bModeEdit: bSegBtn(bIsEdit), bModeView: bSegBtn(bIsView),
+      setBEdit: () => this.setState({ builderMode:'edit' }),
+      setBView: () => this.setState({ builderMode:'view' }),
+      bGraphId: 'PIPE-2026-07-08-GERMLINE-PANEL',
+      bStateBadge: bIsView
+        ? { display:'inline-flex', alignItems:'center', gap:'6px', fontSize:'11px', fontWeight:600, color:'var(--accent-strong)', background:'var(--accent-weak)', border:'1px solid #cfe0fb', padding:'3px 10px', borderRadius:'20px', whiteSpace:'nowrap', flexShrink:0 }
+        : { display:'inline-flex', alignItems:'center', gap:'6px', fontSize:'11px', fontWeight:600, color:'var(--text-2)', background:'var(--surface-2)', border:'1px solid var(--border-strong)', padding:'3px 10px', borderRadius:'20px', whiteSpace:'nowrap', flexShrink:0 },
+      bStateLabel: bIsView ? ('Linked · '+st.runId) : 'Draft — not run',
+      bStateDot: { width:'6px', height:'6px', borderRadius:'50%', background: bIsView ? 'var(--accent)' : 'var(--text-3)', display:'inline-block' },
+      bProfileOpts, bBtnStyle, bBtnGhost, bEmitStyle,
+      bTidy: () => {}, bValidate: () => this.setState({ bDrawerOpen:true }), bEmit: () => this.setState({ bDrawerOpen:true, bEmitted:true }),
+      // strip
+      bStripSegs: gSegs, bStripCount: 'proceed '+(gCounts.proceed||0)+' · hold '+(gCounts.hold||0)+' · escalate '+(gCounts.escalate||0),
+      bOpenProv: () => this.goView('provenance'), bOpenDec: () => this.goView('decision'),
+      bFork: () => this.setState({ builderMode:'edit', bEmitted:false }),
+      // palette
+      bPaletteOpen: paletteOpen, bPaletteClosed: !paletteOpen, togglePalette: () => this.setState({ bPaletteOpen: !paletteOpen }), bPaletteSections,
+      searchIcon: mkIcon('search',{size:14, stroke:'var(--text-3)'}),
+      // canvas
+      bCanvasInner, bNodes, bEdges, bRefs,
+      gateWrap, gateSel, gateCheckpoints, gateDraft: !bIsView, gSegs, gateLockIcon: mkIcon('lock',{size:13, stroke:'var(--text-3)'}), gateShield: mkIcon('shield',{size:15, stroke: bIsView?'var(--escalate)':'var(--text-3)'}),
+      gateVerdictLabel: bIsView ? (gCounts.escalate>0?'Escalate present':'Mixed verdict') : 'pending — no verdict',
+      gateSelect: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState({ bSelected:'g_gate' }); },
+      agentWrap, agentSel, agentIcon: mkIcon('activity',{size:13, stroke:'var(--accent-strong)'}),
+      agentModeDot: { width:'7px', height:'7px', borderRadius:'50%', background:'#8b95a1', display:'inline-block' },
+      agentSelect: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState({ bSelected:'a_qc_triage' }); },
+      ingestWrap,
+      bZoomPct, bZoomIn: () => this.setState({ bZoom: Math.min(1.4, +(bZoomV+0.1).toFixed(2)) }), bZoomOut: () => this.setState({ bZoom: Math.max(0.6, +(bZoomV-0.1).toFixed(2)) }), bZoomFit: () => this.setState({ bZoom:1 }),
+      bClearSel: () => this.setState({ bSelected:null }),
+      // inspector
+      bInspectorOn, bSelHdr, bTabs, bParams, bLocators, bIo, bTabParams, bTabLocators, bTabIo, bTabAgents,
+      bIsGateSel, bIsAgentSel, bIsToolSel: !!selNode,
+      bInspClose: () => this.setState({ bSelected:null }),
+      bOpenRunbook: () => this.goView('settings'),
+      bIoDraft: !bIsView,
+      // drawer
+      bDrawerOpen: drawerOpen, toggleDrawer: () => this.setState({ bDrawerOpen: !drawerOpen }),
+      bValRows, bValClean: true,
+      bYaml, bIsSarek, bProfLabel: bProf, bEnvHint: 'PIPEGUARD_RUN_LAYOUT='+bProf,
+      bEmitted: !!st.bEmitted, bEmitPath: 'src/pipeguard/layout/run_layout.yaml',
+      bCopy: () => {}, bDownload: () => {},
+    };
+
     const V = {
       // view flags
       isOverview: st.view === 'overview', isDecision: st.view === 'decision', isQueue: st.view === 'queue',
-      isProvenance: st.view === 'provenance', isAgent: st.view === 'agent', isSettings: st.view === 'settings', isIntake: st.view === 'intake', isMonitoring: st.view === 'monitoring',
+      isProvenance: st.view === 'provenance', isAgent: st.view === 'agent', isSettings: st.view === 'settings', isIntake: st.view === 'intake', isMonitoring: st.view === 'monitoring', isBuilder: st.view === 'builder',
       pageTitle: titles[st.view],
       canBack: (st.history || []).length > 0,
       back: () => this.back(),
@@ -1609,8 +2177,8 @@ class Component extends DCLogic {
       runId: st.runId, curRun: { ...curRun, dot: curStatus.dot },
 
       // nav
-      navSel: { overview: navS('overview'), intake: navS('intake'), decision: navS('decision'), queue: navS('queue'), provenance: navS('provenance'), agent: navS('agent'), monitoring: navS('monitoring'), settings: navS('settings') },
-      goto: { overview: () => this.goView('overview'), intake: () => this.goView('intake'), decision: () => this.goView('decision'), queue: () => this.goView('queue'), provenance: () => this.goView('provenance'), agent: () => this.goView('agent'), monitoring: () => this.goView('monitoring'), settings: () => this.goView('settings') },
+      navSel: { overview: navS('overview'), intake: navS('intake'), decision: navS('decision'), queue: navS('queue'), provenance: navS('provenance'), agent: navS('agent'), monitoring: navS('monitoring'), settings: navS('settings'), builder: navS('builder') },
+      goto: { overview: () => this.goView('overview'), intake: () => this.goView('intake'), decision: () => this.goView('decision'), queue: () => this.goView('queue'), provenance: () => this.goView('provenance'), agent: () => this.goView('agent'), monitoring: () => this.goView('monitoring'), settings: () => this.goView('settings'), builder: () => this.goView('builder') },
       attnCount,
       attnPillNav: attnCount > 0 ? { marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '10.5px', fontWeight: 600, background: 'var(--escalate)', color: '#fff', borderRadius: '9px', minWidth: '17px', textAlign: 'center', padding: '1px 5px' } : { display: 'none' },
 
@@ -1658,6 +2226,8 @@ class Component extends DCLogic {
       mon: monView,
       // config
       configRows, assay, assayOpts,
+      // pipeline builder
+      ...builderPayload,
     };
     return V;
   }

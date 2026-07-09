@@ -1300,7 +1300,6 @@
         const t = e.data.theme;
         if (t === "light" || t === "dark") {
           appTheme = t;
-          doc.documentElement.dataset.theme = t;
           applyCanvasBg();
         }
         return;
