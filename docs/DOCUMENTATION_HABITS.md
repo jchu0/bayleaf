@@ -132,6 +132,11 @@ bug or failure worth remembering.
 - **Update docs in the same change as the code**, and include verification steps
   when a claim needs them.
 - **Document assumptions instead of inventing certainty.**
+- **Parallelize independent doc work** (CLAUDE.md Working-agreement/Workflow 4, "parallelize
+  by default"): fan out **read-only** agents for a doc-freshness audit or a many-doc sweep,
+  then apply the fixes. Keep edits to the *same* doc single-author (parallel writers collide),
+  and prefer single-author for tightly-coupled canonical docs — ADRs that cross-reference each
+  other — where consistency across the set matters more than the parallelism.
 - **Summarize** files created or changed at the end of a documentation task.
 
 ## Session-end doc checklist

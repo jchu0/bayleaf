@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [architecture.md](architecture.md) · [planning/tasks.md](../planning/tasks.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) · [architecture.md](architecture.md) · [planning/tasks.md](../planning/tasks.md) |
 
 ## Overview
 
@@ -57,6 +57,7 @@ of them is a bug, not a variant.
 | 1 | **QC-triage** | On a flagged card, suggest a likely cause + next action, cited | **done** (T-015) | [`triage/`](../../src/pipeguard/triage/), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) | mid |
 | 2 | **Pipeline-repair** | On a pipeline failure, propose a concrete remediation | planned (agent #2) | [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) | mid–high |
 | 3 | **Archivist** | Index / organize / summarize / prepare exports across runs (the "librarian" over the data platform) | proposed — **design ready for review** | [data-platform-and-archivist.md](data-platform-and-archivist.md) §5 + Appendix A | low / Haiku (organizational, not diagnostic) |
+| 4 | **Feedback-triage** | Categorize the off-gate in-app feedback corpus (category / area / sentiment / priority + recurring themes) to guide product iteration | **done** (T-043) — advisory, **off the gate** (never touches a verdict); PII-safe (aggregate-only Claude path) | [`api/feedback_agent.py`](../../api/feedback_agent.py), [ADR-0016](../adr/ADR-0016-postgres-port.md) | low / Haiku (categorization) |
 
 New ideas land as a roster row first (see intake below), then graduate to a design
 doc / ADR + implementation.

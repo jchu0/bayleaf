@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043), OFF by default; live-server integration test + connection pooling deferred |
+| **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043), OFF by default; **live-Postgres integration test BUILT + verified green** (`tests/test_persistence_postgres_live.py`, compose-gated + skip-safe); connection pooling + read-from-projection deferred |
 | **Date** | 2026-07-09 (MST) |
 | **Deciders** | James Hu, Claude Code |
 | **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [tasks.md](../planning/tasks.md) |
@@ -71,8 +71,8 @@ So the port must be **real but guarded** — present as a production seam, invis
 | | |
 |---|---|
 | **Gains** | The anticipated production DB seam is real + guarded; feedback lands in a queryable DB; a backend swap is one env var; the offline demo/tests are untouched (no new dep, no socket). |
-| **Costs** | A second SQL dialect to keep in parity with `SqliteRepository`; `psycopg` connect logic exists in two off-gate places (repo + feedback store); the Postgres SQL is not exercised by CI (no live server) — covered by dialect review + parity tests instead. |
-| **Follow-ups** | A live-Postgres integration test (compose-gated, opt-in); connection pooling; Alembic-style migrations if the layout ever needs a non-disposable change; wiring the read-API to read the projection (today it recomputes). |
+| **Costs** | A second SQL dialect to keep in parity with `SqliteRepository`; `psycopg` connect logic exists in two off-gate places (repo + feedback store); the Postgres SQL is not in the default-green CI path (it needs docker + the extra) — covered by the compose-gated live test + offline dialect review + parity tests. |
+| **Follow-ups** | ~~A live-Postgres integration test~~ **DONE** (`tests/test_persistence_postgres_live.py` — compose-gated, skip-safe; verified green against real Postgres 16: projection byte-parity vs SQLite, idempotent replay, feedback JSONB round-trip; the review's UTC + `seq` fixes hold). Still open: connection pooling; Alembic-style migrations if the layout ever needs a non-disposable change; wiring the read-API to read the projection (today it recomputes). |
 
 ## Revisit when
 

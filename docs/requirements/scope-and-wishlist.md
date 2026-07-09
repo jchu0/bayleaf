@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Audience** | all (contributors and Claude Code) |
 | **Related** | [ADRs](../adr/), [functional.md](functional.md), [planning/tasks.md](../planning/tasks.md), [journal 2026-07-08](../journal/2026-07-08-build.md) |
 
@@ -23,7 +23,7 @@ are blocked on unbuilt core seams, not on research.
 6. **Dashboard**: review queue (cards-as-tickets), evidence, monitoring; a **Slack** notify adapter.
 7. Rigorous **evaluation** vs. GIAB truth + synthetic failure modes.
 
-## Built as of 2026-07-08
+## Built as of 2026-07-09
 
 The MVP core is standing; these in-scope pieces are now built and verified (see
 [functional.md](functional.md) + [tasks.md](../planning/tasks.md)):
@@ -39,14 +39,21 @@ The MVP core is standing; these in-scope pieces are now built and verified (see
    fastp` + `mosdepth` derive real Q30 88.2% / dup 0.006% / reads-PF 99.3% / coverage 55.8× →
    PROCEED, registry-normalized like a mock run; fetch validated end-to-end, data never committed
    (in-scope 3).
-5. **Dashboard — all prototype screens built** in the React frontend: run overview, intake/preflight,
-   decision cards + triage, review queue, provenance, monitoring, settings (in-scope 6);
+5. **Dashboard — all 8 operator screens built + migrated 1:1** to the light-theme design handoff
+   (T-022b): run overview, intake/preflight, decision cards, agent triage, review queue,
+   provenance (compute-DAG), monitoring, settings — **plus the Pipeline Builder** (T-044/#11);
    plus the Streamlit offline fallback.
-6. **Both AI seams** (synthesizer, QC-triage agent) present, stub-first ($0), env-flippable to live.
+6. **Three AI seams** (synthesizer, QC-triage agent, off-gate feedback-triage agent) present,
+   stub-first ($0), env-flippable to live.
 7. **Read-API policy + telemetry seams** (T-027) — `GET /api/runbook` (flattened thresholds,
-   illustrative-not-clinical + a `units_note`) and `GET /metrics` (Prometheus text exposition;
-   verdict/gate counters; no new dependency), plus a frontend metrics panel surfacing each card's
-   registry-normalized `metric_values` (in-scope 6; base for wishlist #17).
+   illustrative-not-clinical + a `units_note`), `GET /metrics` (Prometheus text exposition), and
+   `GET /api/runs/{id}/artifacts` (per-stage data I/O with real sha256/size/origin, powering the
+   provenance compute-DAG), plus a frontend metrics panel surfacing registry-normalized
+   `metric_values` (in-scope 6; base for wishlist #17).
+8. **In-app feedback + the DB seam** (T-042/T-043, ADR-0016) — the app's first write
+   (`POST /api/feedback`, off-gate telemetry: per-decision thumbs + a global FAB) through a
+   pluggable `FeedbackStore` (jsonl/sqlite/postgres) + an advisory feedback-triage agent; the
+   `Repository` Postgres adapter shipped guarded/off-by-default (verified against real Postgres 16).
 
 Still open in-scope: the **granular config profile** is documented, not shipped (see wishlist #1);
 the **variant gate** is Phase 2; **evaluation** vs. GIAB/synthetic truth is ongoing.
@@ -66,14 +73,14 @@ the **variant gate** is Phase 2; **evaluation** vs. GIAB/synthetic truth is ongo
 | 9 | No-code pipeline runner (schema-driven form + optional LLM NL layer) | Low | command API + frontend | **No model** — nf-core `nextflow_schema.json` → form; NL via LLM + structured output |
 | 10 | Pipeline canvas — stage/DAG view + per-run data-I/O drill-down | Low–med | frontend + provenance ledger | Read-only; visualizes provenance; a lean version may land in the MVP dashboard |
 | 11 | Visual pipeline builder — compose tools + snap-in agents (± RNA-seq) | **High** | canvas + config + agents | ✅ **MVP BUILT** (T-044) — the editable superset of the Provenance canvas: a left→right germline DAG the operator *configures* (select/params/locators/agent-toggle) that emits `run_layout.yaml` across three profiles. **Composes, never executes** (primary action Emit). Hard invariants rendered as visible guarantees: agents are port-less side-nodes (agent→gate data edge unrepresentable), the gate is a terminal locked node with no verdict control, every emitted locator origin is `unknown`. Built from the refreshed design handoff ([`pipeline-builder-brief.md`](../design/frontend/pipeline-builder-brief.md) / `design/frontend/README.md`). Phase-2 seams (free composition, dry-run, in-app run, RNA-seq) designed not built |
-| 12 | In-app user feedback on the system | Low | frontend | Product-refinement telemetry to guide iteration |
+| 12 | In-app user feedback on the system | Low | frontend | ✅ **BUILT** (T-042, extended by T-043/ADR-0016) — off-gate `POST /api/feedback` (the app's first write) + per-decision thumbs + a global FAB, a pluggable JSONL/SQLite/Postgres store, and an advisory feedback-triage agent. Product-refinement telemetry to guide iteration |
 | 13 | Data-platform connectors (Box, Drive, OneDrive, S3, DNAnexus, Databricks, Snowflake, BigQuery, Redshift) | Low–med each | artifact-store port | **Port + first adapters shipped (T-039):** the `ArtifactStore` port (`src/pipeguard/artifacts/`, [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)) — a *materialize-to-local-dir* boundary UPSTREAM of the gate (locates artifacts, never touches a verdict) — with a zero-dep `LocalArtifactStore` and an **S3 adapter OFF by default** (lazy `boto3` in an optional `[s3]` extra; live pull gated by `PIPEGUARD_S3_LIVE`; degrades to local on any error, so a bucket/creds alone never pull). **Deferred (breadth, each its own task):** the other 7 connectors — each needs its own SDK + auth + fixtures before it is demo-safe, and the warehouses (Databricks/Snowflake/BigQuery/Redshift) need a **query→artifact** adapter shape, not a straight object pull. Held back deliberately to avoid heavy-SDK/scope bloat |
 | 14 | Configurable de-identification module (HIPAA / PHI) | Med | connectors + policy | **Prerequisite** for any real patient-data integration; the demo stays public/synthetic. **Export-seam slice shipped (T-040):** a config-driven de-id *policy* ([`api/deid.py`](../../api/deid.py)) realizes G-PII + G-DEID at `GET /api/export` — per-field `DROP`/`HASH`/`GATE_BY_ORIGIN`/`PASSTHROUGH` + an origin-gated, pseudonymized cohort-key opt-in (`include=identity`). Explicitly a **demo de-id SEAM, NOT HIPAA de-identification** (salted-hash pseudonymization ≠ Safe-Harbor scrub). **Still wishlist:** the full module — ingest-side 18-identifier scrub, free-text NLP redaction, date-shift / k-anonymity, DUA/BAA, audit trail (see data-platform §2.1d / §5.2.7) |
 | 15 | CNV / mosaicism calling (dedicated callers) | High | callers + validation | Out of gate scope; coverage/AB signals enable *advisory* agent observations without a caller |
 | 16 | User-defined custom QC metrics | Med | config/runbook model | Adjusting thresholds is in scope; defining new metric types is future |
 | 17 | Telemetry connectors (Datadog + other APM) | Low | — (Prometheus `/metrics` seam **built**, T-027) | The `GET /metrics` base is shipped (verdict/gate counters, hand-rolled exposition, no dep). **Pull/scrape connector bundle shipped** (T-036): Datadog OpenMetrics + Prometheus + OTel-Collector configs (+ optional compose demo) in [`deploy/telemetry/`](../../deploy/telemetry/), documented in [ops/telemetry-connectors.md](../ops/telemetry-connectors.md) — config + docs only, no dep. **Deferred (own task):** an in-app push exporter (ddtrace/DogStatsD or `opentelemetry-*` + OTLP) behind a `PIPEGUARD_*_LIVE` opt-in — that is where a heavy dep + credentials + outbound surface would enter |
 | 18 | Multi-user / multi-tenancy (auth + RBAC + per-user/org isolation) | Low–med | read-API + user model + scoped persistence | Today is **single-user** (all runs/cards global), which is fine for the demo. A lab/org boundary would add auth on the read-API, a user/role model, and scope the ledger/DB by tenant. Complements the de-id module (#14) for real deployments; the `human:<id>` actor already in the event vocabulary is the natural attribution seam. The per-run **`origin` → `study_id`** field (D11) is the study-scoping seam a tenant/study boundary would build on |
-| 19 | **Postgres/`pgvector` as the single end-goal store** (D3) — columnar Parquet export **shipped** (T-030) | Low–med | Repository→Postgres | SQLite stays the operational projection **now**. Export is a **single file on demand** — CSV/JSONL/**Parquet all shipped** (Parquet via an optional `pyarrow` extra) so a user brings any reader (pandas/polars/DuckDB), *not* masses of loose files. **End-goal (D3): Postgres as the single operational + vector store** — its built-in `pgvector` subsumes #5 — not Postgres **+** a separate DuckDB (**DuckDB demoted to optional**) |
+| 19 | **Postgres/`pgvector` as the single end-goal store** (D3) — columnar Parquet export **shipped** (T-030); **Postgres adapter shipped** OFF-by-default (T-043/ADR-0016 — `PostgresRepository` + `get_repository()` + the `[postgres]` extra, verified green against real Postgres 16) | Low–med | ~~Repository→Postgres~~ (built) | SQLite stays the operational projection **now**. Export is a **single file on demand** — CSV/JSONL/**Parquet all shipped** (Parquet via an optional `pyarrow` extra) so a user brings any reader (pandas/polars/DuckDB), *not* masses of loose files. **End-goal (D3): Postgres as the single operational + vector store** — its built-in `pgvector` subsumes #5 — not Postgres **+** a separate DuckDB (**DuckDB demoted to optional**) |
 | 20 | Run scheduling / cancellation / hold — **step-specific** (control plane) | Low–med | command/control API + run-state model + orchestrator hook | Today PipeGuard is **advisory / read-only** (observe + advise). This crosses into **actuation**: hold analysis auto-trigger when pre-run metrics look bad, cancel on an early-surfaced intake error, or pause at a specific pipeline step. Frame it as the **preflight gate acting as an actuator** — a deterministic HOLD (or a human hold) prevents the next step from running; step-level hold/cancel integrates with the workflow engine (Nextflow, [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)) checkpoint/resume. **Invariant preserved:** rules/human decide, the system actuates only on an explicit, recorded decision (every actuation = a ledger event); no AI auto-actuation ([ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)). The dashboard evolves into a **mission-control** view; a prerequisite is capturing **per-step pipeline execution state (start→end) as ledger events** projected to the UI (the OLTP substrate, Re:1a). *Interact* with Nextflow (resume/checkpoint) — don't reinvent it. Builds on the command API in #9 |
 
 ## Scoping pass — 2026-07-08 (non-agent wishlist)
@@ -96,9 +103,8 @@ in isolated feature branches (merge what finishes); the rest are clarified targe
 
 **SCOPE-ONLY (documented target-state, not built now):** W5 (contaminant-QC, High research),
 W6 (variant-miner, High research), W7 (RNA-seq modality, XL new pipeline+gate), W8 (LoRA
-fine-tuning, needs ledger scale), W9 (nf-core schema form, XL), W11 (visual pipeline builder —
-flagship, nearly its own product), W15 (CNV/mosaicism calling, needs callers+validation), W18
-(multi-tenancy — touches the core, XL), W19 (Postgres adapter — needs a running DB, XL), W20
+fine-tuning, needs ledger scale), W9 (nf-core schema form, XL), W15 (CNV/mosaicism calling,
+needs callers+validation), W18 (multi-tenancy — touches the core, XL), W20
 (run-control/mission-control — needs a Nextflow hook + command API). These stay as the wishlist
 rows above; the Jira ticket-create half of W2 is deferred to the ticketing/write-action phase.
 

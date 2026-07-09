@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Audience** | all (contributors and Claude Code) |
 
 **Start here.** This index is the map of what exists — and its
@@ -76,6 +76,7 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [ADR-0013](adr/ADR-0013-gate-architecture-verdict-policy.md) | Gate architecture (preflight/QC/variant) + surface-and-decide verdict policy |
 | [ADR-0014](adr/ADR-0014-productionization-fastapi-react.md) | Productionize with FastAPI + React; Streamlit as the demo fallback |
 | [ADR-0015](adr/ADR-0015-layered-data-contract.md) | Layered, immutable data contract across the gate (the data-structure decisions + why) |
+| [ADR-0016](adr/ADR-0016-postgres-port.md) | Postgres port (guarded, off-by-default): the `Repository` Postgres adapter + a pluggable feedback store |
 
 ## Data (the artifacts and their lineage)
 | Doc | Status | Purpose |
@@ -129,7 +130,7 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | 🟠 | `runbook.py` or `rules.py` — a threshold, a metric in the set, a gate assignment, verdict policy | `data/qc_metrics.md` (the decided runbook). If the *decision policy* changed → also `ADR-0013`; if grounding changed → cascade to `qc_metrics-sources.md`. |
 | 🟠 | `src/pipeguard/metrics/` — registry, aliases, unit, direction | `data/metric_registry.md` (+ `schemas.md` §units). |
 | 🟠 | `provenance.py` / `engine.py`, the `EventType` vocabulary, or the JSONL ledger format | `data/provenance.md` (+ `schemas.md` event vocab — **duplicated, update both**; `ADR-0002`). |
-| 🟠 | `synthesis/` or `triage/` — new agent, model tier, corpus | `design/agents.md` (roster + invariants) + the relevant ADR (`0001/0006/0009/0012`). If hub and ADR disagree, the ADR wins — update the ADR first. |
+| 🟠 | A new **advisory agent anywhere** (`synthesis/`, `triage/`, or an off-gate one like `api/feedback_agent.py`), a model tier, or a corpus | `design/agents.md` (roster + invariants) + the relevant ADR (`0001/0006/0009/0012`). If hub and ADR disagree, the ADR wins — update the ADR first. |
 | 🟠 | `api/` endpoint or `frontend/` screen — new/changed capability | `design/architecture.md` + `design/data-platform-and-archivist.md` + `requirements/functional.md` (REQ-F). If `/metrics` / `_render_prometheus` gains or renames a series → also re-verify the exposed-series table and the no-PHI claim in `ops/telemetry-connectors.md`. |
 | ⚪ | You **make** a load-bearing decision (or realize/supersede one) | A **new `adr/ADR-NNNN-*.md`** (one decision/file) or an existing ADR's Decision/Status + a journal Decisions row. **Never bury a decision in a design-doc appendix or a "D1-Dn" list.** *(Confirmed drift: D1-D14 + a 261-line design landed as appendices.)* |
 | ⚪ | Scope / wishlist / "built" changes | `requirements/scope-and-wishlist.md` (+ mirror `functional.md`, `tasks.md`). A new wishlist item is a scope-guardrail checkpoint — push back if scope over-broadens. |

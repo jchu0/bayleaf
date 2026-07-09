@@ -73,5 +73,6 @@ config loader) are designed, not built.
 
 ## Distilled into
 
+- [docs/adr/ADR-0016-postgres-port.md](../adr/ADR-0016-postgres-port.md) — the live-Postgres test (this session's 2nd workstream) is the ADR-0016 follow-up; see also [2026-07-09-postgres-port.md](2026-07-09-postgres-port.md)
 - [docs/planning/tasks.md](../planning/tasks.md) — T-044 (builder), T-043 (live pg test note)
-- [docs/requirements/scope-and-wishlist.md](../requirements/scope-and-wishlist.md) — #11 built
+- [docs/requirements/scope-and-wishlist.md](../requirements/scope-and-wishlist.md) — #11 built, #12/#19 updated

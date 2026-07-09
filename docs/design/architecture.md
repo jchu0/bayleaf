@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [provenance.md](../data/provenance.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [provenance.md](../data/provenance.md) |
 
 ## Overview
 
@@ -65,13 +65,17 @@ Every finding and verdict is labelled with the gate it came from:
 2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only
    event trail into an `EventLedger` (in-memory + JSONL), anchored to one `AnalysisRun`.
    The event log is authoritative; the relational DB is a rebuildable projection via the
-   `Repository` port + `rebuild-db` (SqliteRepository built; ADR-0002).
-3. **Triage agent (`triage/`, ADR-0009/0012).** Advisory `TriageNote` grounded in a
-   curated knowledge corpus via a retrieval interface — OFF the deterministic critical path.
+   `Repository` port + `rebuild-db`, selected by `get_repository()` — SqliteRepository *and* a
+   guarded, off-by-default PostgresRepository (ADR-0002/0016).
+3. **Advisory agents (OFF the deterministic critical path).** The QC-triage agent (`triage/`,
+   ADR-0009/0012) grounds a `TriageNote` in a curated corpus; the off-gate feedback-triage agent
+   (`api/feedback_agent.py`, ADR-0016) categorizes the in-app feedback corpus.
 4. **Delivery layers (thin, over the core).** `app/` Streamlit (offline demo / fallback);
-   `api/` FastAPI read-API (the production seam); `frontend/` React — **all prototype screens
-   now built**: run overview → intake/preflight → decision cards + triage → review queue →
-   provenance → monitoring → settings (a `DecisionCard` carries `run_id`).
+   `api/` FastAPI read-API + the one off-gate write (`POST /api/feedback` → a pluggable
+   `FeedbackStore`) + the artifacts endpoint — the production seam (ADR-0010/0016); `frontend/`
+   React — **all 8 operator screens built + migrated to the light-theme handoff, plus the
+   Pipeline Builder**: run overview → intake/preflight → decision cards → agent triage → review
+   queue → provenance → monitoring → settings → pipeline builder (a `DecisionCard` carries `run_id`).
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
@@ -105,7 +109,8 @@ re-enters the verdict path.
 | Triage agent | `PIPEGUARD_TRIAGE_AGENT=stub\|claude` | stub ($0) |
 | Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack`; `PIPEGUARD_SLACK_LIVE=1` to arm the live post | stub ($0, no network) |
 | Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — add/remap a source metric without touching rules | canonical decimals; ON the critical path |
-| Repository (persistence) | `Repository` port; SqliteRepository built → Postgres later | SQLite + JSONL |
+| Repository (persistence) | `Repository` port; SqliteRepository **and** guarded PostgresRepository built (ADR-0016), `get_repository()` selects | SQLite + JSONL (Postgres off by default) |
+| Feedback sink (off-gate) | `FeedbackStore` port (`api/feedback_store.py`); jsonl/sqlite/postgres, degrade-to-JSONL (ADR-0016) | JSONL |
 | Deployment | ports & adapters; Nextflow compute portability (ADR-0003) | local |
 
 Unlike the AI/notify seams (off by default, adapter-swapped at the edge), the **metric registry
@@ -116,5 +121,7 @@ versioned YAML/mapping, not by editing `rules`, keeping verdicts byte-identical 
 
 Local today: Streamlit (offline) + FastAPI (`uvicorn`) + React (Vite). The ports-&-adapters
 boundary and Nextflow (compute) carry portability to Slurm / AWS later (ADR-0003, wishlist).
-The core has no cloud/DB coupling; the repository adapter (`SqliteRepository`) is built,
-and a Postgres adapter + IaC are Phase-2+ concerns.
+The core has no cloud/DB coupling; **both** repository adapters are built — `SqliteRepository`
+(default) and a guarded, off-by-default `PostgresRepository` (ADR-0016, with a
+`deploy/postgres/docker-compose.yml` + a compose-gated live test verified green). IaC remains a
+Phase-2+ concern.

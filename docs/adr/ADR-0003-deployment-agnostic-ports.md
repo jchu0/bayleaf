@@ -5,7 +5,7 @@
 | **Status** | Accepted · Realized (event-bus / run-store / notify / artifact-store ports + metric-registry seam built; job-runner + cloud/Slurm compute adapters wishlist) |
 | **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [design/architecture.md](../design/architecture.md) |
+| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0016](ADR-0016-postgres-port.md), [design/architecture.md](../design/architecture.md) |
 
 ## Context
 
@@ -47,9 +47,12 @@ Slurm adapters (and Terraform) are future work.
 
 1. **Ports built with local adapters:** event bus = `EventLedger` (in-memory + JSONL,
    `provenance.py`, [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md)); run store =
-   the `Repository` protocol (`persistence/repository.py`) with a `SqliteRepository` adapter +
-   a `rebuild-db` replay; notify = the `NotifyPort` protocol (`notify/`) with stub + Slack
-   adapters ([ADR-0010](ADR-0010-ticketing-notify-read-api.md)); **artifact store = the
+   the `Repository` protocol (`persistence/repository.py`) with a `SqliteRepository` adapter
+   **and a guarded, OFF-by-default `PostgresRepository`** (selected by `get_repository()` from
+   `PIPEGUARD_REPOSITORY`, degrade-to-SQLite; [ADR-0016](ADR-0016-postgres-port.md)) + a
+   `rebuild-db` replay that targets either backend; notify = the `NotifyPort` protocol
+   (`notify/`) with stub + Slack + Teams + Discord adapters
+   ([ADR-0010](ADR-0010-ticketing-notify-read-api.md)); **artifact store = the
    `ArtifactStore` protocol (`artifacts/`, T-039)** with a zero-dep `LocalArtifactStore` and an
    **OFF-by-default `S3ArtifactStore`**. Each flips at the edge, never from the core.
 2. **Metric registry is a versioned-artifact seam** (`metrics/`) — a swappable authority the

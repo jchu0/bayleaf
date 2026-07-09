@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / all |
 | **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
 
@@ -164,9 +164,10 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
 
 ## Notes / deferred
 
-1. **Slack notify port** is built + verified (REQ-F-022, T-015b); **additional adapters**
-   (Jira / Teams / Discord) and wiring notify into the read-API/ticketing flow remain
-   *(wishlist)*.
+1. **Notify port** is built + verified — **Slack** (T-015b, live-verified) plus **Teams +
+   Discord** webhook adapters (T-035, stdlib `urllib.request`, per-adapter live flag,
+   stub-default). Only the **Jira** ticket-create adapter and wiring notify into the
+   read-API/ticketing flow remain *(wishlist)*.
 2. **Variant gate** (REQ-F-013) is Phase 2 and depends on real variant-level data.
 
 ---

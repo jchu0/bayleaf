@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Purpose** | Top-layer session input (read alongside the ToC): tracks development, timeline, and flags parallel-safe work so non-blocking items can fan out to background agents. |
 
 ## Timeline
