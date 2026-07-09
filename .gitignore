@@ -66,6 +66,13 @@ feedback.sqlite
 pipeline_graphs.jsonl
 pipeline_graphs.sqlite
 
+# Review-queue tickets (HITL, ADR-0010) — local product-state sinks (JSONL / SQLite; the .sqlite
+# is already covered by *.sqlite above), never committed (they carry operator ids). The .tmp glob
+# catches the atomic-rewrite temp file if a crash leaves one behind.
+review_tickets.jsonl
+review_tickets.jsonl.tmp
+review_tickets.sqlite
+
 # Node (in case of a web frontend)
 node_modules/
 .next/

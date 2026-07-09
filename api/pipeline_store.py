@@ -26,6 +26,8 @@ import logging
 import os
 import sqlite3
 import threading
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -316,3 +318,82 @@ def get_pipeline_store() -> PipelineGraphStore:
                 "PIPEGUARD_PIPELINE_STORE=sqlite unavailable (%s); using JSONL.", type(exc).__name__
             )
     return JsonlPipelineGraphStore()
+
+
+# --- Lifecycle transitions over the append-only versioned stream (ADR-0014) -----------------
+# The Builder's draft -> pending_review -> approved lifecycle and its emitted-snapshot baseline
+# are recorded by APPENDING a new version of the envelope, never by mutating a stored row. Why
+# append, not update: the JSONL default has no in-place update primitive, and append-only is the
+# project's ledger discipline (ADR-0002) — every transition becomes an immutable, auditable
+# revision, and the "current" state of a pipeline is simply its latest version. These compose
+# over the store Protocol (``get_versions`` + ``append``) so ONE implementation serves the JSONL
+# / SQLite / Postgres adapters with no per-adapter duplication, and they never peer inside the
+# tolerant ``graph`` envelope (its shape stays the delivery layer's concern).
+#
+# Concurrency: read-latest-then-append is atomic only WITHIN a worker (``append`` authors the
+# version under the store's write lock, but the latest-read happens just before it). That is the
+# same honest single-worker limit the save path already documents; multi-worker needs a DB
+# sequence / row lock — a documented seam, not built.
+
+
+def latest_record(store: PipelineGraphStore, name: str) -> _Record | None:
+    """The highest-``version`` stored envelope for ``name``, or ``None`` if it has no revisions.
+
+    ``get_versions`` is ascending by version, so the last element is the current state. Returns
+    ``None`` (not a raise) for an unknown name so a caller can map it to a 404 explicitly.
+    """
+    versions = store.get_versions(name)
+    return versions[-1] if versions else None
+
+
+def record_transition(store: PipelineGraphStore, name: str, updates: _Record) -> _Record | None:
+    """Append a new version of ``name``'s latest envelope with ``updates`` overlaid (append-only).
+
+    Copies the latest stored envelope, overlays ``updates`` (e.g. a new ``status`` plus a ``*_by``
+    audit field captured from the authenticated actor), mints a fresh server ``id`` +
+    ``created_at``, and appends it so the store authors the next ``version`` under its lock. The
+    ``graph`` / ``profile`` / prior audit fields carry forward untouched (the tolerant envelope is
+    never rewritten). Returns the new stored record, or ``None`` if ``name`` has no versions (an
+    unknown pipeline -> the caller raises 404). The state-machine check (which status may go to
+    which) is the caller's job: this store method is deliberately policy-free and shape-agnostic.
+    """
+    latest = latest_record(store, name)
+    if latest is None:
+        return None
+    # Drop the server-authored ``version`` so ``append`` re-authors the next one; a fresh id +
+    # timestamp mark this as a distinct revision in the audit trail (never reusing the prior row's).
+    new_record: _Record = {
+        **latest,
+        **updates,
+        "id": uuid.uuid4().hex,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    new_record.pop("version", None)
+    return store.append(new_record)
+
+
+def record_emission(
+    store: PipelineGraphStore, name: str, updates: _Record | None = None
+) -> _Record | None:
+    """Record an emitted snapshot of ``name``'s latest envelope — the ``diff`` baseline.
+
+    An emission is a transition that additionally stamps ``emitted_at``, marking that version as
+    the last-emitted / blessed baseline ``GET .../diff`` compares the working graph against.
+    Approval is the emit point: an approved graph is the blessed thing that gets composed into a
+    ``run_layout`` (compose != execute — this NEVER triggers a run, ADR-0001/0003), so ``approve``
+    calls this with ``{"status": "approved", "approved_by": actor.id}``. The ``graph`` envelope
+    carries forward unchanged, so the snapshot's locators are recoverable at diff time without the
+    store ever needing to understand the builder's graph shape.
+    """
+    stamped: _Record = {**(updates or {}), "emitted_at": datetime.now(timezone.utc).isoformat()}
+    return record_transition(store, name, stamped)
+
+
+def last_emitted(store: PipelineGraphStore, name: str) -> _Record | None:
+    """The newest emitted snapshot for ``name`` — its highest-version record with ``emitted_at``.
+
+    ``None`` means the pipeline has never been approved/emitted — the diff endpoint reports "no
+    baseline yet" rather than fabricating an empty one (absence is a signal, not a crash).
+    """
+    emitted = [r for r in store.get_versions(name) if r.get("emitted_at")]
+    return emitted[-1] if emitted else None

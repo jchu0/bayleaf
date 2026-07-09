@@ -76,6 +76,13 @@ src = ["src", "app", "tests", "scripts"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom puts calls in argument defaults (Depends(...),
+# require_role(...)), which B008 flags by default. These are pure/immutable per FastAPI's
+# design (a fresh dependency object, evaluated per-request by the framework), so allowlist
+# them — this EXTENDS ruff's built-in list (Query/Header/Path/...), it does not replace it.
+extend-immutable-calls = ["fastapi.Depends", "api.auth.require_role"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["pipeguard", "api"]
 
