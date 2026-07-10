@@ -35,6 +35,7 @@ import {
   isEditableProfile,
   makeUserNode,
   mergedLoc,
+  savedLocators,
   yamlFor,
   type ConsoleTab,
   type IconKey,
@@ -184,7 +185,15 @@ export function PipelineBuilder() {
       // change is needed; a later load path can rehydrate locEdits/refLoc from here.
       const ack = await api.savePipeline({
         name,
-        graph: { nodes: userNodes, edges: userEdges, locators: locEdits, reference_locators: refLoc },
+        graph: {
+          nodes: userNodes,
+          edges: userEdges,
+          // The merged full locator LIST (backend-consumable shape) so dry-run/diff can resolve a
+          // saved pipeline; keep the raw edits too for a future load path to rehydrate the UI.
+          locators: savedLocators(locEdits),
+          locator_edits: locEdits,
+          reference_locators: refLoc,
+        },
         profile,
       })
       const t = await api.submitPipeline(name)

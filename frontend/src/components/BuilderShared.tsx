@@ -352,6 +352,26 @@ export function isEditableProfile(profile: string): boolean {
   return profile !== 'default' && profile !== 'sarek'
 }
 
+// The merged FULL locator set for the save payload, in the shape the backend's tolerant
+// `_extract_locators` recognizes (a top-level `locators` list of {kind, path|glob, parser,
+// required, role, on_multiple}). F2 originally saved only the partial `locEdits` dict, which the
+// dry-run/diff endpoints can't read; this projects GIAB_LOC ⋈ edits into the consumable list so a
+// saved pipeline actually resolves at dry-run time. `origin` is deliberately omitted (stamped at
+// ingest, never authored — INV: origin never relabels up).
+export function savedLocators(edits: LocEdits): Array<Record<string, unknown>> {
+  return GIAB_LOC.map((g) => {
+    const m = mergedLoc(g.k, edits)
+    return {
+      kind: m.k,
+      [m.field]: m.loc, // 'path' or 'glob' key — the mode the backend infers from
+      parser: m.parser,
+      required: m.required,
+      role: m.role,
+      on_multiple: m.on,
+    }
+  })
+}
+
 // One-line projection of each locator, for the Diff tab (current vs last-Emit snapshot).
 export function curLocMap(edits: LocEdits): Record<string, string> {
   const out: Record<string, string> = {}
