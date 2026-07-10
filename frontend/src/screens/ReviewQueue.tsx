@@ -18,6 +18,7 @@ import { PageHeader } from '../components/PageHeader'
 import { ReviewRepairCard, type RepairApproval } from '../components/ReviewRepairCard'
 import { ReviewStatusBar, type ReviewStatusSegment } from '../components/ReviewStatusBar'
 import { ErrorBox, Loading } from '../components/States'
+import { useToast } from '../components/Toast'
 import { useRole } from '../context/RoleContext'
 import type {
   AgentProposal,
@@ -138,6 +139,10 @@ function formatDate(iso: string | null): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
+
 // Honest resolution copy: resolving a ticket records that a reviewer/approver cleared it — it
 // does NOT run a rerun or re-measure a metric (compose != execute), so we never assert a QC
 // outcome that did not occur. The rerun line is a next-step, not a fabricated result.
@@ -164,6 +169,7 @@ function PriorityBars({ level }: { level: number }) {
 
 export function ReviewQueue() {
   const { actor, isApprover } = useRole()
+  const { toast } = useToast()
   const [details, setDetails] = useState<RunDetail[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ui, setUi] = useState<Record<string, TicketUi>>({})
@@ -270,10 +276,12 @@ export function ReviewQueue() {
         serverIdRef.current[key] = id
         patch(key, { serverId: id })
       }
-      await api.ticketAction(id, action)
+      const updated = await api.ticketAction(id, action)
+      patch(key, { status: updated.status }) // reconcile from the authoritative response
     }
-    const next = (pendingRef.current[key] ?? Promise.resolve()).then(run).catch(() => {
-      /* keep the optimistic state */
+    const next = (pendingRef.current[key] ?? Promise.resolve()).then(run).catch((e) => {
+      // Surface the real backend outcome (403/409/…) instead of silently diverging.
+      toast(`Couldn't ${action} ticket — ${errMsg(e)}`, 'error')
     })
     pendingRef.current[key] = next
     return next

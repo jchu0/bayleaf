@@ -2,6 +2,16 @@ import { useState } from 'react'
 import { Pencil } from 'lucide-react'
 import { api } from '../api'
 import { useRole } from '../context/RoleContext'
+import { useToast } from './Toast'
+
+// A threshold-override name must be a slug the backend accepts (^[A-Za-z0-9][A-Za-z0-9._-]*$);
+// the assay display string ("Rare-disease germline v3") has spaces the store rejects.
+function slugFor(assay: string): string {
+  return `thresholds-${assay.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
+}
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
 
 // Runbook thresholds, keyed on assay × sample type (dc.html 1265-1311, 2233-2261, 2781-2799).
 //
@@ -94,6 +104,7 @@ export function SettingsAssayTable({
   disclaimer?: string
 }) {
   const { actor, role, isApprover, toggleRole } = useRole()
+  const { toast } = useToast()
 
   const [assay, setAssay] = useState<string>(ASSAYS[0])
   const [rows, setRows] = useState<Record<string, Row[]>>(() =>
@@ -131,24 +142,36 @@ export function SettingsAssayTable({
     // Any edit drops the row into an unsaved draft, attributed to the current actor.
     setLife((prev) => ({ ...prev, [assay]: { status: 'draft', by: actor.id, when: '' } }))
   }
-  function save() {
+  async function save() {
     // Reviewer save parks the change pending an approver; approver save publishes it live.
+    const prevLife = life[assay]
     const next: Life = isApprover
       ? { status: 'approved', by: actor.id, when: today() }
       : { status: 'pending', by: actor.id, when: '' }
     setLife((prev) => ({ ...prev, [assay]: next }))
     setEditing(false)
     setSnapshot(null)
-    // Pack the assay's rows into the opaque override payload (F18). Fire-and-forget: the demo
-    // stays usable if the write store is offline; the local lifecycle is the source of truth here.
-    void api
-      .saveThresholds({ name: `thresholds:${assay}`, payload: { assay, rows: rows[assay] } })
-      .catch(() => undefined)
+    // Pack the assay's rows into the opaque override payload (F18). The override name must be a
+    // slug (^[A-Za-z0-9][.\w-]*$) — the assay display string has spaces/colons the backend rejects.
+    try {
+      const ack = await api.saveThresholds({ name: slugFor(assay), payload: { assay, rows: rows[assay] } })
+      toast(`Saved ${assay} thresholds · v${ack.version}`, 'success')
+    } catch (e) {
+      setLife((prev) => ({ ...prev, [assay]: prevLife })) // reconcile: the write didn't land
+      toast(`Couldn't save thresholds — ${errMsg(e)}`, 'error')
+    }
   }
-  function approve() {
+  async function approve() {
     if (!isApprover) return
+    const prevLife = life[assay]
     setLife((prev) => ({ ...prev, [assay]: { status: 'approved', by: actor.id, when: today() } }))
-    void api.approveThresholds(`thresholds:${assay}`).catch(() => undefined)
+    try {
+      await api.approveThresholds(slugFor(assay))
+      toast(`Approved ${assay} thresholds`, 'success')
+    } catch (e) {
+      setLife((prev) => ({ ...prev, [assay]: prevLife })) // reconcile
+      toast(`Couldn't approve thresholds — ${errMsg(e)}`, 'error')
+    }
   }
 
   const inputCls = editing

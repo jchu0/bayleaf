@@ -68,16 +68,17 @@ class _ActionRule(NamedTuple):
     to_status: TicketStatus
 
 
-# Single source of truth for the ticket lifecycle. All actions require at least ``reviewer``; the
-# state-changing ``resolve``/``suppress`` require ``approver`` (an approver gate on closing an
-# issue-class). ``suppress`` is keyed by the ticket's ``rule_id`` — it resolves this ticket AND
-# marks the issue-class handled; class-wide muting of *future* tickets of that rule_id is a
-# documented, not-built seam (would live in create()). An action from an illegal status is a 409.
+# Single source of truth for the ticket lifecycle. All actions require at least ``reviewer`` — the
+# design (README §5.5) lets a reviewer resolve/suppress hold/rerun tickets, and gates the
+# escalation-specific approver requirement in the UI (a reviewer never sees Resolve on an escalate
+# ticket). ``suppress`` is keyed by the ticket's ``rule_id`` — it resolves this ticket AND marks the
+# issue-class handled; class-wide muting of *future* tickets of that rule_id is a documented,
+# not-built seam (would live in create()). An action from an illegal status is a 409.
 _ACTION_RULES: dict[ReviewActionName, _ActionRule] = {
     "acknowledge": _ActionRule(("reviewer", "approver"), ("open", "in_review"), "in_review"),
     "escalate": _ActionRule(("reviewer", "approver"), ("open", "in_review"), "in_review"),
-    "resolve": _ActionRule(("approver",), ("open", "in_review"), "resolved"),
-    "suppress": _ActionRule(("approver",), ("open", "in_review"), "resolved"),
+    "resolve": _ActionRule(("reviewer", "approver"), ("open", "in_review"), "resolved"),
+    "suppress": _ActionRule(("reviewer", "approver"), ("open", "in_review"), "resolved"),
     "reopen": _ActionRule(("reviewer", "approver"), ("resolved",), "open"),
 }
 

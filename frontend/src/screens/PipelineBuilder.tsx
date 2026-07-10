@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import { SegmentedControl } from '../components/SegmentedControl'
+import { useToast } from '../components/Toast'
 import type { SegmentOption } from '../components/SegmentedControl'
 import { BuilderCanvas } from '../components/BuilderCanvas'
 import { BuilderConsole } from '../components/BuilderConsole'
@@ -62,8 +63,13 @@ const SAVE_ST: Record<SaveStatus, { label: string; cls: string }> = {
 // (or select the QC-triage pill); the gate tile is pinned/disabled.
 type PaletteItem = { name: string; sub: string; icon: IconKey; disabled?: boolean; onClick?: () => void }
 
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
+
 export function PipelineBuilder() {
   const { role, isApprover, toggleRole } = useRole()
+  const { toast } = useToast()
 
   const [mode, setMode] = useState<Mode>('view') // defaults to read-only View (§5.9/§6)
   const [profile, setProfile] = useState<string>('giab_panel')
@@ -157,18 +163,39 @@ export function PipelineBuilder() {
     dirtyToDraft()
   }
 
-  // ── save · approval (optimistic local + best-effort backend seam) ──
-  const onSave = () => {
-    setSaveStatus('pending')
-    setVersion((v) => v + 1)
-    // Off the decision domain; only approved graphs emit a blessed config (§7). Best-effort so
-    // the demo works with no backend running.
-    api.savePipeline({ name: GRAPH_ID, graph: { nodes: userNodes, edges: userEdges }, profile }).catch(() => {})
+  // ── save · approval (wired to the real lifecycle store) ──
+  // The backend name must be a slug; the display docName is preserved if it already is one.
+  const pipelineName = () =>
+    docName.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'pipeline'
+
+  const onSave = async () => {
+    const name = pipelineName()
+    setSaveStatus('pending') // optimistic
+    try {
+      // Save creates a draft version, then submit moves it draft → pending_review so Approve is
+      // actionable against the real store (off the decision domain; only approved graphs emit, §7).
+      const ack = await api.savePipeline({ name, graph: { nodes: userNodes, edges: userEdges }, profile })
+      const t = await api.submitPipeline(name)
+      setVersion(ack.version)
+      setSaveStatus(t.status === 'approved' ? 'approved' : t.status === 'pending_review' ? 'pending' : 'draft')
+      toast(`Saved ${name} · v${ack.version} · ${t.status}`, 'success')
+    } catch (e) {
+      setSaveStatus('draft') // reconcile: the write didn't land
+      toast(`Couldn't save pipeline — ${errMsg(e)}`, 'error')
+    }
   }
-  const onApprove = () => {
+  const onApprove = async () => {
     if (!isApprover) return
-    setSaveStatus('approved')
-    api.approvePipeline(GRAPH_ID).catch(() => {})
+    const name = pipelineName()
+    setSaveStatus('approved') // optimistic
+    try {
+      const t = await api.approvePipeline(name)
+      setVersion(t.version)
+      toast(`Approved ${name} · v${t.version}`, 'success')
+    } catch (e) {
+      setSaveStatus('pending') // reconcile: approve failed, stays pending
+      toast(`Couldn't approve pipeline — ${errMsg(e)}`, 'error')
+    }
   }
 
   // ── emit / validate ──

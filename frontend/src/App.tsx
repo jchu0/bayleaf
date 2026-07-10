@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { ToastProvider } from './components/Toast'
 import { RoleProvider } from './context/RoleContext'
 import { Admin } from './screens/Admin'
 import { AgentTriage } from './screens/AgentTriage'
@@ -15,8 +16,9 @@ import { Submit } from './screens/Submit'
 
 export default function App() {
   return (
-    <RoleProvider>
-      <BrowserRouter>
+    <ToastProvider>
+      <RoleProvider>
+        <BrowserRouter>
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<RunOverview />} />
@@ -32,7 +34,8 @@ export default function App() {
             <Route path="/builder" element={<PipelineBuilder />} />
           </Route>
         </Routes>
-      </BrowserRouter>
-    </RoleProvider>
+        </BrowserRouter>
+      </RoleProvider>
+    </ToastProvider>
   )
 }

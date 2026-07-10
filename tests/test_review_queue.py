@@ -191,15 +191,18 @@ def test_viewer_cannot_create(client):
     assert client.post("/api/review/tickets", json=_ticket(), headers=VIEWER).status_code == 403
 
 
-def test_reviewer_cannot_resolve_or_suppress_but_approver_can(client):
+def test_reviewer_can_resolve_and_suppress(client):
+    # Design (README §5.5): a reviewer resolves/suppresses hold/rerun tickets. The
+    # escalation→approver nuance is enforced in the UI (a reviewer never sees Resolve on an
+    # escalate ticket), not at this API level; a viewer still cannot act (see below).
     tid = _create(client, headers=REVIEWER)["id"]
-    # A reviewer may acknowledge/escalate...
     assert _act(client, tid, "acknowledge", headers=REVIEWER).status_code == 200
-    # ...but resolve/suppress require an approver (403 for a reviewer, on ROLE not status).
-    assert _act(client, tid, "resolve", headers=REVIEWER).status_code == 403
-    assert _act(client, tid, "suppress", headers=REVIEWER).status_code == 403
-    # An approver can resolve.
-    assert _act(client, tid, "resolve", headers=APPROVER).status_code == 200
+    assert _act(client, tid, "resolve", headers=REVIEWER).status_code == 200
+    # A reviewer can also suppress a fresh ticket, and an approver can resolve too.
+    tid2 = _create(client, headers=REVIEWER)["id"]
+    assert _act(client, tid2, "suppress", headers=REVIEWER).status_code == 200
+    tid3 = _create(client, headers=REVIEWER)["id"]
+    assert _act(client, tid3, "resolve", headers=APPROVER).status_code == 200
 
 
 def test_viewer_cannot_act(client):
