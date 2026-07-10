@@ -58,8 +58,9 @@ result here (move the row up to "verified" when done).
 | Tool | Reported license | Notes / why used |
 |---|---|---|
 | fastp | MIT *(reported)* | read trim/QC JSON (Q30, dup) |
+| bwa-mem2 | MIT *(reported)* | short-read alignment — invoked only by [`scripts/run_giab_pipeline.py`](../../scripts/run_giab_pipeline.py) (the real-GIAB fastq→variants E2E driver, [strategy.md](strategy.md)), never a `uv` app dependency |
 | mosdepth | MIT *(reported)* | coverage depth + breadth |
-| samtools / bcftools / htslib | MIT/Expat *(reported)* | BAM/VCF stats |
+| samtools / bcftools / htslib | MIT/Expat *(reported)* | BAM/VCF stats, alignment dup-marking (`markdup`) + variant calling (`mpileup`\|`call`\|`norm`) in the same driver |
 | MultiQC | **GPL-3.0** *(reported)* | QC aggregator — **same binary-bundling caveat as PLINK**; CLI use is fine |
 | GATK4 | Apache-2.0 *(reported; older GATK had restrictive terms)* | variant calling |
 | DeepVariant | BSD-3-Clause *(reported)* | variant calling |

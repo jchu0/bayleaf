@@ -180,15 +180,30 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    QC-readout projection (card `metric_values` ⋈ runbook `QCThreshold` →
    Metric·Observed·Threshold·Status), core card/gate untouched. `frontend/` = React + Vite +
    Tailwind consuming the API — **rebuilt to the refreshed design prototype** (2026-07-09,
-   `docs/design/frontend/`, T-062): 9 operator screens in a two-group nav — Operate (submit
-   samplesheet → runs → intake gate → decision cards → review queue → provenance → agent
-   triage → monitoring) and Configure (pipeline builder → settings) — plus a shared
-   `RoleContext` (reviewer|approver) driving every RBAC surface (ADR-0014). The Pipeline
+   `docs/design/frontend/`, T-062), then extended the same day by a maintainer feedback batch
+   (commits `e891e62`→`6371128`, [journal](docs/journal/2026-07-09-frontend-batch2.md)): 10
+   operator screens in a three-group nav — Operate (submit samplesheet → runs → intake gate →
+   decision cards → review queue), Analyze (provenance → agent triage → monitoring), Configure
+   (pipeline builder → settings) — plus an approver-gated **Admin** group (`/admin`, off the
+   deterministic gate: Users & roles client-mock roster + "Act as" wired to the now-full
+   `RoleContext.setActor(actor)` [id+role together, not just a role toggle]; Activity log — a
+   real audit feed merging thresholds/pipelines/tickets; System — real reads of `GET
+   /api/health` + runbook + metric-registry; never a verdict/confidence). The Pipeline
    Builder adds free composition, a typed-port Connect mode, a minimap, and editable
-   Locators; its Save/Approve/Diff/Dry-run call the real endpoints but render
-   optimistic-local (fire-and-forget), a known limitation. Honest deferrals: Monitoring
-   first_seen/last_seen/trend + Median-review (no backend field), Provenance artifact URLs
-   (`RunArtifact` has no `url`), Submit is local-state only (no `POST /api/submissions`).
+   Locators; its Save now chains `savePipeline`→`submitPipeline` and Approve calls
+   `approvePipeline` — both **await + reconcile local state from the response** (no longer
+   fire-and-forget); Dry-run/Diff remain a client-side-only projection (`api.ts`'s
+   `dryRunPipeline`/`pipelineDiff` exist but aren't called yet — still a known limitation). A
+   new `Toast` system (`components/Toast.tsx`) surfaces every off-gate write's real backend
+   outcome (403/409/422/503/…) instead of silently diverging; the fix also slugified the
+   Settings threshold-override name (spaces/colon 422'd the backend's slug pattern) and
+   relaxed review-queue resolve/suppress RBAC from approver-only to reviewer+approver
+   (`api/routers/review_queue.py`, matching the design). `GET /api/monitoring`'s
+   `MonitoringSignature` additively carries `first_seen`/`last_seen`/`trend`/
+   `affected_run_ids`; the Median-review KPI stays a documented, not-yet-built seam. Honest
+   deferrals: Median-review KPI (no backend field), Provenance artifact URLs (`RunArtifact`
+   has no `url`), Submit is local-state only (no `POST /api/submissions`), Builder
+   Dry-run/Diff/Export/Archivist-modal wiring (endpoints exist, UI is a preview).
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
 

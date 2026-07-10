@@ -82,10 +82,31 @@ Per-track status (each artifact labeled by origin):
    `origin` marker, both from one `ORIGIN_LABEL`); the older `mock_run_02/03` `origin` markers
    were reconciled `synthetic` -> `contrived` to match. The `contrived`/`synthetic`
    **definitions are unchanged** — only those two marker files were corrected onto the right
-   side of the existing line.
-2. **`real-giab` — fetch validated end-to-end.** The GIAB HG002 fetch script
+   side of the existing line. A newer driver,
+   [`scripts/seed_giab_demo.py`](../../scripts/seed_giab_demo.py), reuses the same generator to
+   seed ~24 additional runs (`RUN-<date>-GIAB-{A,B}/`, git-ignored) for UI-volume testing —
+   **honestly still `contrived`**: only the sample IDs are GIAB-flavored (HG00x / NA2xxxx) and
+   the `RunSpec.platform` field is rotated across four real instrument names (NovaSeq X /
+   NextSeq 2000 / NovaSeq 6000 / MiSeq) to exercise the platform facet/search; the run *data*
+   is invented, exactly like every other `pipeguard.synthetic` output. It never touches, and is
+   named to be visually distinct from, the genuinely-fetched `real-giab` run below.
+2. **`real-giab` — two producers now, both validated end-to-end.** The GIAB HG002 fetch script
    ([`scripts/fetch_giab_hg002.py`](../../scripts/fetch_giab_hg002.py)) runs end-to-end on a
    bioconda env (real truth VCF + panel-region reads slice); data stays git-ignored
-   (`data/real-giab/`), never committed, re-fetchable ([tasks T-013](../planning/tasks.md)).
+   (`data/real-giab/`), never committed, re-fetchable ([tasks T-013](../planning/tasks.md)). Two
+   scripts consume that fetch to produce a gated, real-metric run: (a) `scripts/gate_giab.py`
+   (T-017) reads the **pre-aligned** NIST panel BAM and gates on mosdepth coverage/breadth only,
+   writing into `data/real-giab/run/`; (b) the newer
+   [`scripts/run_giab_pipeline.py`](../../scripts/run_giab_pipeline.py) (2026-07-09) instead
+   **runs its own alignment chain** — `fastp → bwa-mem2 mem → samtools fixmate/markdup →
+   {mosdepth, bcftools mpileup|call|norm}` — on the raw GIAB HG002 panel fastqs as a standalone
+   bioconda subprocess driver (compose ≠ execute holds, ADR-0001/0003), then lands a
+   **dashboard-discoverable** run at the repo-standard `data/<run_id>/` path (currently
+   `data/RUN-2026-07-08-GIAB-HG002/`, git-ignored under `data/RUN-*-GIAB-*/`) that the read-API
+   discovers and gates exactly like a mock run. Verified: real Q30 88.2% / reads-PF 99.3% /
+   54.2× coverage / dup 0.006% / 553 normalized panel variants, gating to an honest **HOLD** on
+   the missing `cluster_pf` (a run-level SAV/InterOp metric no fastq→BAM path can produce) — see
+   [journal/2026-07-09-giab-e2e-pipeline.md](../journal/2026-07-09-giab-e2e-pipeline.md) and
+   [design/data-platform-and-archivist.md](../design/data-platform-and-archivist.md) §3.2.1.
 3. **`synthetic` (perturbed-from-real) — aspirational.** Deriving labeled failure modes by
    perturbing real GIAB bundles is the remaining upgrade over the `contrived` generator.

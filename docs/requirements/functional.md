@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md) |
 
 ## Overview
 
@@ -181,24 +181,29 @@ node-authoring agent).
    pipeline-repair (REQ-F-023) and archivist (REQ-F-024) calls, each invoking an advisory agent
    **without re-entering the verdict path** — all read-only over already-decided artifacts.
    *Trace:* [architecture.md](../design/architecture.md), [agents.md](../design/agents.md), ADR-0010.
-3. **REQ-F-042 — Operator screens.** The UI presents **9 operator screens**, rebuilt to the
-   refreshed design prototype (`docs/design/frontend/`, 2026-07-09) in a two-group nav —
+3. **REQ-F-042 — Operator screens.** The UI presents **10 operator screens**, rebuilt to the
+   refreshed design prototype (`docs/design/frontend/`, 2026-07-09) in a **three-group nav** —
    **Operate:** submit samplesheet (register a run's SampleSheet/FASTQ locally, compose-only —
    no backend endpoint yet, REQ-F-045's compose≠execute invariant applies equally here), runs
    overview (per-verdict counts + needs-attention + a client-side scale kit: search/facet/sort/
    date-range/paginate), intake/preflight (run-level QC rollup + per-sample admission with
    manual override), decision cards (verdict + per-gate strip + a QC-readout hero from
-   REQ-F-064 + cited evidence), review queue (tickets w/ reviewer-vs-approver RBAC +
-   recurring-issue banner), provenance (pipeline **compute-DAG** with a per-stage data-I/O
-   drill-in), agent triage (advisory note + citations + offline/live); **Configure:** pipeline
-   builder (REQ-F-045) and settings (runbook thresholds, labelled illustrative). A shared
-   `RoleContext` (reviewer|approver) drives every RBAC-gated control. Screens state their data
-   boundary rather than fabricate instrument/compute artifacts the FASTQ-first build doesn't
-   capture, and two now-honest gaps are explicitly rendered empty rather than invented: Monitoring's
-   `first_seen`/`last_seen`/`trend` + Median-review KPI (no backend field), and Provenance
-   artifact links (`RunArtifact` has no `url`). *Trace:* [demo_plan.md](../demo/demo_plan.md),
+   REQ-F-064 + cited evidence), review queue (tickets w/ role-gated actions, REQ-F-063);
+   **Analyze:** provenance (pipeline **compute-DAG** with a per-stage data-I/O drill-in), agent
+   triage (advisory note + citations + offline/live), monitoring (windowed aggregate,
+   REQ-F-047); **Configure:** pipeline builder (REQ-F-045) and settings (runbook thresholds,
+   labelled illustrative). A separate, **approver-gated Admin** governance screen sits outside
+   this operator nav (REQ-F-066) — off the deterministic gate, it is not counted among the 10.
+   A shared `RoleContext` (reviewer|approver) drives every RBAC-gated control, and now exposes a
+   full `setActor(actor)` (id+role together) consumed by Admin's "Act as" (REQ-F-066). Screens
+   state their data boundary rather than fabricate instrument/compute artifacts the FASTQ-first
+   build doesn't capture; one now-honest gap is explicitly rendered empty rather than invented:
+   Monitoring's Median-review KPI (no backend field — its signature-level `first_seen`/
+   `last_seen`/`trend`/`affected_run_ids` fields ARE shipped, REQ-F-047) and Provenance artifact
+   links (`RunArtifact` has no `url`). *Trace:* [demo_plan.md](../demo/demo_plan.md),
    [architecture.md](../design/architecture.md),
-   [tasks T-022/T-022b/T-037/T-062](../planning/tasks.md).
+   [tasks T-022/T-022b/T-037/T-044/T-062](../planning/tasks.md),
+   [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md).
 4. **REQ-F-044 — In-app feedback (off-gate telemetry).** The app captures product feedback
    via the app's first write endpoint (now one of several off-gate product-domain writes),
    `POST /api/feedback` — a per-decision agree/disagree signal
@@ -231,16 +236,22 @@ node-authoring agent).
    [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md)). **Frontend rebuild
    (2026-07-09, Wave 3):** the screen now also ships free composition (add/drag/delete
    user nodes from the palette), a typed-port **Connect mode** (kind-matched wiring only,
-   INV-e), a minimap, and editable Locators with live YAML regen. Its Save/Approve/Diff/
-   Dry-run buttons call the real endpoints above, but update the on-screen status
-   **optimistically (client-first, fire-and-forget)** rather than waiting on/rendering the
-   server's response — a known, labelled limitation (not a fabricated success) until the UI
-   is wired to read back the `pipelines_lifecycle` result. The "Author a tool node" /
+   INV-e), a minimap, and editable Locators with live YAML regen. **Write-wiring fix
+   (2026-07-09 maintainer batch, commit `586f832`):** Save now chains `savePipeline` →
+   `submitPipeline` (draft → pending_review, so Approve's `pending_review` precondition is
+   met — previously 409'd) and the doc name is slugified for the backend; Save/Approve both
+   **await the response and reconcile local `version`/`status` from it** (toasted
+   success/failure via the new `Toast` system), no longer fire-and-forget. **Still a known,
+   labelled limitation:** Dry-run/Diff remain a **client-side-only projection**
+   (`BuilderConsole`/`BuilderShared`) — `dryRunPipeline`/`pipelineDiff` exist in `api.ts` but
+   the Builder screen does not call them yet (not a fabricated success — the console renders
+   from local state and never claims a server round trip). The "Author a tool node" /
    "Pipeline-repair" / "Archivist" modals inside the Builder are **static UI previews**
    labelled `phase-2` in-app — they do not call the live advisory-agent endpoints (those are
    wired elsewhere: REQ-F-041). *Trace:*
    [pipeline-builder-brief.md](../design/frontend/pipeline-builder-brief.md),
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
+   [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md),
    [tasks T-044/T-049/T-062](../planning/tasks.md).
 7. **REQ-F-046 — Honest run lifecycle status + run metadata.** `RunSummary` carries a real
    `status` — `running` (no completion event yet) / `needs_review` (completed, actionable
@@ -253,8 +264,13 @@ node-authoring agent).
 8. **REQ-F-047 — Server-side monitoring aggregate + runs pagination.** `GET /api/monitoring`
    returns a pre-aggregated, optionally time-windowed (7d/14d/30d/all) dashboard payload (KPIs,
    per-run rows, per-gate pass-rate, ranked recurring signatures) so the UI needn't fan out every
-   run's detail; its throughput ratio is a labelled **heuristic**, not a calibrated value.
-   `GET /api/runs` accepts additive `verdict/q/sort/page/limit` (no params → byte-identical body;
+   run's detail; its throughput ratio is a labelled **heuristic**, not a calibrated value. Each
+   ranked signature ADDITIVELY carries `first_seen`/`last_seen` (earliest/latest `[Header]` run
+   date, `None` when undated — never fabricated), `trend` (up/down/flat, a display heuristic
+   comparing the window's recent vs older half by count — not a calibrated rate), and
+   `affected_run_ids` (distinct, chronological); the payload stays backward-compatible. A
+   Median-review-time KPI stays a documented, not-yet-built seam. `GET /api/runs` accepts
+   additive `verdict/q/sort/page/limit` (no params → byte-identical body;
    count/page/limit on response headers). *Trace:*
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
    [architecture.md](../design/architecture.md), [tasks T-048](../planning/tasks.md).
@@ -314,7 +330,10 @@ had reserved or listed as *not-yet-built*.
    reviewer/approver RBAC (REQ-F-060), an audit trail, and **lenient sanity guardrails** (range
    checks, not clinical thresholds), storing each override as a **tolerant versioned envelope** in
    a pluggable store (`PIPEGUARD_SETTINGS_STORE=jsonl|sqlite|postgres`, degrade-to-JSONL, ADR-0016),
-   mirroring the pipeline store (REQ-F-045). It **does NOT mutate the live runbook** — actually
+   mirroring the pipeline store (REQ-F-045). The override `name` is a server-validated **slug**
+   (`^[A-Za-z0-9][A-Za-z0-9._-]*$`); the Settings screen now **slugifies** the display assay
+   string before POSTing (2026-07-09 maintainer batch — the un-slugified name 422'd save and
+   404'd approve). It **does NOT mutate the live runbook** — actually
    applying an approved override to a run is a documented **off-gate seam**, not yet wired, so
    REQ-F-015 (runbook profiles decide thresholds) still holds. *Trace:*
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md) §"NOT built #1",
@@ -325,8 +344,11 @@ had reserved or listed as *not-yet-built*.
 4. **REQ-F-063 — Review-queue / ticket domain.** `api/routers/review_queue.py` +
    `api/review_store.py` back the review-queue screen (REQ-F-042) with a persisted ticket
    domain: create/list tickets plus a **role-gated action lifecycle**
-   (acknowledge / resolve / escalate / suppress / reopen; **resolve & suppress are
-   approver-only**, the rest reviewer+ via `require_role`, REQ-F-060), a ticket `status`
+   (acknowledge / resolve / escalate / suppress / reopen — **all reviewer+approver** via
+   `require_role`, REQ-F-060; RBAC relaxed 2026-07-09 (commit `586f832`) from an earlier
+   approver-only resolve/suppress to match the design's reviewer-resolves-hold/rerun-ticket
+   model — an escalate ticket's approver-only nuance stays a UI-level distinction, not this
+   backend gate), a ticket `status`
    ∈ **open | in_review | resolved**, and recorded review-action timestamps. It is **off-gate** —
    a ticket, suppression, or resolution never changes a verdict or a finding (ADR-0001,
    consistent with REQ-F-004). *Trace:*
@@ -352,6 +374,26 @@ had reserved or listed as *not-yet-built*.
    *Trace:* [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md) §2,
    [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), REQ-F-046/REQ-F-047,
    [tasks T-048](../planning/tasks.md).
+7. **REQ-F-066 — Admin panel (approver-gated governance, off-gate).** A `frontend/src/screens/Admin.tsx`
+   screen at `/admin`, visible only when the acting `RoleContext` is `approver` (the de-facto admin
+   role in the dev-shim model, REQ-F-060) — nav-gated in `Sidebar.tsx`, not a backend permission of
+   its own. Three tabs: **(a) Users & roles** — an explicit **client-mock** roster (there is no
+   backend user store; `api/auth.py` is a header dev-shim) with a per-user role selector and an
+   "Act as" control wired to `RoleContext.setActor` (switches id+role together) so an operator can
+   preview any seeded actor's RBAC surface, plus a persistent "dev auth shim, not an identity
+   system" banner; **(b) Activity log** — a REAL, zero-new-backend audit feed merging
+   `GET /api/settings/thresholds` + `GET /api/pipelines` + `GET /api/review/tickets` into one
+   append-only when/actor/kind/target/status table, facet-filterable by kind (threshold/pipeline/
+   ticket); **(c) System** — REAL reads of `GET /api/health` (new, trivial liveness endpoint) +
+   the runbook's gate count + the metric-registry version/gated-count, labelled
+   illustrative-not-clinical. Admin decides **who** may perform an off-gate product write and
+   whose id lands in an audit `*_by` field — it never sets, overrides, or displays a
+   verdict/finding/confidence, and carries **no confidence meter** (ADR-0001; life-science
+   guardrail 2). *Trace:* [architecture.md](../design/architecture.md) §4,
+   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+   [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), REQ-F-060,
+   [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md) (commit
+   `ce396f7`). *(No `tasks.md` row yet at time of writing — flagged for the planning sweep.)*
 
 ## Notes / deferred
 
