@@ -56,10 +56,32 @@ function DemoBanner({ text }: { text: string }) {
 function UsersTab() {
   const { actor, setActor } = useRole()
   const [users, setUsers] = useState(SEED_USERS)
+  // Role edits STAGE into a draft (id → role) and only take effect on Save — a role change is a
+  // deliberate governance action, not a stray click on a toggle. `dirty` gates the Save/Discard bar.
+  const [draft, setDraft] = useState<Record<string, Role>>({})
+  const roleOf = (id: string, saved: Role) => draft[id] ?? saved
+  const dirty = users.some((u) => draft[u.id] !== undefined && draft[u.id] !== u.role)
 
-  const setUserRole = (id: string, role: Role) => {
-    setUsers((us) => us.map((u) => (u.id === id ? { ...u, role } : u)))
-    if (id === actor.id) setActor({ id, role }) // keep the live actor in sync if it's the current one
+  const stage = (id: string, role: Role) =>
+    setDraft((d) => {
+      const saved = users.find((u) => u.id === id)?.role
+      const next = { ...d }
+      if (role === saved) delete next[id]
+      else next[id] = role
+      return next
+    })
+  const save = () => {
+    setUsers((us) => us.map((u) => (draft[u.id] ? { ...u, role: draft[u.id] } : u)))
+    // Keep the live actor in lockstep if its own role was just changed.
+    if (draft[actor.id] && draft[actor.id] !== actor.role) setActor({ id: actor.id, role: draft[actor.id] })
+    setDraft({})
+  }
+  // Act-as impersonation is already admin-gated (the whole panel is isAdmin-only); confirm it so it
+  // is a deliberate, audited switch rather than a stray click.
+  const actAs = (u: (typeof users)[number]) => {
+    if (u.id === actor.id) return
+    if (!window.confirm(`Act as ${u.name} (${u.role})? Subsequent off-gate writes are attributed to them.`)) return
+    setActor({ id: u.id, role: u.role })
   }
 
   return (
@@ -73,6 +95,7 @@ function UsersTab() {
         </div>
         {users.map((u) => {
           const isCurrent = u.id === actor.id
+          const staged = draft[u.id] !== undefined && draft[u.id] !== u.role
           return (
             <div
               key={u.id}
@@ -86,22 +109,31 @@ function UsersTab() {
                   <div className="flex items-center gap-2 text-[13.5px] font-semibold text-text">
                     {u.name}
                     {isCurrent && (
-                      <span className="rounded-full bg-accent px-2 py-px text-[10px] font-semibold text-white">
-                        you
-                      </span>
+                      <span className="rounded-full bg-accent px-2 py-px text-[10px] font-semibold text-white">you</span>
                     )}
                   </div>
                   <div className="font-mono text-[11.5px] text-text-2">{u.id}</div>
                 </div>
               </div>
-              <SegmentedControl<Role>
-                options={ROLE_OPTS}
-                value={u.role}
-                onChange={(r) => setUserRole(u.id, r)}
-              />
+              <div className="flex items-center gap-2">
+                <select
+                  value={roleOf(u.id, u.role)}
+                  onChange={(e) => stage(u.id, e.target.value as Role)}
+                  className={`rounded-lg border bg-card px-2.5 py-1.5 text-[13px] text-text outline-none focus:border-accent ${
+                    staged ? 'border-hold-bd' : 'border-line'
+                  }`}
+                >
+                  {ROLE_OPTS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                {staged && <span className="text-[10px] font-semibold uppercase tracking-[0.3px] text-hold-fg">unsaved</span>}
+              </div>
               <div className="text-right">
                 <button
-                  onClick={() => setActor({ id: u.id, role: u.role })}
+                  onClick={() => actAs(u)}
                   disabled={isCurrent}
                   className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
                     isCurrent
@@ -116,6 +148,23 @@ function UsersTab() {
           )
         })}
       </div>
+      {dirty && (
+        <div className="mt-3 flex items-center justify-end gap-2">
+          <span className="mr-auto text-[12px] text-text-2">Unsaved role changes.</span>
+          <button
+            onClick={() => setDraft({})}
+            className="rounded-lg border border-line bg-card px-3.5 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-line-strong"
+          >
+            Discard
+          </button>
+          <button
+            onClick={save}
+            className="rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:bg-accent-strong"
+          >
+            Save role changes
+          </button>
+        </div>
+      )}
     </div>
   )
 }
