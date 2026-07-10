@@ -4,6 +4,7 @@ import { api } from '../api'
 import { FacetChip } from '../components/FacetChip'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl } from '../components/SegmentedControl'
+import { DEMO_ACCOUNTS } from '../auth'
 import { useRole } from '../context/RoleContext'
 import type {
   MetricCatalog,
@@ -28,13 +29,10 @@ const ROLE_OPTS: { value: Role; label: string }[] = [
   { value: 'approver', label: 'Approver' },
 ]
 
-// Client-mock roster, seeded from the real actor ids the app + audit trails use.
-const SEED_USERS: { id: string; name: string; email: string; role: Role }[] = [
-  { id: 'a.rivera', name: 'Ada Rivera', email: 'a.rivera@lab.org', role: 'reviewer' },
-  { id: 'm.chen', name: 'Marcus Chen', email: 'm.chen@lab.org', role: 'approver' },
-  { id: 'p.okafor', name: 'Priya Okafor', email: 'p.okafor@lab.org', role: 'reviewer' },
-  { id: 'l.santos', name: 'Lia Santos', email: 'l.santos@lab.org', role: 'viewer' },
-]
+// Client-mock roster — the SAME demo accounts the login gate authenticates (auth.ts), so "Act as"
+// and the sign-in options stay in lockstep. `admin` marks the governance capability.
+const SEED_USERS: { id: string; name: string; email: string; role: Role; admin: boolean }[] =
+  DEMO_ACCOUNTS.map((a) => ({ id: a.id, name: a.name, email: a.email, role: a.role, admin: a.admin }))
 
 function Avatar({ name }: { name: string }) {
   const initials = name.split(' ').map((p) => p[0]).join('').slice(0, 2)
@@ -294,7 +292,21 @@ function SystemTab() {
 }
 
 export function Admin() {
+  const { isAdmin } = useRole()
   const [tab, setTab] = useState<Tab>('users')
+  // Route guard: the nav hides Admin for non-admins, but the /admin URL is directly reachable —
+  // refuse it here too (defense in depth). The real backend authz still lives in api/auth.py.
+  if (!isAdmin) {
+    return (
+      <div className="mx-auto max-w-md rounded-xl border border-line bg-card p-8 text-center shadow-card">
+        <ShieldCheck size={26} className="mx-auto text-text-3" />
+        <div className="mt-2 text-[15px] font-semibold text-text">Admin access required</div>
+        <p className="mt-1 text-[12.5px] text-text-2">
+          Sign in as an admin account to manage users, roles, and system posture.
+        </p>
+      </div>
+    )
+  }
   const tabOptions = [
     { value: 'users' as const, label: <TabLabel icon={<UserCog size={13} />} text="Users & roles" /> },
     { value: 'activity' as const, label: <TabLabel icon={<Activity size={13} />} text="Activity log" /> },

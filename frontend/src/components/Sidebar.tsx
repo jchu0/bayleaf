@@ -17,7 +17,7 @@ import {
   Waypoints,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useRole } from '../context/RoleContext'
 import type { RunSummary } from '../types'
 import { UserSettingsDialog } from './UserSettingsDialog'
@@ -31,7 +31,7 @@ type Group = { heading: string; items: Item[] }
 function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
   const { pathname } = useLocation()
   const { runId } = useParams()
-  const { isApprover } = useRole()
+  const { isAdmin } = useRole()
   const run = runId ?? defaultRunId
   const runHome = run ? `/runs/${run}` : '/'
   const flagged = runs.find((r) => r.run_id === run)?.n_attention ?? 0
@@ -82,8 +82,9 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
         { label: 'Settings', to: '/settings', icon: SlidersVertical, active: pathname.startsWith('/settings') },
       ],
     },
-    // Admin is governance (users/RBAC/audit), gated to approvers — the de-facto admin role.
-    ...(isApprover
+    // Admin is governance (users/RBAC/audit), gated to the dedicated admin capability (the login
+    // identity, not just any approver) — see auth.ts / RoleContext.isAdmin.
+    ...(isAdmin
       ? [
           {
             heading: 'Admin',
@@ -97,7 +98,8 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
 }
 
 function UserPanel() {
-  const { actor, role, toggleRole } = useRole()
+  const { actor, role, toggleRole, logout } = useRole()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [dialog, setDialog] = useState(false)
   const roleLabel = role.charAt(0).toUpperCase() + role.slice(1)
@@ -149,7 +151,14 @@ function UserPanel() {
               <span className="flex-1">Role</span>
               <span className="font-mono text-[10.5px] capitalize text-[#8b97a4]">{role}</span>
             </button>
-            <button className="flex w-full items-center gap-2.5 border-t border-[#2b3543] px-3.5 py-2.5 text-left text-[12.5px] text-[#e0868c] hover:bg-white/5">
+            <button
+              onClick={() => {
+                setOpen(false)
+                logout()
+                navigate('/login', { replace: true })
+              }}
+              className="flex w-full items-center gap-2.5 border-t border-[#2b3543] px-3.5 py-2.5 text-left text-[12.5px] text-[#e0868c] hover:bg-white/5"
+            >
               <LogOut size={14} />
               Sign out
             </button>

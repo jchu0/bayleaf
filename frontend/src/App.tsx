@@ -1,10 +1,12 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import { Layout } from './components/Layout'
 import { ToastProvider } from './components/Toast'
-import { RoleProvider } from './context/RoleContext'
+import { RoleProvider, useRole } from './context/RoleContext'
 import { Admin } from './screens/Admin'
 import { AgentTriage } from './screens/AgentTriage'
 import { Intake } from './screens/Intake'
+import { Login } from './screens/Login'
 import { Monitoring } from './screens/Monitoring'
 import { PipelineBuilder } from './screens/PipelineBuilder'
 import { Provenance } from './screens/Provenance'
@@ -14,26 +16,44 @@ import { RunOverview } from './screens/RunOverview'
 import { Settings } from './screens/Settings'
 import { Submit } from './screens/Submit'
 
+// Auth gate: an unauthenticated visitor is redirected to /login, preserving where they were headed
+// so login can bounce them back. Everything under <Layout> is protected; /login is the one public route.
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { isAuthenticated } = useRole()
+  const location = useLocation()
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
+  }
+  return <>{children}</>
+}
+
 export default function App() {
   return (
     <ToastProvider>
       <RoleProvider>
         <BrowserRouter>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route path="/" element={<RunOverview />} />
-            <Route path="/submit" element={<Submit />} />
-            <Route path="/runs/:runId" element={<RunDetail />} />
-            <Route path="/runs/:runId/provenance" element={<Provenance />} />
-            <Route path="/runs/:runId/intake" element={<Intake />} />
-            <Route path="/runs/:runId/agent" element={<AgentTriage />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/monitoring" element={<Monitoring />} />
-            <Route path="/queue" element={<ReviewQueue />} />
-            <Route path="/builder" element={<PipelineBuilder />} />
-          </Route>
-        </Routes>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route
+              element={
+                <RequireAuth>
+                  <Layout />
+                </RequireAuth>
+              }
+            >
+              <Route path="/" element={<RunOverview />} />
+              <Route path="/submit" element={<Submit />} />
+              <Route path="/runs/:runId" element={<RunDetail />} />
+              <Route path="/runs/:runId/provenance" element={<Provenance />} />
+              <Route path="/runs/:runId/intake" element={<Intake />} />
+              <Route path="/runs/:runId/agent" element={<AgentTriage />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/admin" element={<Admin />} />
+              <Route path="/monitoring" element={<Monitoring />} />
+              <Route path="/queue" element={<ReviewQueue />} />
+              <Route path="/builder" element={<PipelineBuilder />} />
+            </Route>
+          </Routes>
         </BrowserRouter>
       </RoleProvider>
     </ToastProvider>

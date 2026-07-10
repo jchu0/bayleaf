@@ -1,36 +1,62 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { setApiActor } from '../api'
+import { type LoginResult, authenticate, isAdminId, loadSession, saveSession } from '../auth'
 import type { Actor, Role } from '../types'
 
-// One shared RBAC source for the whole app (README §4). The user-panel popover toggles it;
-// the Review queue, Settings threshold save/approve, and Pipeline-builder approve all gate on
-// it. It also feeds the API client's X-PipeGuard-Actor/-Role headers. This is a DEMO affordance
-// (dc.html labels the toggle "Toggle RBAC role (demo)") — flipping to approver unlocks approvals
-// only, never a rules-decided verdict.
+// One shared RBAC + auth source for the whole app (README §4). The demo login gate establishes WHO
+// you are (`session`); the Admin "Act as" flow + the demo role toggle change WHO the app acts as
+// (`actor`). It feeds the API client's X-PipeGuard-Actor/-Role headers. This is a DEMO affordance —
+// flipping to approver unlocks approvals only, never a rules-decided verdict (dc.html labels the
+// toggle "Toggle RBAC role (demo)"). `session` vs `actor`: an admin can Act-as another user for
+// audited writes while keeping their own admin governance (isAdmin follows the login, not the act).
 type RoleState = {
-  actor: Actor
+  session: Actor | null // authenticated identity (null ⇒ logged out; the app gates on this)
+  isAuthenticated: boolean
+  actor: Actor // acting identity (= session unless an admin "Act as" overrides it)
   role: Role
   isReviewer: boolean
   isApprover: boolean
+  isAdmin: boolean // governance capability (Admin panel + Act-as), from the LOGIN identity
+  login: (email: string, password: string) => LoginResult
+  logout: () => void
   setActor: (actor: Actor) => void
   setRole: (role: Role) => void
   toggleRole: () => void
 }
 
-const DEFAULT_ACTOR: Actor = { id: 'a.rivera', role: 'reviewer' }
+// Placeholder acting-actor while logged out — never used for a write (the gate stops render), but
+// keeps `actor` a non-null Actor so consumers stay simple.
+const LOGGED_OUT_ACTOR: Actor = { id: 'anonymous', role: 'viewer' }
 
 const RoleContext = createContext<RoleState | null>(null)
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  // Full actor (id + role) so the Admin "Act as" flow can switch WHO is acting, not just the
-  // role — every audited write is then attributed to the chosen actor, and `viewer` is reachable.
-  const [actor, setActorState] = useState<Actor>(DEFAULT_ACTOR)
+  // Rehydrate a persisted demo session (id + role only — never a token/password) so a refresh stays
+  // signed in. `session` is the real login; `actor` is who the app currently acts as.
+  const [session, setSession] = useState<Actor | null>(() => loadSession())
+  const [actor, setActorState] = useState<Actor>(() => loadSession() ?? LOGGED_OUT_ACTOR)
   const role = actor.role
 
-  // Keep the API client's actor in lockstep so every write carries the current id + role.
+  // Send actor headers only while authenticated; a logged-out client carries none.
   useEffect(() => {
-    setApiActor(actor)
-  }, [actor])
+    setApiActor(session ? actor : null)
+  }, [actor, session])
+
+  const login = useCallback((email: string, password: string): LoginResult => {
+    const res = authenticate(email, password)
+    if (res.ok) {
+      setSession(res.actor)
+      setActorState(res.actor)
+      saveSession(res.actor)
+    }
+    return res
+  }, [])
+
+  const logout = useCallback(() => {
+    setSession(null)
+    setActorState(LOGGED_OUT_ACTOR)
+    saveSession(null)
+  }, [])
 
   const setActor = useCallback((next: Actor) => setActorState(next), [])
   const setRole = useCallback((next: Role) => setActorState((a) => ({ ...a, role: next })), [])
@@ -39,17 +65,25 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  // Admin governance follows the LOGIN identity, so an admin can Act-as anyone and still return.
+  const isAdmin = session != null && isAdminId(session.id)
+
   const value = useMemo<RoleState>(
     () => ({
+      session,
+      isAuthenticated: session != null,
       actor,
       role,
       isReviewer: role === 'reviewer' || role === 'approver',
       isApprover: role === 'approver',
+      isAdmin,
+      login,
+      logout,
       setActor,
       setRole,
       toggleRole,
     }),
-    [actor, role, setActor, setRole, toggleRole],
+    [session, actor, role, isAdmin, login, logout, setActor, setRole, toggleRole],
   )
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>
