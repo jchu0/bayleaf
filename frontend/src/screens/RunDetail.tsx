@@ -25,6 +25,7 @@ import type {
   Verdict,
 } from '../types'
 import { GATE_DOT } from '../verdict'
+import { usePrefs } from '../context/PrefsContext'
 
 type Density = 'split' | 'brief' | 'dense'
 type CardFilter = Verdict | 'all' | 'attention'
@@ -53,7 +54,9 @@ export function RunDetail() {
   // Run-independent QC policy, backing the "QC gate ran but nothing measured" placeholder (S3).
   const [runbook, setRunbook] = useState<RunbookPolicy | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [density, setDensity] = useState<Density>('split')
+  // Density is a saved user preference (persists across runs + refresh) — the Layout control below
+  // updates it in place, so changing it here is the same setting the profile dialog exposes.
+  const { density, setDensity } = usePrefs()
   const [reload, setReload] = useState(0)
   // Per-card open overrides + a screen-wide expand/collapse latch. Absent override → the
   // default (first card open, rest collapsed); expand/collapse-all clears the overrides.

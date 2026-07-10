@@ -73,6 +73,40 @@
   font-size: 14px;
 }
 
+/* Dark theme — the content surfaces adopt the app's existing dark-nav aesthetic (the nav itself
+   already dark, so it stays). Overriding the @theme --color-* vars retargets every Tailwind
+   utility (bg-page, bg-card, text-text, border-line, verdict bg/fg, …). Toggled by PrefsContext
+   stamping data-theme on <html>. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-page: #0f151b;
+  --color-card: #171e27;
+  --color-card-2: #1c242e;
+  --color-card-3: #232d38;
+  --color-line: #2a333e;
+  --color-line-strong: #3a4552;
+  --color-text: #e7ecf1;
+  --color-text-2: #a6b2be;
+  --color-text-3: #7b8794;
+  --color-accent: #4b8bf0;
+  --color-accent-weak: #17233a;
+  --color-accent-strong: #6ba3f5;
+  --color-proceed-bg: #12271c;
+  --color-proceed-bd: #244d34;
+  --color-proceed-fg: #64d69a;
+  --color-hold-bg: #292011;
+  --color-hold-bd: #52421d;
+  --color-hold-fg: #e3bd67;
+  --color-rerun-bg: #2a1a10;
+  --color-rerun-bd: #53351c;
+  --color-rerun-fg: #ef9f63;
+  --color-escalate-bg: #2a1315;
+  --color-escalate-bd: #53262b;
+  --color-escalate-fg: #ef858d;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 14px 36px rgba(0, 0, 0, 0.5);
+}
+
 body {
   margin: 0;
   background: var(--color-page);

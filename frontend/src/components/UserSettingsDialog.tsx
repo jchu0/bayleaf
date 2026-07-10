@@ -1,13 +1,13 @@
 import { X } from 'lucide-react'
 import { useState } from 'react'
+import { type Density, usePrefs } from '../context/PrefsContext'
 import { useRole } from '../context/RoleContext'
 import { SegmentedControl } from './SegmentedControl'
 
 // The profile/preferences modal opened from the user-panel popover (dc.html 95-128) — DISTINCT
-// from the /settings thresholds screen. Preferences are demo-local (no backend prefs store);
-// Save just closes. Role is shown read-only here; it is toggled from the popover's Role row.
+// from the /settings thresholds screen. Theme + density now persist + take effect (PrefsContext);
+// the digest/notification toggles remain demo-local (a production prefs-store seam).
 type Theme = 'light' | 'dark' | 'system'
-type Density = 'comfortable' | 'compact'
 
 function ToggleSwitch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -51,8 +51,7 @@ function PrefRow({
 
 export function UserSettingsDialog({ onClose }: { onClose: () => void }) {
   const { role } = useRole()
-  const [theme, setTheme] = useState<Theme>('light')
-  const [density, setDensity] = useState<Density>('comfortable')
+  const { theme, setTheme, density, setDensity } = usePrefs()
   const [emailDigest, setEmailDigest] = useState(true)
   // Matches the prototype seed prefInApp: true (dc.html) — opens ON.
   const [desktopNotifications, setDesktopNotifications] = useState(true)
@@ -141,13 +140,14 @@ export function UserSettingsDialog({ onClose }: { onClose: () => void }) {
                   ]}
                 />
               </PrefRow>
-              <PrefRow label="Density">
+              <PrefRow label="Card density" hint="Default decision-card layout">
                 <SegmentedControl<Density>
                   value={density}
                   onChange={setDensity}
                   options={[
-                    { value: 'comfortable', label: 'Comfortable' },
-                    { value: 'compact', label: 'Compact' },
+                    { value: 'split', label: 'Split' },
+                    { value: 'brief', label: 'Brief' },
+                    { value: 'dense', label: 'Dense' },
                   ]}
                 />
               </PrefRow>
