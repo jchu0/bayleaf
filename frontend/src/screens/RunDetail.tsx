@@ -24,7 +24,7 @@ import type {
   RunDetail as RunDetailData,
   Verdict,
 } from '../types'
-import { GATE_DOT, VERDICT_STRIPE } from '../verdict'
+import { GATE_DOT } from '../verdict'
 
 type Density = 'split' | 'brief' | 'dense'
 type CardFilter = Verdict | 'all' | 'attention'
@@ -248,7 +248,6 @@ export function RunDetail() {
                   key={card.sample_id}
                   open={open}
                   onToggle={() => setOverride((o) => ({ ...o, [card.sample_id]: !open }))}
-                  className={`border-l-[3px] ${VERDICT_STRIPE[card.verdict]}`}
                   header={<CardHead card={card} header={readout?.header ?? null} />}
                 >
                   <CardBody
