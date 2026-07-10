@@ -177,11 +177,14 @@ function PriorityBars({ level }: { level: number }) {
 }
 
 export function ReviewQueue() {
-  const { actor, isApprover } = useRole()
+  const { actor, isReviewer, isApprover } = useRole()
   const { toast } = useToast()
   const [details, setDetails] = useState<RunDetail[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ui, setUi] = useState<Record<string, TicketUi>>({})
+  // Batch clearance (DC2 part 2): a HOLD/ESCALATE can be cleared individually OR in bulk. Selected
+  // keys drive the batch bar; only still-open/in-review tickets are selectable.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   // Default to Open so resolved (and in-review) tickets leave the active list but stay reachable via
   // their facet chip (part c) — resolved is still a searchable TicketStatus, never dropped.
   const [filter, setFilter] = useState<'all' | TicketStatus>('open')
@@ -343,6 +346,31 @@ export function ReviewQueue() {
 
   const statusOf = (t: QueueTicket): TicketStatus => ui[keyOf(t)]?.status ?? 'open'
 
+  // A ticket is batch-clearable only while it is still awaiting a decision (open/in-review). Resolved
+  // or suppressed tickets fall out of the selection so a stale check can't re-fire an action on them.
+  const clearable = (t: QueueTicket): boolean => {
+    const s = statusOf(t)
+    return s === 'open' || s === 'in_review'
+  }
+  const toggleSelect = (key: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  const clearSelection = () => setSelected(new Set())
+  // Resolve against the live ticket list every render so keys that have since left the clearable set
+  // (already resolved, or filtered away) never drive a batch action.
+  const selectedTickets = tickets.filter((t) => selected.has(keyOf(t)) && clearable(t))
+  const batchAct = (action: 'resolve' | 'suppress') => {
+    for (const t of selectedTickets) {
+      if (action === 'resolve') act(t, 'resolve')
+      else toggleSuppress(t)
+    }
+    clearSelection()
+  }
+
   const counts: Record<'all' | TicketStatus, number> = {
     all: tickets.length,
     open: tickets.filter((t) => statusOf(t) === 'open').length,
@@ -452,6 +480,41 @@ export function ReviewQueue() {
         </div>
       ) : (
         <>
+          {/* Batch clearance bar (DC2 part 2): appears once ≥1 open ticket is selected. Sits above the
+              per-run sticky subheaders (z-20) so it stays reachable while scrolling. Resolve and
+              Suppress reuse the same backend-persisted act/toggleSuppress path as the per-ticket buttons —
+              a HOLD/ESCALATE is a clearable state, and the user clears it individually or in bulk. */}
+          {isReviewer && selectedTickets.length > 0 && (
+            <div className="sticky top-0 z-20 mt-4 flex flex-wrap items-center gap-2.5 rounded-lg border border-accent bg-accent-weak px-3.5 py-2.5 shadow-sm">
+              <span className="text-[12.5px] font-semibold text-text">
+                {selectedTickets.length} selected
+              </span>
+              <span className="text-[11.5px] text-text-3">Clear these tickets in one action</span>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => batchAct('resolve')}
+                  className="rounded-md border border-proceed-bd bg-proceed-bg px-2.5 py-1 text-[12px] font-semibold text-proceed-fg hover:brightness-95"
+                >
+                  Resolve selected
+                </button>
+                <button
+                  type="button"
+                  onClick={() => batchAct('suppress')}
+                  className="rounded-md border border-line-strong bg-card px-2.5 py-1 text-[12px] font-semibold text-text-2 hover:bg-card-2"
+                >
+                  Suppress selected
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="rounded-md px-2 py-1 text-[12px] text-text-3 hover:text-text-2"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           {/* Grouped by run: each group sits under a sticky run subheader; the verdict sort is
               preserved inside every group (see the grouping block above). */}
           <div className="mt-4 flex flex-col gap-5">
@@ -459,8 +522,33 @@ export function ReviewQueue() {
               const groupDate = formatDate(groupTickets[0].runDate)
               return (
                 <div key={runId} className="flex flex-col gap-[13px]">
-                  {/* Sticky run subheader — the mono run-id + date idiom from the ticket header. */}
+                  {/* Sticky run subheader — the mono run-id + date idiom from the ticket header. A
+                      select-all toggle (reviewer+) lets the whole run's open tickets be cleared at once. */}
                   <div className="sticky top-0 z-10 flex items-center gap-2 bg-page py-2">
+                    {isReviewer &&
+                      (() => {
+                        const groupClearable = groupTickets.filter(clearable)
+                        if (groupClearable.length === 0) return null
+                        const allSel = groupClearable.every((t) => selected.has(keyOf(t)))
+                        return (
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 shrink-0 accent-accent"
+                            aria-label={`Select all open tickets in ${runId}`}
+                            checked={allSel}
+                            onChange={() =>
+                              setSelected((prev) => {
+                                const next = new Set(prev)
+                                for (const t of groupClearable) {
+                                  if (allSel) next.delete(keyOf(t))
+                                  else next.add(keyOf(t))
+                                }
+                                return next
+                              })
+                            }
+                          />
+                        )
+                      })()}
                     <span className="font-mono text-[12px] font-semibold text-text-2">{runId}</span>
                     {groupDate && <span className="text-[11.5px] text-text-3">· {groupDate}</span>}
                     <span className="text-[11px] text-text-3">
@@ -469,9 +557,8 @@ export function ReviewQueue() {
                   </div>
                   {groupTickets.map((t) => {
                     const key = keyOf(t)
-                    return (
+                    const card = (
                       <TicketCard
-                        key={key}
                         t={t}
                         ui={ui[key] ?? {}}
                         recurrence={recurrence.get(t.primary.rule_id)}
@@ -488,6 +575,21 @@ export function ReviewQueue() {
                           approveFix: (scope) => approveFix(t, scope),
                         }}
                       />
+                    )
+                    // Reviewers get a select checkbox alongside each still-open ticket; viewers and
+                    // already-cleared tickets render the card alone (no dead checkbox).
+                    if (!isReviewer || !clearable(t)) return <div key={key}>{card}</div>
+                    return (
+                      <div key={key} className="flex items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          className="mt-[15px] h-3.5 w-3.5 shrink-0 accent-accent"
+                          aria-label={`Select ${t.card.sample_id}`}
+                          checked={selected.has(key)}
+                          onChange={() => toggleSelect(key)}
+                        />
+                        <div className="min-w-0 flex-1">{card}</div>
+                      </div>
                     )
                   })}
                 </div>
