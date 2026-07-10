@@ -210,6 +210,11 @@ authoring.
   **Cancel · Save changes**; save is per-assay, **audited** (who · when), guarded (a gate
   can't cross its hard-fail; % clamp 0–100), and **approver-gated**.
 - **Per-agent model tiering** (dropdowns, full versioned model names; roster incl. Fable 5).
+- **Sample-type dropdown (Shipped 2026-07-10, T-095, commit `869cf55`).** The threshold matrix
+  showed Whole-blood and Saliva as two side-by-side columns; a Sample-type dropdown beside the
+  Assay selector now picks one tissue at a time and the table shows a single value column,
+  cleaner and scaling as more sample types are added. Editing/save/approve, the per-tissue
+  values, and the audit lifecycle are unchanged (still keyed on assay × sample type).
 - **Notifications:** Slack, Microsoft Teams, Discord.
 - **Settings dialog** (from the user panel): profile (name / email / role / time zone) +
   preferences (theme, density, email digest, desktop notifications), Cancel / Save.
@@ -286,9 +291,22 @@ View.
 role toggle.
 
 **Console (bottom, tabbed).** **Validate** (static typed checks; click a finding → focuses
-the node) · **Diff** (current locators vs last **Emit** snapshot) · **Dry run** (locator
-resolution vs a mock run dir → matched / ambiguous / missing; resolves paths only, reads no
-bytes). **Emit / Copy / Download** produce the real `run_layout.yaml`.
+the node) · **Diff** · **Dry run** (locator resolution → matched / ambiguous / missing;
+resolves paths only, reads no bytes). **Emit / Copy / Download** produce the real
+`run_layout.yaml`.
+- **Real backend wiring once Saved (Shipped 2026-07-10, T-096, commit `4208f0b`, "closes the
+  Dry-run/Diff limitation").** Before the graph is Saved, both tabs render the earlier
+  client-side-only preview (Diff vs last **Emit** snapshot; Dry-run vs a mock run dir). Once
+  Saved (the graph exists in the pipeline store), **Dry-run** gains a run-id input +
+  "Resolve against run" → `POST /api/pipelines/{name}/dry-run?run_id=…`, rendering the REAL
+  per-locator matched/ambiguous/missing/invalid resolution + summary (the run-id field is a
+  plain text box, not yet a searchable picker — [tasks T-070](../../planning/tasks.md) stays
+  open); **Diff** gains "Diff vs approved baseline" → `GET /api/pipelines/{name}/diff`,
+  rendering added/changed/removed vs the approved baseline (or "no baseline yet"). Save stamps
+  `savedName` (+ clears prior results); New/Cancel reset it. **Compose ≠ execute still holds** —
+  a dry-run globs paths, reads no bytes, runs nothing. **Still open** ([tasks
+  T-069](../../planning/tasks.md)): the Run hand-off / pipeline-repair / archivist modals below
+  remain static previews, and saved-profiles has no backend seam yet.
 
 **Run.** A **hand-off** modal (composes ≠ executes): Emit `run_layout.yaml` → Nextflow/bioconda
 runs (outside PipeGuard) → deterministic ingest writes `run/` → `run_gate` gates + records the
@@ -402,9 +420,21 @@ governance; **not** "any approver," which was the original, now-corrected framin
    legitimate UI path, not the underlying security boundary ([risks.md RISK-035](../../quality/risks.md)).
 2. **Activity log** — a REAL, zero-new-backend audit feed merging `GET /api/settings/thresholds`
    + `GET /api/pipelines` + `GET /api/review/tickets` into one append-only when/actor/kind/target/
-   status table, facet-filterable by kind.
+   status table, facet-filterable by kind. **Shipped 2026-07-10 (T-093, commit `8a14661`, "A2"):**
+   the feed now paginates (25/50/100 + a numbered pager, "Showing X–Y of Z," resets on filter
+   change — was a flat, uncapped list that got messy as it grew) and each row is a compact
+   summary that expands on click to a labelled Detail/Target/Actor/When panel (one open at a
+   time); no backend change.
 3. **System** — REAL reads of `GET /api/health` + the runbook's gate count + the metric-registry
-   version/gated-count, labelled illustrative-not-clinical.
+   version/gated-count, labelled illustrative-not-clinical. **Shipped 2026-07-10 (T-094, commit
+   `7c56564`, "A3/A4"):** gained an **Artifact-store** stat card (`local` · the
+   `PIPEGUARD_ARTIFACT_STORE` s3 seam) and an **Observability** section linking the read-API's
+   `/metrics` exporter, Prometheus (`:9090`), and the Grafana "PipeGuard — QC decision gate"
+   dashboard (`:3000`, built T-036/T-079) as off-demo-path links (Grafana blocks framing; the
+   telemetry stack is off the offline demo path), with a note on bringing up the compose stack.
+   Users & roles also gained a per-user **password/email-reset** action — a labelled production
+   seam (no live mail) that toasts what would happen (a signed, expiring reset link emailed to
+   the user).
 
 Admin decides **who** may perform an off-gate product write and whose id lands in an audit
 `*_by` field — it never sets, overrides, or displays a verdict/finding/confidence, and carries

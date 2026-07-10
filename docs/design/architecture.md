@@ -161,9 +161,21 @@ Every finding and verdict is labelled with the gate it came from:
      the legitimate UI path, not the underlying (already non-production) security boundary.
      **Activity log** — a REAL,
      zero-new-backend audit feed merging `listThresholds` + `listPipelines` + `listTickets` into
-     one append-only when/actor/kind/target/status table, facet-filterable by kind; **System** —
+     one append-only when/actor/kind/target/status table, facet-filterable by kind.
+     **Paginated + expandable (2026-07-10, T-093, commit `8a14661`, "A2"):** the flat, uncapped
+     list (a formatting mess as it grows) now paginates 25/50/100 with a numbered pager
+     ("Showing X–Y of Z," resets on filter change), and each row is a compact summary that
+     expands on click to a labelled Detail/Target/Actor/When panel (one open at a time) — no
+     backend change. **System** —
      REAL reads of `GET /api/health` + runbook gate count + metric-registry version/gated-count,
-     labelled illustrative-not-clinical. Admin decides WHO may perform an off-gate product write
+     labelled illustrative-not-clinical. **Built out (2026-07-10, T-094, commit `7c56564`,
+     "A3/A4"):** gained an Artifact-store stat card (`local` · the `PIPEGUARD_ARTIFACT_STORE` s3
+     seam) and an Observability section linking the read-API's `/metrics` exporter, Prometheus
+     (`:9090`), and the Grafana "PipeGuard — QC decision gate" dashboard (`:3000`, built
+     T-036/T-079) as links (Grafana blocks framing; the stack is off the offline demo path), with
+     a note on bringing up the `deploy/telemetry/` compose stack; Users & roles also gained a
+     per-user password/email-reset action — a labelled production seam (no live mail), which
+     toasts what would happen rather than sending anything. Admin decides WHO may perform an off-gate product write
      and whose id lands in an audit field — it never sets, overrides, or displays a
      verdict/finding/confidence (ADR-0001; no confidence meter). **Gating corrected 2026-07-10**
      (T-081): the nav item and `/admin` route now gate on `isAdmin` — a frontend-only governance
@@ -182,10 +194,9 @@ Every finding and verdict is labelled with the gate it came from:
      **resolve/suppress RBAC relaxed** from approver-only to **reviewer+approver**
      (`api/routers/review_queue.py` `_ACTION_RULES`, matching the design's reviewer-resolves-
      hold/rerun-ticket model — an escalate ticket's approver-only nuance stays a UI-level
-     distinction, not this backend gate). **Still a known, labelled limitation:** the Builder's
-     **Dry-run/Diff remain a client-side-only projection** (`BuilderConsole`/`BuilderShared`) —
-     `api.ts`'s `dryRunPipeline`/`pipelineDiff` exist but the Builder screen does not call them
-     yet.
+     distinction, not this backend gate). **Dry-run/Diff wired to the real endpoints
+     (2026-07-10, T-096, commit `4208f0b`, see the batch-6 bullet below)** — closes the earlier
+     "client-side-only projection" limitation this paragraph used to flag.
    - **Frontend fixes batch 5 (2026-07-10, commits `14c9f3c`→`5774143`, T-085–T-092,
      [journal](../journal/2026-07-10-batch5-builder-card-admin-prefs.md)), 8 UI-polish items —
      all re-presentation/UX, no verdict/gate/ADR-0001 boundary changed.** (1) **Builder Tidy is
@@ -212,13 +223,35 @@ Every finding and verdict is labelled with the gate it came from:
      existing Tailwind utility with no per-component change; density is now one setting shared
      by the dialog and `RunDetail`'s own Layout control. (8) **Admin role-staging** (T-092,
      `5774143`, see the Admin bullet below).
+   - **Frontend fixes batch 6 (2026-07-10, commits `8a14661`→`4208f0b`, T-093–T-096,
+     [journal](../journal/2026-07-10-admin-settings-builder-wiring.md)), 4 items — also
+     re-presentation/UX, no verdict/gate/ADR-0001 boundary changed.** (1) **Admin Activity-log
+     pagination + expandable rows** (T-093, `8a14661`, "A2," see the Admin bullet above). (2)
+     **Admin System observability + artifact-store card + password reset** (T-094, `7c56564`,
+     "A3/A4," see the Admin bullet above). (3) **Settings sample-type dropdown** (T-095,
+     `869cf55`, "S1"): `SettingsAssayTable.tsx`'s two side-by-side Whole-blood/Saliva columns
+     become a single value column driven by a new Sample-type dropdown beside the Assay
+     selector — cleaner and scales as more sample types are added; editing/save/approve, the
+     per-tissue values, and the audit lifecycle (REQ-F-062) are unchanged. (4) **Builder
+     Dry-run/Diff wired to the real endpoints** (T-096, `4208f0b`, "Item E"): once the graph is
+     Saved, `BuilderConsole`'s Dry-run tab calls `POST /api/pipelines/{name}/dry-run?run_id=…`
+     (a plain run-id text input, not yet a searchable picker — [tasks
+     T-070](../planning/tasks.md) stays open), rendering the real per-locator
+     matched/ambiguous/missing/invalid resolution + summary; Diff calls `GET
+     /api/pipelines/{name}/diff`, rendering added/changed/removed vs the approved baseline (or
+     "no baseline yet"); both fall back to the earlier client-side preview before Save. Compose
+     ≠ execute holds (a dry-run globs paths, reads no bytes, runs nothing). **Closes** the
+     "`dryRunPipeline`/`pipelineDiff` exist but aren't called yet" limitation this doc previously
+     flagged; **narrows** [tasks T-069](../planning/tasks.md) to the remaining Run-hand-off /
+     pipeline-repair / archivist Builder modals (still static `phase-2` previews) + saved-profiles.
    **Honest, labelled frontend deferrals (no fabrication):** the Monitoring **Median-review KPI**
    (no backend field yet — the signature-level `first_seen`/`last_seen`/`trend`/`affected_run_ids`
    fields below ARE shipped); Submit now
    hands off to a real execution boundary (`POST /api/runs`, T-057 — see below) but still has
    **no BaseSpace connector** and no conversational multi-turn triage chat (both still wishlist);
-   Builder Dry-run/Diff/Export/Archivist-modal wiring + saved-profiles (endpoints exist, UI is a
-   preview). Of the 10 operator screens: 8 (Runs, Intake, Decision cards, Review queue,
+   the Builder's Run-hand-off / pipeline-repair / archivist modals + saved-profiles remain
+   unwired previews (T-069; Dry-run/Diff themselves are wired as of T-096 above), and there is
+   still no reusable run-selector (T-070). Of the 10 operator screens: 8 (Runs, Intake, Decision cards, Review queue,
    Provenance, Agent triage, Monitoring, Settings) trace to the pre-refresh [T-022b](../planning/tasks.md)
    1:1 fidelity pass, Pipeline Builder to [T-044](../planning/tasks.md), and Submit was new in the
    T-062 rebuild; Admin (governance, not counted among the 10) is new in this batch.

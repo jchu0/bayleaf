@@ -227,8 +227,9 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    the pipeline (not just a zoom reset), ctrl-wheel/trackpad-pinch zooms the canvas natively, and
    the minimap grew to a 210×108 proportional mirror (T-084). Its Save now chains `savePipeline`→`submitPipeline` and Approve calls
    `approvePipeline` — both **await + reconcile local state from the response** (no longer
-   fire-and-forget); Dry-run/Diff remain a client-side-only projection (`api.ts`'s
-   `dryRunPipeline`/`pipelineDiff` exist but aren't called yet — still a known limitation). A
+   fire-and-forget); Dry-run/Diff now call the REAL endpoints once the graph is Saved (T-096,
+   see Batch 6 below), closing the earlier "`dryRunPipeline`/`pipelineDiff` exist but aren't
+   called yet" limitation. A
    new `Toast` system (`components/Toast.tsx`) surfaces every off-gate write's real backend
    outcome (403/409/422/503/…) instead of silently diverging; the fix also slugified the
    Settings threshold-override name (spaces/colon 422'd the backend's slug pattern) and
@@ -266,9 +267,30 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    control. Admin role edits now **stage into a draft** (a dropdown, not the old 3-way toggle that
    reassigned on every click) behind an explicit Save/Discard bar, and Act-as confirms before
    impersonating (still the client-mock roster; `api/auth.py` unchanged). 364 tests (was 363).
+   **Batch 6 (2026-07-10, commits `8a14661`→`4208f0b`, T-093–T-096), also re-presentation/UX —
+   no verdict/gate/ADR-0001 boundary changed.** Admin's Activity log now paginates (25/50/100 +
+   pager, "Showing X–Y of Z," resets on filter change) and each row expands on click to a
+   labelled Detail/Target/Actor/When panel (T-093, no backend change). Admin's System tab gained
+   an Artifact-store stat card (`PIPEGUARD_ARTIFACT_STORE` s3 seam) and an Observability section
+   linking the read-API's `/metrics` exporter, Prometheus (`:9090`), and the Grafana "PipeGuard —
+   QC decision gate" dashboard (`:3000`, T-036/T-079) as off-demo-path links, plus a per-user
+   password/email-reset action — a labelled production seam, no live mail, that toasts what
+   would happen (T-094). Settings' runbook-threshold table replaced its two side-by-side
+   Whole-blood/Saliva columns with a Sample-type dropdown showing one tissue's value column at a
+   time (T-095); editing/save/approve and the audit lifecycle are unchanged. **The Builder's
+   Dry-run/Diff console tabs now call the REAL endpoints once the graph is Saved** —
+   `POST /api/pipelines/{name}/dry-run?run_id=…` (real per-locator matched/ambiguous/missing/
+   invalid resolution, via a plain run-id text input, not yet a searchable picker — T-070 stays
+   open) and `GET /api/pipelines/{name}/diff` (added/changed/removed vs the approved baseline) —
+   falling back to the client-side preview before Save (T-096); compose ≠ execute holds (a
+   dry-run globs paths, runs nothing). **T-069 narrows** to the remaining Run-hand-off /
+   pipeline-repair / archivist Builder modals (`RunHandoffModal`/`PipelineRepairModal`/
+   `ArchivistModal`, still static `phase-2` previews; `api.archiveDigest`/`api.archiveIndex`
+   still uncalled) and saved-profiles.
    Honest deferrals: Median-review KPI (no backend field), Submit now hands off to the real
-   `POST /api/runs` execution boundary but still has no BaseSpace connector (T-057), Builder
-   Dry-run/Diff/Export/Archivist-modal wiring (endpoints exist, UI is a preview).
+   `POST /api/runs` execution boundary but still has no BaseSpace connector (T-057), the Builder's
+   Run-hand-off / pipeline-repair / archivist modals + saved-profiles remain unwired previews
+   (T-069) and there is still no reusable run-selector (T-070).
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
 

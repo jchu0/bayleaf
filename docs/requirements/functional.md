@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md) |
 
 ## Overview
 
@@ -243,11 +243,18 @@ node-authoring agent).
    `submitPipeline` (draft → pending_review, so Approve's `pending_review` precondition is
    met — previously 409'd) and the doc name is slugified for the backend; Save/Approve both
    **await the response and reconcile local `version`/`status` from it** (toasted
-   success/failure via the new `Toast` system), no longer fire-and-forget. **Still a known,
-   labelled limitation:** Dry-run/Diff remain a **client-side-only projection**
-   (`BuilderConsole`/`BuilderShared`) — `dryRunPipeline`/`pipelineDiff` exist in `api.ts` but
-   the Builder screen does not call them yet (not a fabricated success — the console renders
-   from local state and never claims a server round trip). The "Author a tool node" /
+   success/failure via the new `Toast` system), no longer fire-and-forget. **Dry-run/Diff wired
+   to the real endpoints (2026-07-10, T-096, commit `4208f0b`, "Item E"):** once the graph is
+   Saved (exists in the pipeline store), the console's Dry-run tab calls `POST
+   /api/pipelines/{name}/dry-run?run_id=…` (REQ-F-061) — via a plain run-id text input, not yet
+   a searchable run-selector ([tasks T-070](../planning/tasks.md) stays open) — rendering the
+   real per-locator matched/ambiguous/missing/invalid resolution + summary, and the Diff tab
+   calls `GET /api/pipelines/{name}/diff` (REQ-F-061), rendering added/changed/removed vs the
+   approved baseline (or "no baseline yet"); both fall back to the earlier client-side preview
+   before Save. This closes the previous "known, labelled limitation" (Dry-run/Diff existed in
+   `api.ts` but the Builder screen never called them — not a fabricated success, since the
+   console rendered from local state and never claimed a server round trip). **Still open**
+   ([tasks T-069](../planning/tasks.md)): the "Author a tool node" /
    "Pipeline-repair" / "Archivist" modals inside the Builder are **static UI previews**
    labelled `phase-2` in-app — they do not call the live advisory-agent endpoints (those are
    wired elsewhere: REQ-F-041). **Editable template fix (2026-07-09, commit `01ba673`,
@@ -271,7 +278,8 @@ node-authoring agent).
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
    [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md),
    [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md),
-   [tasks T-044/T-049/T-062/T-085/T-086](../planning/tasks.md).
+   [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md),
+   [tasks T-044/T-049/T-062/T-085/T-086/T-096](../planning/tasks.md).
 7. **REQ-F-046 — Honest run lifecycle status + run metadata.** `RunSummary` carries a real
    `status` — `running` (no completion event yet) / `needs_review` (completed, actionable
    samples) / `released` (completed, none) — derived from the provenance ledger, **not** inferred
@@ -358,12 +366,19 @@ had reserved or listed as *not-yet-built*.
    string before POSTing (2026-07-09 maintainer batch — the un-slugified name 422'd save and
    404'd approve). It **does NOT mutate the live runbook** — actually
    applying an approved override to a run is a documented **off-gate seam**, not yet wired, so
-   REQ-F-015 (runbook profiles decide thresholds) still holds. *Trace:*
+   REQ-F-015 (runbook profiles decide thresholds) still holds. **Sample-type dropdown
+   (2026-07-10, T-095, commit `869cf55`, "S1"):** `SettingsAssayTable.tsx`'s threshold matrix
+   previously showed Whole-blood and Saliva as two side-by-side columns; a Sample-type dropdown
+   beside the Assay selector now picks one tissue at a time and the table shows a single value
+   column — a pure presentation change (cleaner, scales as more sample types are added).
+   Editing/save/approve, the per-tissue values, and the audit lifecycle above are unchanged
+   (still keyed on assay × sample type). *Trace:*
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md) §"NOT built #1",
    [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md),
    [ADR-0016](../adr/ADR-0016-postgres-port.md),
    [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
-   [tasks T-051](../planning/tasks.md).
+   [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md),
+   [tasks T-051/T-095](../planning/tasks.md).
 4. **REQ-F-063 — Review-queue / ticket domain.** `api/routers/review_queue.py` +
    `api/review_store.py` back the review-queue screen (REQ-F-042) with a persisted ticket
    domain: create/list tickets plus a **role-gated action lifecycle**
@@ -419,9 +434,21 @@ had reserved or listed as *not-yet-built*.
    the underlying (already non-production) security boundary; **(b) Activity log** — a REAL, zero-new-backend audit feed merging
    `GET /api/settings/thresholds` + `GET /api/pipelines` + `GET /api/review/tickets` into one
    append-only when/actor/kind/target/status table, facet-filterable by kind (threshold/pipeline/
-   ticket); **(c) System** — REAL reads of `GET /api/health` (new, trivial liveness endpoint) +
+   ticket). **Paginated + expandable (2026-07-10, T-093, commit `8a14661`, "A2"):** the
+   previously flat, uncapped list now paginates 25/50/100 with a numbered pager ("Showing X–Y of
+   Z," resets on filter change), and each row is a compact summary expanding on click to a
+   labelled Detail/Target/Actor/When panel (one open at a time); no backend change; **(c) System**
+   — REAL reads of `GET /api/health` (new, trivial liveness endpoint) +
    the runbook's gate count + the metric-registry version/gated-count, labelled
-   illustrative-not-clinical. Admin decides **who** may perform an off-gate product write and
+   illustrative-not-clinical. **Built out (2026-07-10, T-094, commit `7c56564`, "A3/A4"):** gained
+   an **Artifact-store** stat card (`local` · the `PIPEGUARD_ARTIFACT_STORE` s3 seam, built
+   [tasks T-039](../planning/tasks.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)
+   §3) and an **Observability** section linking the read-API's `/metrics` exporter,
+   Prometheus (`:9090`), and the Grafana "PipeGuard — QC decision gate" dashboard (`:3000`, built
+   under the telemetry-connector work) as off-demo-path links, with a note on bringing up the
+   `deploy/telemetry/` compose stack; Users & roles also gained a per-user
+   **password/email-reset** action — a labelled production seam (no live mail) that toasts what
+   would happen rather than sending anything. Admin decides **who** may perform an off-gate product write and
    whose id lands in an audit `*_by` field — it never sets, overrides, or displays a
    verdict/finding/confidence, and carries **no confidence meter** (ADR-0001; life-science
    guardrail 2). *Trace:* [architecture.md](../design/architecture.md) §4,
@@ -429,7 +456,9 @@ had reserved or listed as *not-yet-built*.
    [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), REQ-F-060, REQ-F-069,
    [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md) (commit
    `ce396f7`), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md)
-   (commit `5774143`), [tasks T-066/T-092](../planning/tasks.md).
+   (commit `5774143`),
+   [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md) (commits
+   `8a14661`, `7c56564`), [tasks T-066/T-092/T-093/T-094](../planning/tasks.md).
 8. **REQ-F-067 — Samplesheet submission triggers the real pipeline (execution boundary).**
    `POST /api/runs` (new `api/routers/intake.py`) registers a submitted samplesheet and
    **triggers** `scripts/run_giab_pipeline.py` as a background subprocess (an in-process job
@@ -541,13 +570,26 @@ had reserved or listed as *not-yet-built*.
     placeholder/empty gate groups it synthesizes client-side (REQ-F-068), so the presentation is
     consistent whether or not the API returned real rows for that gate. New test
     `test_qc_hold_blocks_the_downstream_variant_gate` (`tests/test_card_readout.py`). This is
-    "part 1" of the two-tier model per the maintainer; **part 2** (user-clearable HOLD/ESCALATE,
-    individually + in batches) is not yet built. *Trace:*
-    [architecture.md](../design/architecture.md) §4, REQ-F-003, REQ-F-014, REQ-F-064, REQ-F-068,
+    "part 1" of the two-tier model per the maintainer. **Part 2 — user-clearable HOLD/ESCALATE,
+    individually + in batches — shipped 2026-07-10 (T-097, commit `a8fd059`):** the review-queue
+    screen (`ReviewQueue.tsx`, REQ-F-042/REQ-F-063) now gives reviewers+ a select checkbox on every
+    still-open (open/in-review) ticket plus a per-run select-all in the group subheader; selecting
+    ≥1 raises a sticky batch bar ("N selected — Resolve selected / Suppress selected / Cancel")
+    that reuses the **same backend-persisted** per-ticket `act()`/`toggleSuppress()` path
+    (materialize ticket → `ticketAction`), so a bulk clear persists exactly like a single click
+    (verified across a reload: Open 88→86, Resolved 1→3). Selection resolves against the live
+    ticket list each render, so a key that has since left the clearable set can't re-fire an
+    action; viewers see no checkboxes. The DC2 model's "HOLD is a *state*, ESCALATE is *requesting
+    input*, both clearable" is thus realized — off-gate (clearing a ticket never moves a verdict,
+    ADR-0001). *Trace:*
+    [architecture.md](../design/architecture.md) §4, REQ-F-003, REQ-F-014, REQ-F-042, REQ-F-063,
+    REQ-F-064, REQ-F-068,
     [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+    [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md),
     [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md),
     [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md) (commit
-    `545c893`), [tasks T-087](../planning/tasks.md).
+    `545c893`), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md)
+    (commit `a8fd059`), [tasks T-087/T-097](../planning/tasks.md).
 14. **REQ-F-073 — Persisted user preferences (theme, density).** A new
     `frontend/src/context/PrefsContext.tsx` makes the Settings dialog's Theme
     (light/dark/system) and Density (split/brief/dense) controls real, `localStorage`-persisted
