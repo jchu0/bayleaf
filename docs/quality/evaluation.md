@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-09 (MST) |
+| **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md) |
+| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md) |
 
 ## Overview
 
@@ -19,9 +19,9 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **362 tests across 22 files** — 359 pass and 3 skip (the Postgres
+The offline suite is **363 tests across 22 files** — 360 pass and 3 skip (the Postgres
 live-integration checks in `test_persistence_postgres_live`, which need a reachable Postgres
-and are off by default). By collected size: `test_api` (41), `test_notify` (36),
+and are off by default). By collected size: `test_api` (42), `test_notify` (36),
 `test_synthetic` (33), `test_fetch_giab` (32), `test_gate` (29), `test_persistence` (17),
 `test_archivist` (17, the advisory archivist/librarian agent), `test_metrics` (17),
 `test_triage` (16), `test_pipeline_repair` (16, the advisory pipeline-repair agent),

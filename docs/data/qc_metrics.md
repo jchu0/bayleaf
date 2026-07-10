@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-09 (MST) |
+| **Last updated** | 2026-07-10 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization), [schemas.md](schemas.md) (§6 units contract) |
+| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization + wiring status), [schemas.md](schemas.md) (§6 units contract), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) |
 
 ## Overview
 
@@ -130,6 +130,38 @@ first-class metadata field (feeds the record schema); a runbook profile keys on
 | NextSeq | verify per kit — **TODO: add from spec sheet** |
 
 The Q30 gate = the platform × read-length expected value, operator-adjustable.
+
+## Implementation status (T-082, 2026-07-10)
+
+The tables above are the **cited guideline runbook** (design intent); `runbook.py` (code) is a
+concrete, illustrative default that does not always match a cited figure verbatim (e.g. the
+implemented `qc.breadth_20x` gate is `0.90`/`hard_fail 0.80`, not the ACGS `≥99%` example above —
+an intentional MVP flat default, not a drift bug; assay-tuned profiles are the config-driven
+future, REQ-F-015). As of T-082, the **Gate 2/3 rows below are wired end-to-end** (parsed from a
+richer `qc_metrics.csv` → registered `MetricValue` → runbook-gated or surfaced as an observation),
+each **optional** (`required=False`: a present-but-failing value gates; an absent one is silently
+skipped, never NA-flagged — so a lean real run stays clean while a rich contrived run is scored):
+
+1. **Breadth ≥20x / ≥30x** (`qc.breadth_20x`/`qc.breadth_30x`) — now two separate gated rows
+   (was one combined row above), `required=False`.
+2. **% mapped** (`qc.pct_mapped`) — `required=False`.
+3. **On-target rate** (`qc.on_target`) — `required=False`.
+4. **Depth (DP)** (`variant.dp`) — `required=False`, the first **Gate 3** threshold implemented.
+
+**Ungated observations** (registered + wired, no threshold, never NA-flagged, never a finding):
+% PhiX aligned (`preflight.phix_aligned`), Genotype quality (`variant.gq`), Ti/Tv (`variant.titv`)
+— populate the **Gate 1** and **Gate 3** groups with real numbers for the first time (previously
+always an empty note for every run). **Still not computed by any parser** (registered in
+[metric_registry.md](metric_registry.md), no code path): zero-coverage targets, fold-enrichment,
+fold-80, NGSCheckMate identity, sex concordance, contamination (FREEMIX), allele balance — these
+rows above remain design-only.
+
+**Two data tracks stay honest about depth of coverage:** a **contrived** run (the synthetic
+generator, `mock_run_02/03`/`scale_30`) emits all 8 additional metrics (comfortably passing) for a
+full 13-metric, three-gate readout; the **real** GIAB HG002 run (`scripts/run_giab_pipeline.py`)
+only emits what its own tools actually produced — `breadth_20x`/`breadth_30x` from its own
+mosdepth (real: 99.24%/97.07%, both PASS) — `cluster_pf` and everything else above stays blank/no
+finding, never invented.
 
 ## Config model & test-data validation
 

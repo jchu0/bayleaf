@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-09 (MST) |
+| **Last updated** | 2026-07-10 (MST) |
 | **Audience** | all |
-| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md) |
+| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md) |
 
 ## Overview
 
@@ -277,6 +277,40 @@ tail rather than hanging silently.
 
 **Owner / revisit trigger.** Demo rehearsal on the actual demo machine with a live Submit;
 confirm `PIPEGUARD_BIOCONDA_BIN` is set in the API's launch env before any live Submit demo.
+
+### RISK-035 — The demo login gate is client-side only and is not real access control
+
+| Field | Value |
+|---|---|
+| **Category** | Demo / Security |
+| **Likelihood** | Low |
+| **Impact** | Medium |
+| **Status** | Mitigating |
+| **Added** | 2026-07-10 (MST) |
+
+**Risk.** `frontend/src/auth.ts` (T-081) gates every route behind a login screen, but the check
+is a **synchronous, client-side** credential compare against a hardcoded roster + a single shared
+password (`pipeguard`), the "session" is `{id, role}` in `localStorage` with **no token**, and the
+CAPTCHA on the login screen is a labelled placeholder that gates submit but verifies nothing. A
+viewer could read the bundled JS, learn the roster/password, or edit `localStorage` directly to
+mint any role — including `admin` — with no server round trip. **The backend is unaffected**:
+`api/auth.py`'s header dev-shim (already RISK-adjacent, [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md))
+is the actual (also non-production) authorization boundary, and it was not changed by this login
+screen — the login only decides which `Actor` headers the frontend *sends*.
+
+**Mitigation.** Explicitly labelled throughout as a **demo gate, not production auth** — every
+production seam (OAuth/OIDC, server-side argon2/bcrypt password hashing, an httpOnly/Secure/
+SameSite session cookie or JWT+refresh, a real CAPTCHA, signed reset links, TLS) is named inline
+in `auth.ts`'s own comments and on the login screen's security-posture footer, per the maintainer's
+explicit choice ("demo gate over wiring real auth" — [tasks T-081](../planning/tasks.md)). No PHI
+or real patient data is ever in scope (demo data is `real-giab`/`synthetic`/`contrived` only,
+[strategy.md](../data/strategy.md)), so a bypassed login exposes only the demo dataset, not
+sensitive data. The generic "Incorrect email or password" message avoids a user-enumeration leak
+at least at the UI layer.
+
+**Owner / revisit trigger.** Any move toward a real multi-tenant deployment (swap `current_actor`
+per ADR-0017's Follow-ups, then also replace `auth.ts` with a real OIDC/session flow before any
+non-demo audience sees the app); any session that hardens `api/auth.py`.
 
 ---
 

@@ -34,10 +34,21 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
 ---
 
 ## 4. App shell
+- **Login gate (Shipped 2026-07-09→10, T-081, commit `0f7e85f`).** The whole app now sits
+  behind `screens/Login.tsx`: email/password (+ show/hide), a one-click demo-account picker
+  (`l.santos` viewer / `a.rivera` reviewer / `m.chen` approver / `s.ops`/`admin@lab.org` admin,
+  shared password `pipeguard`), a labelled CAPTCHA placeholder that gates submit, a "Forgot
+  password?" stub, and a security-posture footer naming every production seam NOT built (real
+  OAuth/OIDC, server-side password hashing, an httpOnly session cookie, real CAPTCHA, signed
+  reset links, TLS). `App.tsx`'s `RequireAuth` guard redirects any unauthenticated route to
+  `/login`, preserving the intended destination. This is a **demo-only client-side gate**, not
+  production auth (see §8 Invariants + [risks.md RISK-035](../../quality/risks.md)).
 - **Left nav (236px, dark `#141a21`).** Two groups:
   - **Operate:** Submit samplesheet · Runs · Intake gate · Decision cards · Review queue ·
     Provenance · Agent triage · Monitoring
   - **Configure:** Pipeline builder · Settings
+  - Plus an **Admin** group (`/admin`, off the operator nav — see §11), gated on the login
+    identity's `isAdmin`, not on any wire role.
 - **User panel (nav footer).** Avatar + name → popover: **Role** row (reflects & toggles
   **reviewer/approver** RBAC — the same flag the Review queue and approval flows read),
   **Settings** (opens the Settings dialog), **Sign out**.
@@ -105,22 +116,44 @@ Per-sample verdict cards for a run.
   with no metric table at all (preflight is rule-based — see the gate strip/evidence; variant
   extracts no metrics in this build) shows an explicit empty-state note instead of vanishing.
   Nothing is fabricated; the gate stays byte-for-byte unchanged.
+- **Shipped 2026-07-10 (T-082, commits `a8fc73b`→`a9b06ad`):** the preflight/variant "no metric
+  table" case above is now often a real one — `QCMetrics` gained 8 additional registered fields
+  (PhiX aligned; breadth ≥20x/30x, mapped reads, on-target — extra QC; depth/GQ/Ts-Tv —
+  variant), so a **contrived** demo card can render a full 13-metric, three-gate table (5
+  originally-gated + 5 newly optional-gated + 3 ungated observations, the latter labelled with
+  the registry's display name, e.g. "Ts/Tv ratio," not the raw key). The **real** GIAB HG002 card
+  stays honest about what it actually measured — it now also shows real `breadth_20x`/`breadth_30x`
+  from its own mosdepth, but nothing it doesn't produce is invented.
 
 ### 5.5 Review queue  (`view: 'queue'`)
 Cross-run triage. **Reviewer/approver RBAC**, **first-open + Expand/Collapse all**,
 collapsible tickets (header row is the toggle), per-ticket actions (suppress / escalate /
 resolve).
+- **Shipped 2026-07-09 (T-078, commit `e3e1995`):** 25/50/100 pagination + a numbered pager
+  (mirrors Monitoring); tickets visually grouped under a sticky per-run subheader; the default
+  filter flipped all → open so resolved tickets leave the active view but stay reachable via the
+  Resolved facet chip.
 
 ### 5.6 Provenance  (`view: 'provenance'`)
 Left→right stage DAG + a per-stage I/O inspector.
 - Every artifact is a **link** — open in store, copy digest, download.
 - Nodes **color by stage status only** (pass/warn); the origin / sample-type chips and the
   header legend were removed (sample type comes from the sample sheet).
+- **Shipped 2026-07-09 (T-077, commit `71a06d6`):** download/open-in-store are now real —
+  `GET /api/runs/{id}/artifacts/{name}` (traversal-hardened) backs both anchors. A "show full"
+  toggle reveals all 64 hex chars of the digest. The QC node now shows a real input edge:
+  the demux stage's output (`demux_stats.csv`/reads) doubles as the QC stage's input, so QC no
+  longer reads as orphaned.
+- **Shipped 2026-07-10 (T-080, commit `eb7d016`):** the digest column now reads "hash"/"content
+  hash," not "sha256," on screen (defense-in-depth — the wire field and its value are unchanged).
 
 ### 5.7 Agent triage  (`view: 'agent'`)
 Advisory triage assistant. **Chat composer**: multi-line text window, **Enter** sends,
 **Shift+Enter** newline, circular send, suggestion chips, and a **pop-out / minimize**
 toggle. Helper line reinforces "advisory · can't change the verdict."
+- **Shipped 2026-07-09 (T-078, commit `e3e1995`):** the case selector is now a
+  Sample·Verdict·Gate·Headline·Findings table (was a non-scalable pill row), verdict-ranked,
+  with the active row highlighted.
 
 ### 5.8 Monitoring  (`view: 'monitoring'`)
 - **Recurring issue signatures**: **searchable**, **collapsible rows** on a fixed 5-column
@@ -129,6 +162,12 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
 - All rows **escalatable** to the pipeline-repair agent; **affected-run chips are links** →
   that run's Decision cards filtered to *Needs attention*.
 - Windowed KPIs (incl. **Median review**), date-labelled throughput bars, 7/14/30d window.
+- **Shipped 2026-07-09 (T-078, commit `e3e1995`):** a `DateRangePicker` after the window views
+  refines the throughput chart client-side, with an honest caption that the KPIs/gate-pass rates
+  stay window-scoped; the stacked bar gains a Y-axis gutter, a "samples" label, and gridlines.
+- **Shipped 2026-07-10 (T-080, commit `eb7d016`):** the throughput bars are now a **constant
+  width** (28px) inside a scrollable viewport, so they no longer stretch/squish as the run
+  count or date range grows.
 
 ### 5.9 Pipeline builder  (`view: 'builder'`)  — see §6 for the full model
 Node-graph editor that **emits `run_layout.yaml`**. Defaults to **View**; **Edit** unlocks
@@ -152,13 +191,26 @@ authoring.
 tool node" replaced by a read-only note). **Edit** enables all authoring.
 
 **Canvas.** Large, pannable in any direction; loads centered on the pipeline. Dot-grid = 20px
-snap grid. Bottom-right **minimap** (spine + gate + composed nodes). Floating zoom + **Tidy**
-(auto-layout) + **Connect** controls.
+snap grid. Bottom-right **minimap** (spine + gate + composed nodes) — **grown to a 210×108
+proportional mirror** (was 168×46), 2026-07-10, T-084. Floating zoom + **Tidy**
+(auto-layout) + **Connect** controls, plus (2026-07-10, T-084) a native ctrl-wheel/trackpad-pinch
+zoom on the canvas itself (`{ passive: false }`, since React's `onWheel` can't `preventDefault`;
+plain wheel still pans; clamped 0.6–1.4), and **Fit** now centers/zooms to the pipeline's actual
+bounding box instead of only resetting the zoom level.
 
 **Nodes.** Three kinds — `tool`, `agent`, `gate`:
 - **Seeded germline chain** (fastp → bwa-mem2 → samtools markdup → {mosdepth, bcftools call →
   bcftools norm} → MultiQC) + reference nodes (genome / panel BED / truth VCF) + the QC-triage
-  agent + the terminal gate.
+  agent + the terminal gate. **Tool I/O corrected 2026-07-10 (T-083, commit `d8c1625`)** against
+  the real pipeline (`scripts/run_giab_pipeline.py`): bcftools call gains a `panel_bed` input
+  (`mpileup -R PANEL`), bcftools norm loses it (norm has no `-R`); samtools markdup now outputs
+  `bam`·`bai`·`markdup_metrics` (was a phantom `samtools_stats` with no producer); bwa-mem2
+  outputs `bam` only (the `.bai` comes from markdup's index); mosdepth gains
+  `mosdepth_thresholds`; MultiQC's fan-in drops the phantom `samtools_stats`. **The seeded
+  connector lines are now COMPUTED** from the tool/reference card geometry + typed ports (were
+  hardcoded SVG path strings anchored to fixed pixels, which detached from a port the moment a
+  card's port count changed) — the same anchoring the free-composition edges already used, so a
+  connector can never detach again.
 - **Free composition (Edit):** click a palette tool to add a node; **drag** to place
   (grid-snap); delete per-node. Composed cards are **visually identical to the seeded DAG
   cards** — the tool's own icon, version, and typed I/O ports.
@@ -281,3 +333,28 @@ Shape: chips ~20px radius, buttons/inputs 8px, cards 11–14px; card shadow
 
 Suggested repo drop: `docs/design/frontend/handoffs/` — point Claude Code here to implement
 against `frontend/src/`.
+
+---
+
+## 11. Admin (`/admin`) — governance, off the operator nav
+
+**Shipped 2026-07-09 (T-066, commit `ce396f7`); gating corrected 2026-07-10 (T-081, commit
+`0f7e85f`).** Not part of the original design pass above (added during the maintainer-feedback
+batch); tracked here because it shares the login/RBAC surface §4 now fronts. A screen at `/admin`,
+visible only when the LOGGED-IN identity's `isAdmin` is true (a frontend-only governance
+capability layered over viewer/reviewer/approver — an admin is an approver who also holds
+governance; **not** "any approver," which was the original, now-corrected framing). Three tabs:
+
+1. **Users & roles** — an explicit **client-mock** roster (there is no backend user store;
+   `api/auth.py` is a header dev-shim) with a per-user role selector and an "Act as" control wired
+   to `RoleContext.setActor` (switches id+role together) so an operator can preview any seeded
+   actor's RBAC surface, plus a persistent "dev auth shim, not an identity system" banner.
+2. **Activity log** — a REAL, zero-new-backend audit feed merging `GET /api/settings/thresholds`
+   + `GET /api/pipelines` + `GET /api/review/tickets` into one append-only when/actor/kind/target/
+   status table, facet-filterable by kind.
+3. **System** — REAL reads of `GET /api/health` + the runbook's gate count + the metric-registry
+   version/gated-count, labelled illustrative-not-clinical.
+
+Admin decides **who** may perform an off-gate product write and whose id lands in an audit
+`*_by` field — it never sets, overrides, or displays a verdict/finding/confidence, and carries
+**no confidence meter** (§8 Invariants hold here too).

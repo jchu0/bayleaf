@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-09 (MST) |
+| **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) |
 
 ## Overview
 
@@ -119,7 +119,37 @@ Every finding and verdict is labelled with the gate it came from:
      recurring-signatures list is now client-side paginated** (25/50/100 + pager, `e5d5043`,
      mirroring the Runs-list pattern) — distinct from the still-open per-run `rows` pagination
      gap ([tasks T-072](../planning/tasks.md)).
-   - **Admin (`screens/Admin.tsx`), approver-gated governance off the gate.** Three tabs: **Users
+   - **Frontend fixes batch 4 (2026-07-09→10, commits `71a06d6`→`07f53af`, [journal](../journal/2026-07-10-provenance-qc-builder-auth.md)), eight maintainer-reported gaps closed.**
+     (1) **Provenance download + full digest + a real QC input** (T-077, `71a06d6`, above).
+     (2) **UI refinements** (T-078, `e3e1995`): Review-queue 25/50/100 pagination + per-run
+     grouping + a default open-tickets filter; Runs-card two-row layout (a long `run_id` no
+     longer squeezes the verdict bar); Monitoring gains a `DateRangePicker` + a Y-axis gutter +
+     gridlines on the throughput chart (no charting lib added); Agent-triage's non-scalable pill
+     selector becomes a verdict-ranked Sample·Verdict·Gate·Headline·Findings table.
+     (3) **Grafana dashboard** (T-079, `f696bc7`, `deploy/telemetry/`): Prometheus/Grafana were
+     already wired (T-036) but Grafana booted empty; a provisioned "PipeGuard — QC decision gate"
+     board now renders the four already-shipped `/metrics` series (no new series) — config-only,
+     still off the offline demo path. (4) **Hash label + chart-width fix** (T-080, `eb7d016`,
+     above + the Monitoring throughput bars going constant-width/scrollable instead of
+     stretching/squishing as run count grows). (5) **Demo login gate + a real admin role**
+     (T-081, `0f7e85f`): a login screen now fronts the whole app (`frontend/src/auth.ts` +
+     `screens/Login.tsx`, four demo accounts, every production auth seam labelled as NOT
+     implemented — OAuth/OIDC, server-side password hashing, httpOnly session cookie, real
+     CAPTCHA); **`isAdmin` now follows the LOGIN identity**, a frontend-only governance
+     capability layered over the wire roles (an admin is an approver who *also* holds
+     governance) — this **corrects** the Admin paragraph below, previously gated on "any
+     approver." (6) **QC enrichment → an honest three-gate readout** (T-082, above).
+     (7)/(8) **Pipeline Builder connector + tool-I/O fix, and canvas navigation** (T-083/T-084,
+     `d8c1625`/`07f53af`): the seeded DAG's connectors were hardcoded SVG paths that detached
+     from a port whenever a card's port count changed — now **computed** from the tool/reference
+     card geometry + typed ports (`BuilderCanvas` `SEEDED_WIRES`/`REF_WIRES`), and several tools
+     had wrong I/O (bcftools call/norm's `panel_bed`, markdup's real outputs, mosdepth's
+     thresholds output, a phantom `samtools_stats`) — all corrected against the real pipeline
+     (`scripts/run_giab_pipeline.py`); **Fit** now centers/zooms to the pipeline (not just a zoom
+     reset), ctrl-wheel/trackpad-pinch zooms the canvas natively (native `{ passive: false }`
+     listener, since React's `onWheel` is passive), and the minimap grew to a 210×108
+     proportional mirror (was 168×46).
+   - **Admin (`screens/Admin.tsx`), `isAdmin`-gated governance off the gate.** Three tabs: **Users
      & roles** — an explicit **client-mock** roster (there is no backend user store; `api/auth.py`
      is a header dev-shim) with a role selector and "Act as" wired to `RoleContext.setActor`, plus
      a persistent "dev auth shim, not an identity system" banner; **Activity log** — a REAL,
@@ -128,7 +158,10 @@ Every finding and verdict is labelled with the gate it came from:
      REAL reads of `GET /api/health` + runbook gate count + metric-registry version/gated-count,
      labelled illustrative-not-clinical. Admin decides WHO may perform an off-gate product write
      and whose id lands in an audit field — it never sets, overrides, or displays a
-     verdict/finding/confidence (ADR-0001; no confidence meter).
+     verdict/finding/confidence (ADR-0001; no confidence meter). **Gating corrected 2026-07-10**
+     (T-081): the nav item and `/admin` route now gate on `isAdmin` — a frontend-only governance
+     capability (`frontend/src/auth.ts` `ADMIN_IDS`, derived from the login roster) layered over
+     the wire roles, distinct from "any approver" — not the earlier any-approver framing.
    - **Off-gate writes now round-trip, not just compose.** A new `Toast` system
      (`components/Toast.tsx`, `ToastProvider` mounted in `App.tsx`) surfaces the real backend
      outcome (403/409/422/503/…) of every product write instead of silently diverging. Three
@@ -148,7 +181,7 @@ Every finding and verdict is labelled with the gate it came from:
      yet.
    **Honest, labelled frontend deferrals (no fabrication):** the Monitoring **Median-review KPI**
    (no backend field yet — the signature-level `first_seen`/`last_seen`/`trend`/`affected_run_ids`
-   fields below ARE shipped); Provenance artifact links (`RunArtifact` has no `url`); Submit now
+   fields below ARE shipped); Submit now
    hands off to a real execution boundary (`POST /api/runs`, T-057 — see below) but still has
    **no BaseSpace connector** and no conversational multi-turn triage chat (both still wishlist);
    Builder Dry-run/Diff/Export/Archivist-modal wiring + saved-profiles (endpoints exist, UI is a
@@ -179,7 +212,17 @@ Every finding and verdict is labelled with the gate it came from:
      signed JWT) returning the same `Actor`; every `require_role(...)` gate and `actor.id` capture
      keeps working unchanged (a single chokepoint to harden). Wholly OFF the gate: it can gate who
      may *write* product state, never a verdict / finding / confidence / rule (ADR-0001).
-   - **Runs read-API.** `GET /api/runs` (+ `/{id}`, `/{id}/cards/{sample}`, `/{id}/artifacts`).
+   - **Runs read-API.** `GET /api/runs` (+ `/{id}`, `/{id}/cards/{sample}`, `/{id}/artifacts`, and
+     now `/{id}/artifacts/{name}` — a traversal-hardened download, `FileResponse`, name must be a
+     bare filename resolving inside the run dir; `RunArtifact` gained a `url` field pointing at it,
+     closing the earlier "no download URL" deferral, T-077 `71a06d6`). The artifact-stage map
+     (`_ARTIFACT_STAGE`) now attaches each file to a **list** of `(stage, role)` edges rather than
+     one, so `demux_stats.csv`/`reads` are both the demux stage's OUTPUT *and* the QC stage's INPUT
+     — the same bytes feed the QC node in the Provenance compute-DAG, which previously read as
+     input-less. The frontend also stopped naming the digest algorithm on screen ("hash" /
+     "content hash," not "sha256," in Provenance + the Archivist manifest — defense-in-depth,
+     2026-07-10 `eb7d016`; the wire field is still `sha256`), and added a "show full" toggle
+     revealing all 64 hex chars.
      Each `RunSummary` now carries `platform` + `run_date` (parsed from the SampleSheet
      `[Header]`) and an **honest run-lifecycle `status`** — `running` | `needs_review` |
      `released`, derived from provenance (`_run_status`): `running` until the run's
@@ -249,10 +292,25 @@ Every finding and verdict is labelled with the gate it came from:
      — the card's registry-normalized `metric_values` × the runbook's `QCThreshold`s → a gate-grouped,
      flagged-first table of Metric · Observed · Threshold · Status. Direction (`>=`/`<=`) comes from
      the runbook's `higher_is_better` (never guessed); an ungated metric is surfaced `not_gated`, not
-     fabricated. Its per-metric `status` is **derived to mirror the QC rule exactly** (`pass` ⟺ no
+     fabricated, and now **labelled with the registry's `display_name`** (e.g. "Genotype quality
+     (GQ)") rather than the raw `our_key` (2026-07-10, `a9b06ad`). Its per-metric `status` is
+     **derived to mirror the QC rule exactly** (`pass` ⟺ no
      finding, `fail` ⟺ a CRITICAL finding, `borderline` ⟺ a WARN finding) so the readout can never
      contradict the gate, and the **core `DecisionCard` model is untouched** — pure re-presentation,
-     off the deterministic path (ADR-0001).
+     off the deterministic path (ADR-0001). **QC enrichment (T-082, 2026-07-10, commits
+     `a8fc73b`→`a9b06ad`):** the core `QCMetrics` model gained 8 additional registered fields
+     (`preflight.phix_aligned`; `qc.breadth_20x`/`breadth_30x`/`pct_mapped`/`on_target`;
+     `variant.dp`/`gq`/`titv`, [schemas.md](../data/schemas.md)) so the **preflight and variant**
+     groups — previously always an empty note for every run, regardless of data — can now populate
+     with real measured rows when a run's QC report carries them; 5 of the 8 gained an **optional**
+     (`required=False`) runbook threshold that scores a present value but never NA-flags an absent
+     one, so a lean real run stays exactly as before while a richer contrived run is fully gated
+     (10 gated / 10 ungated of 20 registered metrics, [metric_registry.md](../data/metric_registry.md)
+     §Wiring status). The synthetic generator emits all 8 (contrived, comfortably passing); the real
+     GIAB HG002 driver (`scripts/run_giab_pipeline.py`) now also writes its own real
+     `breadth_20x`/`breadth_30x` from mosdepth (honest extra QC from that run's own data, not
+     contrived) while everything it doesn't produce stays blank — no result is ever fabricated,
+     and the gate's verdict logic is unchanged.
    - **Advisory agent reads (off the gate).** Three on-demand, read-only endpoints surface the
      advisory agents without re-entering the core: `GET /api/monitoring/signatures/{signature}/repair`
      returns the pipeline-repair agent's cited `RepairProposal` for a recurring signature, and

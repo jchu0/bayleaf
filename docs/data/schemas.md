@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-09 (MST) |
+| **Last updated** | 2026-07-10 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md) |
+| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) |
 
 ## Overview
 
@@ -67,6 +67,21 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > `pipeline.log` lines), and **`execution_trace[]` (`TraceRecord`)** — plus the run-level header
 > context above. **Each collection defaults empty**; a missing on-disk artifact yields no rows,
 > not a crash (tolerant boundary, CLAUDE.md data-handling 2).
+>
+> **`QCMetrics` (T-082).** The frozen-CSV five (`q30` · `pct_reads_identified` ·
+> `mean_coverage` · `dup_rate` · `cluster_pf`, every run carries these) plus **8 additional
+> `float | None` fields** a richer QC report may also emit: `phix_aligned` (preflight tier);
+> `breadth_20x` · `breadth_30x` · `pct_mapped` · `on_target` (extra QC tier); `variant_dp` ·
+> `variant_gq` · `variant_titv` (variant tier). All 8 default `None` (absent column → `None`,
+> tolerant, same as the frozen five) and each maps to a **registered** metric-registry
+> `our_key` with a declared raw unit (`metrics/mapping.py` `_QCMETRICS_MAP` —
+> [metric_registry.md](metric_registry.md)); a present value populates the decision card's
+> **preflight** and **variant** gate groups (previously always empty for every run). `runbook.QCThreshold`
+> correspondingly gains `required: bool = True` — 5 of the 8 (breadth_20x/30x, pct_mapped,
+> on_target, variant_dp) get an **optional** (`required=False`) threshold that scores a present
+> value but never NA-flags an absent one (`rules._evaluate_metric`); `phix_aligned`/`variant_gq`/
+> `variant_titv` stay ungated observations. See [qc_metrics.md](qc_metrics.md) for the concrete
+> thresholds.
 >
 > **`TraceRecord`** — one task row of the Nextflow/nf-core **execution trace**, whose on-disk
 > artifact is **`trace.txt`** (matching ArtifactRef `kind=execution_trace`), parsed by

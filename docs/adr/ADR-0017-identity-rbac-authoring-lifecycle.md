@@ -70,3 +70,18 @@ infrastructure into a hackathon demo that must stay offline and single-process.
 - The app gains real multi-user deployment (then `current_actor` must become a verified provider
   and 401-vs-403 semantics matter upstream).
 - Concurrent authoring at multi-worker scale makes per-name version races real.
+
+## Realized addendum (2026-07-10) — a frontend demo login layer, no decision change
+
+The frontend gained a client-side login screen (`frontend/src/auth.ts` + `screens/Login.tsx`,
+T-081, commit `0f7e85f`) that fronts every route and chooses which `Actor{id, role}` the app
+sends as `X-PipeGuard-Actor`/`-Role`. This is **additive framing, not a new decision**: it does
+not change `api/auth.py`, `current_actor()`, `require_role`, or any backend authorization
+boundary described above — it only decides which of the already-permitted `Actor`s the UI acts
+as, and it is itself an equally-explicit **dev-only** layer (four hardcoded demo accounts, one
+shared password, `localStorage` session with no token, a labelled CAPTCHA placeholder). `isAdmin`
+(the Admin-panel governance gate, REQ-F-066) is a **frontend-only** capability derived from the
+login roster, layered *above* the `viewer|reviewer|approver` `Role` this ADR defines — it never
+becomes a fourth wire role, and `api/auth.py` has no concept of "admin." See
+[risks.md](../quality/risks.md) RISK-035 and
+[functional.md](../requirements/functional.md) REQ-F-069/REQ-F-066 for the full framing.

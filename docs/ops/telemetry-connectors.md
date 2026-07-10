@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / ops |
-| **Related** | [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) (read API), [requirements/scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (wishlist #17), [planning/tasks.md](../planning/tasks.md) (T-036/T-027), config bundle: [`deploy/telemetry/`](../../deploy/telemetry/) |
+| **Related** | [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) (read API), [requirements/scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (wishlist #17), [planning/tasks.md](../planning/tasks.md) (T-036/T-027/T-079), config bundle: [`deploy/telemetry/`](../../deploy/telemetry/) |
 
 ## Overview
 
@@ -96,6 +96,14 @@ uv run uvicorn api.main:app --port 8010          # API with /metrics
 docker compose -f deploy/telemetry/docker-compose.yml up
 # Prometheus → http://localhost:9090   Grafana → http://localhost:3000
 ```
+
+**Fact (added 2026-07-10, T-079).** Grafana no longer boots empty: a provisioned
+**"PipeGuard — QC decision gate"** dashboard ([`deploy/telemetry/grafana-dashboard.json`](../../deploy/telemetry/grafana-dashboard.json)
++ [`grafana-dashboards.yml`](../../deploy/telemetry/grafana-dashboards.yml) provider) renders
+the same four series above (runs/samples stat tiles, cards-by-verdict donut + trend, flagged-by-gate
+bar) — no new series, config only. A stable `pipeguard-prometheus` datasource `uid`
+([`grafana-datasource.yml`](../../deploy/telemetry/grafana-datasource.yml)) lets it bind
+deterministically.
 
 **Decision — demo sizzle only.** This stack is *not* on the offline Streamlit/API
 demo path and is not required to run or demo PipeGuard; the anonymous-admin Grafana

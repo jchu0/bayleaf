@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-09 (MST) |
+| **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) |
 
 ## Overview
 
@@ -374,7 +374,8 @@ had reserved or listed as *not-yet-built*.
    Metric · Observed · Threshold · Status** table for the MetricsPanel (REQ-F-042 / T-045). It is
    read-only and **derives nothing new** — the core `DecisionCard`, its findings, and the gate are
    untouched (ADR-0001); Status is a deterministic restatement of the already-decided gate, not a
-   re-evaluation. *Trace:* [schemas.md](../data/schemas.md) §DecisionCard/QC,
+   re-evaluation. An ungated metric row is labelled with the registry's **display name** (e.g.
+   "Ts/Tv ratio"), not the raw `our_key` (2026-07-10, `a9b06ad`). *Trace:* [schemas.md](../data/schemas.md) §DecisionCard/QC,
    [qc_metrics.md](../data/qc_metrics.md),
    [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [tasks T-045](../planning/tasks.md).
 6. **REQ-F-065 — Runs-list reconciliations (Tier-0).** `GET /api/runs` gains, on top of the
@@ -386,10 +387,15 @@ had reserved or listed as *not-yet-built*.
    *Trace:* [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md) §2,
    [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), REQ-F-046/REQ-F-047,
    [tasks T-048](../planning/tasks.md).
-7. **REQ-F-066 — Admin panel (approver-gated governance, off-gate).** A `frontend/src/screens/Admin.tsx`
-   screen at `/admin`, visible only when the acting `RoleContext` is `approver` (the de-facto admin
-   role in the dev-shim model, REQ-F-060) — nav-gated in `Sidebar.tsx`, not a backend permission of
-   its own. Three tabs: **(a) Users & roles** — an explicit **client-mock** roster (there is no
+7. **REQ-F-066 — Admin panel (`isAdmin`-gated governance, off-gate).** A `frontend/src/screens/Admin.tsx`
+   screen at `/admin`, visible only when the LOGGED-IN identity's `isAdmin` is true — nav-gated in
+   `Sidebar.tsx`, not a backend permission of its own. **Corrected 2026-07-10 (T-081,** commit
+   `0f7e85f`**):** `isAdmin` is a **frontend-only governance capability** (`frontend/src/auth.ts`
+   `ADMIN_IDS`, derived from the demo login roster — REQ-F-069) layered over the wire roles
+   (viewer/reviewer/approver), distinct from "any approver" — an admin is an approver who *also*
+   holds governance; `isAdmin` follows the **login** identity (`session`), not the "Act as" actor,
+   so an admin can preview another role and still return. (Originally gated on "any approver";
+   that framing is now stale and superseded by this row.) Three tabs: **(a) Users & roles** — an explicit **client-mock** roster (there is no
    backend user store; `api/auth.py` is a header dev-shim) with a per-user role selector and an
    "Act as" control wired to `RoleContext.setActor` (switches id+role together) so an operator can
    preview any seeded actor's RBAC surface, plus a persistent "dev auth shim, not an identity
@@ -403,9 +409,9 @@ had reserved or listed as *not-yet-built*.
    verdict/finding/confidence, and carries **no confidence meter** (ADR-0001; life-science
    guardrail 2). *Trace:* [architecture.md](../design/architecture.md) §4,
    [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
-   [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), REQ-F-060,
+   [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), REQ-F-060, REQ-F-069,
    [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md) (commit
-   `ce396f7`). *(No `tasks.md` row yet at time of writing — flagged for the planning sweep.)*
+   `ce396f7`), [tasks T-066](../planning/tasks.md).
 8. **REQ-F-067 — Samplesheet submission triggers the real pipeline (execution boundary).**
    `POST /api/runs` (new `api/routers/intake.py`) registers a submitted samplesheet and
    **triggers** `scripts/run_giab_pipeline.py` as a background subprocess (an in-process job
@@ -437,6 +443,61 @@ had reserved or listed as *not-yet-built*.
    [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md),
    [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md) (commit
    `12ffa30`), [tasks T-073](../planning/tasks.md).
+10. **REQ-F-069 — Demo login gate (frontend, NOT production auth).** A login screen
+    (`frontend/src/screens/Login.tsx`) fronts every route; `App.tsx`'s `RequireAuth` redirects an
+    unauthenticated visit to `/login` and preserves the intended destination. Four demo accounts
+    (`frontend/src/auth.ts`: viewer / reviewer / approver / admin, one shared password) map to the
+    same `Actor{id, role}` the API already consumes via `X-PipeGuard-Actor`/`-Role` (REQ-F-060) —
+    login simply chooses which actor the app acts as; the session (`{id, role}` only, **no
+    token/password**) persists to `localStorage` so a refresh stays signed in. Every production
+    seam is a **labelled placeholder, not implemented**: OAuth/OIDC against a real IdP, server-side
+    password hashing (argon2/bcrypt — passwords never reach the client), an httpOnly/Secure/
+    SameSite session cookie or JWT+refresh, a real CAPTCHA, signed password-reset links, and TLS.
+    A generic "Incorrect email or password" message never reveals which field missed. This is a
+    **demo-only client-side gate** — it adds no server-side protection; `api/auth.py`'s header
+    dev-shim (REQ-F-060) is unchanged and remains the actual (also non-production) authorization
+    boundary. *Trace:* [architecture.md](../design/architecture.md) §4,
+    [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) §Realized addendum,
+    REQ-F-060, REQ-F-066, [risks.md](../quality/risks.md) RISK-035,
+    [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) (commit `0f7e85f`),
+    [tasks T-081](../planning/tasks.md).
+11. **REQ-F-070 — Provenance artifact download + full-digest reveal.** `GET
+    /api/runs/{id}/artifacts/{name}` (`api/main.py`) serves the named artifact's bytes
+    (`FileResponse`); the name must be a bare filename and the resolved path must stay inside the
+    run directory (traversal-hardened — a `..`/absolute name 404s, never serves outside the run
+    dir). `RunArtifact` gained a `url` field pointing at it, closing the earlier "no download URL"
+    gap. The Provenance screen's digest column now offers a "show full" toggle revealing all 64 hex
+    characters, and — a defense-in-depth UI choice, not a wire-format change — labels the field
+    "hash"/"content hash" rather than naming "sha256" on screen (Provenance + the Archivist
+    manifest modal); the underlying field is unchanged content-hash sha256
+    ([schemas.md](../data/schemas.md) §ArtifactRef). The artifact-stage map (`_ARTIFACT_STAGE`)
+    now attaches each file to a **list** of `(stage, role)` edges (was one), so
+    `demux_stats.csv`/`reads` are both the demux stage's OUTPUT and the QC stage's INPUT — the
+    same bytes feed the QC node in the Provenance compute-DAG (REQ-F-042), which previously
+    rendered with no input edge at all. *Trace:* [architecture.md](../design/architecture.md) §4,
+    REQ-F-040, [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) (commits
+    `71a06d6`, `eb7d016`), [tasks T-077/T-080](../planning/tasks.md).
+12. **REQ-F-071 — QC enrichment: registered preflight/QC/variant metrics wired end-to-end.** The
+    core `QCMetrics` model, `parsers.parse_qc_metrics`, and the QCMetrics→registry mapping gain 8
+    additional registered fields beyond the frozen-CSV five (`preflight.phix_aligned`;
+    `qc.breadth_20x`/`breadth_30x`/`pct_mapped`/`on_target`; `variant.dp`/`gq`/`titv`,
+    [schemas.md](../data/schemas.md)), each `None`-tolerant so a run that omits them is unchanged.
+    `runbook.QCThreshold` gains `required: bool = True`; 5 of the 8 gain an **optional**
+    (`required=False`) threshold that scores a value that IS present but never NA-flags one that's
+    absent (REQ-F-016 still holds — gating stays on the registry's canonical, normalized value).
+    This closes a real gap: the decision-card readout's **preflight** and **variant** gate groups
+    (REQ-F-068) previously showed an empty-state note for *every* run, with no code path that
+    could ever populate them; they now populate with real measured rows when a run's QC report
+    carries the data. The synthetic generator emits all 8 (contrived, comfortably passing, so
+    failure-mode coverage stays exactly on the original frozen five); the real GIAB HG002 driver
+    additionally writes its own real `breadth_20x`/`breadth_30x` from mosdepth (not contrived) —
+    the metric catalog is now 10 gated / 10 ungated of 20 registered `our_key`s
+    ([metric_registry.md](../data/metric_registry.md) §Wiring status), and 7 registered metrics
+    remain unwired (an honest, pre-existing gap, not introduced by this change). Gate verdict
+    logic and every pinned demo verdict are unchanged. *Trace:* [qc_metrics.md](../data/qc_metrics.md)
+    §Implementation status, REQ-F-012/REQ-F-013/REQ-F-064/REQ-F-068,
+    [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) (commits `a8fc73b`,
+    `a9b06ad`), [tasks T-082](../planning/tasks.md).
 
 ## Notes / deferred
 

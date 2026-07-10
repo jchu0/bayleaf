@@ -136,13 +136,18 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 5. **Deployment-agnostic ports & adapters**; Nextflow carries compute portability (ADR-0003).
 6. **Config layer + profiles** serve research (lean) and biotech (granular) from one codebase (ADR-0005).
 
-## Current code map (evolving; updated 2026-07-09)
+## Current code map (evolving; updated 2026-07-10)
 
 1. **Core (`src/pipeguard/`), framework-agnostic.** `rules` emits cited, immutable
    `Finding`s (each derives its gate + a rule-version-independent signature +
    content_hash); `synthesis/base.py` aggregates the verdict (never the LLM);
    confidence is omitted until grounded (T-019). `models` is the pydantic data
-   contract; `identifiers` gives UUIDv7 ids + content hashing; `runbook` holds QC policy.
+   contract; `identifiers` gives UUIDv7 ids + content hashing; `runbook` holds QC policy
+   — `QCThreshold` now carries `required` (default `True`; T-082) so a richer QC report
+   (13 metrics: the frozen five + 8 more registered preflight/qc/variant metrics) can gate
+   5 additional **optional** thresholds (score a present value, never NA-flag an absent
+   one) without penalizing a lean real run; the metric catalog is 10 gated / 10 ungated
+   of 20 registered `our_key`s (`data/metric_registry.md`).
 2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only
    event trail (analysis_run.started → per-sample findings/verdict → completed) into an
    `EventLedger` (in-memory + JSONL); the event log is authoritative, the DB a
@@ -164,7 +169,9 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    via `require_role` capturing `submitted_by`, → a pluggable `PipelineGraphStore` — a
    tolerant versioned envelope reserving a draft→approve+RBAC lifecycle, T-049; both
    jsonl/sqlite/postgres) + the artifacts + **windowed-monitoring** endpoints
-   (`GET /api/runs/{id}/artifacts`, `GET /api/monitoring`) + **advisory agent reads** (off-gate,
+   (`GET /api/runs/{id}/artifacts`, `GET /api/monitoring`) + a traversal-hardened artifact
+   **download** (`GET /api/runs/{id}/artifacts/{name}` → `FileResponse`; `RunArtifact.url` now
+   populated, T-077 — the old "no download URL" deferral is closed) + **advisory agent reads** (off-gate,
    read-only: `GET /api/monitoring/signatures/{signature}/repair`, `GET /api/runs/{id}/archive-digest`,
    `GET /api/archive/index`) + runs pagination/search with
    **Tier-0 params** (status filter, platform-aware `q`, sort aliases, facet-count header) +
@@ -193,18 +200,32 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    (commits `e891e62`→`6371128`, [journal](docs/journal/2026-07-09-frontend-batch2.md)): 10
    operator screens in a three-group nav — Operate (submit samplesheet → runs → intake gate →
    decision cards → review queue), Analyze (provenance → agent triage → monitoring), Configure
-   (pipeline builder → settings) — plus an approver-gated **Admin** group (`/admin`, off the
+   (pipeline builder → settings) — plus an **Admin** group (`/admin`, off the
    deterministic gate: Users & roles client-mock roster + "Act as" wired to the now-full
    `RoleContext.setActor(actor)` [id+role together, not just a role toggle]; Activity log — a
    real audit feed merging thresholds/pipelines/tickets; System — real reads of `GET
-   /api/health` + runbook + metric-registry; never a verdict/confidence). A shared
+   /api/health` + runbook + metric-registry; never a verdict/confidence). **The whole app now
+   sits behind a demo login screen** (`frontend/src/auth.ts` + `screens/Login.tsx`, T-081): four
+   demo accounts (viewer/reviewer/approver/admin, shared password, every production auth seam
+   labelled inline as NOT implemented — OAuth/OIDC, server-side password hashing, httpOnly
+   session cookie, real CAPTCHA); `App.tsx`'s `RequireAuth` guard redirects an unauthenticated
+   visit to `/login`. Admin gating is now **`isAdmin`** (a frontend-only governance capability
+   layered over the wire roles, distinct from "any approver" — an admin is an approver who also
+   holds governance), not the earlier any-approver framing. A shared
    `RUN_STATUS_META` (`verdict.ts`) now drives every run-status dot; the top-bar run switcher
    was rebuilt into a searchable, 8-row-capped combobox (search by id/platform, "view all"
    footer) whose dot reads the run's real `status`, not `n_attention` (fixed F17). The Pipeline
-   Builder adds free composition, a typed-port Connect mode, a minimap, and editable
+   Builder adds free composition, a typed-port Connect mode, and editable
    Locators — "New → From template" now seeds an **editable** germline-chain draft
    (`germlineTemplate()`) rather than the old read-only seeded DAG (only the original linked
-   pipeline still renders read-only); its Save now chains `savePipeline`→`submitPipeline` and Approve calls
+   pipeline still renders read-only). Its seeded connector lines are now **computed** from the
+   tool/reference card geometry + typed ports (`BuilderCanvas` `SEEDED_WIRES`/`REF_WIRES`, T-083;
+   the old hardcoded SVG-path `EDGES` table — which detached from a port whenever a card's port
+   count changed — is gone), with the tool I/O corrected to match the real pipeline (bcftools
+   call gains `panel_bed`, norm loses it; markdup outputs `bam`·`bai`·`markdup_metrics`, not a
+   phantom `samtools_stats`; mosdepth gains `mosdepth_thresholds`); **Fit** now centers/zooms to
+   the pipeline (not just a zoom reset), ctrl-wheel/trackpad-pinch zooms the canvas natively, and
+   the minimap grew to a 210×108 proportional mirror (T-084). Its Save now chains `savePipeline`→`submitPipeline` and Approve calls
    `approvePipeline` — both **await + reconcile local state from the response** (no longer
    fire-and-forget); Dry-run/Diff remain a client-side-only projection (`api.ts`'s
    `dryRunPipeline`/`pipelineDiff` exist but aren't called yet — still a known limitation). A
@@ -214,10 +235,12 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    relaxed review-queue resolve/suppress RBAC from approver-only to reviewer+approver
    (`api/routers/review_queue.py`, matching the design). `GET /api/monitoring`'s
    `MonitoringSignature` additively carries `first_seen`/`last_seen`/`trend`/
-   `affected_run_ids`; the Median-review KPI stays a documented, not-yet-built seam. Honest
-   deferrals: Median-review KPI (no backend field), Provenance artifact URLs (`RunArtifact`
-   has no `url`), Submit now hands off to the real `POST /api/runs` execution boundary but
-   still has no BaseSpace connector (T-057), Builder
+   `affected_run_ids`; the Median-review KPI stays a documented, not-yet-built seam. Provenance
+   now serves a real artifact **download** + a "show full" 64-char digest toggle (labelled
+   "hash," not "sha256," in the UI — defense-in-depth; the wire field is unchanged, T-077/T-080)
+   and the QC node reads as fed (`_ARTIFACT_STAGE` maps demux output → QC input too, T-077).
+   Honest deferrals: Median-review KPI (no backend field), Submit now hands off to the real
+   `POST /api/runs` execution boundary but still has no BaseSpace connector (T-057), Builder
    Dry-run/Diff/Export/Archivist-modal wiring (endpoints exist, UI is a preview).
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
