@@ -3,11 +3,11 @@ import type { AgentProposal } from '../types'
 
 export type RepairApproval = 'none' | 'instance' | 'class'
 
-// Illustrative fallback used only when the advisory pipeline-repair agent can't be reached
-// (off-gate, non-critical) so the card still renders rule-derived context. It is clearly a
-// heuristic suggestion, never a verdict — the gate is unaffected either way.
+// Honest fallback used only when the advisory pipeline-repair agent can't be reached (off-gate,
+// non-critical). We do NOT fabricate a class-specific fix for an unknown signature — the card
+// simply states the agent is unavailable; the recurring pattern and the gate are unaffected.
 const FALLBACK_SUMMARY =
-  'Add an index-distance guard to the demux step (min Hamming ≥ 3) and fail closed on i5 collisions. Prevents this class of barcode mismatch on future runs.'
+  'The pipeline-repair agent is unavailable, so no proposed fix can be shown for this signature. The recurring pattern is unchanged and the gate is unaffected.'
 
 // The pipeline-repair agent's proposed fix, surfaced inline on a recurring ticket after the
 // reviewer escalates the signature (`api.signatureRepair`). Strictly ADVISORY: the two approve

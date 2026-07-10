@@ -138,9 +138,12 @@ function formatDate(iso: string | null): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
+// Honest resolution copy: resolving a ticket records that a reviewer/approver cleared it — it
+// does NOT run a rerun or re-measure a metric (compose != execute), so we never assert a QC
+// outcome that did not occur. The rerun line is a next-step, not a fabricated result.
 function resolutionNote(verdict: Verdict): string {
-  if (verdict === 'rerun') return 'Rerun completed; the metric now clears its threshold.'
-  if (verdict === 'escalate') return 'Approver signed off after review.'
+  if (verdict === 'rerun') return 'Requeue the sample to clear the rerun.'
+  if (verdict === 'escalate') return 'Escalation signed off by an approver.'
   return 'Cleared after manual review.'
 }
 
@@ -167,6 +170,10 @@ export function ReviewQueue() {
   const [filter, setFilter] = useState<'all' | TicketStatus>('all')
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const seededRef = useRef(false)
+  // Per-key sync de-dup state (see syncAction): a synchronous server-id map + an in-flight
+  // promise chain so a rapid double-action materializes exactly one server ticket.
+  const serverIdRef = useRef<Record<string, string>>({})
+  const pendingRef = useRef<Record<string, Promise<void>>>({})
 
   // Latest ui, read inside async write handlers without a stale closure.
   const uiRef = useRef(ui)
@@ -250,19 +257,26 @@ export function ReviewQueue() {
   // Optimistic local update, then a best-effort wire write (materializing the ticket on first
   // touch). These are off-gate advisory writes — a failed sync keeps the operator's intent
   // on-screen so the demo never stalls, and never touches a rules-decided verdict.
-  const syncAction = async (t: QueueTicket, action: ReviewActionName) => {
+  // Per-key promise chain + the synchronous server-id ref (declared above) so a rapid
+  // double-action on a not-yet-persisted ticket materializes exactly ONE server ticket (the
+  // second action waits for the first createTicket, then reuses its id) instead of racing two POSTs.
+  const syncAction = (t: QueueTicket, action: ReviewActionName): Promise<void> => {
     const key = keyOf(t)
-    try {
-      let id = uiRef.current[key]?.serverId
+    const run = async () => {
+      let id = serverIdRef.current[key] ?? uiRef.current[key]?.serverId
       if (!id) {
         const created = await api.createTicket(ticketInFrom(t))
         id = created.id
+        serverIdRef.current[key] = id
         patch(key, { serverId: id })
       }
       await api.ticketAction(id, action)
-    } catch {
-      /* keep the optimistic state */
     }
+    const next = (pendingRef.current[key] ?? Promise.resolve()).then(run).catch(() => {
+      /* keep the optimistic state */
+    })
+    pendingRef.current[key] = next
+    return next
   }
 
   const act = (t: QueueTicket, action: ReviewActionName) => {

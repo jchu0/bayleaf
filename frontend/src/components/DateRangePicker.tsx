@@ -41,8 +41,16 @@ export function DateRangePicker({
   })
 
   const active = !!(start || end)
+  // Cover all four states so the label never contradicts the active (filtered) styling — incl.
+  // the end-only case reachable by picking "To" before "From".
   const label =
-    start && end ? `${fmtShort(start)} – ${fmtShort(end)}` : start ? `${fmtShort(start)} – …` : 'Any date'
+    start && end
+      ? `${fmtShort(start)} – ${fmtShort(end)}`
+      : start
+        ? `${fmtShort(start)} – …`
+        : end
+          ? `… – ${fmtShort(end)}`
+          : 'Any date'
 
   const firstDow = new Date(view.y, view.m, 1).getDay()
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate()

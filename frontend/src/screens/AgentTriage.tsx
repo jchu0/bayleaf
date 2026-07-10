@@ -76,9 +76,12 @@ export function AgentTriage() {
   // Operator asked for live but the triage agent isn't armed → honest rule-derived fallback.
   const errorFallback = noteState === 'ready' && live && !note?.model
   const offline = !hasLiveModel
+  // A served note that carries a model IS model-generated narration — never relabel it
+  // "rule-derived", regardless of the demo source toggle (rules decide / AI advises: don't
+  // present model prose as deterministic output).
   const sourceLabel = errorFallback
     ? 'Live synthesis unavailable — rule-derived fallback'
-    : hasLiveModel && live
+    : hasLiveModel
       ? `Claude · ${note?.model}`
       : 'Rule-derived triage (offline)'
 
@@ -93,7 +96,7 @@ export function AgentTriage() {
         subtitle="AI-assisted triage to speed up diagnosis. The agent advises; the human decides."
         actions={
           active ? (
-            <AgentSourceToggle live={live} label={sourceLabel} onToggle={() => setLive((v) => !v)} />
+            <AgentSourceToggle live={hasLiveModel || live} label={sourceLabel} onToggle={() => setLive((v) => !v)} />
           ) : undefined
         }
       />

@@ -1,5 +1,5 @@
 import { RotateCw } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { MonitoringSignatureRow } from '../components/MonitoringSignatureRow'
 import { PageHeader } from '../components/PageHeader'
@@ -40,11 +40,14 @@ export function Monitoring() {
   const [query, setQuery] = useState('')
   const [openSigs, setOpenSigs] = useState<Set<string>>(new Set())
 
-  // Single pre-aggregated call (drops the old N+1 runs.map(api.run) reassembly, F21).
+  // Single pre-aggregated call (drops the old N+1 runs.map(api.run) reassembly, F21). A request
+  // id guards against out-of-order responses on a window switch — only the latest may commit.
+  const reqId = useRef(0)
   const load = useCallback(async () => {
+    const id = ++reqId.current
     setError(null)
     const d = await api.monitoring(window)
-    setData(d)
+    if (id === reqId.current) setData(d)
   }, [window])
   const { spinning, updatedLabel, refresh } = useRefresh(load)
 
