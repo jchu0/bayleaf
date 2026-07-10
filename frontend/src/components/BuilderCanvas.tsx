@@ -22,6 +22,13 @@ import {
 
 const INNER_W = 2560
 const INNER_H = 460
+const MM_W = 210 // minimap width
+const MM_H = 108 // minimap height — a bigger, squarer canvas mirror than the old 168×46 strip
+const MM_SCALE = MM_W / INNER_W // uniform proportional scale (no x/y distortion)
+const MM_VPAD = (MM_H - INNER_H * MM_SCALE) / 2 // vertically center the canvas strip in the box
+const ZMIN = 0.6
+const ZMAX = 1.4
+const clampZoom = (z: number): number => Math.min(ZMAX, Math.max(ZMIN, +z.toFixed(2)))
 const UW = 168 // user-node width — port anchors depend on it
 const UPT = 52 // user-node first-port y-offset from card top
 const UROW = 18 // user-node port-row pitch
@@ -89,6 +96,45 @@ export function BuilderCanvas(props: CanvasProps) {
     })
   }, [])
 
+  // Trackpad / mouse zoom: a ctrl-wheel (what a trackpad pinch and Ctrl+scroll both emit) zooms the
+  // canvas instead of zooming the whole page. Attached natively with { passive: false } because
+  // React's synthetic onWheel is passive and can't preventDefault. Plain wheel keeps panning.
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+  const onZoomRef = useRef(props.onZoom)
+  onZoomRef.current = props.onZoom
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      onZoomRef.current(clampZoom(zoomRef.current + (e.deltaY > 0 ? -0.1 : 0.1)))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // Fit: reset zoom + scroll so the pipeline is centered — the seeded DAG, or the user nodes' bbox
+  // when composing a draft. Content coords include the 360/480 margin the inner div carries.
+  const fitToDag = () => {
+    props.onZoom(1)
+    const el = scrollRef.current
+    if (!el) return
+    let tx = 1685
+    let ty = 713
+    if (userNodes.length) {
+      const xs = userNodes.map((n) => n.x)
+      const ys = userNodes.map((n) => n.y)
+      tx = 360 + (Math.min(...xs) + Math.max(...xs) + UW) / 2
+      ty = 480 + (Math.min(...ys) + Math.max(...ys)) / 2 + 40
+    }
+    requestAnimationFrame(() => {
+      el.scrollLeft = Math.max(0, tx - el.clientWidth / 2)
+      el.scrollTop = Math.max(0, ty - el.clientHeight / 2)
+    })
+  }
+
   const segs = gateSegs()
 
   // User-edge geometry: anchor to the exact port dots (out = right edge, in = left edge).
@@ -134,10 +180,6 @@ export function BuilderCanvas(props: CanvasProps) {
     return `M${ax} 372 V${Math.round((372 + b.y) / 2)} H${b.x} V${b.y}`
   }).filter((d): d is string => d != null)
 
-  // Minimap scale (168×46 over the 2560×460 inner).
-  const msx = 168 / INNER_W
-  const msy = 46 / INNER_H
-  const miniSpine = [148, 448, 748, 1048, 1348, 1648, 1948]
 
   return (
     <div className="relative min-w-0 flex-1">
@@ -232,22 +274,39 @@ export function BuilderCanvas(props: CanvasProps) {
         </div>
       )}
 
-      {/* Minimap (spine + gate + composed nodes) */}
-      <div className="absolute bottom-3.5 right-3.5 z-[6] h-[46px] w-[168px] overflow-hidden rounded-lg border border-line-strong bg-card shadow-card">
+      {/* Minimap — a bigger, proportional mirror of the whole canvas (uniform scale, no distortion):
+          seeded tool cards + references + the terminal gate + any composed nodes, each to scale. */}
+      <div
+        className="absolute bottom-3.5 right-3.5 z-[6] overflow-hidden rounded-lg border border-line-strong bg-card shadow-card"
+        style={{ width: MM_W, height: MM_H }}
+      >
         <div className="absolute inset-0 bg-card-2" />
-        {miniSpine.map((x, i) => (
-          <span
-            key={i}
-            className="absolute h-[6px] w-[8px] rounded-[1px] bg-line-strong"
-            style={{ top: 20, left: x * msx }}
-          />
-        ))}
-        <span className="absolute h-[10px] w-[8px] rounded-[1px] bg-text-3" style={{ top: 18, left: 2320 * msx }} />
+        {showSeeded &&
+          TOOLS.map((t) => (
+            <span
+              key={t.id}
+              className="absolute rounded-[1px] bg-line-strong"
+              style={{ left: t.x * MM_SCALE, top: MM_VPAD + t.y * MM_SCALE, width: TW * MM_SCALE, height: 62 * MM_SCALE }}
+            />
+          ))}
+        {showSeeded &&
+          REFS.map((r) => (
+            <span
+              key={r.id}
+              className="absolute rounded-[1px] bg-line"
+              style={{ left: r.x * MM_SCALE, top: MM_VPAD + 372 * MM_SCALE, width: 150 * MM_SCALE, height: 40 * MM_SCALE }}
+            />
+          ))}
+        {/* terminal gate */}
+        <span
+          className="absolute rounded-[1px] bg-text-3"
+          style={{ left: 2100 * MM_SCALE, top: MM_VPAD + 196 * MM_SCALE, width: Math.max(4, 120 * MM_SCALE), height: 64 * MM_SCALE }}
+        />
         {userNodes.map((n) => (
           <span
             key={n.id}
-            className="absolute h-[6px] w-[7px] rounded-[1px] bg-accent"
-            style={{ left: n.x * msx, top: n.y * msy }}
+            className="absolute rounded-[1px] bg-accent"
+            style={{ left: n.x * MM_SCALE, top: MM_VPAD + n.y * MM_SCALE, width: UW * MM_SCALE, height: 46 * MM_SCALE }}
           />
         ))}
       </div>
@@ -255,20 +314,20 @@ export function BuilderCanvas(props: CanvasProps) {
       {/* Zoom controls */}
       <div className="absolute bottom-3.5 left-3.5 z-[6] flex items-center gap-0.5 rounded-lg border border-line-strong bg-card p-1 shadow-card">
         <button
-          onClick={() => props.onZoom(Math.max(0.6, +(zoom - 0.1).toFixed(2)))}
+          onClick={() => props.onZoom(clampZoom(zoom - 0.1))}
           className="grid h-7 w-7 place-items-center rounded-md text-text-2 hover:bg-page"
         >
           <Minus size={15} />
         </button>
         <span className="min-w-[38px] text-center font-mono text-[11px] text-text-2">{Math.round(zoom * 100)}%</span>
         <button
-          onClick={() => props.onZoom(Math.min(1.4, +(zoom + 0.1).toFixed(2)))}
+          onClick={() => props.onZoom(clampZoom(zoom + 0.1))}
           className="grid h-7 w-7 place-items-center rounded-md text-text-2 hover:bg-page"
         >
           <Plus size={15} />
         </button>
         <div className="mx-0.5 h-[18px] w-px bg-line" />
-        <button onClick={() => props.onZoom(1)} className="rounded-md px-2 py-1 text-[11px] font-medium text-text-2 hover:bg-page">
+        <button onClick={fitToDag} title="Fit — center the pipeline" className="rounded-md px-2 py-1 text-[11px] font-medium text-text-2 hover:bg-page">
           Fit
         </button>
       </div>
