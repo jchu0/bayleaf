@@ -135,6 +135,7 @@ export type RunArtifact = {
   sha256: string | null
   size_bytes: number
   origin: string
+  url: string // same-origin download link: GET /api/runs/:id/artifacts/:name
 }
 
 export type RunDetail = {

@@ -31,7 +31,7 @@ from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
@@ -131,6 +131,7 @@ class RunArtifact(BaseModel):
     sha256: str | None
     size_bytes: int
     origin: str
+    url: str  # same-origin download link (GET /api/runs/{id}/artifacts/{name}); read-only
 
 
 # Life-science guardrail (CLAUDE.md, "Runbook thresholds are illustrative/configurable, not
@@ -509,30 +510,37 @@ _HASH_MAX_BYTES = 8 * 1024 * 1024
 # Filename → (pipeline stage, I/O role). The small committed metadata artifacts map explicitly;
 # raw-read extensions fall through to the suffix rules below so a future real-reads run still
 # lands each file on the right stage instead of vanishing.
-_ARTIFACT_STAGE: dict[str, tuple[str, str]] = {
+# A file can sit on more than one edge — one stage's OUTPUT is often the next stage's INPUT — so
+# each name maps to a LIST of (stage, role) pairs. That is what gives QC a real input edge: the
+# demultiplexed result (demux_stats / reads) is demux's output AND the data QC operates on, the
+# same bytes on two edges (no file fabricated). Without it the QC node rendered orphaned ("how are
+# there no inputs for QC?"). qc_metrics.csv stays QC's OUTPUT — it is the flattened QC report, not
+# an input.
+_ARTIFACT_STAGE: dict[str, list[tuple[str, str]]] = {
     # SampleSheet is the barcode manifest demux consumes — the preflight (demux) gate compares
     # it against demux_stats for index integrity — so it lands on demux, not intake.
-    "sample_metadata.csv": ("intake", "input"),
-    "samplesheet.csv": ("demux", "input"),
-    "demux_stats.csv": ("demux", "output"),
-    "qc_metrics.csv": ("qc", "output"),
-    "pipeline.log": ("gate", "input"),
+    "sample_metadata.csv": [("intake", "input")],
+    "samplesheet.csv": [("demux", "input")],
+    "demux_stats.csv": [("demux", "output"), ("qc", "input")],
+    "qc_metrics.csv": [("qc", "output")],
+    "pipeline.log": [("gate", "input")],
 }
 _SKIP_ARTIFACTS = {"origin"}  # provenance marker, not a data artifact
 _SKIP_SUFFIXES = {".bai", ".tbi", ".csi", ".pyc"}  # index/sidecar files
 
 
-def _artifact_stage_role(name: str) -> tuple[str, str] | None:
+def _artifact_stage_roles(name: str) -> list[tuple[str, str]]:
     lower = name.lower()
     if lower in _ARTIFACT_STAGE:
         return _ARTIFACT_STAGE[lower]
     if lower.endswith((".bam", ".cram")):
-        return ("align", "output")
+        return [("align", "output")]
     if lower.endswith((".vcf", ".vcf.gz")):
-        return ("variant", "output")
+        return [("variant", "output")]
     if lower.endswith((".fastq", ".fastq.gz", ".fq", ".fq.gz")):
-        return ("demux", "output")
-    return None
+        # Reads are demux's output and the QC stage's real input (the two-edge case).
+        return [("demux", "output"), ("qc", "input")]
+    return []
 
 
 def _sha256_of(path: Path) -> str | None:
@@ -564,21 +572,47 @@ def list_run_artifacts(run_id: str) -> list[RunArtifact]:
     for p in sorted(run_dir.iterdir()):
         if not p.is_file() or p.name in _SKIP_ARTIFACTS or p.suffix in _SKIP_SUFFIXES:
             continue
-        stage_role = _artifact_stage_role(p.name)
-        if stage_role is None:
+        pairs = _artifact_stage_roles(p.name)
+        if not pairs:
             continue
-        stage, role = stage_role
-        out.append(
-            RunArtifact(
-                name=p.name,
-                stage=stage,
-                role=role,
-                sha256=_sha256_of(p),
-                size_bytes=p.stat().st_size,
-                origin=origin,
+        # Hash + stat once, then emit one row per (stage, role) edge the file sits on.
+        sha = _sha256_of(p)
+        size = p.stat().st_size
+        url = f"/api/runs/{run_id}/artifacts/{p.name}"
+        for stage, role in pairs:
+            out.append(
+                RunArtifact(
+                    name=p.name,
+                    stage=stage,
+                    role=role,
+                    sha256=sha,
+                    size_bytes=size,
+                    origin=origin,
+                    url=url,
+                )
             )
-        )
     return out
+
+
+@app.get("/api/runs/{run_id}/artifacts/{name}")
+def get_run_artifact(run_id: str, name: str) -> FileResponse:
+    """Serve one run artifact for download / open-in-store (the provenance drill-in links).
+
+    Read-only and traversal-hardened: ``name`` must be a bare filename (no path segments, no
+    ``..``) and the resolved path must be a real direct child file of the run dir — a crafted
+    name can never aim this outside ``data/<run_id>/``. Skips the same non-data markers/sidecars
+    the listing does, so only genuine artifacts are served.
+    """
+    run_dir = DATA_ROOT / run_id
+    if not run_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Unknown run '{run_id}'")
+    # Reject anything but a bare filename BEFORE touching the filesystem.
+    if name != Path(name).name or name in _SKIP_ARTIFACTS:
+        raise HTTPException(status_code=404, detail="Unknown artifact")
+    target = (run_dir / name).resolve()
+    if not target.is_relative_to(run_dir.resolve()) or not target.is_file():
+        raise HTTPException(status_code=404, detail="Unknown artifact")
+    return FileResponse(target, filename=name)
 
 
 @app.get("/api/config")

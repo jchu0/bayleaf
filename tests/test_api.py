@@ -84,20 +84,39 @@ def test_card_endpoint_and_404s():
 
 def test_artifacts_endpoint_maps_stages_with_real_hash_and_origin():
     arts = client.get("/api/runs/mock_run_01/artifacts").json()
+    # A file can sit on more than one (stage, role) edge, so index by (name, stage, role).
+    edges = {(a["name"], a["stage"], a["role"]) for a in arts}
     by_name = {a["name"]: a for a in arts}
     # The metadata artifacts map to their pipeline stages (SampleSheet is the demux barcode
     # manifest the preflight gate consumes, not an intake input)...
-    assert by_name["SampleSheet.csv"]["stage"] == "demux"
-    assert by_name["sample_metadata.csv"]["stage"] == "intake"
-    assert by_name["demux_stats.csv"]["stage"] == "demux"
-    assert by_name["qc_metrics.csv"]["stage"] == "qc"
-    # ...each carries the run's origin tag and a real (small-file) sha256 + byte size.
+    assert ("SampleSheet.csv", "demux", "input") in edges
+    assert ("sample_metadata.csv", "intake", "input") in edges
+    assert ("qc_metrics.csv", "qc", "output") in edges
+    # demux_stats is demux's OUTPUT and also the QC stage's INPUT (the two-edge case that gives
+    # the QC node a real input instead of rendering orphaned).
+    assert ("demux_stats.csv", "demux", "output") in edges
+    assert ("demux_stats.csv", "qc", "input") in edges
+    # ...each carries the run's origin tag, a real (small-file) sha256 + byte size, and a
+    # same-origin download url.
     sheet = by_name["SampleSheet.csv"]
     assert sheet["origin"] == "contrived"
     assert len(sheet["sha256"]) == 64 and sheet["size_bytes"] > 0
+    assert sheet["url"] == "/api/runs/mock_run_01/artifacts/SampleSheet.csv"
     # The origin marker itself is never surfaced as a data artifact.
     assert "origin" not in by_name
     assert client.get("/api/runs/NOPE/artifacts").status_code == 404
+
+
+def test_artifact_download_serves_file_and_blocks_traversal():
+    # A real artifact downloads with its bytes...
+    ok = client.get("/api/runs/mock_run_01/artifacts/SampleSheet.csv")
+    assert ok.status_code == 200 and len(ok.content) > 0
+    # ...a bogus name / unknown run 404s...
+    assert client.get("/api/runs/mock_run_01/artifacts/nope.csv").status_code == 404
+    assert client.get("/api/runs/NOPE/artifacts/SampleSheet.csv").status_code == 404
+    # ...and a path-traversal name never escapes the run dir (encoded or raw).
+    assert client.get("/api/runs/mock_run_01/artifacts/..%2f..%2fpyproject.toml").status_code == 404
+    assert client.get("/api/runs/mock_run_01/artifacts/origin").status_code == 404
 
 
 # --- In-app feedback (W12): the one write endpoint, off the deterministic gate -------------

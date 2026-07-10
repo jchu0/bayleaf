@@ -1,4 +1,4 @@
-import { type MouseEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { ArrowDownToLine, ArrowUpFromLine, ChevronRight, ExternalLink } from 'lucide-react'
 import { api } from '../api'
@@ -307,10 +307,13 @@ function ProvColumn({
   )
 }
 
-// Every artifact is a link (§5.6): open-in-store / copy-digest / download. RunArtifact carries
-// no URL yet, so open/download are graceful no-ops; copy-digest works client-side off the sha256.
+// Every artifact is a link (§5.6): open-in-store / copy-digest / show-full-digest / download —
+// all wired to the real same-origin artifact URL (GET /api/runs/:id/artifacts/:name). The digest
+// is a sha256 CONTENT hash of the file's bytes (not a process/task/ledger id — those are arun_…
+// and evt_…); "show full" reveals all 64 chars, and copy grabs the whole value.
 function ProvArtifactRow({ art }: { art: RunArtifact }) {
   const [copied, setCopied] = useState(false)
+  const [showFull, setShowFull] = useState(false)
 
   const copyDigest = () => {
     if (!art.sha256) return
@@ -322,15 +325,14 @@ function ProvArtifactRow({ art }: { art: RunArtifact }) {
       () => {},
     )
   }
-  // No artifact URL in the contract yet — keep open/download honest no-ops rather than fake a link.
-  const noop = (e: MouseEvent) => e.preventDefault()
 
   return (
     <div className="border-b border-line py-[11px]">
       <div className="flex items-center justify-between gap-2">
         <a
-          href="#"
-          onClick={noop}
+          href={art.url}
+          target="_blank"
+          rel="noopener noreferrer"
           title="Open artifact in store"
           className="inline-flex items-center gap-[5px] break-all font-mono text-[12.5px] font-medium text-accent-strong hover:underline"
         >
@@ -338,25 +340,44 @@ function ProvArtifactRow({ art }: { art: RunArtifact }) {
           {art.name}
         </a>
       </div>
-      <div className="mt-[5px] flex items-center gap-[10px]">
+      <div className="mt-[5px] flex flex-wrap items-center gap-[10px]">
         {art.sha256 ? (
-          <button
-            type="button"
-            onClick={copyDigest}
-            title="Copy digest"
-            className="font-mono text-[11px] text-accent-strong hover:underline"
-          >
-            {copied ? 'copied ✓' : `sha256:${art.sha256.slice(0, 12)}…`}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={copyDigest}
+              title={`Copy content digest — sha256:${art.sha256}`}
+              className="font-mono text-[11px] text-accent-strong hover:underline"
+            >
+              {copied ? 'copied ✓' : `sha256:${art.sha256.slice(0, 12)}…`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowFull((v) => !v)}
+              className="text-[10.5px] text-text-3 hover:text-text-2"
+            >
+              {showFull ? 'hide' : 'show full'}
+            </button>
+          </>
         ) : (
           <span className="font-mono text-[11px] text-text-3">sha256 n/a</span>
         )}
         <span className="text-[11px] text-text-3">{fmtSize(art.size_bytes)}</span>
         <span className="text-[11px] text-text-3">·</span>
-        <a href="#" onClick={noop} title="Download artifact" className="text-[11px] text-accent-strong hover:underline">
+        <a
+          href={art.url}
+          download={art.name}
+          title="Download artifact"
+          className="text-[11px] text-accent-strong hover:underline"
+        >
           download
         </a>
       </div>
+      {showFull && art.sha256 && (
+        <div className="mt-1.5 select-all break-all font-mono text-[10.5px] leading-relaxed text-text-2">
+          sha256:{art.sha256}
+        </div>
+      )}
     </div>
   )
 }
