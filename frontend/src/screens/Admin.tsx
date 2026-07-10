@@ -1,9 +1,10 @@
-import { Activity, CheckCircle2, ChevronRight, ShieldCheck, UserCog } from 'lucide-react'
+import { Activity, BarChart3, CheckCircle2, ChevronRight, Database, ExternalLink, LineChart, ShieldCheck, UserCog } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { FacetChip } from '../components/FacetChip'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
+import { useToast } from '../components/Toast'
 import { DEMO_ACCOUNTS } from '../auth'
 import { useRole } from '../context/RoleContext'
 import type {
@@ -55,7 +56,12 @@ function DemoBanner({ text }: { text: string }) {
 // ── Users & roles (client-mock) ──────────────────────────────────────────────
 function UsersTab() {
   const { actor, setActor } = useRole()
+  const { toast } = useToast()
   const [users, setUsers] = useState(SEED_USERS)
+  // Password/email reset is a production seam — no live mail in the demo. The admin action toasts
+  // what would happen (a signed, expiring reset link emailed to the user).
+  const resetPassword = (u: (typeof users)[number]) =>
+    toast(`A password-reset link would be emailed to ${u.email} — production seam (no live mail here).`, 'info')
   // Role edits STAGE into a draft (id → role) and only take effect on Save — a role change is a
   // deliberate governance action, not a stray click on a toggle. `dirty` gates the Save/Discard bar.
   const [draft, setDraft] = useState<Record<string, Role>>({})
@@ -112,7 +118,16 @@ function UsersTab() {
                       <span className="rounded-full bg-accent px-2 py-px text-[10px] font-semibold text-white">you</span>
                     )}
                   </div>
-                  <div className="font-mono text-[11.5px] text-text-2">{u.id}</div>
+                  <div className="flex items-center gap-2 font-mono text-[11.5px] text-text-2">
+                    {u.id}
+                    <button
+                      onClick={() => resetPassword(u)}
+                      title={`Reset password for ${u.email}`}
+                      className="font-sans text-[11px] font-medium text-accent-strong hover:underline"
+                    >
+                      Reset password
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -378,13 +393,23 @@ function SystemTab() {
     api.health().then((h) => setHealth(h.status)).catch(() => setHealth('unreachable'))
   }, [])
 
+  // Observability endpoints (the deploy/telemetry docker-compose stack). Off the offline demo path,
+  // so these are links, not embeds (Grafana blocks framing, and they're only up when the compose
+  // stack runs). The API base swaps :5173→:8010 in dev so /metrics resolves to the read-API.
+  const apiBase = `${window.location.protocol}//${window.location.hostname}:8010`
+  const OBS = [
+    { label: 'Prometheus /metrics', href: `${apiBase}/metrics`, icon: Activity, note: 'read-API exporter · runs · samples · cards · gate-flagged' },
+    { label: 'Prometheus', href: 'http://localhost:9090', icon: LineChart, note: 'scrapes the /metrics seam · :9090' },
+    { label: 'Grafana', href: 'http://localhost:3000', icon: BarChart3, note: 'PipeGuard — QC decision gate dashboard · :3000' },
+  ]
+
   return (
     <div>
       <p className="mb-3 text-[12.5px] text-text-2">
         Read-only posture from the live read-API. Thresholds are illustrative policy, not clinical
         cutoffs.
       </p>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard
           label="API health"
           value={health ?? '…'}
@@ -400,9 +425,47 @@ function SystemTab() {
           value={registry ? `v${registry.metric_registry_version}` : '…'}
           sub={registry ? `${registry.n_gated}/${registry.n_registered} gated` : undefined}
         />
+        <StatCard label="Artifact store" value="local" sub="PIPEGUARD_ARTIFACT_STORE · s3 seam" />
       </div>
+
+      {/* Observability — the telemetry stack views (Prometheus/Grafana) surfaced from here. */}
+      <div className="mt-5">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.4px] text-text-3">
+          <Database size={13} /> Observability
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {OBS.map((o) => {
+            const Icon = o.icon
+            return (
+              <a
+                key={o.label}
+                href={o.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-2.5 rounded-xl border border-line bg-card p-3.5 shadow-card hover:border-line-strong"
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-card-2 text-text-2">
+                  <Icon size={15} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1 text-[13px] font-semibold text-text">
+                    {o.label} <ExternalLink size={11} className="text-text-3" />
+                  </span>
+                  <span className="mt-0.5 block text-[11.5px] leading-snug text-text-2">{o.note}</span>
+                </span>
+              </a>
+            )
+          })}
+        </div>
+        <p className="mt-2 text-[11px] text-text-3">
+          Prometheus/Grafana require the telemetry stack:{' '}
+          <span className="font-mono">docker compose -f deploy/telemetry/docker-compose.yml up</span> — off the
+          offline demo path. The read-API always serves <span className="font-mono">/metrics</span>.
+        </p>
+      </div>
+
       {runbook && (
-        <div className="mt-3 rounded-xl border border-line bg-card-2 px-4 py-3 text-[12px] leading-relaxed text-text-2">
+        <div className="mt-4 rounded-xl border border-line bg-card-2 px-4 py-3 text-[12px] leading-relaxed text-text-2">
           {runbook.disclaimer}
         </div>
       )}
