@@ -178,7 +178,15 @@ export function PipelineBuilder() {
     try {
       // Save creates a draft version, then submit moves it draft → pending_review so Approve is
       // actionable against the real store (off the decision domain; only approved graphs emit, §7).
-      const ack = await api.savePipeline({ name, graph: { nodes: userNodes, edges: userEdges }, profile })
+      // F2: the authored locators ride INSIDE the tolerant graph envelope (nodes + edges +
+      // locators + reference locators), so a saved pipeline round-trips the run_layout authoring —
+      // not just the node/edge topology. The backend `graph` is a free-form dict, so no schema
+      // change is needed; a later load path can rehydrate locEdits/refLoc from here.
+      const ack = await api.savePipeline({
+        name,
+        graph: { nodes: userNodes, edges: userEdges, locators: locEdits, reference_locators: refLoc },
+        profile,
+      })
       const t = await api.submitPipeline(name)
       setVersion(ack.version)
       setSaveStatus(t.status === 'approved' ? 'approved' : t.status === 'pending_review' ? 'pending' : 'draft')
