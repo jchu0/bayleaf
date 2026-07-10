@@ -107,6 +107,9 @@ export function SettingsAssayTable({
   const { toast } = useToast()
 
   const [assay, setAssay] = useState<string>(ASSAYS[0])
+  // Sample type is a dropdown (not two side-by-side columns) so the table shows one tissue's
+  // thresholds at a time — cleaner as more tissues are added.
+  const [sampleType, setSampleType] = useState<'blood' | 'saliva'>('blood')
   const [rows, setRows] = useState<Record<string, Row[]>>(() =>
     Object.fromEntries(ASSAYS.map((a) => [a, ROWS_BY_ASSAY[a].map((r) => ({ ...r }))])),
   )
@@ -210,6 +213,16 @@ export function SettingsAssayTable({
             </option>
           ))}
         </select>
+        <span className="ml-2 text-[11px] font-semibold uppercase tracking-[0.4px] text-text-3">Sample type</span>
+        <select
+          value={sampleType}
+          onChange={(e) => setSampleType(e.target.value as 'blood' | 'saliva')}
+          aria-label="Sample type"
+          className="min-w-[130px] cursor-pointer rounded-lg border border-line-strong bg-card px-[11px] py-[7px] text-[12.5px] font-medium text-text focus:border-accent focus:outline-none"
+        >
+          <option value="blood">Whole blood</option>
+          <option value="saliva">Saliva</option>
+        </select>
       </div>
 
       {/* Status + audit + RBAC-gated action bar */}
@@ -274,39 +287,23 @@ export function SettingsAssayTable({
         <strong className="text-text-2">approver</strong> makes a change live.
       </p>
 
-      {/* Threshold matrix */}
+      {/* Threshold matrix — one column, for the selected sample type (chosen via the dropdown). */}
       <div className="mt-[13px] overflow-hidden rounded-[10px] border border-line">
-        <div className="grid grid-cols-[1.4fr_1fr_1fr] bg-card-2 text-[9.5px] font-semibold uppercase tracking-[0.4px] text-text-3">
+        <div className="grid grid-cols-[1.6fr_1fr] bg-card-2 text-[9.5px] font-semibold uppercase tracking-[0.4px] text-text-3">
           <div className="px-[13px] py-[9px]">Metric</div>
-          <div className="px-[10px] py-[9px] text-center">Whole blood</div>
-          <div className="px-[10px] py-[9px] text-center">Saliva</div>
+          <div className="px-[10px] py-[9px] text-center">{sampleType === 'blood' ? 'Whole blood' : 'Saliva'}</div>
         </div>
         {current.map((r, i) => (
-          <div
-            key={r.metric}
-            className="grid grid-cols-[1.4fr_1fr_1fr] items-center border-t border-line"
-          >
+          <div key={r.metric} className="grid grid-cols-[1.6fr_1fr] items-center border-t border-line">
             <div className="px-[13px] py-[9px] text-[12.5px] text-text">{r.metric}</div>
             <div className="flex items-center justify-center gap-[6px] px-2 py-[7px]">
               <span className="shrink-0 font-mono text-[12px] text-text-3">{r.dir}</span>
               <input
-                value={r.blood}
+                value={r[sampleType]}
                 readOnly={!editing}
                 inputMode="decimal"
-                onChange={(e) => editCell(i, 'blood', e.target.value)}
-                aria-label={`${r.metric} · whole blood`}
-                className={inputCls}
-              />
-              {r.unit && <span className="shrink-0 font-mono text-[12px] text-text-3">{r.unit}</span>}
-            </div>
-            <div className="flex items-center justify-center gap-[6px] bg-card-2 px-2 py-[7px]">
-              <span className="shrink-0 font-mono text-[12px] text-text-3">{r.dir}</span>
-              <input
-                value={r.saliva}
-                readOnly={!editing}
-                inputMode="decimal"
-                onChange={(e) => editCell(i, 'saliva', e.target.value)}
-                aria-label={`${r.metric} · saliva`}
+                onChange={(e) => editCell(i, sampleType, e.target.value)}
+                aria-label={`${r.metric} · ${sampleType === 'blood' ? 'whole blood' : 'saliva'}`}
                 className={inputCls}
               />
               {r.unit && <span className="shrink-0 font-mono text-[12px] text-text-3">{r.unit}</span>}
