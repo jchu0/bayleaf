@@ -19,20 +19,21 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **353 tests across 21 files** — 350 pass and 3 skip (the Postgres
+The offline suite is **362 tests across 22 files** — 359 pass and 3 skip (the Postgres
 live-integration checks in `test_persistence_postgres_live`, which need a reachable Postgres
 and are off by default). By collected size: `test_api` (41), `test_notify` (36),
-`test_synthetic` (32), `test_fetch_giab` (32), `test_gate` (29), `test_persistence` (17),
+`test_synthetic` (33), `test_fetch_giab` (32), `test_gate` (29), `test_persistence` (17),
 `test_archivist` (17, the advisory archivist/librarian agent), `test_metrics` (17),
 `test_triage` (16), `test_pipeline_repair` (16, the advisory pipeline-repair agent),
 `test_settings` (13, config-override authoring), `test_review_queue` (13, the ticket domain),
 `test_card_readout` (12, the QC-readout projection), `test_pipeline_lifecycle` (11,
 submit/approve/dry-run/diff), `test_auth` (10, the RBAC dev shim), `test_gate_notify` (9),
-`test_artifacts_s3` (9), `test_pipelines` (8, the Pipeline Builder save/version store),
+`test_artifacts_s3` (9), `test_execution_trace` (8, the structured execution-trace feed →
+EXEC-001), `test_pipelines` (8, the Pipeline Builder save/version store),
 `test_artifacts` (7), `test_metrics_mapping` (5), `test_persistence_postgres_live` (3) — all
 runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `test_api` and
-`test_triage` suites need the api/claude extras to import FastAPI, while the two new agent suites
-run pure-offline over the core + pydantic).
+`test_triage` suites need the api/claude extras to import FastAPI, while `test_execution_trace`
+and the two agent suites run pure-offline over the core + pydantic).
 
 ## What "good" means (principles)
 
@@ -167,7 +168,8 @@ silently dropped — surfaced the moment a threshold keys on it
 
 **Definition of good.** clean → **proceed**; barcode_swap / absent_from_sheet →
 **escalate**; missing_metadata / low_q30 / low_coverage / high_dup → **hold**;
-pipeline_failure → **rerun**. Generated runs parse with the *existing* parsers (no
+pipeline_failure (a run-log failure marker, PIPE-001) → **rerun**; process_failure (a failed
+execution-trace task, EXEC-001) → **rerun**. Generated runs parse with the *existing* parsers (no
 generator-only dialect) and are byte-reproducible.
 
 **Method.** Generate one run per mode into a temp dir, gate it, assert the verdict
@@ -176,6 +178,38 @@ committed `mock_run_02/03` and assert their pinned verdict vectors.
 
 **Known failure modes.** The generator drifting from real artifact shapes — mitigated by
 reusing the production parsers in the assertion (`test_generated_run_parses_with_existing_parsers`).
+
+### EVAL-011 — Execution-trace ingestion: a failed process → EXEC-001 → RERUN
+
+| Field | Value |
+|---|---|
+| **Target** | Execution-trace rule (`rules._check_execution_trace`, **EXEC-001**) end-to-end through the gate + into the pipeline-repair feed |
+| **Type** | Failure-mode |
+| **Automated?** | Yes — `test_execution_trace.py` (`test_parse_execution_trace_tab_separated`, `test_parse_execution_trace_is_tolerant`, `test_exec_001_failed_task_is_a_rerun_finding`, `test_exec_001_is_a_no_op_when_clean_or_absent`, `test_exec_001_tag_exact_match_no_crossfire`, `test_exec_001_end_to_end_through_the_gate`, `test_no_trace_file_means_no_exec_finding`, `test_exec_001_feeds_the_repair_agent`) |
+
+**Definition of good.** A Nextflow/nf-core `trace.txt` is **read** on the gate path (composes ≠
+executes — it reads a trace the run already emitted, never runs a process): a failed task
+(status in the runbook's failure-status set **or** a nonzero exit — so an OOM/time-kill fires
+even when the status isn't literally `FAILED`) becomes a structured, cited **EXEC-001** `Finding`
+(PIPELINE category, preflight gate) whose `suggested_verdict` is **RERUN**, driving the sample to
+RERUN end-to-end while a clean sample stays PROCEED. The task attaches to its sample by an
+**exact** nf-core `tag` match (S1 never cross-fires S10 — the substring trap PIPE-001's log grep
+must avoid). A clean task, no `trace.txt`, or an unknown sample yields **no** finding (a missing
+trace is a signal, not a crash; the pinned demo runs carry no `trace.txt` and are unaffected). The
+EXEC-001 finding's recurring signature then **flows to the advisory pipeline-repair agent** (a
+`RepairProposal`, `advisory=True`, no verdict).
+
+**Method.** Parse a hand-built trace (tab-separated, plus a garbled/absent file for tolerance);
+assert the rule fires on `FAILED` and nonzero-exit tasks and no-ops on clean/absent/unknown;
+generate a synthetic `PROCESS_FAILURE` run, gate it, and assert S02 → RERUN with an EXEC-001
+finding while the clean sample stays PROCEED and a no-failure run emits no `trace.txt`; roll the
+signature up and assert `propose_repair` returns an advisory proposal addressing EXEC-001.
+
+**Known failure modes.** A substring tag match would let S1's failure attach to S10 — pinned by
+`test_exec_001_tag_exact_match_no_crossfire`. A trace parse that crashed on a garbled file would
+break the tolerant boundary — asserted by `test_parse_execution_trace_is_tolerant`. Ingesting a
+trace must not change the pinned demo verdicts (those runs have no `trace.txt`) — preserved by
+EVAL-001/EVAL-010.
 
 ## Faithfulness cases (AI narrates, never decides)
 

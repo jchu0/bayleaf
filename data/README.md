@@ -30,6 +30,13 @@ runs carry invented values, not real data perturbed into failure modes, which is
 `contrived` definition. See [`docs/data/strategy.md`](../docs/data/strategy.md) for origin
 labels (the definitions themselves are unchanged).
 
+One further file is **optional**: `trace.txt`, a Nextflow/nf-core execution trace (task table)
+the gate reads (the EXEC-001 rule → RERUN; see
+[`docs/data/qc_metrics.md`](../docs/data/qc_metrics.md) pipeline / operational rules). The
+synthetic generator emits it **only for a run that has a process failure**, so a run without one
+keeps exactly its **five artifacts** (+ the `origin` marker = 6 files, byte-identical /
+reproducible); a run with one carries `trace.txt` as a **seventh** file.
+
 ## `synthetic_bulk` — regenerated, never committed
 
 Bulk volume (dozens of runs, to exercise the frontend's scale affordances — pagination,

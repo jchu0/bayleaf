@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) |
 
 ## Overview
 
@@ -67,6 +67,24 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    byte-identical. The registry is **on the QC-gate critical path**; a missing field yields
    no `MetricValue` (a signal, not a crash). *Trace:* [metric_registry.md](../data/metric_registry.md),
    [schemas.md](../data/schemas.md) §QC (units contract), `rules.py`, T-024/T-025.
+8. **REQ-F-017 — Execution-trace ingestion (EXEC-001).** The gate **reads** an optional
+   Nextflow/nf-core `trace.txt` when the run produced one and maps a **failed pipeline
+   process** to **RERUN** — the structured sibling of the free-text run-log check (PIPE-001).
+   A task attaches to its sample by an **exact** nf-core `tag` match (so a zero-padded id can't
+   cross-fire the way a substring would), and a task is a failure when its status is in the
+   runbook's failure-status set **or** its exit code is nonzero (an OOM/time-kill fires even
+   when the status isn't literally `FAILED`), yielding a cited, immutable `Finding` (PIPELINE
+   category, **preflight** gate) whose suggested verdict is RERUN. It **composes ≠ executes**:
+   it *reads* a trace the run already emitted and **never runs a process** (ADR-0001/0003). A
+   missing, absent, or garbled trace yields **no** finding (a signal, not a crash — the pinned
+   demo runs carry no `trace.txt` and are unaffected). Downstream it is **advisory only**: the
+   EXEC-001 finding's recurring signature flows to the pipeline-repair agent (REQ-F-023) via the
+   monitoring rollup, giving that agent a **structured executor-failure** feed distinct from
+   PipeGuard's own gate findings. The **verdict policy is unchanged** — an operational/execution
+   failure → RERUN (REQ-F-014). *Trace:* [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md),
+   [qc_metrics.md](../data/qc_metrics.md) §Verdict policy,
+   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)/[ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md),
+   `rules._check_execution_trace`, [tasks T-061](../planning/tasks.md).
 
 ## Advisory triage agent (ADR-0009/0012)
 
@@ -101,8 +119,9 @@ holds across **five** agents — triage, feedback, pipeline-repair, archivist, a
 node-authoring agent).
 
 1. **REQ-F-023 — Advisory pipeline-repair agent.** On a **recurring issue signature** rolled up
-   from the monitoring view (the same `Finding.signature` counter `GET /api/monitoring` uses), the
-   system can produce a cited **RepairProposal** {`summary`, `attach_to` (pipeline stage), `scope`
+   from the monitoring view (the same `Finding.signature` counter `GET /api/monitoring` uses — now
+   including structured pipeline-executor failures via EXEC-001, REQ-F-017, not only PipeGuard's own
+   gate findings), the system can produce a cited **RepairProposal** {`summary`, `attach_to` (pipeline stage), `scope`
    (gate)} proposing a **human-reviewed** remediation grounded in a curated remediation corpus
    (ADR-0008 taxonomy + the runbook; **no invented thresholds**). `advisory` is pinned `True` and the
    record has **no verdict/confidence field**; `attach_to`/`scope` and every citation are

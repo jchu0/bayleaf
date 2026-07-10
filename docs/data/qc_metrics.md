@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization), [schemas.md](schemas.md) (§6 units contract) |
+| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization), [schemas.md](schemas.md) (§6 units contract) |
 
 ## Overview
 
@@ -81,6 +81,27 @@ edge cases.
 4. Clean → **PROCEED**. Worst verdict wins.
 5. Depth vs breadth are surfaced as distinct signals. Every decision + resolution is
    recorded to the experience corpora (ADR-0009).
+
+## Pipeline / operational rules (PIPE-001, EXEC-001)
+
+Two preflight-gate rules realize the operational-failure branch of the verdict policy
+(item 3 → **RERUN**) from what the run *itself produced*, not from re-running anything:
+
+1. **PIPE-001** — a free-text failure marker for the sample in `pipeline.log`
+   (matched against `runbook.log_failure_markers`).
+2. **EXEC-001** — its **structured sibling**: it reads the Nextflow/nf-core execution
+   trace (`trace.txt`, a task table) instead of grepping a free-text log. A task belongs
+   to the sample by an **exact** nf-core `tag` match (so a zero-padded id can't cross-fire
+   a substring), and counts as failed when its status is in `runbook.trace_failure_statuses`
+   (default `["FAILED", "ABORTED"]` — illustrative/configurable, **not** a clinical set)
+   **or** its exit code is nonzero. It emits a CRITICAL `PIPELINE` finding citing `trace.txt`
+   + the exit code, and maps to **RERUN** under the same operational-failure policy (verdict
+   policy 3) as PIPE-001 — the verdict rationale is unchanged, only the evidence source is.
+
+Both rules **read** an artifact the pipeline dropped; PipeGuard composes, it does not
+execute — the gate never runs a process ([ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)).
+`trace.txt` is an **optional** input: present only for runs that had a process failure
+(see [`data/README.md`](../../data/README.md)).
 
 ## CNV & mosaicism
 

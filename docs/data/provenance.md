@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active (Phase 1 seam built; DB projection + `rebuild-db` implemented) |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / bioinformatics |
-| **Related** | [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [schemas.md](schemas.md), `src/pipeguard/provenance.py`, `src/pipeguard/engine.py`, `src/pipeguard/persistence/` |
+| **Related** | [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [schemas.md](schemas.md), [qc_metrics.md](qc_metrics.md), `src/pipeguard/provenance.py`, `src/pipeguard/engine.py`, `src/pipeguard/rules.py`, `src/pipeguard/persistence/` |
 
 ## Overview
 
@@ -19,9 +19,12 @@ ships the in-memory ledger with optional JSONL persistence.
 
 One `AnalysisRun` (`arun_…`) per gate execution is the anchor every finding, card,
 and event references. Phase 1 records the **gate provenance** — `rule_pack_version`,
-the runbook's metric set, `generated_by`, and start/complete timestamps. The
-**pipeline provenance** (sarek `params_hash` / `execution_trace`) is a Phase-2
-addition that needs real sarek data (see [nf-core-conventions](nf-core-conventions.md)).
+the runbook's metric set, `generated_by`, and start/complete timestamps. Recording the full
+**pipeline-provenance manifest** on the AnalysisRun (sarek `params_hash`; the
+`execution_trace` artifact ref + hash) is still a Phase-2 addition that needs real sarek data
+(see [nf-core-conventions](nf-core-conventions.md)) — but note the execution trace *itself* is
+**already read as a gate input** (EXEC-001; see the Event-vocabulary note below). Reading the
+trace on the gate and recording it as provenance metadata here are two different things.
 
 ## Event vocabulary
 
@@ -42,6 +45,17 @@ live on the QC critical path (T-024/T-025): the rule engine builds registry-back
 **reserved** only because those `MetricValue`s are built in-memory from the parsed metrics, not
 yet emitted as ledger events — that (and `artifact.ingested`) lands with artifact-level QC
 ingest in Phase 2.
+
+**Note — the execution trace is read on the gate, not emitted as an event.** The structured
+Nextflow/nf-core trace (`trace.txt` → `TraceRecord[]`, [schemas.md](schemas.md)) is now
+**ingested as a gate input**: a failed task (status in the runbook failure set or a nonzero
+exit) becomes an **EXEC-001** `Finding` (category `pipeline` → preflight gate, suggested
+**RERUN**), cited from `trace.txt` with `source_kind=execution_trace`. Because it lands as a
+*finding*, it rides the **existing** vocabulary — `finding.emitted` → `verdict.decided` — and
+adds **no new `EventType`**. The trace is an **input artifact the gate READS**, not a provenance
+event (composes ≠ executes, ADR-0001/0003); recording it as provenance *metadata* on the
+AnalysisRun (the manifest under [The AnalysisRun anchor](#the-analysisrun-anchor), plus any
+`artifact.ingested` event) stays Phase-2.
 
 Each event carries `analysis_run_id` / `run_id` / `sample_id`, an `actor`
 (`system` | `rule_engine` | `agent` | `human:<id>`), typed `payload`, and
@@ -104,7 +118,10 @@ their producers land.
 2. `artifact.ingested` / `metric.parsed` **events** (and their projected tables) once
    artifact-level QC ingest lands — the `MetricValue`/`MetricRegistry` normalization they would
    record already runs on the gate (above), just not yet as emitted events.
-3. **pipeline_provenance** on the AnalysisRun from sarek `pipeline_info/`.
+3. **pipeline_provenance** *manifest* on the AnalysisRun from sarek `pipeline_info/`
+   (`params_hash` + the `execution_trace` artifact ref/hash). The execution trace is
+   **already read as a gate input** today (EXEC-001 → RERUN); what remains here is recording
+   it as provenance *metadata* — no new event type is involved.
 
 ## Phase 1 scope notes (deliberate divergences from schemas.md)
 

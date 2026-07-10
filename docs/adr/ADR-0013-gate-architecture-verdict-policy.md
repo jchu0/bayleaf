@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Accepted · Realized (three-gate model + surface-and-decide policy built; QC gate now decides on registry-normalized canonical values, T-025) |
-| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08, 2026-07-09 (MST) |
 | **Deciders** | James Hu, Claude Code |
 | **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md), [ADR-0009](ADR-0009-corpora-retrieval-upskilling.md), [ADR-0015](ADR-0015-layered-data-contract.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/metric_registry.md](../data/metric_registry.md) |
 
@@ -82,6 +82,17 @@ human judgment call, not an automatic resequence.
    against a runbook threshold stored in the same `canonical_unit`, so a change in a source's raw
    unit can't silently move a gate; verdicts are byte-identical to before, and the finding text
    renders back to raw units via `registry.denormalize` (schemas.md §6 units contract).
+4. **A failed pipeline process is on-gate (EXEC-001, 2026-07-09).**
+   `rules._check_execution_trace` reads the structured Nextflow/nf-core execution trace
+   (`trace.txt`) and, on a failed task for the sample (exact nf-core `tag` match; status in
+   `runbook.trace_failure_statuses` or a nonzero exit), emits a CRITICAL `PIPELINE` finding →
+   **RERUN** — the structured sibling of PIPE-001's free-text log grep, consistent with the
+   operational-failure branch of the verdict policy (item 3 above; verdict rationale unchanged).
+   The maintainer chose **on-gate** — a failed process is a first-class operational failure —
+   over an off-gate advisory. **Compose ≠ execute is preserved:** the gate reads a trace the run
+   already dropped, it never runs a process
+   ([ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md)). `runbook.trace_failure_statuses`
+   (default `["FAILED", "ABORTED"]`) is a new illustrative/configurable field, not a clinical set.
 
 ## Revisit when
 

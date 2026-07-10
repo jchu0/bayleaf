@@ -60,6 +60,28 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > deliberately does not coerce it, so an absent or malformed value degrades to `None` instead of
 > failing — contrast Convention 2, which governs *stored* run timestamps (`created_at`, etc.).
 
+> **Intake bundle — `RunArtifacts` (parser output, tolerant).** The in-memory contract
+> `parsers.load_run` hands the rules (ADR-0015 *tolerant intake*, distinct from the persisted
+> records above): `run_id` plus per-sample collections `samples[]` (`Sample`), `sample_sheet[]`
+> (`SampleSheetEntry`), `demux[]` (`DemuxRecord`), `qc[]` (`QCMetrics`), `log_lines[]` (raw
+> `pipeline.log` lines), and **`execution_trace[]` (`TraceRecord`)** — plus the run-level header
+> context above. **Each collection defaults empty**; a missing on-disk artifact yields no rows,
+> not a crash (tolerant boundary, CLAUDE.md data-handling 2).
+>
+> **`TraceRecord`** — one task row of the Nextflow/nf-core **execution trace**, whose on-disk
+> artifact is **`trace.txt`** (matching ArtifactRef `kind=execution_trace`), parsed by
+> `parsers.parse_execution_trace` inside `load_run`. Fields — **all optional (`… | None`,
+> default `None`):** `task_id` · `process` · `tag` *(the nf-core sample tag; EXEC-001 matches a
+> task to a sample by exact `tag`)* · `status` *(task disposition, upper-cased —
+> `COMPLETED|FAILED|CACHED|ABORTED`)* · `exit` *(process exit code; `0` = success)*. A
+> **STRUCTURED pipeline-execution signal the gate READS — it never runs a process** (composes ≠
+> executes, ADR-0001/0003); every field is optional so a partial/garbled trace is a **signal,
+> not a crash**. A failed task (status in the runbook failure set — default `FAILED`/`ABORTED` —
+> **or** a nonzero `exit`) drives the **EXEC-001** rule (category `pipeline` → **preflight** gate,
+> suggested **RERUN**), the structured sibling of PIPE-001's free-text log marker; its `Evidence`
+> cites `trace.txt` with **`source_kind=execution_trace`** (#7). See [provenance.md](provenance.md)
+> for why this is a *gate input*, not a new ledger event.
+
 ### Analysis
 4. **AnalysisRun** (`arun_`) — one gate execution over a sample under pinned versions.
    Findings/MetricValues/DecisionCards/Events FK here. Two-layer manifest:
