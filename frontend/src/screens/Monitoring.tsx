@@ -205,27 +205,31 @@ export function Monitoring() {
                 </div>
               </div>
 
-              <div className="min-w-0 flex-1">
-                {/* Plot area: gridlines (0 / half / max) drawn behind the bars, both 150px tall so the
-                    stacked bar % heights read against the same scale the ticks label. */}
-                <div className="relative h-[150px]">
-                  <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-                    {[0, 0.5, 1].map((f) => (
-                      <div
-                        key={f}
-                        className="absolute inset-x-0 border-t border-dashed border-line"
-                        style={{ top: `${(1 - f) * 100}%` }}
-                      />
-                    ))}
-                  </div>
-                  <div className="relative flex h-full items-end gap-[10px]">
-                    {chartRuns.map((r) => (
-                      <div
-                        key={r.run_id}
-                        className="flex h-full min-w-0 flex-1 flex-col justify-end"
-                        title={`${r.run_id} · ${r.n_samples} samples`}
-                      >
-                        <div className="mx-auto flex h-full w-[26px] flex-col justify-end gap-[2px]">
+              {/* Scroll viewport: bars are a CONSTANT width so the row never distorts as the run
+                  count grows (a long window ≈ a 14-day view's density); when they overrun the row
+                  it scrolls sideways instead of squishing. `w-max min-w-full` fills the row when
+                  few runs, then grows to content (scroll) when many. The Y-axis gutter stays fixed. */}
+              <div className="min-w-0 flex-1 overflow-x-auto">
+                <div className="w-max min-w-full">
+                  {/* Plot area: gridlines (0 / half / max) drawn behind the bars, both 150px tall so
+                      the stacked bar % heights read against the same scale the ticks label. */}
+                  <div className="relative h-[150px]">
+                    <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+                      {[0, 0.5, 1].map((f) => (
+                        <div
+                          key={f}
+                          className="absolute inset-x-0 border-t border-dashed border-line"
+                          style={{ top: `${(1 - f) * 100}%` }}
+                        />
+                      ))}
+                    </div>
+                    <div className="relative flex h-full items-end gap-[12px]">
+                      {chartRuns.map((r) => (
+                        <div
+                          key={r.run_id}
+                          className="flex h-full w-[28px] shrink-0 flex-col justify-end gap-[2px]"
+                          title={`${r.run_id} · ${r.n_samples} samples`}
+                        >
                           {STACK_ORDER.map((v) => {
                             const n = r.counts[v] ?? 0
                             return n ? (
@@ -238,19 +242,19 @@ export function Monitoring() {
                             ) : null
                           })}
                         </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Date labels — mirror the bar flex so each sits centered under its column. */}
+                  <div className="mt-[7px] flex gap-[12px]">
+                    {chartRuns.map((r) => (
+                      <div key={r.run_id} className="w-[28px] shrink-0 text-center">
+                        <span className="whitespace-nowrap font-mono text-[9px] text-text-3">
+                          {shortDate(r.run_date, r.run_id)}
+                        </span>
                       </div>
                     ))}
                   </div>
-                </div>
-                {/* Date labels — mirror the bar flex so each sits centered under its column. */}
-                <div className="mt-[7px] flex gap-[10px]">
-                  {chartRuns.map((r) => (
-                    <div key={r.run_id} className="min-w-0 flex-1 text-center">
-                      <span className="whitespace-nowrap font-mono text-[9px] text-text-3">
-                        {shortDate(r.run_date, r.run_id)}
-                      </span>
-                    </div>
-                  ))}
                 </div>
               </div>
             </div>

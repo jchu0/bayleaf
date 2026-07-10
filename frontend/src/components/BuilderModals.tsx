@@ -339,7 +339,7 @@ export function ArchivistModal({ onClose }: { onClose: () => void }) {
         <div className="rounded-xl border border-line px-3 py-3">
           <div className="font-mono text-[12px] font-semibold text-text">RUN-2026-07-06-A · run/ → cold storage</div>
           <div className="mt-1 text-[11.5px] leading-relaxed text-text-2">
-            Manifest of the 5 <span className="font-mono">run/</span> CSVs + sha256; original left read-only until the archive is verified.
+            Manifest of the 5 <span className="font-mono">run/</span> CSVs + content hash; original left read-only until the archive is verified.
           </div>
           <div className="mt-2 font-mono text-[10px] text-text-3">s3://pipeguard-cold/2026/07/RUN-2026-07-06-A/</div>
         </div>
