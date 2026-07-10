@@ -138,6 +138,7 @@ export const api = {
   config: () => get<Runbook>('/api/config'),
   runbook: () => get<RunbookPolicy>('/api/runbook'),
   metricsRegistry: () => get<MetricCatalog>('/api/metrics/registry'),
+  health: () => get<{ status: string }>('/api/health'),
 
   // ── monitoring (read) ──
   monitoring: (window: MonitoringWindow = 'all', signaturesLimit?: number) => {

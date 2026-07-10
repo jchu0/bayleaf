@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { RoleProvider } from './context/RoleContext'
+import { Admin } from './screens/Admin'
 import { AgentTriage } from './screens/AgentTriage'
 import { Intake } from './screens/Intake'
 import { Monitoring } from './screens/Monitoring'
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/runs/:runId/intake" element={<Intake />} />
             <Route path="/runs/:runId/agent" element={<AgentTriage />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/admin" element={<Admin />} />
             <Route path="/monitoring" element={<Monitoring />} />
             <Route path="/queue" element={<ReviewQueue />} />
             <Route path="/builder" element={<PipelineBuilder />} />

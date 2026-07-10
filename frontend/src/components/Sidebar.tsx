@@ -13,6 +13,7 @@ import {
   Shield,
   SlidersVertical,
   Star,
+  UserCog,
   Waypoints,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -24,13 +25,13 @@ import { UserSettingsDialog } from './UserSettingsDialog'
 type Item = { label: string; to: string; icon: LucideIcon; active: boolean; badge?: number }
 type Group = { heading: string; items: Item[] }
 
-// Two-group nav (Operate / Configure) per README §4 — the source of truth over the stale
-// 3-group prototype. Per-run views resolve to the run in context (else the first run) so they
-// always navigate somewhere useful. The Decision-cards badge shows the CURRENT run's flagged
-// sample count (hold+rerun+escalate = its n_attention), in mono.
+// Nav groups (Operate / Analyze / Configure, + an approver-only Admin group). Per-run views
+// resolve to the run in context (else the first run) so they always navigate somewhere useful.
+// The Decision-cards badge shows the CURRENT run's flagged sample count (its n_attention), in mono.
 function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
   const { pathname } = useLocation()
   const { runId } = useParams()
+  const { isApprover } = useRole()
   const run = runId ?? defaultRunId
   const runHome = run ? `/runs/${run}` : '/'
   const flagged = runs.find((r) => r.run_id === run)?.n_attention ?? 0
@@ -81,14 +82,27 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
         { label: 'Settings', to: '/settings', icon: SlidersVertical, active: pathname.startsWith('/settings') },
       ],
     },
+    // Admin is governance (users/RBAC/audit), gated to approvers — the de-facto admin role.
+    ...(isApprover
+      ? [
+          {
+            heading: 'Admin',
+            items: [
+              { label: 'Admin panel', to: '/admin', icon: UserCog, active: pathname.startsWith('/admin') },
+            ],
+          },
+        ]
+      : []),
   ]
 }
 
 function UserPanel() {
-  const { role, toggleRole } = useRole()
+  const { actor, role, toggleRole } = useRole()
   const [open, setOpen] = useState(false)
   const [dialog, setDialog] = useState(false)
   const roleLabel = role.charAt(0).toUpperCase() + role.slice(1)
+  // Reflect the live actor (Admin "Act as" can switch it), not a hardcoded user.
+  const initials = actor.id.split(/[.\-_ ]/).map((p) => p[0]?.toUpperCase() ?? '').join('').slice(0, 2) || 'U'
 
   return (
     <div className="relative border-t border-nav-border p-3">
@@ -97,10 +111,10 @@ function UserPanel() {
         className="flex w-full items-center gap-2.5 rounded-[9px] bg-nav-hover px-2.5 py-[7px] text-left transition-colors hover:brightness-110"
       >
         <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-[linear-gradient(150deg,#3a7,#186)] text-[12px] font-semibold text-white">
-          AR
+          {initials}
         </span>
         <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate text-[12.5px] font-semibold text-[#e7ecf1]">a.rivera</span>
+          <span className="block truncate font-mono text-[12.5px] font-semibold text-[#e7ecf1]">{actor.id}</span>
           <span className="flex items-center gap-1.5">
             <span className="h-[5px] w-[5px] rounded-full bg-[#3ba55d]" />
             <span className="text-[10.5px] text-[#7c8794]">{roleLabel}</span>
@@ -114,8 +128,8 @@ function UserPanel() {
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute bottom-[66px] left-3 right-3 z-40 overflow-hidden rounded-[11px] border border-[#2b3543] bg-nav-hover shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
             <div className="border-b border-[#2b3543] px-3.5 py-3">
-              <div className="text-[12.5px] font-semibold text-[#e7ecf1]">Ada Rivera</div>
-              <div className="font-mono text-[10.5px] text-[#7c8794]">a.rivera@lab.org</div>
+              <div className="font-mono text-[12.5px] font-semibold text-[#e7ecf1]">{actor.id}</div>
+              <div className="font-mono text-[10.5px] text-[#7c8794]">{actor.id}@lab.org</div>
             </div>
             <button
               onClick={() => {
