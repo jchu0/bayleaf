@@ -375,6 +375,14 @@ export function PipelineBuilder() {
       ],
     },
     {
+      heading: 'References',
+      items: [
+        { name: 'Reference FASTA', sub: 'reference_fasta', icon: 'db', onClick: () => addNode('Reference FASTA', 'reference_fasta') },
+        { name: 'Panel BED', sub: 'panel_bed', icon: 'db', onClick: () => addNode('Panel BED', 'panel_bed') },
+        { name: 'Truth VCF', sub: 'truth_vcf', icon: 'db', onClick: () => addNode('Truth VCF', 'truth_vcf') },
+      ],
+    },
+    {
       heading: 'Contamination',
       items: [{ name: 'NGSCheckMate', sub: 'ngscheckmate · optional', icon: 'bars', onClick: () => addNode('NGSCheckMate', 'ngscheckmate') }],
     },
@@ -717,6 +725,7 @@ function Palette({
   onOpenAuthor: () => void
 }) {
   const [query, setQuery] = useState('')
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const q = query.trim().toLowerCase()
   const filtered = q
     ? sections
@@ -743,34 +752,55 @@ function Palette({
 
       <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-3 pb-4 pt-3">
         {filtered.length === 0 && <p className="px-1 pt-2 text-[11.5px] text-text-3">No nodes match “{query.trim()}”.</p>}
-        {filtered.map((s) => (
-          <div key={s.heading}>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.5px] text-text-3">{s.heading}</p>
-            <div className="space-y-1.5">
-              {s.items.map((it) => {
-                const Icon = ICONS[it.icon]
-                const disabled = it.disabled || isView
-                return (
-                  <div
-                    key={it.name}
-                    onClick={() => !disabled && it.onClick?.()}
-                    className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 ${
-                      disabled ? 'cursor-not-allowed border-line bg-card-2 opacity-[0.65]' : 'cursor-pointer border-line bg-card hover:border-line-strong'
-                    }`}
-                  >
-                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-card-2 ${disabled ? 'text-text-3' : 'text-text-2'}`}>
-                      <Icon size={14} />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-[12.5px] font-medium text-text">{it.name}</span>
-                      <span className="block truncate font-mono text-[10px] text-text-3">{it.sub}</span>
-                    </span>
-                  </div>
-                )
-              })}
+        {filtered.map((s) => {
+          // Collapsible sections keep a long, growing palette navigable; a search overrides collapse
+          // so matches are always visible. The count hints at how much each section holds.
+          const isCollapsed = collapsed.has(s.heading) && !q
+          return (
+            <div key={s.heading}>
+              <button
+                onClick={() =>
+                  setCollapsed((c) => {
+                    const n = new Set(c)
+                    if (n.has(s.heading)) n.delete(s.heading)
+                    else n.add(s.heading)
+                    return n
+                  })
+                }
+                className="mb-1.5 flex w-full items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.5px] text-text-3 hover:text-text-2"
+              >
+                <ChevronRight size={11} className={`shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+                <span>{s.heading}</span>
+                <span className="ml-auto font-mono normal-case text-text-3">{s.items.length}</span>
+              </button>
+              {!isCollapsed && (
+                <div className="space-y-1.5">
+                  {s.items.map((it) => {
+                    const Icon = ICONS[it.icon]
+                    const disabled = it.disabled || isView
+                    return (
+                      <div
+                        key={it.name}
+                        onClick={() => !disabled && it.onClick?.()}
+                        className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 ${
+                          disabled ? 'cursor-not-allowed border-line bg-card-2 opacity-[0.65]' : 'cursor-pointer border-line bg-card hover:border-line-strong'
+                        }`}
+                      >
+                        <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-card-2 ${disabled ? 'text-text-3' : 'text-text-2'}`}>
+                          <Icon size={14} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-[12.5px] font-medium text-text">{it.name}</span>
+                          <span className="block truncate font-mono text-[10px] text-text-3">{it.sub}</span>
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          )
+        })}
 
         {!isView ? (
           <div className="space-y-2.5">

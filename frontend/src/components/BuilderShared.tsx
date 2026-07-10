@@ -200,6 +200,12 @@ export const BTOOLSPEC: Record<string, { version: string; icon: IconKey; ins: st
   'bcftools norm': { version: '1.20', icon: 'funnel', ins: ['vcf', 'reference_fasta'], outs: ['filtered_vcf'] },
   'MultiQC': { version: '1.21', icon: 'layers', ins: ['fastp_json', 'markdup_metrics', 'mosdepth_summary'], outs: ['multiqc_json'] },
   'NGSCheckMate': { version: '1.0.1', icon: 'bars', ins: ['bam'], outs: ['ngscheckmate'] },
+  // Reference SOURCES — no inputs; each emits a reference artifact a tool's ref input consumes
+  // (fasta → bwa/call/norm, bed → mosdepth/call, truth VCF → benchmarking). Typed wiring keeps
+  // a fasta from landing on a fastq port.
+  'Reference FASTA': { version: 'GRCh38', icon: 'db', ins: [], outs: ['reference_fasta'] },
+  'Panel BED': { version: 'panel', icon: 'db', ins: [], outs: ['panel_bed'] },
+  'Truth VCF': { version: 'v4.2.1', icon: 'db', ins: [], outs: ['truth_vcf'] },
 }
 
 export function makeUserNode(name: string, kind: string, index: number): UserNode {
