@@ -1,0 +1,138 @@
+import { type ReactNode, useState } from 'react'
+import { SettingsToggle } from './SettingsToggle'
+
+// Notifications (dc.html 1225-1244): three channel rows — Slack + Microsoft Teams connected with
+// a live toggle, Discord unconnected with a Connect affordance. Purely presentational demo state;
+// no channel wiring here (the real Slack send is env-armed on the core, off the gate).
+
+// Design icons are inlined verbatim (currentColor lets the token class drive the stroke) rather
+// than reached for from lucide so the glyphs match the prototype exactly.
+function SlackGlyph() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="10" y1="3" x2="8" y2="21" />
+      <line x1="16" y1="3" x2="14" y2="21" />
+      <line x1="3" y1="9" x2="21" y2="9" />
+      <line x1="2" y1="15" x2="20" y2="15" />
+    </svg>
+  )
+}
+function TeamsGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="6" width="13" height="12" rx="2" />
+      <path d="M16 9l5-2v10l-5-2" />
+    </svg>
+  )
+}
+function DiscordGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="12" r="1" />
+      <circle cx="15" cy="12" r="1" />
+      <path d="M7.5 7.5c3-1 6-1 9 0M7.5 16.5c3 1 6 1 9 0M7 8l-2 8a12 12 0 0 0 5 2M17 8l2 8a12 12 0 0 1-5 2" />
+    </svg>
+  )
+}
+
+function ConnectedDot() {
+  return (
+    <span className="mt-[2px] flex items-center gap-[5px] text-[11.5px] text-proceed-fg">
+      <span className="inline-block h-[6px] w-[6px] rounded-full bg-proceed" />
+      Connected
+    </span>
+  )
+}
+
+function ChannelRow({
+  icon,
+  iconWhiteBox,
+  iconTone,
+  name,
+  status,
+  control,
+  tinted,
+}: {
+  icon: ReactNode
+  iconWhiteBox?: boolean
+  iconTone: string
+  name: ReactNode
+  status: ReactNode
+  control: ReactNode
+  tinted?: boolean
+}) {
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-[10px] border border-line px-[14px] py-[12px] ${
+        tinted ? 'bg-card-2' : ''
+      }`}
+    >
+      <div
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line ${
+          iconWhiteBox ? 'bg-white' : 'bg-card-2'
+        } ${iconTone}`}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-semibold text-text">{name}</div>
+        {status}
+      </div>
+      {control}
+    </div>
+  )
+}
+
+export function SettingsNotifications() {
+  const [slackOn, setSlackOn] = useState(true)
+  const [teamsOn, setTeamsOn] = useState(true)
+
+  return (
+    <section className="rounded-[13px] border border-line bg-card px-[18px] py-[17px]">
+      <div className="text-[14.5px] font-semibold text-text">Notifications</div>
+      <p className="mt-[3px] text-[12.5px] text-text-2">
+        Ping the channel when a run reaches the gate with samples needing attention.
+      </p>
+      <div className="mt-[13px] space-y-[9px]">
+        <ChannelRow
+          tinted
+          iconWhiteBox
+          iconTone="text-text-2"
+          icon={<SlackGlyph />}
+          name={
+            <>
+              Slack · <span className="font-mono">#pipeguard-ops</span>
+            </>
+          }
+          status={<ConnectedDot />}
+          control={<SettingsToggle on={slackOn} onChange={setSlackOn} label="Slack notifications" />}
+        />
+        <ChannelRow
+          iconTone="text-text-2"
+          icon={<TeamsGlyph />}
+          name={
+            <>
+              Microsoft Teams · <span className="font-mono">Lab Ops</span>
+            </>
+          }
+          status={<ConnectedDot />}
+          control={<SettingsToggle on={teamsOn} onChange={setTeamsOn} label="Microsoft Teams notifications" />}
+        />
+        <ChannelRow
+          iconTone="text-text-3"
+          icon={<DiscordGlyph />}
+          name="Discord"
+          status={<div className="mt-[2px] text-[11.5px] text-text-3">Not connected</div>}
+          control={
+            <button
+              type="button"
+              className="shrink-0 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12px] font-medium text-accent"
+            >
+              Connect
+            </button>
+          }
+        />
+      </div>
+    </section>
+  )
+}

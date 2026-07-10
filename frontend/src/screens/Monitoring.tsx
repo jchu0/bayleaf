@@ -1,148 +1,187 @@
-import { ChevronRight, Wrench } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { RotateCw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
+import { MonitoringSignatureRow } from '../components/MonitoringSignatureRow'
+import { PageHeader } from '../components/PageHeader'
+import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { Empty, ErrorBox, Loading } from '../components/States'
-import type { Gate, RunDetail, RunSummary } from '../types'
-import { GATE_DOT, GATE_LABEL, VERDICT_BAR, VERDICT_LABEL } from '../verdict'
+import { useRefresh } from '../hooks/useRefresh'
+import type { Gate, MonitoringMetrics, MonitoringWindow, Verdict } from '../types'
+import { GATE_DOT, VERDICT_BAR, VERDICT_LABEL } from '../verdict'
 
-const VERDICTS = ['proceed', 'hold', 'rerun', 'escalate'] as const
-const GATES = ['preflight', 'qc', 'variant'] as const
-// Top-N recurring signatures shown before the "Show all" toggle.
-const SIG_CAP = 8
-// A signature seen this many times or more gets a "Repair agent" escalation CTA.
-const REPAIR_MIN = 3
+// The window control offers the three dated windows README §5.8 mandates; the backend applies one
+// window to the whole payload, so it governs the KPIs, throughput, gate-pass, and signatures
+// uniformly. ('all' is a valid MonitoringWindow but intentionally not offered here.)
+const WINDOW_OPTIONS: SegmentOption<MonitoringWindow>[] = [
+  { value: '7d', label: '7d' },
+  { value: '14d', label: '14d' },
+  { value: '30d', label: '30d' },
+]
+const WINDOW_LABEL: Record<string, string> = { '7d': '7 days', '14d': '14 days', '30d': '30 days', all: 'all time' }
+
+// Stacked-bar order, top→bottom (escalate on top, proceed at the baseline).
+const STACK_ORDER: Verdict[] = ['escalate', 'rerun', 'hold', 'proceed']
+// Legend order per the design.
+const LEGEND_ORDER: Verdict[] = ['proceed', 'hold', 'rerun', 'escalate']
+// Gate-pass row labels — the design labels only QC/Variant with "gate".
+const GATE_PASS_LABEL: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', variant: 'Variant gate' }
+
+// Short throughput-bar date derived from the run's [Header] date (YYYY-MM-DD → MM-DD). We never
+// fabricate a date: an undated run (shouldn't appear in a dated window) falls back to its run id.
+function shortDate(runDate: string | null, runId: string): string {
+  if (runDate && runDate.length >= 10) return runDate.slice(5, 10)
+  return runId.length > 6 ? runId.slice(-6) : runId
+}
 
 export function Monitoring() {
-  const [runs, setRuns] = useState<RunSummary[] | null>(null)
-  const [details, setDetails] = useState<RunDetail[]>([])
+  const [window, setWindow] = useState<MonitoringWindow>('7d')
+  const [data, setData] = useState<MonitoringMetrics | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [showAllSigs, setShowAllSigs] = useState(false)
+  const [query, setQuery] = useState('')
+  const [openSigs, setOpenSigs] = useState<Set<string>>(new Set())
+
+  // Single pre-aggregated call (drops the old N+1 runs.map(api.run) reassembly, F21).
+  const load = useCallback(async () => {
+    setError(null)
+    const d = await api.monitoring(window)
+    setData(d)
+  }, [window])
+  const { spinning, updatedLabel, refresh } = useRefresh(load)
 
   useEffect(() => {
-    api
-      .runs()
-      .then((rs) => {
-        setRuns(rs)
-        return Promise.all(rs.map((r) => api.run(r.run_id)))
-      })
-      .then(setDetails)
-      .catch((e) => setError(String(e)))
-  }, [])
+    refresh().catch((e) => setError(String(e)))
+  }, [refresh])
 
-  if (error) return <ErrorBox message={error} />
-  if (!runs) return <Loading label="Loading monitoring…" />
-  if (runs.length === 0) return <Empty message="No runs to monitor yet." />
+  const windowShort = window
+  const windowLabel = WINDOW_LABEL[window] ?? 'window'
 
-  const totalSamples = runs.reduce((a, r) => a + r.n_samples, 0)
-  const totalAttention = runs.reduce((a, r) => a + r.n_attention, 0)
-  const proceed = runs.reduce((a, r) => a + (r.counts.proceed ?? 0), 0)
-  const maxSamples = Math.max(...runs.map((r) => r.n_samples), 1)
+  const filteredSigs = useMemo(() => {
+    if (!data) return []
+    const q = query.trim().toLowerCase()
+    if (!q) return data.signatures
+    return data.signatures.filter((s) =>
+      `${s.rule_id} ${s.title} ${s.signature}`.toLowerCase().includes(q),
+    )
+  }, [data, query])
 
-  const gateFlagged: Record<Gate, number> = { preflight: 0, qc: 0, variant: 0 }
-  const sigMap = new Map<string, { rule: string; title: string; gate: Gate; count: number }>()
-  let cardCount = 0
-  for (const d of details) {
-    for (const c of d.cards) {
-      cardCount += 1
-      const flagged = new Set(c.gate_results.map((g) => g.gate))
-      for (const g of GATES) if (flagged.has(g)) gateFlagged[g] += 1
-      for (const f of c.findings) {
-        const cur = sigMap.get(f.signature) ?? { rule: f.rule_id, title: f.title, gate: f.gate, count: 0 }
-        cur.count += 1
-        sigMap.set(f.signature, cur)
-      }
-    }
-  }
-  const signatures = [...sigMap.values()].sort((a, b) => b.count - a.count)
-  const visibleSigs = showAllSigs ? signatures : signatures.slice(0, SIG_CAP)
+  const control = (
+    <div className="flex items-center gap-2">
+      <SegmentedControl options={WINDOW_OPTIONS} value={window} onChange={setWindow} />
+      <button
+        type="button"
+        onClick={() => refresh().catch((e) => setError(String(e)))}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 transition-colors hover:border-line-strong"
+        title="Refresh telemetry"
+      >
+        <RotateCw size={13} className={spinning ? 'animate-spin' : ''} />
+        {updatedLabel ? `Updated ${updatedLabel}` : 'Refresh'}
+      </button>
+    </div>
+  )
 
-  const kpis = [
-    { label: 'Runs', value: String(runs.length) },
-    { label: 'Samples', value: String(totalSamples) },
-    { label: 'Auto-proceed', value: totalSamples ? `${Math.round((proceed / totalSamples) * 100)}%` : '—' },
-    { label: 'Need review', value: String(totalAttention) },
+  const header = (
+    <PageHeader
+      eyebrow="Fleet health"
+      title="Monitoring"
+      subtitle="Run throughput and verdict trends across recent runs. System telemetry (Prometheus) lands with the backend."
+      actions={control}
+    />
+  )
+
+  if (error) return <div className="mx-auto max-w-[1040px]">{header}<ErrorBox message={error} onRetry={() => refresh().catch((e) => setError(String(e)))} /></div>
+  if (!data) return <div className="mx-auto max-w-[1040px]">{header}<Loading label="Loading monitoring…" /></div>
+
+  const o = data.overall
+  const maxSamples = Math.max(...data.runs.map((r) => r.n_samples), 1)
+
+  const kpis: { label: string; value: string; hint?: string }[] = [
+    { label: `Runs · ${windowShort}`, value: String(o.n_runs) },
+    { label: `Samples · ${windowShort}`, value: String(o.n_samples) },
+    {
+      label: 'Auto-proceed',
+      value: o.auto_proceed_pct != null ? `${Math.round(o.auto_proceed_pct)}%` : '—',
+      // Honest labelling (guardrail 2): a throughput ratio, NOT a calibrated confidence.
+      hint: 'Throughput heuristic — share of samples the gate auto-cleared to Proceed. Not a calibrated confidence.',
+    },
+    // Honest placeholder (F3): no review-latency telemetry field exists on the backend yet.
+    { label: 'Median review', value: '—', hint: 'Review-latency telemetry not yet captured by the backend.' },
   ]
 
   return (
     <div className="mx-auto max-w-[1040px]">
-      <h1 className="text-[22px] font-semibold tracking-tight text-text">Monitoring</h1>
-      <p className="mt-1 text-[13px] text-text-2">
-        Run throughput + verdict distribution. System telemetry (Prometheus <code>/metrics</code>) ships with the
-        backend.
-      </p>
+      {header}
 
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* KPI row — border-only tiles (no shadow), value mono 24px */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {kpis.map((k) => (
-          <div key={k.label} className="rounded-xl border border-line bg-card px-4 py-3 shadow-card">
-            <div className="font-mono text-[26px] font-semibold text-text">{k.value}</div>
-            <div className="mt-0.5 text-[12px] text-text-2">{k.label}</div>
+          <div key={k.label} className="rounded-xl border border-line bg-card px-4 py-[14px]" title={k.hint}>
+            <div className="font-mono text-[24px] font-semibold leading-none text-text">{k.value}</div>
+            <div className="mt-1.5 text-[11.5px] text-text-2">{k.label}</div>
           </div>
         ))}
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <div className="rounded-xl border border-line bg-card p-4 shadow-card lg:col-span-2">
-          <p className="mb-3 text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">Verdicts over time</p>
-          <div className="flex items-end gap-3">
-            {runs.map((r) => {
-              const barH = (r.n_samples / maxSamples) * 150
-              return (
-                <Link
+      {/* Two-column band: verdicts-over-time (1.5fr) + gate pass rate (1fr) */}
+      <div className="mt-[14px] grid gap-[14px] lg:grid-cols-[1.5fr_1fr]">
+        <div className="rounded-[14px] border border-line bg-card px-[18px] py-4">
+          <div className="text-[13.5px] font-semibold text-text">Verdicts over time</div>
+          {data.runs.length === 0 ? (
+            <p className="mt-4 text-[12.5px] text-text-3">No dated runs in this window.</p>
+          ) : (
+            <div className="mt-4 flex h-[168px] items-end gap-[10px]">
+              {data.runs.map((r) => (
+                <div
                   key={r.run_id}
-                  to={`/runs/${r.run_id}`}
-                  title={`Open ${r.run_id} decision cards`}
-                  className="group flex flex-1 flex-col items-center"
+                  className="flex h-full min-w-0 flex-1 flex-col items-center gap-[7px]"
+                  title={`${r.run_id} · ${r.n_samples} samples`}
                 >
-                  <div
-                    className="flex w-full max-w-12 flex-col-reverse overflow-hidden rounded-t opacity-90 transition group-hover:opacity-100 group-hover:ring-2 group-hover:ring-accent-weak"
-                    style={{ height: barH }}
-                  >
-                    {VERDICTS.map((v) => {
+                  <div className="flex w-[26px] flex-1 flex-col justify-end gap-[2px]">
+                    {STACK_ORDER.map((v) => {
                       const n = r.counts[v] ?? 0
                       return n ? (
                         <div
                           key={v}
-                          className={VERDICT_BAR[v]}
-                          style={{ height: (n / r.n_samples) * barH }}
+                          className={`w-full rounded-[2px] ${VERDICT_BAR[v]}`}
+                          style={{ height: `${(n / maxSamples) * 100}%` }}
                           title={`${VERDICT_LABEL[v]}: ${n}`}
                         />
                       ) : null
                     })}
                   </div>
-                  <span className="mt-1.5 w-full truncate text-center font-mono text-[9px] text-text-3 group-hover:text-text-2">
-                    {r.run_id}
-                  </span>
-                </Link>
-              )
-            })}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-text-2">
-            {VERDICTS.map((v) => (
-              <span key={v} className="flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-sm ${VERDICT_BAR[v]}`} />
+                  <div className="whitespace-nowrap font-mono text-[9px] text-text-3">
+                    {shortDate(r.run_date, r.run_id)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="mt-[14px] flex flex-wrap gap-[14px] border-t border-line pt-3">
+            {LEGEND_ORDER.map((v) => (
+              <span key={v} className="inline-flex items-center gap-[5px] text-[11px] text-text-2">
+                <span className={`inline-block h-[9px] w-[9px] rounded-[2px] ${VERDICT_BAR[v]}`} />
                 {VERDICT_LABEL[v]}
               </span>
             ))}
           </div>
         </div>
 
-        <div className="rounded-xl border border-line bg-card p-4 shadow-card">
-          <p className="mb-3 text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">Gate pass rate</p>
-          <div className="space-y-3">
-            {GATES.map((g) => {
-              const passPct = cardCount ? Math.round(((cardCount - gateFlagged[g]) / cardCount) * 100) : 100
+        <div className="rounded-[14px] border border-line bg-card px-[18px] py-4">
+          <div className="text-[13.5px] font-semibold text-text">Gate pass rate · {windowShort}</div>
+          <div className="mt-[18px] flex flex-col gap-[17px]">
+            {data.gates.map((g) => {
+              const passPct = g.total ? Math.round(((g.total - g.flagged) / g.total) * 100) : 100
               return (
-                <div key={g}>
-                  <div className="mb-1 flex items-center justify-between text-[12px]">
-                    <span className="flex items-center gap-1.5 text-text-2">
-                      <span className={`h-1.5 w-1.5 rounded-full ${GATE_DOT[g]}`} />
-                      {GATE_LABEL[g]} gate
+                <div key={g.gate}>
+                  <div className="mb-[7px] flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 text-[12.5px] text-text">
+                      <span className={`inline-block h-2 w-2 rounded-full ${GATE_DOT[g.gate]}`} />
+                      {GATE_PASS_LABEL[g.gate]}
                     </span>
-                    <span className="font-mono text-text">{passPct}%</span>
+                    <span className="font-mono text-[13px] font-semibold text-text">{passPct}%</span>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-card-3">
-                    <div className="h-full bg-proceed" style={{ width: `${passPct}%` }} />
+                  {/* Fill uses THAT gate's own accent, not a blanket green. */}
+                  <div className="h-2 overflow-hidden rounded-[5px] bg-card-2">
+                    <div className={`h-full ${GATE_DOT[g.gate]}`} style={{ width: `${passPct}%` }} />
                   </div>
                 </div>
               )
@@ -151,51 +190,66 @@ export function Monitoring() {
         </div>
       </div>
 
-      {signatures.length > 0 && (
-        <div className="mt-4 rounded-xl border border-line bg-card p-4 shadow-card">
-          <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">
-            Recurring issue signatures{' '}
-            <span className="font-normal normal-case tracking-normal text-text-3">· all-time</span>
-          </p>
-          {/* Honest labeling: counts are lifetime totals across every loaded run, not a rolling
-              window — 7d/14d/30d trends land once the backend serves windowed time-series. */}
-          <p className="mb-3 text-[11px] text-text-3">Lifetime counts across all runs · not yet windowed.</p>
-          <div className="space-y-1.5">
-            {visibleSigs.map((s) => {
-              const recurring = s.count >= REPAIR_MIN
-              return (
-                <Link
-                  key={s.rule + s.title}
-                  to="/queue"
-                  title="Open review queue"
-                  className="flex items-center gap-3 rounded-lg border border-line px-3 py-2 transition hover:border-line-strong"
-                >
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${GATE_DOT[s.gate]}`} />
-                  <span className="shrink-0 font-mono text-[11px] text-text-2">{s.rule}</span>
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-text">{s.title}</span>
-                  {recurring && (
-                    <span className="flex shrink-0 items-center gap-1 rounded-md border border-accent bg-accent-weak px-2 py-0.5 text-[11px] font-medium text-accent-strong">
-                      <Wrench size={11} /> Repair agent
-                    </span>
-                  )}
-                  <span className="shrink-0 rounded border border-line bg-card-2 px-1.5 py-0.5 font-mono text-[10.5px] text-text-2">
-                    ×{s.count}
-                  </span>
-                  <ChevronRight size={15} className="shrink-0 text-text-3" />
-                </Link>
-              )
-            })}
-          </div>
-          {signatures.length > SIG_CAP && (
-            <button
-              onClick={() => setShowAllSigs((v) => !v)}
-              className="mt-2.5 text-[12px] font-medium text-accent hover:underline"
-            >
-              {showAllSigs ? `Show top ${SIG_CAP}` : `Show all (${signatures.length})`}
-            </button>
-          )}
-        </div>
+      {data.n_runs_excluded_no_date > 0 && (
+        // Honest bookkeeping: undated runs can't be placed on the time axis under a dated window.
+        <p className="mt-2 text-[10.5px] text-text-3">
+          {data.n_runs_excluded_no_date} run{data.n_runs_excluded_no_date === 1 ? '' : 's'} without a recorded
+          date {data.n_runs_excluded_no_date === 1 ? 'is' : 'are'} excluded from this window.
+        </p>
       )}
+
+      {/* Recurring issue signatures — searchable, collapsible fixed-grid rows */}
+      <div className="mt-[14px] rounded-[14px] border border-line bg-card px-[18px] py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-[13.5px] font-semibold text-text">Recurring issue signatures · {windowShort}</div>
+            <div className="mt-0.5 text-[12px] text-text-2">
+              A signature recurring 3× auto-escalates to the pipeline-repair agent.
+            </div>
+          </div>
+          <div className="flex min-w-[230px] items-center gap-[7px] rounded-[9px] border border-line bg-card-2 px-[10px] py-[6px]">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-text-3">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.1-4.1" />
+            </svg>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search historic issues…"
+              className="min-w-0 flex-1 border-none bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-3"
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-[9px]">
+          {filteredSigs.map((s) => (
+            <MonitoringSignatureRow
+              key={s.signature}
+              sig={s}
+              open={openSigs.has(s.signature)}
+              onToggle={() =>
+                setOpenSigs((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(s.signature)) next.delete(s.signature)
+                  else next.add(s.signature)
+                  return next
+                })
+              }
+              windowShort={windowShort}
+              windowLabel={windowLabel}
+            />
+          ))}
+
+          {filteredSigs.length === 0 &&
+            (query.trim() ? (
+              <div className="rounded-[10px] border border-dashed border-line-strong px-6 py-6 text-center text-[12.5px] text-text-2">
+                No historic issues match “{query.trim()}”.
+              </div>
+            ) : (
+              <Empty message={`No recurring issue signatures in the last ${windowLabel}.`} />
+            ))}
+        </div>
+      </div>
     </div>
   )
 }

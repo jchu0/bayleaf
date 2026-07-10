@@ -1,14 +1,16 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type MouseEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { ArrowDownToLine, ArrowUpFromLine, ChevronRight } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpFromLine, ChevronRight, ExternalLink } from 'lucide-react'
 import { api } from '../api'
+import { PageHeader } from '../components/PageHeader'
 import { ErrorBox, Loading } from '../components/States'
 import type { Gate, PipelineStage, RunArtifact, RunDetail, Verdict } from '../types'
-import { GATE_LABEL } from '../verdict'
+import { GATE_DOT, VERDICT_LABEL } from '../verdict'
 
-// Fixed pipeline lineage (§5). Tools describe what this build actually touches: it starts
-// from FASTQ, so alignment/variant-calling are shown but marked "not run in this build"
-// (no artifacts) rather than fabricating an aligner/caller run we didn't execute.
+// Fixed pipeline lineage (§5.6). Tools describe what this build actually touches: it starts
+// from FASTQ, so alignment/variant-calling are shown but marked "not run in this build" (no
+// artifacts) rather than fabricating an aligner/caller run — the honesty guardrail wins over
+// the prototype's populated-looking mock.
 const STAGES: { key: PipelineStage; n: number; title: string; tool: string; gate?: Gate }[] = [
   { key: 'intake', n: 1, title: 'Sample intake', tool: 'Sample sheet + metadata' },
   { key: 'demux', n: 2, title: 'Demultiplex', tool: 'demux stats', gate: 'preflight' },
@@ -22,24 +24,45 @@ type Status = 'ok' | 'warn' | 'blocked' | 'skipped'
 type Stage = (typeof STAGES)[number]
 const VERDICT_RANK: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
 
-const STATUS_DOT: Record<Status, string> = {
-  ok: 'bg-proceed',
-  warn: 'bg-hold',
-  blocked: 'bg-escalate',
-  skipped: 'bg-line-strong',
+// Nodes color by STAGE STATUS ONLY (§5.6). The number badge is the primary signal: a solid
+// status fill; the detail badge/pill use the tinted treatment (bg + solid border + solid text).
+// `skipped` stays deliberately neutral — the app declines to color a stage it never ran.
+const STATUS_STYLE: Record<
+  Status,
+  { numBadge: string; dot: string; headBadge: string; pill: string; label: string }
+> = {
+  ok: {
+    numBadge: 'bg-proceed text-white',
+    dot: 'bg-proceed',
+    headBadge: 'bg-proceed-bg border-proceed text-proceed',
+    pill: 'bg-proceed-bg border-proceed text-proceed',
+    label: 'Completed',
+  },
+  warn: {
+    numBadge: 'bg-hold text-white',
+    dot: 'bg-hold',
+    headBadge: 'bg-hold-bg border-hold text-hold',
+    pill: 'bg-hold-bg border-hold text-hold',
+    label: 'Completed with warnings',
+  },
+  blocked: {
+    numBadge: 'bg-escalate text-white',
+    dot: 'bg-escalate',
+    headBadge: 'bg-escalate-bg border-escalate text-escalate',
+    pill: 'bg-escalate-bg border-escalate text-escalate',
+    label: 'Awaiting review',
+  },
+  skipped: {
+    numBadge: 'bg-line-strong text-white',
+    dot: 'bg-line-strong',
+    headBadge: 'bg-card-2 border-line text-text-3',
+    pill: 'bg-card-2 border-line text-text-3',
+    label: 'Not run in this build',
+  },
 }
-const STATUS_PILL: Record<Status, { label: string; cls: string }> = {
-  ok: { label: 'Completed', cls: 'border-proceed-bd bg-proceed-bg text-proceed-fg' },
-  warn: { label: 'Completed with warnings', cls: 'border-hold-bd bg-hold-bg text-hold-fg' },
-  blocked: { label: 'Blocked', cls: 'border-escalate-bd bg-escalate-bg text-escalate-fg' },
-  skipped: { label: 'Not run in this build', cls: 'border-line bg-card-2 text-text-3' },
-}
-const ORIGIN_CHIP: Record<string, string> = {
-  'real-giab': 'border-preflight/40 bg-preflight/10 text-preflight',
-  synthetic: 'border-hold-bd bg-hold-bg text-hold-fg',
-  contrived: 'border-line bg-card-2 text-text-3',
-  unknown: 'border-line bg-card-2 text-text-3',
-}
+
+// Gate pill tags per the handoff (note the asymmetry — preflight has no "gate" suffix).
+const GATE_TAG: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', variant: 'Variant gate' }
 
 function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`
@@ -101,151 +124,219 @@ export function Provenance() {
   if (error) return <ErrorBox message={error} />
   if (!detail || !artifacts) return <Loading label="Loading provenance…" />
 
+  // Per-stage note for the drill-in band. Gate stages carry the worst gate result's rationale
+  // (rules-authored); non-gate stages get an honest derived note — never a fabricated one.
+  const noteFor = (stage: Stage): string => {
+    if (stage.gate) {
+      const results = detail.cards.flatMap((c) => c.gate_results).filter((g) => g.gate === stage.gate)
+      if (results.length) {
+        const worst = results.reduce((a, b) => (VERDICT_RANK[b.verdict] < VERDICT_RANK[a.verdict] ? b : a))
+        if (worst.rationale) return worst.rationale
+      }
+    }
+    const n = detail.cards.length
+    switch (stage.key) {
+      case 'intake':
+        return `${n} sample${n === 1 ? '' : 's'} registered from the sample sheet.`
+      case 'align':
+        return 'Not run in this build — lineage starts from FASTQ; alignment provenance is future work.'
+      case 'variant':
+        return 'Not run in this build — variant-calling provenance is future work.'
+      case 'gate':
+        return `Aggregates the three gates → overall verdict ${VERDICT_LABEL[runWorst]}.`
+      default:
+        return 'No stage note captured for this stage.'
+    }
+  }
+
   // Default the drill-in to the first stage that flagged (most interesting), else the gate.
   const firstFlagged = STAGES.find((s) => statusFor(s) === 'blocked' || statusFor(s) === 'warn')
   const active = selected ?? firstFlagged?.key ?? 'gate'
   const activeStage = STAGES.find((s) => s.key === active) ?? STAGES[STAGES.length - 1]
-  const origin = artifacts[0]?.origin ?? 'unknown'
+  const activeStatus = statusFor(activeStage)
+  const sc = STATUS_STYLE[activeStatus]
+  const stageArts = artifacts.filter((a) => a.stage === activeStage.key)
+  const inputs = stageArts.filter((a) => a.role === 'input')
+  const outputs = stageArts.filter((a) => a.role === 'output')
 
   return (
     <div className="mx-auto max-w-[1080px]">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-semibold tracking-tight text-text">Provenance</h1>
-          <p className="mt-1 text-[13px] text-text-2">
-            Read-only lineage for <span className="font-mono text-text-3">{detail.run_id}</span>. Click a stage to
+      <PageHeader
+        eyebrow="Lineage"
+        title="Provenance"
+        subtitle={
+          <>
+            Read-only lineage for <span className="font-mono text-text">{detail.run_id}</span>. Click a stage to
             inspect its data I/O.
-          </p>
-        </div>
-        <span
-          className={`rounded-full border px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wide ${ORIGIN_CHIP[origin] ?? ORIGIN_CHIP.unknown}`}
-        >
-          {origin}
-        </span>
-      </div>
+          </>
+        }
+      />
 
-      {/* Horizontal DAG */}
-      <div className="mt-5 flex items-stretch gap-1.5 overflow-x-auto pb-1">
-        {STAGES.map((stage, i) => {
+      {/* Left→right stage DAG — nodes stretch equally with auto-width chevrons between. */}
+      <div
+        className="mt-[18px] grid items-stretch gap-1 px-0.5 pb-2.5 pt-1.5"
+        style={{ gridTemplateColumns: 'repeat(5, minmax(0,1fr) auto) minmax(0,1fr)' }}
+      >
+        {STAGES.flatMap((stage, i) => {
           const status = statusFor(stage)
+          const s = STATUS_STYLE[status]
           const isActive = stage.key === active
-          return (
-            <div key={stage.key} className="flex items-stretch gap-1.5">
-              <button
-                onClick={() => setSelected(stage.key)}
-                className={`w-[150px] shrink-0 rounded-xl border bg-card p-3 text-left shadow-card transition-colors ${
-                  isActive ? 'border-accent ring-1 ring-accent/30' : 'border-line hover:border-line-strong'
-                } ${status === 'skipped' ? 'opacity-70' : ''}`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="grid h-5 w-5 place-items-center rounded-full bg-card-2 font-mono text-[11px] font-semibold text-text-2">
-                    {stage.n}
-                  </span>
-                  <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status]}`} title={STATUS_PILL[status].label} />
-                </div>
-                <div className="mt-2 text-[13px] font-semibold text-text">{stage.title}</div>
-                <div className="mt-0.5 truncate text-[11px] text-text-3">{stage.tool}</div>
-                {stage.gate && (
-                  <div className="mt-2 inline-flex items-center gap-1 rounded border border-line bg-card-2 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-text-2">
-                    {GATE_LABEL[stage.gate]} gate
-                  </div>
-                )}
-              </button>
-              {i < STAGES.length - 1 && <ChevronRight size={16} className="my-auto shrink-0 text-text-3" />}
-            </div>
-          )
+          const cells: ReactNode[] = [
+            <button
+              key={stage.key}
+              onClick={() => setSelected(stage.key)}
+              className={`flex w-full flex-col gap-[7px] overflow-hidden rounded-xl border bg-card p-3 text-left transition-shadow ${
+                isActive ? 'border-accent shadow-card ring-[3px] ring-accent-weak' : 'border-line'
+              }`}
+            >
+              <div className="flex w-full items-center justify-between">
+                <span
+                  className={`grid h-[22px] w-[22px] place-items-center rounded-[7px] font-mono text-[12px] font-semibold ${s.numBadge}`}
+                >
+                  {stage.n}
+                </span>
+                <span
+                  className={`h-[9px] w-[9px] rounded-full shadow-[0_0_0_3px_var(--color-page)] ${s.dot}`}
+                  title={s.label}
+                />
+              </div>
+              <div className="text-left text-[12.5px] font-semibold leading-[1.25] text-text">{stage.title}</div>
+              <div className="max-w-full truncate text-left font-mono text-[9.5px] text-text-3">{stage.tool}</div>
+              {stage.gate && (
+                <span className="inline-flex max-w-full items-center gap-1 self-start whitespace-nowrap rounded-full border border-line bg-page px-[7px] py-0.5 text-[8.5px] font-semibold uppercase text-text-2">
+                  <span className={`h-[5px] w-[5px] shrink-0 rounded-full ${GATE_DOT[stage.gate]}`} />
+                  {GATE_TAG[stage.gate]}
+                </span>
+              )}
+            </button>,
+          ]
+          if (i < STAGES.length - 1) {
+            cells.push(
+              <div key={`chev-${stage.key}`} className="flex shrink-0 items-center px-[3px]">
+                <ChevronRight size={16} strokeWidth={2.4} className="text-line-strong" />
+              </div>,
+            )
+          }
+          return cells
         })}
       </div>
 
-      {/* Drill-in */}
-      <StageDrillIn
-        stage={activeStage}
-        status={statusFor(activeStage)}
-        artifacts={artifacts.filter((a) => a.stage === activeStage.key)}
-        rationale={
-          activeStage.gate
-            ? detail.cards.flatMap((c) => c.gate_results).find((g) => g.gate === activeStage.gate)?.rationale ?? null
-            : null
-        }
-      />
+      {/* Drill-in: header · note bar · I/O grid */}
+      <div className="mt-[14px] overflow-hidden rounded-[14px] border border-line bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+        <div className="flex items-center gap-[13px] border-b border-line px-5 py-4">
+          <span
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-[9px] border font-mono text-[15px] font-semibold ${sc.headBadge}`}
+          >
+            {activeStage.n}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-semibold text-text">{activeStage.title}</div>
+            <div className="font-mono text-[11.5px] text-text-3">{activeStage.tool}</div>
+          </div>
+          <span
+            className={`shrink-0 rounded-full border px-[11px] py-1 text-[11px] font-semibold uppercase tracking-[0.3px] ${sc.pill}`}
+          >
+            {sc.label}
+          </span>
+        </div>
+
+        {/* Per-stage note bar — shown for every stage. */}
+        <div className="border-b border-line bg-card-2 px-5 py-[11px] text-[12.5px] leading-[1.5] text-text-2">
+          {noteFor(activeStage)}
+        </div>
+
+        <div className="grid grid-cols-2">
+          <ProvColumn icon={<ArrowDownToLine size={14} strokeWidth={2} />} label="Inputs" refs={inputs} />
+          <ProvColumn
+            icon={<ArrowUpFromLine size={14} strokeWidth={2} />}
+            label="Outputs"
+            refs={outputs}
+            className="border-l border-line"
+          />
+        </div>
+      </div>
     </div>
   )
 }
 
-function StageDrillIn({
-  stage,
-  status,
-  artifacts,
-  rationale,
+function ProvColumn({
+  icon,
+  label,
+  refs,
+  className = '',
 }: {
-  stage: Stage
-  status: Status
-  artifacts: RunArtifact[]
-  rationale: string | null
+  icon: ReactNode
+  label: string
+  refs: RunArtifact[]
+  className?: string
 }) {
-  const inputs = artifacts.filter((a) => a.role === 'input')
-  const outputs = artifacts.filter((a) => a.role === 'output')
-  const pill = STATUS_PILL[status]
-
   return (
-    <section className="mt-4 rounded-xl border border-line bg-card p-5 shadow-card">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-card-2 font-mono text-[12px] font-semibold text-text-2">
-          {stage.n}
-        </span>
-        <div>
-          <h3 className="text-[15px] font-semibold text-text">{stage.title}</h3>
-          <p className="text-[11.5px] text-text-3">{stage.tool}</p>
-        </div>
-        <span className={`ml-auto rounded-full border px-2.5 py-1 text-[11px] font-medium ${pill.cls}`}>{pill.label}</span>
+    <div className={`px-5 py-4 ${className}`}>
+      <div className="flex items-center gap-[7px] text-[11px] font-semibold uppercase tracking-[0.5px] text-text-3">
+        {icon}
+        {label}
       </div>
-
-      {rationale && <p className="mt-3 text-[13px] text-text-2">{rationale}</p>}
-
-      {artifacts.length === 0 ? (
-        <p className="mt-4 rounded-lg border border-dashed border-line-strong bg-card-2/40 px-4 py-6 text-center text-[12.5px] text-text-3">
-          Not executed in this build — the pipeline starts from FASTQ. Alignment / variant lineage is future
-          pipeline-provenance.
-        </p>
-      ) : (
-        <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          <RefColumn icon={<ArrowDownToLine size={13} />} label="Inputs" refs={inputs} />
-          <RefColumn icon={<ArrowUpFromLine size={13} />} label="Outputs" refs={outputs} />
-        </div>
-      )}
-    </section>
+      <div className="mt-1.5">
+        {refs.length === 0 ? (
+          <p className="py-[11px] font-mono text-[12px] text-text-3">—</p>
+        ) : (
+          refs.map((a) => <ProvArtifactRow key={a.name} art={a} />)
+        )}
+      </div>
+    </div>
   )
 }
 
-function RefColumn({ icon, label, refs }: { icon: ReactNode; label: string; refs: RunArtifact[] }) {
+// Every artifact is a link (§5.6): open-in-store / copy-digest / download. RunArtifact carries
+// no URL yet, so open/download are graceful no-ops; copy-digest works client-side off the sha256.
+function ProvArtifactRow({ art }: { art: RunArtifact }) {
+  const [copied, setCopied] = useState(false)
+
+  const copyDigest = () => {
+    if (!art.sha256) return
+    void navigator.clipboard?.writeText(art.sha256).then(
+      () => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      },
+      () => {},
+    )
+  }
+  // No artifact URL in the contract yet — keep open/download honest no-ops rather than fake a link.
+  const noop = (e: MouseEvent) => e.preventDefault()
+
   return (
-    <div>
-      <p className="mb-2 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">
-        {icon}
-        {label}
-      </p>
-      {refs.length === 0 ? (
-        <p className="text-[12px] text-text-3">—</p>
-      ) : (
-        <div className="space-y-2">
-          {refs.map((a) => (
-            <div key={a.name} className="rounded-lg border border-line bg-card-2/40 px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate font-mono text-[12.5px] text-text">{a.name}</span>
-                <span
-                  className={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${ORIGIN_CHIP[a.origin] ?? ORIGIN_CHIP.unknown}`}
-                >
-                  {a.origin}
-                </span>
-              </div>
-              <div className="mt-1 flex flex-wrap gap-x-3 font-mono text-[10.5px] text-text-3">
-                {a.sha256 ? <span className="text-accent">sha256:{a.sha256.slice(0, 12)}</span> : <span>sha256: —</span>}
-                <span>{fmtSize(a.size_bytes)}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="border-b border-line py-[11px]">
+      <div className="flex items-center justify-between gap-2">
+        <a
+          href="#"
+          onClick={noop}
+          title="Open artifact in store"
+          className="inline-flex items-center gap-[5px] break-all font-mono text-[12.5px] font-medium text-accent-strong hover:underline"
+        >
+          <ExternalLink size={12} strokeWidth={1.9} className="shrink-0" />
+          {art.name}
+        </a>
+      </div>
+      <div className="mt-[5px] flex items-center gap-[10px]">
+        {art.sha256 ? (
+          <button
+            type="button"
+            onClick={copyDigest}
+            title="Copy digest"
+            className="font-mono text-[11px] text-accent-strong hover:underline"
+          >
+            {copied ? 'copied ✓' : `sha256:${art.sha256.slice(0, 12)}…`}
+          </button>
+        ) : (
+          <span className="font-mono text-[11px] text-text-3">sha256 n/a</span>
+        )}
+        <span className="text-[11px] text-text-3">{fmtSize(art.size_bytes)}</span>
+        <span className="text-[11px] text-text-3">·</span>
+        <a href="#" onClick={noop} title="Download artifact" className="text-[11px] text-accent-strong hover:underline">
+          download
+        </a>
+      </div>
     </div>
   )
 }

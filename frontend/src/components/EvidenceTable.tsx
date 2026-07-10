@@ -1,125 +1,151 @@
 import type { Evidence, Finding, Severity } from '../types'
-import { GATE_DOT, GATE_LABEL, STATUS_CHIP } from '../verdict'
+import { GATE_DOT, GATE_LABEL } from '../verdict'
 
-const GATES = ['preflight', 'qc', 'variant'] as const
+// The design's separate "Supporting evidence · cited" section — findings (not metric_values)
+// rendered as a Source · Field · Observed · Expected sub-table, one card per finding, with the
+// cited source kept traceable. Distinct from the QC readout hero (QCReadout) so measured
+// signals and cited provenance never conflate. Repurposed from the old EvidenceTable, which
+// mislabeled a findings table as the QC readout.
 
-// The "QC readout by gate": findings grouped by gate, each a Metric · Observed · Threshold ·
-// Status row (flagged-first), with the cited source(s) kept as a caption so evidence stays
-// traceable. Bad barcode segments are highlighted (self-explaining index swaps).
-export function EvidenceTable({ findings }: { findings: Finding[] }) {
-  if (findings.length === 0) {
-    return <p className="text-[13px] font-medium text-proceed-fg">No provenance, metadata, or QC issues found.</p>
-  }
-  const groups = GATES.map((gate) => ({ gate, items: findings.filter((f) => f.gate === gate) })).filter(
-    (g) => g.items.length > 0,
-  )
-  return (
-    <div className="space-y-4">
-      {groups.map(({ gate, items }) => (
-        <div key={gate}>
-          <div className="mb-1.5 flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-2">
-              <span className={`h-1.5 w-1.5 rounded-full ${GATE_DOT[gate]}`} />
-              {GATE_LABEL[gate]} gate
-            </span>
-            <span className="rounded border border-hold-bd bg-hold-bg px-1.5 py-0.5 text-[10px] font-medium text-hold-fg">
-              {items.length} flagged
-            </span>
-          </div>
-          <div className="overflow-hidden rounded-lg border border-line">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="bg-card-2 text-left text-[10.5px] uppercase tracking-wide text-text-3">
-                  <th className="px-3 py-2 font-medium">Metric</th>
-                  <th className="px-3 py-2 font-medium">Observed</th>
-                  <th className="px-3 py-2 font-medium">Threshold</th>
-                  <th className="px-3 py-2 text-right font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((f) => {
-                  // Show every cited evidence row (not just evidence[0]); a finding with
-                  // multiple citations renders one sub-row per source so provenance stays
-                  // complete. `[null]` keeps a finding visible even with no evidence attached.
-                  const evs: (Evidence | null)[] = f.evidence.length > 0 ? f.evidence : [null]
-                  return evs.map((e, i) => {
-                    // Traceability caption: rule id (primary row only) · source_kind · source ·
-                    // source_field/locator — surfaces where the number actually came from.
-                    const cite = [
-                      i === 0 ? f.rule_id : null,
-                      e?.source_kind,
-                      e?.source,
-                      e?.source_field ?? e?.locator,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')
-                    return (
-                      <tr key={`${f.id}-${i}`} className="border-t border-line align-top">
-                        <td className="px-3 py-2">
-                          {i === 0 && (
-                            <>
-                              <div className="font-medium text-text">{f.title}</div>
-                              {f.detail && (
-                                <div className="mt-0.5 text-[11.5px] text-text-3">{f.detail}</div>
-                              )}
-                            </>
-                          )}
-                          {cite && (
-                            <div className={`font-mono text-[10.5px] text-text-3 ${i === 0 ? 'mt-0.5' : ''}`}>
-                              {i > 0 ? '↳ ' : ''}
-                              {cite}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 font-mono text-[12px] text-text">
-                          <Observed value={e?.value ?? null} expected={e?.expected ?? null} />
-                        </td>
-                        <td className="px-3 py-2 font-mono text-[12px] text-text-2">
-                          {e?.expected ?? e?.threshold ?? '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          {i === 0 && <StatusChip sev={f.severity} />}
-                        </td>
-                      </tr>
-                    )
-                  })
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
+type Variant = 'split' | 'brief' | 'dense'
+
+// Severity chip treatment (mirrors the prototype SEV map): the accent color per severity,
+// on a tinted background. Kept local — verdict.ts has no severity-chip export.
+const SEV: Record<Severity, { dot: string; text: string; bg: string; label: string }> = {
+  critical: { dot: 'bg-crit', text: 'text-crit', bg: 'bg-escalate-bg', label: 'Critical' },
+  warn: { dot: 'bg-warn', text: 'text-warn', bg: 'bg-rerun-bg', label: 'Warn' },
+  info: { dot: 'bg-info', text: 'text-info', bg: 'bg-accent-weak', label: 'Info' },
 }
 
-function StatusChip({ sev }: { sev: Severity }) {
-  const s = STATUS_CHIP[sev]
+const RULE_CHIP =
+  'shrink-0 rounded-[5px] border border-line bg-card-2 px-1.5 py-px font-mono text-[10.5px] font-medium text-text-2'
+
+// A barcode/index sequence — the only value shape where a per-character diff is meaningful.
+const isSeq = (s: string) => /^[ACGTN-]{4,}$/i.test(s)
+
+// Highlight the differing characters of an observed index against the declared one (an index
+// swap self-explains: the mismatched bases light up escalate-red). Non-sequence values render
+// plainly — we never fabricate a "bad" flag the evidence didn't carry.
+function ObservedCell({ value, expected }: { value: string | null; expected: string | null }) {
+  if (!value) return <span className="text-text-3">—</span>
+  if (expected && value !== expected && value.length === expected.length && isSeq(value) && isSeq(expected)) {
+    return (
+      <span className="font-mono text-[11.5px]">
+        {[...value].map((ch, i) => (
+          <span
+            key={i}
+            className={
+              ch !== expected[i]
+                ? 'rounded-[2px] bg-escalate-bg px-[1.5px] font-bold text-escalate-fg underline underline-offset-2'
+                : 'text-text'
+            }
+          >
+            {ch}
+          </span>
+        ))}
+      </span>
+    )
+  }
+  return <span className="break-all font-mono text-[11.5px] font-semibold text-text">{value}</span>
+}
+
+function SevChip({ sev }: { sev: Severity }) {
+  const s = SEV[sev]
   return (
     <span
-      className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${s.cls}`}
+      className={`inline-flex shrink-0 items-center gap-[5px] rounded-[5px] px-[7px] py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.4px] ${s.text} ${s.bg}`}
     >
+      <span className={`h-[5px] w-[5px] rounded-full ${s.dot}`} />
       {s.label}
     </span>
   )
 }
 
-// Highlight the differing segment(s) of a barcode value in red vs the declared index.
-function Observed({ value, expected }: { value: string | null; expected: string | null }) {
-  if (!value) return <>—</>
-  if (expected && value.includes('-') && expected.includes('-')) {
-    const observed = value.split('-')
-    const declared = expected.split('-')
+function GateChip({ gate }: { gate: Finding['gate'] }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-[5px] rounded-[5px] border border-line bg-card-2 px-[7px] py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.3px] text-text-2">
+      <span className={`h-[5px] w-[5px] rounded-full ${GATE_DOT[gate]}`} />
+      {GATE_LABEL[gate]}
+    </span>
+  )
+}
+
+// One evidence sub-row's cells (Source/Field/Observed/Expected).
+function evField(e: Evidence): string {
+  return e.source_field ?? e.locator ?? '—'
+}
+function evExpected(e: Evidence): string {
+  return e.expected ?? e.threshold ?? '—'
+}
+
+export function CitedEvidence({ findings, variant }: { findings: Finding[]; variant: Variant }) {
+  if (findings.length === 0) return null
+
+  // Dense: compact rows — dot + title + rule chip + a single mono provenance line per citation.
+  if (variant === 'dense') {
     return (
-      <>
-        {observed.map((seg, i) => (
-          <span key={i}>
-            {i > 0 ? '-' : ''}
-            <span className={seg !== declared[i] ? 'font-semibold text-escalate-fg' : ''}>{seg}</span>
-          </span>
+      <div className="flex flex-col gap-[7px]">
+        {findings.map((f) => (
+          <div key={f.id} className="flex items-start gap-2.5 rounded-[9px] border border-line px-[11px] py-2.5">
+            <span className={`mt-[5px] h-2 w-2 shrink-0 rounded-full ${SEV[f.severity].dot}`} />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[12.5px] font-semibold text-text">{f.title}</span>
+                <span className={RULE_CHIP}>{f.rule_id}</span>
+              </div>
+              {f.evidence.map((e, i) => (
+                <div key={i} className="mt-1 font-mono text-[11px] text-text-3">
+                  <span className="text-accent-strong">{e.source}</span> · {evField(e)} —{' '}
+                  <span className="font-semibold text-text">{e.value ?? '—'}</span>{' '}
+                  <span className="text-text-3">exp {evExpected(e)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         ))}
-      </>
+      </div>
     )
   }
-  return <>{value}</>
+
+  const grid = variant === 'split' ? 'grid-cols-[1.1fr_1fr_1.25fr_1fr]' : 'grid-cols-[1fr_1fr_1.3fr_1fr]'
+  return (
+    <div className="flex flex-col gap-2.5">
+      {findings.map((f) => (
+        <div key={f.id} className="overflow-hidden rounded-[10px] border border-line">
+          <div className="px-[13px] py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <SevChip sev={f.severity} />
+              <span className="text-[13px] font-semibold text-text">{f.title}</span>
+              <span className={RULE_CHIP}>{f.rule_id}</span>
+              <GateChip gate={f.gate} />
+            </div>
+            {f.detail && <div className="mt-1.5 text-[12.5px] leading-[1.5] text-text-2">{f.detail}</div>}
+          </div>
+          <div
+            className={`grid ${grid} border-t border-line bg-card-2 text-[9.5px] font-semibold uppercase tracking-[0.4px] text-text-3`}
+          >
+            <div className="px-[13px] py-1.5">Source</div>
+            <div className="px-2 py-1.5">Field</div>
+            <div className="px-2 py-1.5">Observed</div>
+            <div className="px-[11px] py-1.5">Expected</div>
+          </div>
+          {f.evidence.map((e, i) => (
+            <div key={i} className={`grid ${grid} items-center border-t border-line`}>
+              <div className="px-[13px] py-2">
+                <div className="font-mono text-[11.5px] text-accent-strong">{e.source}</div>
+                <span className="mt-0.5 inline-block rounded-[4px] border border-line bg-card-2 px-[5px] font-mono text-[8.5px] font-semibold uppercase tracking-[0.2px] text-text-3">
+                  {e.source_kind}
+                </span>
+              </div>
+              <div className="px-2 py-2 font-mono text-[11px] text-text-3">{evField(e)}</div>
+              <div className="px-2 py-2">
+                <ObservedCell value={e.value} expected={e.expected} />
+              </div>
+              <div className="px-[11px] py-2 font-mono text-[11px] text-text-2">{evExpected(e)}</div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
 }
