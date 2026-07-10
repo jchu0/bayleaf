@@ -31,8 +31,19 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from pipeguard import DecisionCard, Runbook, run_gate_from_dir
+from pipeguard.metrics import default_registry
 from pipeguard.models import CanonicalUnit, Gate, MetricValue, Sample, Verdict
 from pipeguard.runbook import DEFAULT_RUNBOOK, QCThreshold
+
+
+def _display_name(our_key: str) -> str:
+    """The registry's human display name for a metric (fallback: the key itself). Used to label an
+    ungated row nicely; the registry is loaded once + cached, so this stays free of per-call I/O."""
+    try:
+        return default_registry().entry(our_key).display_name
+    except Exception:
+        return our_key
+
 
 # --- Vocabulary -----------------------------------------------------------------------------
 
@@ -232,11 +243,12 @@ def _classify(value: float, threshold: QCThreshold) -> tuple[ReadoutStatus, bool
 def _row_for(mv: MetricValue, threshold: QCThreshold | None) -> MetricReadout:
     """Build one readout row by joining a metric value to its runbook threshold (or None)."""
     if threshold is None:
-        # No gate for this metric: surface the observation honestly, classify nothing.
+        # No gate for this metric: surface the observation honestly, classify nothing. Use the
+        # registry's display name so an ungated row reads "Genotype quality (GQ)", not "variant.gq".
         obs_num, obs_sym = _to_display(mv.normalized_value, mv.canonical_unit, "")
         return MetricReadout(
             metric=mv.metric_key,
-            label=mv.metric_key,
+            label=_display_name(mv.metric_key),
             gate=mv.gate,
             status=ReadoutStatus.NOT_GATED,
             direction=Direction.UNKNOWN,

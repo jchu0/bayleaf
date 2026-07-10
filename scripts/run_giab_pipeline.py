@@ -238,9 +238,22 @@ def parse_fastp(fastp_json: Path) -> tuple[float, float, float, int]:
 
 
 def write_run_dir(
-    cfg: RunConfig, q30: float, reads_pf: float, coverage: float, dup: float, total_reads: int
+    cfg: RunConfig,
+    q30: float,
+    reads_pf: float,
+    coverage: float,
+    dup: float,
+    total_reads: int,
+    b20: float,
+    b30: float,
 ) -> None:
-    """Write the frozen-five-CSV run dir the read-API discovers + gates (data/<run_id>/)."""
+    """Write the run dir the read-API discovers + gates (data/<run_id>/).
+
+    Beyond the frozen five, the QC report also carries the REAL breadth-of-coverage metrics mosdepth
+    computed (breadth_20x/30x) — honest extra QC from this run's own data (not contrived), so the
+    real card's QC group is richer than five rows. cluster_pf stays blank (a run-level SAV metric
+    not derivable from reads).
+    """
     cfg.run_dir.mkdir(parents=True, exist_ok=True)
 
     def w(name: str, text: str) -> None:
@@ -264,8 +277,9 @@ def write_run_dir(
     # cluster_pf is a run-level SAV/InterOp metric not derivable from reads → left blank (honest).
     w(
         "qc_metrics.csv",
-        "sample_id,q30,pct_reads_identified,mean_coverage,dup_rate,cluster_pf\n"
-        f"{_SAMPLE},{q30:.2f},{reads_pf:.2f},{coverage:.1f},{dup:.4f},\n",
+        "sample_id,q30,pct_reads_identified,mean_coverage,dup_rate,cluster_pf,"
+        "breadth_20x,breadth_30x\n"
+        f"{_SAMPLE},{q30:.2f},{reads_pf:.2f},{coverage:.1f},{dup:.4f},,{b20:.4f},{b30:.4f}\n",
     )
     w("pipeline.log", "\n".join(_LOG) + "\n")
     w("origin", "real-giab\n")
@@ -305,7 +319,7 @@ def main() -> int:
         f"handing the run/ outputs to run_gate (Q30 {q30:.1f}%, reads-PF {reads_pf:.1f}%, "
         f"cov {coverage:.1f}x, dup {dup:.3f}%, {n_variants} variants)",
     )
-    write_run_dir(cfg, q30, reads_pf, coverage, dup, total_reads)
+    write_run_dir(cfg, q30, reads_pf, coverage, dup, total_reads, b20, b30)
 
     _, cards = run_gate_from_dir(cfg.run_dir)  # default runbook — the read-API's recompute
     card = cards[0]
