@@ -26,6 +26,17 @@ _QCMETRICS_MAP: tuple[tuple[str, str, str], ...] = (
     ("mean_coverage", "qc.mean_target_coverage", "x"),
     ("dup_rate", "qc.duplication", "percent"),
     ("cluster_pf", "qc.cluster_pf", "percent"),
+    # Additional registered metrics (present only in a richer QC report). Each raw_unit below is the
+    # scale the parsed value is on — declared, never guessed (the pct_* trap). They populate the
+    # preflight / variant gate groups when a run emits them; absent → skipped (see the None guard).
+    ("phix_aligned", "preflight.phix_aligned", "percent"),
+    ("breadth_20x", "qc.breadth_20x", "fraction"),
+    ("breadth_30x", "qc.breadth_30x", "fraction"),
+    ("pct_mapped", "qc.pct_mapped", "fraction"),
+    ("on_target", "qc.on_target", "fraction"),
+    ("variant_dp", "variant.dp", "x"),
+    ("variant_gq", "variant.gq", "phred"),
+    ("variant_titv", "variant.titv", "ratio"),
 )
 
 

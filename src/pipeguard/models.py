@@ -318,7 +318,14 @@ class Sample(BaseModel):
 
 
 class QCMetrics(BaseModel):
-    """Per-sample QC metrics pulled from the QC report."""
+    """Per-sample QC metrics pulled from the QC report.
+
+    The first five are the frozen-CSV contract every run carries. The rest are additional
+    registered metrics a richer QC report may also emit (preflight / extra QC / variant tier) —
+    each is ``None`` when absent (a missing metric is a signal, not a default), so a lean real run
+    and a fuller contrived run both parse. When present they populate the decision card's preflight
+    & variant gate groups; the metric registry already knows every one.
+    """
 
     sample_id: str
     q30: float | None = None
@@ -326,6 +333,17 @@ class QCMetrics(BaseModel):
     mean_coverage: float | None = None
     dup_rate: float | None = None
     cluster_pf: float | None = None
+    # preflight tier
+    phix_aligned: float | None = None
+    # extra QC tier
+    breadth_20x: float | None = None
+    breadth_30x: float | None = None
+    pct_mapped: float | None = None
+    on_target: float | None = None
+    # variant tier
+    variant_dp: float | None = None
+    variant_gq: float | None = None
+    variant_titv: float | None = None
 
 
 class MetricValue(BaseModel):

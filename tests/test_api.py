@@ -415,17 +415,26 @@ def test_metric_catalog_lists_registered_metrics_and_gated_flag():
     # Every registered metric type is listed (the extensibility story lives here).
     assert body["n_registered"] == 20
     assert len(body["entries"]) == 20
-    # Exactly the five runbook keys are gated; the other 15 are registered-but-ungated.
-    assert body["n_gated"] == 5
+    # Ten runbook keys are gated: the five required frozen-CSV metrics + five optional
+    # (non-blocking) checks that score a richer run without NA-flagging a lean one. The rest stay
+    # registered-but-ungated vocabulary the gate can still adopt.
+    assert body["n_gated"] == 10
     gated = {e["our_key"] for e in body["entries"] if e["gated"]}
     assert gated == {
+        # required (frozen-CSV)
         "qc.q30",
         "qc.reads_passing_filter",
         "qc.mean_target_coverage",
         "qc.cluster_pf",
         "qc.duplication",
+        # optional (present-but-failing gates; missing is fine)
+        "qc.breadth_20x",
+        "qc.breadth_30x",
+        "qc.pct_mapped",
+        "qc.on_target",
+        "variant.dp",
     }
-    assert sum(1 for e in body["entries"] if not e["gated"]) == 15
+    assert sum(1 for e in body["entries"] if not e["gated"]) == 10
     # Each entry carries the flattened vocabulary fields the settings catalog renders.
     q30 = next(e for e in body["entries"] if e["our_key"] == "qc.q30")
     assert q30["gated"] is True and q30["gate"] == "qc"

@@ -35,6 +35,11 @@ class QCThreshold(BaseModel):
     higher_is_better: bool = True
     borderline_band: float = 0.03  # within 3% (relative) of the gate -> borderline
     unit: str = ""
+    # When False, a MISSING metric for this threshold is NOT a finding (the metric is optional —
+    # only a present-but-failing value gates). This lets the runbook carry richer, non-blocking
+    # checks (extra-QC / variant tier) that score a run which emits them, without NA-flagging a lean
+    # run that omits them. The five frozen-CSV metrics stay required=True (unchanged behavior).
+    required: bool = True
 
 
 class Runbook(BaseModel):
@@ -81,6 +86,56 @@ class Runbook(BaseModel):
                 hard_fail=0.50,
                 higher_is_better=False,
                 unit="%",
+            ),
+            # ── Optional, non-blocking checks (required=False) ──────────────────────────────────
+            # They gate a value that IS present but never NA-flag a run that omits them, so a richer
+            # (contrived) run is scored on these while a lean (real) run is not. gate/hard_fail are
+            # canonical (fractions for the % ones, x for depth); phix / GQ / Ts-Tv stay ungated
+            # observations (a control / a target-band metric the one-sided gate can't score).
+            QCThreshold(
+                metric="breadth_20x",
+                our_key="qc.breadth_20x",
+                label="Breadth ≥20x",
+                gate=0.90,
+                hard_fail=0.80,
+                required=False,
+                unit="%",
+            ),
+            QCThreshold(
+                metric="breadth_30x",
+                our_key="qc.breadth_30x",
+                label="Breadth ≥30x",
+                gate=0.80,
+                hard_fail=0.65,
+                required=False,
+                unit="%",
+            ),
+            QCThreshold(
+                metric="pct_mapped",
+                our_key="qc.pct_mapped",
+                label="Mapped reads",
+                gate=0.95,
+                hard_fail=0.90,
+                required=False,
+                unit="%",
+            ),
+            QCThreshold(
+                metric="on_target",
+                our_key="qc.on_target",
+                label="On-target rate",
+                gate=0.60,
+                hard_fail=0.40,
+                required=False,
+                unit="%",
+            ),
+            QCThreshold(
+                metric="variant_dp",
+                our_key="variant.dp",
+                label="Variant depth (DP)",
+                gate=20.0,
+                hard_fail=10.0,
+                required=False,
+                unit="x",
             ),
         ]
     )

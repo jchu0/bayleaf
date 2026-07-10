@@ -211,6 +211,19 @@ def _qc_values(i: int, mode: FailureMode) -> dict[str, float]:
         "mean_coverage": _PASS_COVERAGE_BASE + (i % 6) * 1.4,
         "dup_rate": _PASS_DUP_BASE + (i % 5) * 1.2,
         "cluster_pf": _PASS_CLUSTER_PF_BASE + (i % 4) * 1.0,
+        # Richer QC report — additional registered metrics, all comfortably passing (they populate
+        # the card's preflight & variant gate groups; failure modes stay on the 5 above). Emitted in
+        # the raw unit the mapping declares: phix in percent; breadth/mapped/on-target as fractions;
+        # DP in x; GQ in phred; Ts/Tv as a ratio.
+        "phix_aligned": 0.6 + (i % 3) * 0.15,
+        "breadth_20x": 0.965 + (i % 4) * 0.006,
+        "breadth_30x": 0.925 + (i % 5) * 0.008,
+        "pct_mapped": 0.985 + (i % 3) * 0.004,
+        "on_target": 0.80 + (i % 4) * 0.02,
+        # DP + GQ are integer-typed in the registry — keep them integral.
+        "variant_dp": 32.0 + (i % 6) * 2.0,
+        "variant_gq": 52.0 + (i % 5) * 2.0,
+        "variant_titv": 2.02 + (i % 3) * 0.02,
     }
     if mode is FailureMode.LOW_Q30:
         values["q30"] = _LOW_Q30_VALUE
@@ -334,13 +347,23 @@ def _render_demux(spec: RunSpec) -> str:
 
 
 def _render_qc(spec: RunSpec) -> str:
-    """Flattened MultiQC-style per-sample metrics. Every sample gets a row."""
-    lines = ["sample_id,q30,pct_reads_identified,mean_coverage,dup_rate,cluster_pf"]
+    """Flattened MultiQC-style per-sample metrics. Every sample gets a row.
+
+    Beyond the frozen five, the report also carries the additional registered metrics (preflight /
+    extra QC / variant tier) so a contrived run's decision card shows a full three-gate readout.
+    """
+    lines = [
+        "sample_id,q30,pct_reads_identified,mean_coverage,dup_rate,cluster_pf,"
+        "phix_aligned,breadth_20x,breadth_30x,pct_mapped,on_target,variant_dp,variant_gq,variant_titv"
+    ]
     for i, s in enumerate(spec.samples):
         v = _qc_values(i, s.mode)
         lines.append(
             f"{s.sample_id},{v['q30']:.1f},{v['pct_reads_identified']:.1f},"
-            f"{v['mean_coverage']:.1f},{v['dup_rate']:.1f},{v['cluster_pf']:.1f}"
+            f"{v['mean_coverage']:.1f},{v['dup_rate']:.1f},{v['cluster_pf']:.1f},"
+            f"{v['phix_aligned']:.2f},{v['breadth_20x']:.3f},{v['breadth_30x']:.3f},"
+            f"{v['pct_mapped']:.3f},{v['on_target']:.3f},{v['variant_dp']:.0f},"
+            f"{v['variant_gq']:.0f},{v['variant_titv']:.3f}"
         )
     return _join(lines)
 

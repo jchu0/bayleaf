@@ -222,6 +222,15 @@ def parse_qc_metrics(path: Path) -> list[QCMetrics]:
                 mean_coverage=_to_float(row.get("mean_coverage")),
                 dup_rate=_to_float(row.get("dup_rate")),
                 cluster_pf=_to_float(row.get("cluster_pf")),
+                # Additional registered metrics — absent columns become None (tolerant parsing).
+                phix_aligned=_to_float(row.get("phix_aligned")),
+                breadth_20x=_to_float(row.get("breadth_20x")),
+                breadth_30x=_to_float(row.get("breadth_30x")),
+                pct_mapped=_to_float(row.get("pct_mapped")),
+                on_target=_to_float(row.get("on_target")),
+                variant_dp=_to_float(row.get("variant_dp")),
+                variant_gq=_to_float(row.get("variant_gq")),
+                variant_titv=_to_float(row.get("variant_titv")),
             )
         )
     return metrics

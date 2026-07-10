@@ -166,6 +166,10 @@ def _check_metadata(sid: str, meta: Sample | None, runbook: Runbook) -> Finding 
 
 def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -> Finding | None:
     if mv is None:
+        # Optional threshold + no observation → nothing to say (only a present-but-failing value
+        # gates an optional metric). Keeps a lean run from being NA-flagged on richer checks.
+        if not threshold.required:
+            return None
         return Finding(
             rule_id=f"QC-{threshold.metric.upper()}-NA",
             sample_id=sid,
