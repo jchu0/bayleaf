@@ -1,0 +1,161 @@
+import { X } from 'lucide-react'
+import { useState } from 'react'
+import { useRole } from '../context/RoleContext'
+import { SegmentedControl } from './SegmentedControl'
+
+// The profile/preferences modal opened from the user-panel popover (dc.html 95-128) — DISTINCT
+// from the /settings thresholds screen. Preferences are demo-local (no backend prefs store);
+// Save just closes. Role is shown read-only here; it is toggled from the popover's Role row.
+type Theme = 'light' | 'dark' | 'system'
+type Density = 'comfortable' | 'compact'
+
+function ToggleSwitch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      className={`relative h-[22px] w-[38px] shrink-0 rounded-full transition-colors ${
+        on ? 'bg-accent' : 'bg-card-3'
+      }`}
+    >
+      <span
+        className={`absolute top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-all ${
+          on ? 'left-[18px]' : 'left-[2px]'
+        }`}
+      />
+    </button>
+  )
+}
+
+function PrefRow({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5">
+      <div className="min-w-0">
+        <div className="text-[13.5px] font-medium text-text">{label}</div>
+        {hint && <div className="text-[12px] text-text-2">{hint}</div>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+export function UserSettingsDialog({ onClose }: { onClose: () => void }) {
+  const { role } = useRole()
+  const [theme, setTheme] = useState<Theme>('light')
+  const [density, setDensity] = useState<Density>('comfortable')
+  const [emailDigest, setEmailDigest] = useState(true)
+  const [desktopNotifications, setDesktopNotifications] = useState(false)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-[520px] max-w-full overflow-hidden rounded-2xl border border-line bg-card shadow-pop">
+        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+          <h2 className="font-serif text-[19px] font-medium text-text">Settings</h2>
+          <button
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-lg text-text-2 hover:bg-page"
+            aria-label="Close"
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
+          <section>
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.8px] text-text-3">Profile</p>
+            <div className="divide-y divide-line">
+              <PrefRow label="Display name">
+                <input
+                  defaultValue="Ada Rivera"
+                  className="w-[220px] rounded-lg border border-line bg-card px-2.5 py-1.5 text-[13px] text-text focus:border-accent focus:outline-none"
+                />
+              </PrefRow>
+              <PrefRow label="Email">
+                <input
+                  defaultValue="a.rivera@lab.org"
+                  className="w-[220px] rounded-lg border border-line bg-card px-2.5 py-1.5 font-mono text-[12.5px] text-text focus:border-accent focus:outline-none"
+                />
+              </PrefRow>
+              <PrefRow label="Role" hint="Toggled from the account menu">
+                <span className="rounded-md bg-card-2 px-2.5 py-1 font-mono text-[12px] capitalize text-text-2">
+                  {role} · RBAC
+                </span>
+              </PrefRow>
+              <PrefRow label="Time zone">
+                <select
+                  defaultValue="America/Denver"
+                  className="w-[220px] rounded-lg border border-line bg-card px-2.5 py-1.5 text-[13px] text-text focus:border-accent focus:outline-none"
+                >
+                  <option value="America/Denver">America/Denver (MST)</option>
+                  <option value="America/New_York">America/New_York (EST)</option>
+                  <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                  <option value="UTC">UTC</option>
+                </select>
+              </PrefRow>
+            </div>
+          </section>
+
+          <section className="mt-4">
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.8px] text-text-3">
+              Preferences
+            </p>
+            <div className="divide-y divide-line">
+              <PrefRow label="Theme">
+                <SegmentedControl<Theme>
+                  value={theme}
+                  onChange={setTheme}
+                  options={[
+                    { value: 'light', label: 'Light' },
+                    { value: 'dark', label: 'Dark' },
+                    { value: 'system', label: 'System' },
+                  ]}
+                />
+              </PrefRow>
+              <PrefRow label="Density">
+                <SegmentedControl<Density>
+                  value={density}
+                  onChange={setDensity}
+                  options={[
+                    { value: 'comfortable', label: 'Comfortable' },
+                    { value: 'compact', label: 'Compact' },
+                  ]}
+                />
+              </PrefRow>
+              <PrefRow label="Email digest" hint="Daily summary of runs needing review">
+                <ToggleSwitch on={emailDigest} onChange={setEmailDigest} />
+              </PrefRow>
+              <PrefRow label="Desktop notifications" hint="Alert on escalations assigned to me">
+                <ToggleSwitch on={desktopNotifications} onChange={setDesktopNotifications} />
+              </PrefRow>
+            </div>
+          </section>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-line bg-card px-3.5 py-1.5 text-[13px] font-medium text-text-2 hover:bg-page"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-accent-strong"
+          >
+            Save changes
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

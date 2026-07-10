@@ -6,10 +6,15 @@
    (bg-page, bg-card, text-text, border-line, bg-nav, bg-proceed-bg, text-escalate-fg, …). */
 @theme {
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Page titles — Newsreader serif, the refreshed design's H1 treatment (F1).
+     Consumed via the shared PageHeader component (font-serif utility). */
+  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
 
-  /* Light content surface */
-  --color-page: #eef1f4;
+  /* Light content surface. --color-page is the main content column (design --bg #f5f7f9);
+     --color-card-2 is the one-step-darker inset surface (design --surface-2 #eef1f4) — the
+     two are a deliberate 2-step neutral backdrop, not the same value (F24). */
+  --color-page: #f5f7f9;
   --color-card: #ffffff;
   --color-card-2: #eef1f4;
   --color-card-3: #e6eaef;
@@ -22,9 +27,11 @@
   --color-accent-weak: #eaf0fc;
   --color-accent-strong: #1a4fac;
 
-  /* Dark left nav */
+  /* Dark left nav. --color-nav-active is the selected-item background (#22303f); nav-hover
+     doubles as the elevated dark surface for the user-panel button + popover (#1b222b). */
   --color-nav: #141a21;
-  --color-nav-hover: #1b232c;
+  --color-nav-hover: #1b222b;
+  --color-nav-active: #22303f;
   --color-nav-border: #202832;
   --color-nav-text: #c3ccd6;
   --color-nav-label: #6b7683;
@@ -86,4 +93,15 @@ body {
 }
 .pg-fade {
   animation: pgfade 0.28s ease both;
+}
+
+/* Spinner for Refresh controls / loading affordances (Intake, Monitoring, …). Declared once
+   here so per-screen waves never re-touch index.css and collide (W1-A). */
+@keyframes pgspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.pg-spin {
+  animation: pgspin 0.7s linear infinite;
 }

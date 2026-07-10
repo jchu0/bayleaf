@@ -21,7 +21,7 @@ export function Layout() {
   const defaultRunId = runs[0]?.run_id ?? null
   return (
     <div className="flex h-screen overflow-hidden bg-page text-text">
-      <Sidebar attention={attention} defaultRunId={defaultRunId} />
+      <Sidebar runs={runs} defaultRunId={defaultRunId} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar attention={attention} runs={runs} />
         <main className="flex-1 overflow-y-auto px-8 py-7">

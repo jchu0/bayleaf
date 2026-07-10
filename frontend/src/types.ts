@@ -97,11 +97,29 @@ export type ProvenanceEvent = {
   created_at: string
 }
 
+// A run's lifecycle stage — a REAL server field read from the SampleSheet [Header], never
+// inferred from n_attention (a running run with 0 flagged samples is `running`, not released).
+// Wire value is `needs_review` (not `review`); map to a display label at the render layer.
+export type RunStatus = 'running' | 'needs_review' | 'released'
+
 export type RunSummary = {
   run_id: string
   n_samples: number
   n_attention: number
   counts: Record<string, number>
+  status: RunStatus
+  platform: string | null
+  run_date: string | null
+}
+
+// One page of the runs list, carrying the header-borne totals + status facet counts that a
+// header-blind fetch would drop (X-PipeGuard-Total-Count / -Status-Counts / -Page / -Limit).
+export type RunsPage = {
+  data: RunSummary[]
+  total: number
+  statusCounts: Record<RunStatus, number> | null
+  page: number | null
+  limit: number | null
 }
 
 // The pipeline stages of the provenance canvas (§5). Fixed order: intake → demux → qc →
@@ -230,3 +248,301 @@ export type FeedbackAck = {
   schema_version: number
   status: 'recorded'
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RBAC (dev shim). Mirrors api/auth.py: an actor id + a role, sent on writes via the
+// X-PipeGuard-Actor / X-PipeGuard-Role headers. Approver unlocks threshold/pipeline approval
+// only — never a card verdict (rules decide / AI advises).
+// ─────────────────────────────────────────────────────────────────────────────
+export type Role = 'viewer' | 'reviewer' | 'approver'
+export type Actor = { id: string; role: Role }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Origin / artifact vocabularies (read-only in the client — origin never relabels up).
+// ─────────────────────────────────────────────────────────────────────────────
+export type OriginTag = 'real-giab' | 'synthetic' | 'contrived' | 'unknown'
+export type ArtifactKind =
+  | 'fastq' | 'bam' | 'bai' | 'recal_cram' | 'recal_table' | 'mosdepth_summary'
+  | 'fastp_json' | 'markdup_metrics' | 'samtools_stats' | 'vcf' | 'gvcf'
+  | 'filtered_vcf' | 'joint_vcf' | 'ngscheckmate' | 'multiqc_json' | 'versions_yml'
+  | 'params_json' | 'execution_trace'
+export type ReferenceKind = 'reference_fasta' | 'panel_bed' | 'truth_vcf'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Windowed monitoring aggregate (GET /api/monitoring). Replaces the per-run N-fan-out.
+// auto_proceed_pct is a throughput heuristic, NOT a calibrated confidence.
+// ─────────────────────────────────────────────────────────────────────────────
+export type MonitoringWindow = '7d' | '14d' | '30d' | 'all'
+export type MonitoringOverall = {
+  n_runs: number
+  n_samples: number
+  n_attention: number
+  verdict_counts: Record<string, number>
+  auto_proceed_pct: number | null
+}
+export type MonitoringRunRow = {
+  run_id: string
+  run_date: string | null
+  n_samples: number
+  counts: Record<string, number>
+}
+export type MonitoringGate = { gate: Gate; flagged: number; total: number }
+// first_seen/last_seen/trend are NOT yet served (F2) — kept optional so the row can render
+// the columns honestly (omitted) until the backend aggregate carries them.
+export type MonitoringSignature = {
+  signature: string
+  rule_id: string
+  title: string
+  gate: Gate
+  count: number
+  first_seen?: string | null
+  last_seen?: string | null
+  trend?: 'up' | 'down' | 'flat' | null
+}
+export type MonitoringMetrics = {
+  window: MonitoringWindow
+  n_runs_excluded_no_date: number
+  n_signatures_total: number
+  overall: MonitoringOverall
+  runs: MonitoringRunRow[]
+  gates: MonitoringGate[]
+  signatures: MonitoringSignature[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QC readout (GET /api/runs/:id/cards/:sid/qc-readout) — the Decision-cards hero table.
+// Gate-grouped, flagged-first Metric·Observed·Threshold·Status rows.
+// ─────────────────────────────────────────────────────────────────────────────
+export type ReadoutStatus = 'pass' | 'borderline' | 'fail' | 'not_gated'
+export type ReadoutDirection = '>=' | '<=' | '?'
+export type MetricReadout = {
+  metric: string
+  label: string
+  gate: Gate
+  status: ReadoutStatus
+  direction: ReadoutDirection
+  observed_value: number
+  canonical_unit: CanonicalUnit
+  observed_unit: string
+  observed_display: string
+  threshold_display: string | null
+  hard_fail_display: string | null
+  within_borderline_band: boolean
+  flagged: boolean
+}
+export type GateReadout = { gate: Gate; rows: MetricReadout[]; flagged_count: number }
+export type QcReadout = { sample_id: string; gates: GateReadout[]; flagged_count: number }
+// origin/sample_type/library_prep are honestly nullable; not_captured lists the missing ones.
+export type CardHeader = {
+  sample_id: string
+  run_id: string | null
+  verdict: Verdict
+  generated_by: string
+  sample_type: string | null
+  library_prep: string | null
+  origin: string | null
+  not_captured: string[]
+}
+export type CardReadout = { header: CardHeader; readout: QcReadout }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Operator-facing runbook policy (GET /api/runbook) — disclaimer-bearing, with `our_key` +
+// direction. Distinct from the raw core Runbook (GET /api/config).
+// ─────────────────────────────────────────────────────────────────────────────
+export type RunbookThreshold = {
+  metric: string
+  our_key: string
+  label: string
+  gate: Gate
+  hard_fail: number
+  unit: string
+  direction: 'higher_is_better' | 'lower_is_better'
+}
+export type RunbookPolicy = {
+  disclaimer: string
+  units_note: string
+  run_id_field: string
+  required_metadata_fields: string[]
+  thresholds: RunbookThreshold[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pipeline graph store + lifecycle (api/pipeline.py + routers/pipelines_lifecycle.py).
+// The graph is authoring state; a verdict is NEVER stored on it. Status vocab uses the
+// backend wire values (pending_review, not README §7's `pending`).
+// ─────────────────────────────────────────────────────────────────────────────
+export type PipelineStatus = 'draft' | 'pending_review' | 'approved'
+export type PipelineGraphIn = {
+  name: string
+  schema_version?: string
+  graph: Record<string, unknown>
+  profile?: string | null
+}
+export type PipelineGraph = {
+  id: string
+  name: string
+  schema_version: string
+  version: number
+  created_at: string
+  graph: Record<string, unknown>
+  profile: string | null
+  status: PipelineStatus
+  submitted_by: string | null
+  reviewed_by: string | null
+  approved_by: string | null
+}
+export type PipelineGraphAck = {
+  id: string
+  name: string
+  version: number
+  schema_version: string
+  created_at: string
+  status: PipelineStatus
+}
+export type TransitionResult = {
+  name: string
+  version: number
+  status: PipelineStatus
+  submitted_by?: string | null
+  reviewed_by?: string | null
+  approved_by?: string | null
+  created_at: string
+  emitted_at: string | null
+}
+export type LocatorResolution = {
+  node: string | null
+  kind: string
+  mode: 'path' | 'glob'
+  pattern: string
+  required: boolean
+  role: string
+  on_multiple: string
+  status: 'matched' | 'ambiguous' | 'missing' | 'invalid'
+  paths: string[]
+}
+export type DryRunResult = {
+  name: string
+  version: number
+  run_id: string
+  executed: false
+  locators: LocatorResolution[]
+  summary: Record<string, number>
+}
+export type LocatorDiff = {
+  key: string
+  node: string | null
+  kind: string
+  role: string
+  before: Record<string, unknown> | null
+  after: Record<string, unknown> | null
+}
+export type DiffResult = {
+  name: string
+  has_baseline: boolean
+  working_version: number
+  emitted_version: number | null
+  emitted_at: string | null
+  added: LocatorDiff[]
+  removed: LocatorDiff[]
+  changed: LocatorDiff[]
+  unchanged_count: number
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review-queue tickets (routers/review_queue.py). Recurrence/issueClass/resolvedBy in the
+// prototype are frontend-derived, NOT wire fields.
+// ─────────────────────────────────────────────────────────────────────────────
+export type TicketStatus = 'open' | 'in_review' | 'resolved'
+export type TicketPriority = 'high' | 'medium' | 'low'
+export type ReviewActionName = 'acknowledge' | 'resolve' | 'escalate' | 'suppress' | 'reopen'
+export type TicketAction = { action: ReviewActionName; actor: string; at: string }
+export type Ticket = {
+  id: string
+  schema_version: number
+  created_at: string
+  run_id: string
+  sample_id: string
+  gate: Gate
+  verdict: Verdict
+  rule_id: string
+  title: string
+  priority: TicketPriority
+  status: TicketStatus
+  opened_by: string
+  actions: TicketAction[]
+}
+export type TicketIn = {
+  run_id: string
+  sample_id: string
+  gate: Gate
+  verdict: Verdict
+  rule_id: string
+  title: string
+  priority?: TicketPriority
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings-authoring: threshold overrides (routers/settings.py). `payload` is an opaque
+// tolerant blob — the assay×sample-type rows are a frontend convention packed into it.
+// ─────────────────────────────────────────────────────────────────────────────
+export type SettingsStatus = 'draft' | 'pending_review' | 'approved'
+export type ThresholdOverrideIn = { name: string; payload: Record<string, unknown> }
+export type ThresholdOverride = {
+  id: string
+  name: string
+  version: number
+  created_at: string
+  payload: Record<string, unknown>
+  status: SettingsStatus
+  submitted_by: string | null
+  reviewed_by: string | null
+  approved_by: string | null
+}
+export type ThresholdOverrideAck = {
+  id: string
+  name: string
+  version: number
+  created_at: string
+  status: SettingsStatus
+  submitted_by: string | null
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Advisory agent reads (off-gate, read-only): pipeline-repair + archivist proposals.
+// ─────────────────────────────────────────────────────────────────────────────
+export type AgentProposal = {
+  agent: 'qc_triage' | 'pipeline_repair' | 'archivist'
+  advisory_only: true
+  summary: string
+  mode: 'stub' | 'claude'
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Frontend-local compose types (README §7). NO backend write endpoint yet — Submit registers
+// in local state, the Builder emits config. Compose ≠ execute.
+// ─────────────────────────────────────────────────────────────────────────────
+export type SampleRow = { sample: string; type: string; i7: string; i5: string; study: string }
+export type Submission = {
+  runName: string
+  study: string
+  assay: string
+  platform: string
+  source: 'upload' | 'basespace'
+  samples: SampleRow[]
+}
+export type LayoutLocator = {
+  kind: ArtifactKind | ReferenceKind
+  path?: string
+  glob?: string
+  parser: string | null
+  required: boolean
+  role: 'output' | 'reference'
+  onMultiple: 'first' | 'all' | 'error'
+  origin: OriginTag
+}
+export type RunLayoutConfig = {
+  schemaVersion: 'run_layout/1'
+  profile: string
+  locators: Record<string, LayoutLocator>
+}
+export type ProposedFlag = { flag: string; value: string; enabled: boolean; help: string }

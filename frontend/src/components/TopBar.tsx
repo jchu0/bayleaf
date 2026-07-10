@@ -8,6 +8,7 @@ function useCrumb(): { title: string; run: string | null } {
   const { pathname } = useLocation()
   const { runId } = useParams()
   if (pathname === '/') return { title: 'Runs', run: null }
+  if (pathname.startsWith('/submit')) return { title: 'Submit samplesheet', run: null }
   if (pathname.includes('/intake')) return { title: 'Intake gate', run: runId ?? null }
   if (pathname.startsWith('/queue')) return { title: 'Review queue', run: null }
   if (pathname.startsWith('/monitoring')) return { title: 'Monitoring', run: null }
@@ -39,7 +40,7 @@ export function TopBar({ attention = 0, runs = [] }: { attention?: number; runs?
       {pathname !== '/' && (
         <button
           onClick={() => navigate(-1)}
-          className="grid h-8 w-8 place-items-center rounded-lg text-text-2 hover:bg-page"
+          className="grid h-8 w-8 place-items-center rounded-lg text-text-2 hover:bg-card-2"
           aria-label="Back"
         >
           <ArrowLeft size={17} />
@@ -47,11 +48,12 @@ export function TopBar({ attention = 0, runs = [] }: { attention?: number; runs?
       )}
       <span className="text-[15px] font-semibold text-text">{title}</span>
 
+      {run && <span className="text-[13px] text-text-3">/</span>}
       {run && (
         <div className="relative">
           <button
             onClick={() => setMenuOpen((o) => !o)}
-            className="flex items-center gap-1.5 rounded-lg border border-line bg-page px-2.5 py-1 font-mono text-[12px] text-text hover:border-line-strong"
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-card-2 px-2.5 py-1 font-mono text-[12px] text-text hover:border-line-strong"
           >
             <span className={`h-1.5 w-1.5 rounded-full ${dot(runs.find((r) => r.run_id === run)?.n_attention ?? 0)}`} />
             {run}
@@ -65,8 +67,8 @@ export function TopBar({ attention = 0, runs = [] }: { attention?: number; runs?
                   <button
                     key={r.run_id}
                     onClick={() => switchRun(r.run_id)}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-left font-mono text-[12px] hover:bg-page ${
-                      r.run_id === run ? 'bg-page text-text' : 'text-text-2'
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left font-mono text-[12px] hover:bg-card-2 ${
+                      r.run_id === run ? 'bg-card-2 text-text' : 'text-text-2'
                     }`}
                   >
                     <span className={`h-1.5 w-1.5 rounded-full ${dot(r.n_attention)}`} />
@@ -81,7 +83,7 @@ export function TopBar({ attention = 0, runs = [] }: { attention?: number; runs?
       )}
 
       <div className="ml-auto flex items-center gap-2.5">
-        <div className="hidden items-center gap-2 rounded-lg border border-line bg-page px-2.5 py-1.5 text-[13px] text-text-3 md:flex">
+        <div className="flex w-[230px] items-center gap-2 rounded-lg border border-line bg-card-2 px-2.5 py-1.5 text-[13px] text-text-3">
           <Search size={14} />
           <span>Search samples, rules…</span>
           <kbd className="rounded border border-line bg-card px-1 text-[10px] text-text-3">/</kbd>
@@ -90,7 +92,7 @@ export function TopBar({ attention = 0, runs = [] }: { attention?: number; runs?
           <span className="h-2 w-2 rounded-full bg-proceed" />
           State: Ready
         </span>
-        <button className="relative grid h-8 w-8 place-items-center rounded-lg text-text-2 hover:bg-page" aria-label="Notifications">
+        <button className="relative grid h-8 w-8 place-items-center rounded-lg text-text-2 hover:bg-card-2" aria-label="Notifications">
           <Bell size={17} strokeWidth={1.8} />
           {attention > 0 && (
             <span className="absolute right-0 top-0.5 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-escalate px-0.5 text-[9px] font-semibold text-white">
