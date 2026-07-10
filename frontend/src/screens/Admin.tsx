@@ -1,9 +1,9 @@
-import { Activity, CheckCircle2, ShieldCheck, UserCog } from 'lucide-react'
+import { Activity, CheckCircle2, ChevronRight, ShieldCheck, UserCog } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { FacetChip } from '../components/FacetChip'
 import { PageHeader } from '../components/PageHeader'
-import { SegmentedControl } from '../components/SegmentedControl'
+import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { DEMO_ACCOUNTS } from '../auth'
 import { useRole } from '../context/RoleContext'
 import type {
@@ -179,10 +179,22 @@ const KIND_STYLE: Record<FeedKind, string> = {
   ticket: 'bg-preflight/10 text-preflight',
 }
 
+type ActPerPage = '25' | '50' | '100'
+const ACT_PER_PAGE: SegmentOption<ActPerPage>[] = [
+  { value: '25', label: '25' },
+  { value: '50', label: '50' },
+  { value: '100', label: '100' },
+]
+const rowKey = (r: FeedRow) => `${r.when}|${r.kind}|${r.target}|${r.detail}`
+
 function ActivityTab() {
   const [rows, setRows] = useState<FeedRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | FeedKind>('all')
+  const [perPage, setPerPage] = useState<ActPerPage>('25')
+  const [page, setPage] = useState(1)
+  const [openKey, setOpenKey] = useState<string | null>(null) // one expanded row at a time
+  useEffect(() => setPage(1), [filter, perPage])
 
   useEffect(() => {
     Promise.all([
@@ -240,6 +252,12 @@ function ActivityTab() {
     return c
   }, [rows])
   const shown = (rows ?? []).filter((r) => filter === 'all' || r.kind === filter)
+  const per = Number(perPage)
+  const total = shown.length
+  const pages = Math.max(1, Math.ceil(total / per))
+  const curPage = Math.min(page, pages)
+  const fromIdx = (curPage - 1) * per
+  const paged = shown.slice(fromIdx, fromIdx + per)
 
   if (error) return <div className="rounded-xl border border-escalate-bd bg-escalate-bg p-6 text-[13px] text-escalate-fg">{error}</div>
   if (!rows) return <div className="rounded-xl border border-line bg-card p-6 text-[13px] text-text-2">Loading activity…</div>
@@ -261,21 +279,73 @@ function ActivityTab() {
           No activity yet. Approvals, pipeline versions, and ticket actions land here.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
-          {shown.map((r, i) => (
-            <div key={i} className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-0">
-              <span className={`rounded-md px-2 py-0.5 text-[10.5px] font-semibold uppercase ${KIND_STYLE[r.kind]}`}>
-                {r.kind}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-[13px] text-text">{r.detail}</span>
-              <span className="hidden font-mono text-[11.5px] text-text-2 sm:block">{r.target}</span>
-              <span className="font-mono text-[11.5px] text-text-2">{r.actor}</span>
-              <span className="w-[150px] shrink-0 text-right font-mono text-[11px] text-text-3">
-                {fmtWhen(r.when)}
-              </span>
+        <>
+          <div className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
+            {paged.map((r) => {
+              const k = rowKey(r)
+              const isOpen = openKey === k
+              return (
+                <div key={k} className="border-b border-line last:border-0">
+                  {/* Compact summary row; click to expand the full detail (so a long entry never
+                      makes a formatting mess in the flat list). One row open at a time. */}
+                  <button
+                    onClick={() => setOpenKey(isOpen ? null : k)}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-card-2"
+                  >
+                    <ChevronRight size={13} className={`shrink-0 text-text-3 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                    <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10.5px] font-semibold uppercase ${KIND_STYLE[r.kind]}`}>
+                      {r.kind}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-text">{r.detail}</span>
+                    <span className="hidden font-mono text-[11.5px] text-text-2 md:block">{r.actor}</span>
+                    <span className="w-[150px] shrink-0 text-right font-mono text-[11px] text-text-3">{fmtWhen(r.when)}</span>
+                  </button>
+                  {isOpen && (
+                    <dl className="grid grid-cols-[90px_1fr] gap-x-3 gap-y-1.5 border-t border-line bg-card-2 px-4 py-3 text-[12px]">
+                      <dt className="text-text-3">Detail</dt>
+                      <dd className="text-text">{r.detail}</dd>
+                      <dt className="text-text-3">Target</dt>
+                      <dd className="font-mono text-text-2">{r.target}</dd>
+                      <dt className="text-text-3">Actor</dt>
+                      <dd className="font-mono text-text-2">{r.actor}</dd>
+                      <dt className="text-text-3">When</dt>
+                      <dd className="font-mono text-text-2">{fmtWhen(r.when)}</dd>
+                    </dl>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <span className="text-[12px] text-text-2">
+              Showing {fromIdx + 1}–{Math.min(fromIdx + per, total)} of {total}
+            </span>
+            <div className="ml-auto flex items-center gap-3">
+              <SegmentedControl<ActPerPage> options={ACT_PER_PAGE} value={perPage} onChange={setPerPage} />
+              {pages > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={curPage <= 1}
+                    className="rounded-md border border-line px-2 py-1 text-[12px] text-text-2 hover:border-line-strong disabled:opacity-40"
+                  >
+                    ‹
+                  </button>
+                  <span className="px-1 font-mono text-[12px] text-text-2">
+                    {curPage} / {pages}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                    disabled={curPage >= pages}
+                    className="rounded-md border border-line px-2 py-1 text-[12px] text-text-2 hover:border-line-strong disabled:opacity-40"
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
+          </div>
+        </>
       )}
     </div>
   )
