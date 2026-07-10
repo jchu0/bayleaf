@@ -10,7 +10,8 @@
 > **Draft for review.** Produced by a multi-agent design workflow (four design perspectives +
 > three adversarial critiques — scope-realism, guardrails, over-engineering — then synthesized)
 > and fact-checked against the code: `get_run_bundle`, the reserved `metric.parsed` /
-> `artifact.ingested` event types, GET-only CORS, the `@lru_cache` on `_evaluate`, the five
+> `artifact.ingested` event types, the GET + single off-gate POST (feedback/pipelines) CORS
+> posture (no PUT/DELETE/PATCH), the `@lru_cache` on `_evaluate`, the five
 > `.exists()`-gated ingest CSVs, and the `MetricValue.source_*` fields all verified present.
 > Line numbers are approximate (some drifted after recent merges); **symbol references are
 > verified**. Everything is tiered **(A) already built · (B) build now · (C) target-state** so
@@ -122,7 +123,7 @@ GET /api/export?format=csv|jsonl&grain=decision|feature
 
 - `grain=decision` → one row per (run, sample): verdict + full narrative (`headline`/`rationale`/`next_steps`) + findings. This is **richer** than any DB export could be today, because those fields are dropped by the projection (`records.py:73-105`) but are present in memory.
 - `grain=feature` → one `MetricValue` per line/row, `canonical_unit` + `metric_registry_version` inline = **the ML corpus**, in the long format [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) designates (no pivot needed).
-- GET-only, preserving the read-only CORS posture (`allow_methods=["GET"]`, `api/main.py:34`; [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md)/[ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md)).
+- `GET /api/export` itself stays GET, over a CORS posture that now allows **GET + a single off-gate POST write verb** (the feedback/pipelines writes); no PUT/DELETE/PATCH (`allow_methods=["GET", "POST"]`, `api/main.py:66`; [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md)/[ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md)).
 - Formats: **stdlib `csv` + `json` only.** No `pyarrow`/Parquet, no `pandas`. Any consumer wanting a wide feature matrix pivots on their side.
 
 **b. Honest-labeling of the export source (guardrail G-EXPORT-SOURCE).** This export is a **live deterministic re-derivation at export time**, not a read of a recorded decision. That is acceptable *because the gate is deterministic and we stamp its version pins*, but we must not claim it is ledger/projection-derived audit provenance. Every export row and its accompanying manifest header carry: `rule_pack_version`, `metric_registry_version`, `generated_by`, `origin`, and an export timestamp — self-describing and reproducible. Audit-grade, ledger-anchored export is (C) §2.2.
@@ -303,7 +304,7 @@ Two class-name decisions that deliberately do **not** fight sarek or the current
 
 ### 3.6 Invariant restated — the gate never opens the big binaries
 
-1. `load_run` opens exactly the five `run/` files (`parsers.py:187-217`); **no BAM/CRAM/VCF/`.bed.gz` handle exists anywhere in `parsers.py`**. The heavy `mosdepth`/`fastp` reads happen once, upstream, in `gate_giab.py`, off the gate path, and are flattened into `run/qc_metrics.csv`.
+1. `load_run` opens exactly six small text files under `run/` — the five flat CSVs/log (`parsers.py:187-217`) plus an optional `trace.txt` (a Nextflow execution trace, `parsers.py:301`, read-if-present → `[]` when absent, feeding EXEC-001); **no BAM/CRAM/VCF/`.bed.gz` handle exists anywhere in `parsers.py`**. The heavy `mosdepth`/`fastp` reads happen once, upstream, in `gate_giab.py`, off the gate path, and are flattened into `run/qc_metrics.csv`.
 2. Everything in §3.5 is read only by the archivist/UI/agents for indexing/display/provenance — the tier-1 substrate the agent layer observes but never writes into in a way that changes a verdict.
 3. **Therefore the whole tier-C design is verdict-safe:** relocating to a per-run root, converting BAM→CRAM, dropping regenerable FASTQ, or renaming files **cannot move a verdict**, because no core code path opens those files. The only rename that even touches the gate is the `run/` *parent-dir* move, and it leaves the CSV contents and filenames untouched.
 
@@ -382,8 +383,8 @@ These are the invariants from [ADR-0001](../adr/ADR-0001-deterministic-gate-advi
 ### 5.4 Triggers, roster, structure
 
 1. **Batch / on-demand only**, over an already-populated store — never per-sample, never on the critical path. Invoked as a standalone entry point (the `triage_card()` analog) via CLI and/or a read-only `GET` endpoint mirroring the triage endpoint's advisory posture (`api/main.py:113-124`), like the notifier (`notify/`, [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md)).
-2. **Roster: genuine agent #3, behind #2.** #1 QC-triage **done**; #2 pipeline-repair **planned/deferred** (Opus-tier, needs `pipeline_info/execution_trace` capture that doesn't exist). The Archivist is a data-platform convenience over already-decided runs — spec now, build after the durable substrate and #2.
-3. **Structure follows the `triage/` precedent** — a top-level package, **not** an `agents/` folder. The `agents/<scope>/` restructure (T-026, [planning/tasks.md](../planning/tasks.md)) is deferred until agent #2 lands; keep `synthesis/` (narration) and `notify/` (port) out of the agent bucket.
+2. **Roster: genuine agent #3, behind #2.** #1 QC-triage **done**; #2 pipeline-repair **done** (T-058, Opus-tier `src/pipeguard/pipeline_repair/`; the `pipeline_info/execution_trace` capture it consumes now exists via EXEC-001 — `parsers.parse_execution_trace` + `models.TraceRecord`). The Archivist is a data-platform convenience over already-decided runs — spec now, build after the durable substrate and #2.
+3. **Structure follows the `triage/` precedent** — a top-level package, **not** an `agents/` folder. #2 landed exactly this way (`src/pipeguard/pipeline_repair/`), so the `agents/<scope>/` restructure (T-026, [planning/tasks.md](../planning/tasks.md)) stays deferred (it is **not** triggered by #2 landing); keep `synthesis/` (narration) and `notify/` (port) out of the agent bucket.
 
 ---
 
@@ -417,7 +418,7 @@ Keep this as the target-state spec, but for the hackathon **build exactly one th
 
 ARCHIVIST AGENT (#3) — drop-in roster block for docs/design/agents.md
 
-STATUS: design-now / build-later. Spec now; build the deterministic export/index substrate first (it is the same code as the BUILD-NOW `/api/export` endpoint); attach the off-by-default LLM narration last, only once a populated store exists. Priority: behind #1 QC-triage (done) and #2 pipeline-repair (planned/deferred).
+STATUS: design-now / build-later. Spec now; build the deterministic export/index substrate first (it is the same code as the BUILD-NOW `/api/export` endpoint); attach the off-by-default LLM narration last, only once a populated store exists. Priority: behind #1 QC-triage (done) and #2 pipeline-repair (done, T-058).
 
 SCOPE: the librarian over the data platform and output tree. Reads across the ledger/projection + cards (completion boundary) and, later, the run-dir output tree (ingest boundary) — the two surfaces the rules pipeline ignores. It indexes/rolls up runs, samples, findings, cards, and events (by month/verdict/gate/signature/origin); registers output-tree `ArtifactRef` pointers+checksums to a NON-authoritative index; tags organizational metadata as a separate layer; and prepares CSV/JSONL exports + a manifest (the ML-ready `MetricValue` corpus + the per-run/batch export the frontend lacks). It never enters `load_run → evaluate_run`.
 
@@ -439,7 +440,7 @@ TRIGGERS: batch/on-demand only over a populated store; standalone entry point (t
 
 MODEL TIER: cheapest (Haiku), env `PIPEGUARD_ARCHIVIST_MODEL`; off by default behind `PIPEGUARD_ARCHIVIST_AGENT=stub|claude` (default stub) — an organizing task, not diagnosis (ADR-0012).
 
-ROSTER PLACEMENT: genuine agent #3, behind #2. Follows the top-level `triage/` package precedent, NOT an `agents/` folder — the agents/<scope>/ restructure (T-026) is deferred until #2 lands; keep synthesis/ and notify/ out of the agent bucket.
+ROSTER PLACEMENT: genuine agent #3, behind #2. Follows the top-level `triage/` package precedent, NOT an `agents/` folder — #2 itself landed as a top-level package, so the agents/<scope>/ restructure (T-026) stays deferred (not triggered by #2 landing); keep synthesis/ and notify/ out of the agent bucket.
 
 ---
 
@@ -799,7 +800,7 @@ GROUND 1 §4 states no per-variant metrics are defined; **this is now stale.** V
 
 6. Is the "deterministic archivist core" worth shipping in the demo at all, or is it fully subsumed by the BUILD-NOW `/api/export` endpoint? (Recommendation: subsumed — ship the endpoint under its plain name, keep the Archivist as spec-only.)
 
-7. Agent-slot priority for tomorrow: flip the existing QC-triage agent live for the demo (recommended) vs. start agent #2 pipeline-repair (blocked on `pipeline_info/execution_trace` capture that doesn't exist). Confirm the "polish what works" call.
+7. ~~Agent-slot priority: QC-triage live for the demo vs. start agent #2 pipeline-repair (blocked on `pipeline_info/execution_trace` capture that doesn't exist).~~ **Superseded (2026-07-09):** #2 pipeline-repair is **built** (T-058) and the `execution_trace` capture now **exists** (EXEC-001, T-061); this open question is resolved.
 
 
 **NGS output layout (from the §3 expansion) — additional questions (none block build-now; all are naming/semantics or target-state):**

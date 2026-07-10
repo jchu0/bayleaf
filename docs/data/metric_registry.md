@@ -21,8 +21,6 @@ frozen [`MetricRegistry`](../../src/pipeguard/metrics/registry.py)
 path today**: the rule engine maps each parsed `QCMetrics` field to its `our_key`, normalizes
 via `observe`, and gates on `MetricValue.normalized_value`
 ([mapping.py](../../src/pipeguard/metrics/mapping.py) → [rules.py](../../src/pipeguard/rules.py)).
-*(The `pipeguard.metrics` module docstrings still read "additive only" — stale; the wiring
-has landed.)*
 
 ## Entry shape
 

@@ -232,6 +232,7 @@ config override, notably, records intent without mutating the live runbook.
 | Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack\|teams\|discord`; each adapter armed by its OWN `PIPEGUARD_{SLACK,TEAMS,DISCORD}_LIVE=1` (Teams/Discord also need `PIPEGUARD_{TEAMS,DISCORD}_WEBHOOK_URL`) | stub ($0, no network) |
 | Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — add/remap a source metric without touching rules | canonical decimals; ON the critical path |
 | Repository (persistence) | `Repository` port; SqliteRepository **and** guarded PostgresRepository built (ADR-0016), `get_repository()` selects | SQLite + JSONL (Postgres off by default) |
+| Artifact store (staging) | `PIPEGUARD_ARTIFACT_STORE=local\|s3` (`src/pipeguard/artifacts/`); S3 adapter OFF by default (lazy `boto3`, degrade-to-local), realized + tested (`tests/test_artifacts_s3.py`), entry `run_gate_from_store` — the ADR-0003 ports-&-adapters storage seam | `local` |
 | Feedback sink (off-gate) | `FeedbackStore` port (`api/feedback_store.py`); jsonl/sqlite/postgres, degrade-to-JSONL (ADR-0016) | JSONL |
 | Pipeline-graph store (off-gate product) | `PIPEGUARD_PIPELINE_STORE=jsonl\|sqlite\|postgres` (`api/pipeline_store.py`); mirrors the feedback sink — degrade-to-JSONL, never logs the DSN (ADR-0016) | JSONL |
 | Settings-override store (off-gate authoring) | `PIPEGUARD_SETTINGS_STORE=jsonl\|sqlite\|postgres` (`api/settings_store.py`); config-threshold override ledger — degrade-to-JSONL, DSN never logged. Records intent; **never mutates the live runbook** (ADR-0001/0016) | JSONL |
@@ -246,7 +247,11 @@ versioned YAML/mapping, not by editing `rules`, keeping verdicts byte-identical 
 ## Deployment
 
 Local today: Streamlit (offline) + FastAPI (`uvicorn`) + React (Vite). The ports-&-adapters
-boundary and Nextflow (compute) carry portability to Slurm / AWS later (ADR-0003, wishlist).
+boundary and Nextflow (compute) carry portability to Slurm / AWS later (ADR-0003, wishlist) —
+though **storage** portability is already a realized seam, not only a future note: the **S3
+artifact-store adapter is built + tested** (`src/pipeguard/artifacts/`, `PIPEGUARD_ARTIFACT_STORE=s3`,
+off by default; lazy `boto3`, degrade-to-local; `tests/test_artifacts_s3.py`), so pointing
+staging at S3 is an adapter flip.
 The core has no cloud/DB coupling; **both** repository adapters are built — `SqliteRepository`
 (default) and a guarded, off-by-default `PostgresRepository` (ADR-0016, with a
 `deploy/postgres/docker-compose.yml` + a compose-gated live test verified green). IaC remains a

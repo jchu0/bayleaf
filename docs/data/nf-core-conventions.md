@@ -51,7 +51,9 @@ peak_rss), `execution_report/timeline/dag`, `manifest_<ts>.bco.json` (BioCompute
   `software_versions.yml`), `params_hash` (from `params_<ts>.json`, for reproducibility
   diffing), `pipeline_name/version`, `nextflow_version`, `session_id`, git `commit`.
   **`execution_trace.txt` status/exit is a far better pipeline-failure signal than a
-  log-substring scan** — use it for the `PIPELINE` / operational-RERUN rules.
+  log-substring scan** — **now built** (EXEC-001, `rules._check_execution_trace`): the
+  structured trace drives the `PIPELINE` / operational-RERUN rules **alongside** the
+  free-text log scan (PIPE-001), not in place of it (see Takeaway 4).
 - **DIVERGE:** flatten the version map for **comparison** (`tool → version`) + keep
   `params_hash`, so we can diff "same reference/aligner/thresholds as the validated baseline?"
 
@@ -129,7 +131,7 @@ Naming grammar: `<sample>.<caller>[.<stage>].<ext>`.
 1. Adopt vocabulary, not the validation *stance* (inputs vs outputs).
 2. `Sample` ← samplesheet + csv recap, not the runtime meta map (only `id`/`single_end` guaranteed).
 3. `MetricValue` mirrors `report_general_stats_data`, but **pin a canonical metric registry** (keys drift).
-4. `AnalysisRun` is `pipeline_info/` typed; `execution_trace.txt` status/exit replaces the log-substring failure scan.
+4. `AnalysisRun` is `pipeline_info/` typed; the structured `execution_trace.txt` status/exit check is **built** (EXEC-001, `rules._check_execution_trace`) and **complements** — does not replace — the free-text log-substring failure scan (PIPE-001): both coexist as preflight operational-failure checks.
 5. `ArtifactRef` ingests the `csv/*.csv` recaps + adds `checksum`/`kind` for gate-grade provenance.
 6. `RunbookProfile` borrows the form-generating schema shape but keeps the three-way gate keywords.
 7. **Panel-specific:** prefer Picard **CollectHsMetrics** over WGS metrics; use **NGSCheckMate** + sex-vs-coverage as the germline contamination/mix-up signals (`CalculateContamination` is somatic-only in sarek).

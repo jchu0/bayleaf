@@ -85,10 +85,13 @@ g. **Build stub-first.** Deterministic stub + lazy SDK import + fallback + env f
 1. Today: [`src/pipeguard/triage/`](../../src/pipeguard/triage/) (agent.py +
    retrieval.py + knowledge corpus + models.py) is the reference shape for any new
    agent.
-2. **Folder plan (T-026, deferred).** When agent #2 (pipeline-repair) lands, move
-   `triage/` → `agents/triage/` and add `agents/pipeline_repair/`. We do **not**
-   create the `agents/<scope>/` folder for a single agent — it would be churn.
-   Keep [`synthesis/`](../../src/pipeguard/synthesis/) (narration) and
+2. **Folder plan (T-026, deferred).** Agent #2 (pipeline-repair) has landed — but as a
+   **top-level [`pipeline_repair/`](../../src/pipeguard/pipeline_repair/) package** (mirroring
+   `triage/`), **not** via the `agents/<scope>/` consolidation. That consolidation (move
+   `triage/` → `agents/triage/`, add `agents/pipeline_repair/`) stays **deferred** (T-026, per
+   its own "don't do it mid-dev" note): it is a naming reshuffle, not gated on #2, and we skip
+   the churn while the layer is still moving. Keep
+   [`synthesis/`](../../src/pipeguard/synthesis/) (narration) and
    [`notify/`](../../src/pipeguard/notify/) (an outbound port) **out** of the agent
    bucket — they are not agents ([ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)).
 
