@@ -1,4 +1,13 @@
-import type { Gate, Severity, Verdict } from './types'
+import type { Gate, RunStatus, Severity, Verdict } from './types'
+
+// Real run-status → pill dot + display label. Driven off RunSummary.status, NEVER inferred from
+// n_attention (F17): a `running` run with 0 flagged samples is "Sequencing", not "Released".
+// Shared by the Runs list and the top-bar run switcher so both read status identically.
+export const RUN_STATUS_META: Record<RunStatus, { dot: string; label: string }> = {
+  needs_review: { dot: 'bg-hold', label: 'Needs review' },
+  running: { dot: 'bg-info', label: 'Sequencing' },
+  released: { dot: 'bg-proceed', label: 'Released' },
+}
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
   proceed: 'Proceed',

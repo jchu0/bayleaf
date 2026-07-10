@@ -2,6 +2,11 @@ import { ArrowLeft, Bell, ChevronDown, Search } from 'lucide-react'
 import { useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { RunSummary } from '../types'
+import { RUN_STATUS_META } from '../verdict'
+
+// The run switcher shows at most this many rows; search narrows the full set, and a footer links
+// to the full Runs list. A flat dropdown of every run does not scale (the prototype's pattern).
+const MAX_RUN_ROWS = 8
 
 // Contextual page title + run pill, derived from the route (mirrors the prototype top bar).
 function useCrumb(): { title: string; run: string | null } {
@@ -26,14 +31,31 @@ export function TopBar({ attention = 0, runs = [] }: { attention?: number; runs?
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
-  const dot = (n: number) => (n > 0 ? 'bg-hold' : 'bg-proceed')
+  const [query, setQuery] = useState('')
 
   // Switch the run in context while keeping the same view (e.g. decision cards → decision
   // cards, provenance → provenance) by swapping the run id in the current path.
   function switchRun(id: string) {
     setMenuOpen(false)
+    setQuery('')
     navigate(pathname.replace(/\/runs\/[^/]+/, `/runs/${id}`))
   }
+  function closeMenu() {
+    setMenuOpen(false)
+    setQuery('')
+  }
+
+  // F17: the pill dot reflects the run's REAL status (needs_review/running/released), never
+  // inferred from n_attention. Search filters the full set by run id or platform; the list is
+  // capped and a footer links to the full Runs list, so the switcher scales past a handful.
+  const current = runs.find((r) => r.run_id === run)
+  const q = query.trim().toLowerCase()
+  const matches = q
+    ? runs.filter(
+        (r) => r.run_id.toLowerCase().includes(q) || (r.platform ?? '').toLowerCase().includes(q),
+      )
+    : runs
+  const shownRuns = matches.slice(0, MAX_RUN_ROWS)
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-card px-5">
@@ -52,30 +74,64 @@ export function TopBar({ attention = 0, runs = [] }: { attention?: number; runs?
       {run && (
         <div className="relative">
           <button
-            onClick={() => setMenuOpen((o) => !o)}
+            onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
             className="flex items-center gap-1.5 rounded-lg border border-line bg-card-2 px-2.5 py-1 font-mono text-[12px] text-text hover:border-line-strong"
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${dot(runs.find((r) => r.run_id === run)?.n_attention ?? 0)}`} />
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${current ? RUN_STATUS_META[current.status].dot : 'bg-line-strong'}`}
+            />
             {run}
             <ChevronDown size={13} className="text-text-3" />
           </button>
           {menuOpen && (
             <>
-              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-              <div className="absolute left-0 top-full z-20 mt-1 w-60 overflow-hidden rounded-lg border border-line bg-card py-1 shadow-pop">
-                {runs.map((r) => (
-                  <button
-                    key={r.run_id}
-                    onClick={() => switchRun(r.run_id)}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-left font-mono text-[12px] hover:bg-card-2 ${
-                      r.run_id === run ? 'bg-card-2 text-text' : 'text-text-2'
-                    }`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full ${dot(r.n_attention)}`} />
-                    <span className="flex-1">{r.run_id}</span>
-                    {r.n_attention > 0 && <span className="text-[10px] text-hold-fg">{r.n_attention} need review</span>}
-                  </button>
-                ))}
+              <div className="fixed inset-0 z-10" onClick={closeMenu} />
+              <div className="absolute left-0 top-full z-20 mt-1 w-[360px] overflow-hidden rounded-xl border border-line-strong bg-card shadow-pop">
+                <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
+                  <Search size={14} className="text-text-3" />
+                  {/* eslint-disable-next-line jsx-a11y/no-autofocus -- opening the switcher is an explicit user action; focusing search is expected */}
+                  <input
+                    autoFocus
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search runs by id or platform…"
+                    className="min-w-0 flex-1 bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-3"
+                  />
+                </div>
+                <div className="max-h-[300px] overflow-y-auto p-1.5">
+                  {shownRuns.map((r) => {
+                    const meta = RUN_STATUS_META[r.status]
+                    return (
+                      <button
+                        key={r.run_id}
+                        onClick={() => switchRun(r.run_id)}
+                        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-card-2 ${
+                          r.run_id === run ? 'bg-card-2' : ''
+                        }`}
+                      >
+                        <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${meta.dot}`} />
+                        <span className="font-mono text-[12.5px] font-medium text-text">{r.run_id}</span>
+                        {r.platform && <span className="text-[11px] text-text-3">· {r.platform}</span>}
+                        <span className="ml-auto shrink-0 text-[11px] text-text-3">{meta.label}</span>
+                      </button>
+                    )
+                  })}
+                  {matches.length === 0 && (
+                    <div className="px-3 py-5 text-center text-[12px] text-text-2">
+                      No runs match “{query}”.
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    closeMenu()
+                    navigate('/')
+                  }}
+                  className="flex w-full items-center justify-between border-t border-line bg-card px-3 py-2.5 hover:bg-card-2"
+                >
+                  <span className="text-[12px] font-semibold text-accent-strong">View all runs</span>
+                  <span className="text-[11px] text-text-3">{runs.length} runs →</span>
+                </button>
               </div>
             </>
           )}

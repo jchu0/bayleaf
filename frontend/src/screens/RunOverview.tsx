@@ -7,20 +7,12 @@ import { FacetChip } from '../components/FacetChip'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl } from '../components/SegmentedControl'
 import type { RunStatus, RunSummary } from '../types'
-import { VERDICT_BAR, VERDICT_LABEL } from '../verdict'
+import { RUN_STATUS_META as STATUS_META, VERDICT_BAR, VERDICT_LABEL } from '../verdict'
 
 const VERDICTS = ['proceed', 'hold', 'rerun', 'escalate'] as const
 type StatusFacet = 'all' | RunStatus
 type SortKey = 'recent' | 'urgent'
 type PerPage = '25' | '50' | '100'
-
-// Real-status → pill dot + display label. Driven off RunSummary.status (never inferred from
-// n_attention, F17): a `running` run with 0 flagged samples is "Sequencing", not "Released".
-const STATUS_META: Record<RunStatus, { dot: string; label: string }> = {
-  needs_review: { dot: 'bg-hold', label: 'Needs review' },
-  running: { dot: 'bg-info', label: 'Sequencing' },
-  released: { dot: 'bg-proceed', label: 'Released' },
-}
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 // ISO "2026-07-08" → "Jul 8, 2026" without a Date() round-trip (avoids a TZ day-shift).
