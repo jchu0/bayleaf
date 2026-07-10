@@ -38,6 +38,10 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: "${GF_ADMIN_PASSWORD:-admin}"
     volumes:
       - ./grafana-datasource.yml:/etc/grafana/provisioning/datasources/pipeguard.yml:ro
+      # Dashboard provider + the dashboard JSON it loads (the "PipeGuard — QC decision gate" board
+      # over the four /metrics series). Same provisioning pattern as the datasource above.
+      - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/pipeguard.yml:ro
+      - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/pipeguard-overview.json:ro
     ports:
       - "3000:3000"
     depends_on:

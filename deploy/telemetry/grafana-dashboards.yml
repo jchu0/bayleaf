@@ -1,0 +1,17 @@
+# Grafana dashboard provisioning for the optional docker-compose telemetry demo.
+# Loads every dashboard JSON mounted under /etc/grafana/provisioning/dashboards (see
+# docker-compose.yml). Mirrors the datasource-provisioning pattern — config only, no app changes.
+
+apiVersion: 1
+
+providers:
+  - name: PipeGuard
+    orgId: 1
+    folder: PipeGuard
+    type: file
+    disableDeletion: false
+    editable: true
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false
