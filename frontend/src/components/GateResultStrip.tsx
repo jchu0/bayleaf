@@ -41,7 +41,15 @@ export function GateResultStrip({
                   {VERDICT_LABEL[g.verdict]}
                 </span>
               ) : (
-                <span className="shrink-0 rounded-full border border-line bg-card-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3px] text-text-2">
+                // A gate with no findings PASSED — show it green (not a neutral grey), so a clean
+                // gate reads as clearly passing. A gate hard-blocked upstream stays neutral "Not run".
+                <span
+                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3px] ${
+                    blocked
+                      ? 'border-line bg-card-2 text-text-2'
+                      : 'border-proceed-bd bg-proceed-bg text-proceed-fg'
+                  }`}
+                >
                   {blocked ? 'Not run' : 'Passed'}
                 </span>
               )}
