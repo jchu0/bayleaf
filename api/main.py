@@ -27,12 +27,12 @@ from collections.abc import Callable, Iterable, Iterator
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
 from pipeguard.metrics import default_registry
@@ -1039,13 +1039,29 @@ class MonitoringGate(BaseModel):
 
 
 class MonitoringSignature(BaseModel):
-    """One recurring issue signature, ranked by its count within the window."""
+    """One recurring issue signature, ranked by its count within the window.
+
+    Identity (`signature`/`rule_id`/`title`/`gate`) and `count` are the historic core; the four
+    fields below are ADDITIVE fidelity for the §7 signature row and default so the payload stays
+    backward-compatible:
+
+    - `first_seen` / `last_seen` — earliest / latest [Header] date (ISO 8601) of a run carrying
+      the signature; None when only undated runs carry it (never fabricated — honest omission).
+    - `trend` — a coarse up/down/flat glyph comparing the recent vs older half of the window by
+      occurrence count. A display heuristic, NOT a calibrated rate (life-science guardrail 2).
+    - `affected_run_ids` — the distinct run ids the signature appears in, chronological, for the
+      affected-run deep-links on the detail panel.
+    """
 
     signature: str
     rule_id: str
     title: str
     gate: str
     count: int
+    first_seen: str | None = None
+    last_seen: str | None = None
+    trend: Literal["up", "down", "flat"] = "flat"
+    affected_run_ids: list[str] = Field(default_factory=list)
 
 
 class MonitoringMetrics(BaseModel):
@@ -1119,6 +1135,14 @@ def get_monitoring(
     rows: list[MonitoringRunRow] = []
     sig_counts: dict[str, int] = {}
     sig_meta: dict[str, tuple[str, str, str]] = {}  # signature -> (rule_id, title, gate)
+    # Additive fidelity accumulators for the §7 signature row: the distinct run ids a signature
+    # appears in (chronological — the `kept` loop is already date-sorted; deduped via `sig_seen`)
+    # for the affected-run deep-links, and the parsed [Header] date of each dated occurrence for
+    # the first/last-seen range and the recent-vs-older trend.
+    sig_runs: dict[str, list[str]] = {}
+    sig_seen: dict[str, set[str]] = {}
+    sig_dates: dict[str, list[date]] = {}
+    kept_dates: list[date] = []  # dated runs in the window, for the "all"-window trend split
     for rid in kept:
         detail = _evaluate(rid)
         summary = detail.summary
@@ -1130,14 +1154,51 @@ def get_monitoring(
                 counts=summary.counts,
             )
         )
+        # Parse the run's [Header] date once; an undated/unparseable run can't be placed on the
+        # time axis, so it still contributes to count/affected-runs but not to dates or the trend.
+        try:
+            run_d: date | None = date.fromisoformat(summary.run_date) if summary.run_date else None
+        except ValueError:
+            run_d = None
+        if run_d is not None:
+            kept_dates.append(run_d)
         for card in detail.cards:
             for finding in card.findings:
-                sig_counts[finding.signature] = sig_counts.get(finding.signature, 0) + 1
+                sig = finding.signature
+                sig_counts[sig] = sig_counts.get(sig, 0) + 1
                 # First sighting fixes the display metadata; the signature key is stable across
                 # rule versions (models.Finding.signature), so any occurrence carries the same.
-                sig_meta.setdefault(
-                    finding.signature, (finding.rule_id, finding.title, finding.gate.value)
-                )
+                sig_meta.setdefault(sig, (finding.rule_id, finding.title, finding.gate.value))
+                seen = sig_seen.setdefault(sig, set())
+                if summary.run_id not in seen:
+                    seen.add(summary.run_id)
+                    sig_runs.setdefault(sig, []).append(summary.run_id)
+                if run_d is not None:
+                    sig_dates.setdefault(sig, []).append(run_d)
+
+    # Trend split point: occurrences in the recent half of the window vs the older half. A dated
+    # window (7/14/30d) splits at today - N/2; "all" has no fixed span, so split at the midpoint
+    # of the observed run-date range. None → nothing to split on, so every trend reads flat.
+    if window in _WINDOW_DAYS:
+        midpoint: date | None = today - timedelta(days=_WINDOW_DAYS[window] // 2)
+    elif kept_dates:
+        lo, hi = min(kept_dates), max(kept_dates)
+        midpoint = date.fromordinal((lo.toordinal() + hi.toordinal()) // 2)
+    else:
+        midpoint = None
+
+    def _sig_trend(dates: list[date]) -> Literal["up", "down", "flat"]:
+        # Rising (more occurrences in the recent half) → "up"; falling → "down"; else "flat". A
+        # coarse display heuristic, not a calibrated rate (life-science guardrail 2).
+        if midpoint is None or not dates:
+            return "flat"
+        older = sum(1 for d in dates if d <= midpoint)
+        recent = len(dates) - older
+        if recent > older:
+            return "up"
+        if recent < older:
+            return "down"
+        return "flat"
 
     # Rank by count desc, then rule_id / title / signature so ties order deterministically.
     ranked = sorted(
@@ -1152,6 +1213,10 @@ def get_monitoring(
             title=sig_meta[sig][1],
             gate=sig_meta[sig][2],
             count=sig_counts[sig],
+            first_seen=min(sig_dates[sig]).isoformat() if sig_dates.get(sig) else None,
+            last_seen=max(sig_dates[sig]).isoformat() if sig_dates.get(sig) else None,
+            trend=_sig_trend(sig_dates.get(sig, [])),
+            affected_run_ids=sig_runs.get(sig, []),
         )
         for sig in ranked
     ]

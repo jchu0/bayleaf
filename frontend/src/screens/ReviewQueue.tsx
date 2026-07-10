@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   Check,
   CheckCircle2,
+  ChevronRight,
   ChevronUp,
   EyeOff,
   FileText,
@@ -12,7 +13,6 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { api } from '../api'
-import { CollapsibleRow } from '../components/CollapsibleRow'
 import { FacetChip } from '../components/FacetChip'
 import { PageHeader } from '../components/PageHeader'
 import { ReviewRepairCard, type RepairApproval } from '../components/ReviewRepairCard'
@@ -524,62 +524,95 @@ function TicketCard({
   )
 
   return (
-    <CollapsibleRow open={open} onToggle={onToggle} header={header} className={status === 'resolved' ? 'opacity-70' : ''}>
-      <p className="text-[12.5px] leading-relaxed text-text-2">{card.rationale}</p>
-
-      <div className="mt-2.5 flex flex-wrap items-center gap-2">
-        <span className="text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">Issue class</span>
-        <span className="rounded-md border border-line bg-card-2 px-2 py-0.5 font-mono text-[11px] text-text-2">
-          {t.primary.rule_id} · {t.primary.title}
-        </span>
-        {suppressed && (
-          <span className="text-[11px] italic text-text-3">suppressed — future runs won't re-prompt</span>
-        )}
+    <div
+      className={`overflow-hidden rounded-xl border border-line bg-card shadow-card ${
+        status === 'resolved' ? 'opacity-70' : ''
+      }`}
+    >
+      {/* Header row IS the toggle — mirrors the CollapsibleRow primitive so a ticket reads like the
+          app's other collapsibles. The card is hand-rolled (not CollapsibleRow) so the action /
+          resolved footer can sit BELOW the drawer and stay reachable even when the ticket is
+          collapsed, matching the prototype's card-level footers (triage actions must never hide). */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggle()
+          }
+        }}
+        className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left"
+      >
+        <ChevronRight
+          size={16}
+          className={`shrink-0 text-text-3 transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+        <div className="min-w-0 flex-1">{header}</div>
       </div>
 
-      {recurring && recurrence && (
-        <div className="mt-2.5 flex flex-wrap items-center gap-2.5 rounded-[9px] border border-rerun-bd bg-rerun-bg px-3 py-2.5">
-          <RefreshCw size={15} className="shrink-0 text-rerun" />
-          <span className="min-w-0 flex-1 text-[12px] leading-snug text-rerun-fg">
-            Recurring signature — <strong>seen {recurrence.count}× in {recurrence.window}</strong> ·{' '}
-            <span className="font-mono">{recurrence.runsLabel}</span>
-          </span>
-          {ui.repairEscalated ? (
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#cfe0fb] bg-accent-weak px-2.5 py-1 text-[11px] font-semibold text-accent-strong">
-              <Check size={12} />
-              Sent to pipeline-repair agent
+      {open && (
+        <div className="border-t border-line px-4 py-4">
+          <p className="text-[12.5px] leading-relaxed text-text-2">{card.rationale}</p>
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">Issue class</span>
+            <span className="rounded-md border border-line bg-card-2 px-2 py-0.5 font-mono text-[11px] text-text-2">
+              {t.primary.rule_id} · {t.primary.title}
             </span>
-          ) : (
-            <button
-              type="button"
-              onClick={on.escalateRepair}
-              className="whitespace-nowrap rounded-[7px] bg-rerun px-[11px] py-1.5 text-[11.5px] font-medium text-white transition-opacity hover:opacity-90"
-            >
-              Escalate to repair agent
-            </button>
+            {suppressed && (
+              <span className="text-[11px] italic text-text-3">suppressed — future runs won't re-prompt</span>
+            )}
+          </div>
+
+          {recurring && recurrence && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-2.5 rounded-[9px] border border-rerun-bd bg-rerun-bg px-3 py-2.5">
+              <RefreshCw size={15} className="shrink-0 text-rerun" />
+              <span className="min-w-0 flex-1 text-[12px] leading-snug text-rerun-fg">
+                Recurring signature — <strong>seen {recurrence.count}× in {recurrence.window}</strong> ·{' '}
+                <span className="font-mono">{recurrence.runsLabel}</span>
+              </span>
+              {ui.repairEscalated ? (
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#cfe0fb] bg-accent-weak px-2.5 py-1 text-[11px] font-semibold text-accent-strong">
+                  <Check size={12} />
+                  Sent to pipeline-repair agent
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={on.escalateRepair}
+                  className="whitespace-nowrap rounded-[7px] bg-rerun px-[11px] py-1.5 text-[11.5px] font-medium text-white transition-opacity hover:opacity-90"
+                >
+                  Escalate to repair agent
+                </button>
+              )}
+            </div>
+          )}
+
+          {ui.repairEscalated && (
+            <ReviewRepairCard
+              proposal={ui.repairProposal ?? null}
+              loading={ui.repairLoading ?? false}
+              approved={ui.repairApproved ?? 'none'}
+              isApprover={isApprover}
+              onApprove={on.approveFix}
+            />
+          )}
+
+          {needsApprover && status !== 'resolved' && (
+            <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-2 text-[12px] text-escalate-fg">
+              <ChevronUp size={14} className="shrink-0" />
+              Escalated to approver — awaiting sign-off from an Approver.
+            </div>
           )}
         </div>
       )}
 
-      {ui.repairEscalated && (
-        <ReviewRepairCard
-          proposal={ui.repairProposal ?? null}
-          loading={ui.repairLoading ?? false}
-          approved={ui.repairApproved ?? 'none'}
-          isApprover={isApprover}
-          onApprove={on.approveFix}
-        />
-      )}
-
-      {needsApprover && status !== 'resolved' && (
-        <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-2 text-[12px] text-escalate-fg">
-          <ChevronUp size={14} className="shrink-0" />
-          Escalated to approver — awaiting sign-off from an Approver.
-        </div>
-      )}
-
+      {/* Action / resolved footer — a card-level region OUTSIDE the drawer so triage actions stay
+          reachable on a collapsed ticket (fidelity S6). */}
       {status === 'resolved' ? (
-        <div className="-mx-4 -mb-4 mt-4 flex items-start gap-2.5 border-t border-line bg-proceed-bg px-4 py-3">
+        <div className="flex items-start gap-2.5 border-t border-line bg-proceed-bg px-4 py-3">
           <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-proceed" />
           <p className="flex-1 text-[12.5px] leading-relaxed text-proceed-fg">
             <strong>Resolved by {ui.resolvedBy ?? 'a.rivera'}.</strong> {resolutionNote(verdict)}
@@ -593,7 +626,7 @@ function TicketCard({
           </button>
         </div>
       ) : (
-        <div className="-mx-4 -mb-4 mt-4 flex flex-wrap items-center gap-2 border-t border-line bg-card-2 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 border-t border-line bg-card-2 px-4 py-2.5">
           <Link
             to={`/runs/${t.runId}`}
             className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12px] text-text-2 transition-colors hover:text-text"
@@ -663,6 +696,6 @@ function TicketCard({
           </div>
         </div>
       )}
-    </CollapsibleRow>
+    </div>
   )
 }

@@ -2,6 +2,15 @@ import { Link } from 'react-router-dom'
 import { FileText, Info, SquareCheckBig, Star } from 'lucide-react'
 import type { DecisionCard, TriageCitation, TriageNote } from '../types'
 
+// The static, source-derived label rendered as each citation's second line (dc.html 1140/1151).
+// The TriageCitation contract (types.ts) carries only source_kind|ref|title|score — no free-text
+// 'kind' — so we never fabricate a corpus label; we key a fixed human phrase off source_kind.
+// Advisory only: this names where the evidence came from, never that the agent set a verdict.
+const SOURCE_KIND_LABEL: Record<TriageCitation['source_kind'], string> = {
+  finding: 'From this run findings',
+  knowledge: 'Knowledge and experience',
+}
+
 // The advisory subject card for Agent triage (dc.html 1107-1164): who/what is being triaged,
 // the model's likely-cause + suggested-action narration, its citations split into this run's
 // findings vs. the knowledge corpus, and a footer that restates the invariant + links back to
@@ -120,24 +129,30 @@ function FindingCite({ cite, runId }: { cite: TriageCitation; runId: string }) {
       <div className="min-w-0">
         <div className="text-[12.5px] font-semibold text-text">{cite.title ?? cite.ref}</div>
         {cite.title && <div className="mt-0.5 font-mono text-[10.5px] text-text-3">{cite.ref}</div>}
+        <div className="mt-0.5 text-[10.5px] text-text-3">{SOURCE_KIND_LABEL[cite.source_kind]}</div>
       </div>
     </Link>
   )
 }
 
-// A cited knowledge/experience entry — an id-chip card (KB-217 / INC-0042 / SOP-11). No
-// fabricated "kind" line: the contract carries only ref + title, so we show only those.
+// A cited knowledge/experience entry — an id-chip card (KB-217 / INC-0042 / SOP-11). Two lines:
+// the corpus title (when the contract carries one) over a static source-kind sub-label. The
+// sub-label is derived, not invented — the contract has no free-text "kind", so we render a fixed
+// "Knowledge and experience" rather than fabricating a corpus category.
 function KnowledgeCite({ cite }: { cite: TriageCitation }) {
   return (
     <div className="flex items-start gap-[9px] rounded-[9px] border border-line bg-card px-[11px] py-[9px]">
       <span className="shrink-0 rounded-[5px] bg-accent-weak px-1.5 py-0.5 font-mono text-[10px] font-semibold text-accent-strong">
         {cite.ref}
       </span>
-      {cite.title && (
-        <div className="min-w-0">
+      <div className="min-w-0">
+        {cite.title && (
           <div className="text-[12.5px] font-medium leading-[1.35] text-text">{cite.title}</div>
+        )}
+        <div className={`text-[10.5px] text-text-3${cite.title ? ' mt-0.5' : ''}`}>
+          {SOURCE_KIND_LABEL[cite.source_kind]}
         </div>
-      )}
+      </div>
     </div>
   )
 }

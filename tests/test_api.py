@@ -760,7 +760,18 @@ def test_monitoring_default_window_is_internally_consistent():
     assert body["n_signatures_total"] == len(sigs)  # uncapped by default
     assert [s["count"] for s in sigs] == sorted((s["count"] for s in sigs), reverse=True)
     assert all(s["count"] >= 1 for s in sigs)
-    assert {"signature", "rule_id", "title", "gate", "count"} == set(sigs[0])
+    # Fully described, incl. the additive first/last-seen + trend + affected-run deep-link fields.
+    assert {
+        "signature",
+        "rule_id",
+        "title",
+        "gate",
+        "count",
+        "first_seen",
+        "last_seen",
+        "trend",
+        "affected_run_ids",
+    } == set(sigs[0])
 
 
 def test_monitoring_signature_cap_reports_full_total():

@@ -1,4 +1,4 @@
-import type { GateReadout, ReadoutStatus } from '../types'
+import type { Gate, ReadoutStatus, RunbookPolicy, RunbookThreshold } from '../types'
 import { GATE_DOT } from '../verdict'
 
 // The Decision-card HERO: the QC readout by gate, populated from the API's `qc-readout`
@@ -6,27 +6,78 @@ import { GATE_DOT } from '../verdict'
 // This is a pure re-presentation of already-decided numbers — it never sets a verdict or a
 // confidence (ADR-0001); `status` mirrors the rule the gate already applied. Repurposed from
 // the old (dead) Value/Reported table into the design's four-column readout (F20).
+//
+// Robustness (S3): when a gate ran but nothing was measured (empty metric_values), the caller
+// injects a `notMeasuredGroup` built from the operator runbook so the checks stay VISIBLE with
+// Observed "—" and a neutral `not_measured` status — never a silently-empty hero.
 
 type Variant = 'split' | 'brief' | 'dense'
 
+// A presentation-only fifth status layered over the wire `ReadoutStatus`. `not_measured` is not a
+// server state — it marks a runbook threshold the gate never got an observation for. Kept local to
+// this file (types.ts is the wire contract); it is still rules-derived, NEVER a confidence meter.
+export type ReadoutRowStatus = ReadoutStatus | 'not_measured'
+// The minimal row/group shape the readout renders. `GateReadout`/`MetricReadout` from the API are
+// structurally assignable to these (they carry more fields + a narrower status), so callers pass
+// either the real projection or a runbook-backed placeholder group through the same component.
+export type ReadoutRow = {
+  metric: string
+  label: string
+  observed_display: string
+  threshold_display: string | null
+  status: ReadoutRowStatus
+}
+export type ReadoutGroup = { gate: Gate; rows: ReadoutRow[]; flagged_count: number }
+
 // Per-status treatment. Deliberately independent of verdict.ts STATUS_CHIP (which maps a
 // finding's severity, and uses ESCALATE for critical): the design's metric-status chip maps
-// pass→proceed / borderline→hold / fail→RERUN, plus a neutral fourth state for an ungated
-// metric we decline to classify (never fabricate a threshold).
-const READOUT: Record<ReadoutStatus, { dot: string; chip: string; label: string }> = {
+// pass→proceed / borderline→hold / fail→RERUN, plus two neutral states — `not_gated` (measured
+// but no threshold) and `not_measured` (threshold exists but no observation). Neither fabricates.
+const READOUT: Record<ReadoutRowStatus, { dot: string; chip: string; label: string }> = {
   pass: { dot: 'bg-proceed', chip: 'bg-proceed-bg text-proceed-fg border-proceed-bd', label: 'Pass' },
   borderline: { dot: 'bg-hold', chip: 'bg-hold-bg text-hold-fg border-hold-bd', label: 'Border' },
   fail: { dot: 'bg-rerun', chip: 'bg-rerun-bg text-rerun-fg border-rerun-bd', label: 'Fail' },
   not_gated: { dot: 'bg-line-strong', chip: 'bg-card-2 text-text-3 border-line', label: 'Ungated' },
+  not_measured: {
+    dot: 'bg-line-strong',
+    chip: 'bg-card-2 text-text-3 border-line border-dashed',
+    label: 'Not measured',
+  },
 }
 
-const GROUP_LABEL: Record<GateReadout['gate'], string> = {
+const GROUP_LABEL: Record<Gate, string> = {
   preflight: 'Preflight gate',
   qc: 'QC gate',
   variant: 'Variant gate',
 }
 
-function StatusChip({ status }: { status: ReadoutStatus }) {
+// Build the "gate ran, nothing measured" placeholder group from the operator runbook — one row per
+// gated threshold with Observed "—" and a neutral `not_measured` status. Lets the caller keep QC
+// checks visible when a card's metric_values are empty. Returns null when the runbook gates nothing
+// at this gate (caller degrades to hiding the block, the pre-S3 behavior).
+export function notMeasuredGroup(gate: Gate, runbook: RunbookPolicy): ReadoutGroup | null {
+  const rows = runbook.thresholds
+    .filter((t) => t.gate === gate)
+    .map<ReadoutRow>((t) => ({
+      metric: t.our_key,
+      label: t.label,
+      observed_display: '—',
+      threshold_display: thresholdDisplay(t),
+      status: 'not_measured',
+    }))
+  return rows.length ? { gate, rows, flagged_count: 0 } : null
+}
+
+// The runbook only carries the hard-fail bound + a direction — render it as a one-sided threshold
+// (≥ / ≤). Symbol-like units (x, %) are appended; word units (count, phred…) would read wrong.
+function thresholdDisplay(t: RunbookThreshold): string {
+  const arrow = t.direction === 'higher_is_better' ? '≥' : '≤'
+  const wordUnit = ['count', 'bool', 'ratio', 'fraction', 'reads', 'phred'].includes(t.unit)
+  const unit = t.unit && !wordUnit ? t.unit : ''
+  return `${arrow} ${t.hard_fail}${unit}`
+}
+
+function StatusChip({ status }: { status: ReadoutRowStatus }) {
   const s = READOUT[status]
   return (
     <span
@@ -37,10 +88,20 @@ function StatusChip({ status }: { status: ReadoutStatus }) {
   )
 }
 
-// The per-gate rollup pill: "N flagged" (amber) when any row is fail/borderline, else
-// "all clear" (green) — reads the gate's own flagged_count so it can never disagree with the
-// rows below it.
-function Rollup({ flagged }: { flagged: number }) {
+// The per-gate rollup pill. "N flagged" (amber) when any row is fail/borderline; a neutral "not
+// measured" (grey) when the group has rows but none were observed — so a nothing-measured gate can
+// never read as a green "all clear"; otherwise "all clear". Reads `flagged_count` for the amber
+// count so it can't disagree with the rows below it.
+function Rollup({ group }: { group: ReadoutGroup }) {
+  const measured = group.rows.some((r) => r.status !== 'not_measured')
+  if (!measured && group.rows.length > 0) {
+    return (
+      <span className="ml-auto rounded-full border border-dashed border-line bg-card-2 px-2 py-px text-[9.5px] font-semibold text-text-3">
+        not measured
+      </span>
+    )
+  }
+  const flagged = group.flagged_count
   const cls = flagged
     ? 'bg-hold-bg text-hold-fg border-hold-bd'
     : 'bg-proceed-bg text-proceed-fg border-proceed-bd'
@@ -51,7 +112,7 @@ function Rollup({ flagged }: { flagged: number }) {
   )
 }
 
-export function QCReadout({ gates, variant }: { gates: GateReadout[]; variant: Variant }) {
+export function QCReadout({ gates, variant }: { gates: ReadoutGroup[]; variant: Variant }) {
   // Empty gate groups recede — a sample that never reached a gate has nothing to show there.
   const groups = gates.filter((g) => g.rows.length > 0)
   if (groups.length === 0) return null
@@ -66,7 +127,7 @@ export function QCReadout({ gates, variant }: { gates: GateReadout[]; variant: V
               <span className="text-[10px] font-semibold uppercase tracking-[0.4px] text-text-2">
                 {GROUP_LABEL[g.gate]}
               </span>
-              <Rollup flagged={g.flagged_count} />
+              <Rollup group={g} />
             </div>
             <div className="grid grid-cols-[1.7fr_0.8fr_1fr_0.7fr] text-[9px] font-semibold uppercase tracking-[0.4px] text-text-3">
               <div className="px-[13px] py-1.5">Metric</div>
@@ -110,7 +171,7 @@ export function QCReadout({ gates, variant }: { gates: GateReadout[]; variant: V
               <span className="text-[10px] font-semibold uppercase tracking-[0.4px] text-text-2">
                 {GROUP_LABEL[g.gate]}
               </span>
-              <Rollup flagged={g.flagged_count} />
+              <Rollup group={g} />
             </div>
             <div className="flex flex-wrap gap-[7px]">
               {g.rows.map((m) => (

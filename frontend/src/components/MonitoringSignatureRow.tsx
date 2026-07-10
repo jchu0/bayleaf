@@ -1,22 +1,33 @@
 import { Calendar, ChevronRight, ExternalLink, Star } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../api'
 import type { AgentProposal, MonitoringSignature } from '../types'
 import { GATE_LABEL } from '../verdict'
 
-// A signature carries no per-signature affected-run list in the live aggregate yet (F2 backend
-// gap) — read it defensively so the chips light up the moment the backend serves them, without
-// fabricating a mapping in the meantime.
+// types.ts (frozen) doesn't type affected_run_ids on MonitoringSignature, though the aggregate
+// now serves it — read it via a defensive cast so the chips render without touching the frozen
+// type, and degrade to the honest empty-state when an older/partial payload omits it.
 type SignatureWithRuns = MonitoringSignature & { affected_run_ids?: string[] }
+
+// Month-abbreviated ISO date for the first→last-seen range, matching the prototype's "Jun 26 →
+// Jul 8" (PipeGuard.dc.html:1383/2286). Parses the YYYY-MM-DD parts directly — no Date object, so
+// there's no timezone off-by-one — and falls back to the raw string if it isn't a plain date.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function shortSeen(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return iso
+  const month = MONTHS[Number(m[2]) - 1]
+  return month ? `${month} ${Number(m[3])}` : iso
+}
 
 // A recurring-issue-signature row on the fixed 5-column grid (chevron · signature · first→last
 // seen · frequency · trend). The whole header row toggles the detail panel open; the detail is a
 // sibling of the header (not nested), so its links/buttons don't bubble into the toggle.
 //
-// Honesty invariants held here: first_seen/last_seen/trend are omitted (not faked) until the
-// backend carries them; the Escalate CTA hits the advisory read-only repair endpoint and never
-// mutates a verdict (rules decide / AI advises).
+// Honesty invariants held here: first_seen/last_seen render only when the aggregate carries them
+// (a signature with only undated runs shows no range — omitted, never faked); a flat/absent trend
+// draws no glyph; the Escalate CTA hits the advisory read-only repair endpoint and never mutates
+// a verdict (rules decide / AI advises).
 export function MonitoringSignatureRow({
   sig,
   open,
@@ -37,7 +48,6 @@ export function MonitoringSignatureRow({
   const [escError, setEscError] = useState<string | null>(null)
 
   const affectedRuns = (sig as SignatureWithRuns).affected_run_ids ?? []
-  const hasDates = Boolean(sig.first_seen && sig.last_seen)
   const recurring = sig.count >= 3
   const autoNote = recurring ? `Auto-escalated · recurred ${sig.count}×` : 'Available for manual escalation'
   const desc = `${sig.title}. Flagged by ${sig.rule_id} on the ${GATE_LABEL[sig.gate]} gate; recorded ${sig.count}× in the last ${windowLabel}.`
@@ -47,7 +57,14 @@ export function MonitoringSignatureRow({
     setEscError(null)
     try {
       // Advisory, off-gate read: returns a RepairProposal for a human to weigh, never an action.
-      const p = await api.signatureRepair(sig.signature)
+      // The repair endpoint accepts ?window=, so we thread the operator's active window directly
+      // (the typed api.signatureRepair() client is frozen at signature-only arity) — the proposal
+      // is then computed over the same span the row shows, not the endpoint's default window.
+      const res = await fetch(
+        `/api/monitoring/signatures/${encodeURIComponent(sig.signature)}/repair?window=${encodeURIComponent(windowShort)}`,
+      )
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      const p = (await res.json()) as AgentProposal
       setProposal(p)
       setEscState('done')
     } catch (e) {
@@ -81,11 +98,11 @@ export function MonitoringSignatureRow({
         <span className="min-w-0 truncate font-mono text-[12px] text-text">
           {sig.rule_id} · {sig.title}
         </span>
-        {/* Col 3 — first → last seen; omitted honestly until the aggregate carries dates (F2) */}
-        {hasDates ? (
+        {/* Col 3 — first → last seen; omitted honestly when only undated runs carry the signature */}
+        {sig.first_seen && sig.last_seen ? (
           <span className="inline-flex min-w-0 items-center gap-[5px] whitespace-nowrap font-mono text-[10.5px] text-text-3">
             <Calendar size={12} className="shrink-0" />
-            {sig.first_seen} → {sig.last_seen}
+            {shortSeen(sig.first_seen)} → {shortSeen(sig.last_seen)}
           </span>
         ) : (
           <span />
@@ -94,7 +111,7 @@ export function MonitoringSignatureRow({
         <span className="whitespace-nowrap text-[11px] text-text-2">
           <strong className="font-mono text-text">{sig.count}×</strong> / {windowShort}
         </span>
-        {/* Col 5 — trend glyph; empty until the backend serves a trend (F2) */}
+        {/* Col 5 — trend glyph; ▲ rising / ▼ falling, nothing when flat or absent */}
         <span className="text-center text-[12px] font-bold">
           {sig.trend === 'up' ? (
             <span className="text-escalate">▲</span>
@@ -128,10 +145,10 @@ export function MonitoringSignatureRow({
               </div>
             </>
           ) : (
-            // Honest empty: the aggregate does not yet map a signature to its runs (F2). No
-            // fabricated links — the chips light up once the backend carries affected_run_ids.
+            // Honest empty: no run mapping came back for this signature (e.g. an older/partial
+            // payload). No fabricated links — chips render only from real ids the aggregate serves.
             <div className="mt-[13px] text-[10.5px] text-text-3">
-              Per-signature affected-run list not yet served by the monitoring aggregate.
+              No affected runs recorded for this signature.
             </div>
           )}
 

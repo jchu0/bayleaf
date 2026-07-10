@@ -93,6 +93,17 @@ export function Intake() {
     return out
   }, [run, runbook])
 
+  // The yield admission cutoff is the runbook's own `pct_reads_identified` gate (0.70,
+  // canonical fraction) — surfaced so the operator sees the real threshold instead of a
+  // magic number. Falls back to the literal 70% if the runbook didn't load; it matches
+  // the code path (`yield_ < gate`) either way.
+  const yieldTarget = useMemo(() => {
+    const th = runbook?.qc_thresholds.find((q) => q.metric === 'pct_reads_identified')
+    const gate = th?.gate ?? 0.7
+    const unit = th?.unit ?? '%'
+    return { gate, unit, display: displayThreshold(gate, unit) }
+  }, [runbook])
+
   if (error) return <ErrorBox message={error} />
   if (!runId) return <Empty message="Pick a run from the switcher to see its intake gate." />
   if (!run) return <Loading label="Loading intake…" />
@@ -164,6 +175,7 @@ export function Intake() {
 
           <SampleAdmission
             run={run}
+            yieldTarget={yieldTarget}
             overrides={overrides}
             setOverrides={setOverrides}
             openMap={openMap}
@@ -242,12 +254,14 @@ const STATUS_LABEL: Record<string, string> = {
 
 function SampleAdmission({
   run,
+  yieldTarget,
   overrides,
   setOverrides,
   openMap,
   setOpenMap,
 }: {
   run: RunDetail
+  yieldTarget: { gate: number; unit: string; display: string }
   overrides: Record<string, boolean>
   setOverrides: (fn: (m: Record<string, boolean>) => Record<string, boolean>) => void
   openMap: Record<string, boolean>
@@ -257,9 +271,9 @@ function SampleAdmission({
     const yield_ = metricOf(card, 'qc.reads_passing_filter') // fraction identified/PF
     const q30 = metricOf(card, 'qc.q30')
     const flaggedAtIntake = card.gate_results.some((g) => g.gate === 'preflight')
-    // "Genuinely-sparse": low read yield but not flagged for a provenance/metadata reason —
-    // the case the manual override exists for.
-    const sparse = !flaggedAtIntake && yield_ != null && yield_ < 0.7
+    // "Genuinely-sparse": below the runbook's yield gate but not flagged for a provenance/
+    // metadata reason — the case the manual override exists for.
+    const sparse = !flaggedAtIntake && yield_ != null && yield_ < yieldTarget.gate
     return { card, yield_, q30, flaggedAtIntake, sparse }
   })
 
@@ -268,7 +282,8 @@ function SampleAdmission({
       <div className="border-b border-line px-[18px] py-[14px]">
         <div className="text-[14.5px] font-semibold text-text">Sample admission</div>
         <div className="mt-0.5 text-[12px] text-text-2">
-          By read yield. A genuinely-sparse sample can still be admitted with a manual override.
+          Yield target ≥ {yieldTarget.display} reads identified. A genuinely-sparse sample can still be admitted with a
+          manual override.
         </div>
       </div>
 
@@ -315,7 +330,7 @@ function SampleAdmission({
               <div className="-m-4 bg-card-2 px-4 pb-[15px] pt-3.5">
                 <div className="mb-[7px] flex items-center justify-between gap-3">
                   <span className="text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">
-                    Yield · reads identified
+                    Yield vs target · ≥ {yieldTarget.display}
                   </span>
                   <span className="font-mono text-[11.5px] text-text-2">{pct != null ? `${pct}%` : '—'}</span>
                 </div>

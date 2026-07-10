@@ -54,7 +54,8 @@ export function UserSettingsDialog({ onClose }: { onClose: () => void }) {
   const [theme, setTheme] = useState<Theme>('light')
   const [density, setDensity] = useState<Density>('comfortable')
   const [emailDigest, setEmailDigest] = useState(true)
-  const [desktopNotifications, setDesktopNotifications] = useState(false)
+  // Matches the prototype seed prefInApp: true (dc.html) — opens ON.
+  const [desktopNotifications, setDesktopNotifications] = useState(true)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -72,36 +73,55 @@ export function UserSettingsDialog({ onClose }: { onClose: () => void }) {
 
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
           <section>
-            <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.8px] text-text-3">Profile</p>
-            <div className="divide-y divide-line">
-              <PrefRow label="Display name">
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.8px] text-text-3">Profile</p>
+            {/* Avatar row leads Profile (dc.html): same 150deg green gradient as the sidebar user chip. */}
+            <div className="mb-4 flex items-center gap-3.5">
+              <div
+                className="grid h-[46px] w-[46px] shrink-0 place-items-center rounded-full text-[16px] font-semibold text-white"
+                style={{ background: 'linear-gradient(150deg,#3a7,#186)' }}
+              >
+                AR
+              </div>
+              <button
+                type="button"
+                className="rounded-lg border border-line-strong bg-card px-3 py-[7px] text-[12px] font-medium text-accent-strong hover:bg-page"
+              >
+                Change avatar
+              </button>
+            </div>
+            {/* Two-column field grid with labels above each control (dc.html). */}
+            <div className="grid grid-cols-2 gap-[13px]">
+              <div>
+                <label className="mb-1.5 block text-[11px] font-semibold text-text-2">Display name</label>
                 <input
                   defaultValue="Ada Rivera"
-                  className="w-[220px] rounded-lg border border-line bg-card px-2.5 py-1.5 text-[13px] text-text focus:border-accent focus:outline-none"
+                  className="w-full rounded-lg border border-line-strong bg-card px-[11px] py-2 text-[13px] text-text focus:border-accent focus:outline-none"
                 />
-              </PrefRow>
-              <PrefRow label="Email">
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[11px] font-semibold text-text-2">Email</label>
                 <input
                   defaultValue="a.rivera@lab.org"
-                  className="w-[220px] rounded-lg border border-line bg-card px-2.5 py-1.5 font-mono text-[12.5px] text-text focus:border-accent focus:outline-none"
+                  className="w-full rounded-lg border border-line-strong bg-card px-[11px] py-2 font-mono text-[12.5px] text-text focus:border-accent focus:outline-none"
                 />
-              </PrefRow>
-              <PrefRow label="Role" hint="Toggled from the account menu">
-                <span className="rounded-md bg-card-2 px-2.5 py-1 font-mono text-[12px] capitalize text-text-2">
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[11px] font-semibold text-text-2">Role</label>
+                <div className="rounded-lg border border-line bg-card-2 px-[11px] py-2 text-[12.5px] capitalize text-text-2">
                   {role} · RBAC
-                </span>
-              </PrefRow>
-              <PrefRow label="Time zone">
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[11px] font-semibold text-text-2">Time zone</label>
                 <select
                   defaultValue="America/Denver"
-                  className="w-[220px] rounded-lg border border-line bg-card px-2.5 py-1.5 text-[13px] text-text focus:border-accent focus:outline-none"
+                  className="w-full cursor-pointer rounded-lg border border-line-strong bg-card px-[11px] py-2 text-[12.5px] text-text focus:border-accent focus:outline-none"
                 >
                   <option value="America/Denver">America/Denver (MST)</option>
-                  <option value="America/New_York">America/New_York (EST)</option>
-                  <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                  <option value="America/New_York">America/New_York (ET)</option>
                   <option value="UTC">UTC</option>
                 </select>
-              </PrefRow>
+              </div>
             </div>
           </section>
 

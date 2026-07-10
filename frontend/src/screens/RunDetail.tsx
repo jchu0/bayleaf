@@ -10,12 +10,20 @@ import { DecisionVerdictBar } from '../components/DecisionVerdictBar'
 import { CitedEvidence } from '../components/EvidenceTable'
 import { FacetChip } from '../components/FacetChip'
 import { GateResultStrip } from '../components/GateResultStrip'
-import { QCReadout } from '../components/MetricsPanel'
+import { QCReadout, notMeasuredGroup, type ReadoutGroup } from '../components/MetricsPanel'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { ErrorBox } from '../components/States'
 import { VerdictBadge } from '../components/VerdictBadge'
-import type { CardHeader, CardReadout, DecisionCard, Gate, RunDetail as RunDetailData, Verdict } from '../types'
+import type {
+  CardHeader,
+  CardReadout,
+  DecisionCard,
+  Gate,
+  RunbookPolicy,
+  RunDetail as RunDetailData,
+  Verdict,
+} from '../types'
 import { GATE_DOT, VERDICT_STRIPE } from '../verdict'
 
 type Density = 'split' | 'brief' | 'dense'
@@ -33,12 +41,16 @@ const LAYOUTS: { value: Density; label: string }[] = [
 ]
 // The design's origin tags — where a card's verdict originated (qc/variant read as "… gate").
 const GATE_TAG: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', variant: 'Variant gate' }
+// Pipeline order for the QC-readout gate groups, so an injected placeholder group sorts into place.
+const GATE_ORDER: Record<Gate, number> = { preflight: 0, qc: 1, variant: 2 }
 
 export function RunDetail() {
   const { runId = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const [detail, setDetail] = useState<RunDetailData | null>(null)
   const [readouts, setReadouts] = useState<ReadoutState>({})
+  // Run-independent QC policy, backing the "QC gate ran but nothing measured" placeholder (S3).
+  const [runbook, setRunbook] = useState<RunbookPolicy | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [density, setDensity] = useState<Density>('split')
   const [reload, setReload] = useState(0)
@@ -76,6 +88,19 @@ export function RunDetail() {
       cancelled = true
     }
   }, [runId, reload])
+
+  // The runbook is run-independent QC policy — fetch once. It backs the not-measured placeholder;
+  // a failure just leaves it null and the readout hero degrades to hiding (the pre-S3 behavior).
+  useEffect(() => {
+    let cancelled = false
+    api
+      .runbook()
+      .then((rb) => !cancelled && setRunbook(rb))
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // The URL owns the filter so Monitoring can deep-link `?filter=attention` to a run's flagged
   // samples. Unknown values fall back to "all".
@@ -230,6 +255,7 @@ export function RunDetail() {
                     card={card}
                     density={density}
                     readout={readout}
+                    runbook={runbook}
                     platform={detail!.summary.platform}
                     date={detail!.summary.run_date}
                   />
@@ -345,6 +371,7 @@ function CardBody({
   card,
   density,
   readout,
+  runbook,
   platform,
   date,
 }: {
@@ -352,10 +379,21 @@ function CardBody({
   card: DecisionCard
   density: Density
   readout: CardReadout | null
+  runbook: RunbookPolicy | null
   platform: string | null
   date: string | null
 }) {
-  const gates = readout?.readout.gates ?? []
+  // QC checks must stay visible whenever the QC gate applies. When the gate ran but produced no
+  // measured metrics (empty metric_values → no QC rows in the projection), fall back to the runbook
+  // thresholds as `not_measured` placeholder rows instead of dropping the whole hero (S3). The
+  // status stays rules-derived (never a confidence meter); a missing runbook degrades to hiding.
+  const realGates = readout?.readout.gates ?? []
+  const qcApplies = card.gate_results.some((g) => g.gate === 'qc')
+  const qcHasRows = realGates.some((g) => g.gate === 'qc' && g.rows.length > 0)
+  const placeholder = qcApplies && !qcHasRows && runbook ? notMeasuredGroup('qc', runbook) : null
+  const gates: ReadoutGroup[] = placeholder
+    ? [...realGates, placeholder].sort((a, b) => GATE_ORDER[a.gate] - GATE_ORDER[b.gate])
+    : realGates
   const hasReadout = gates.some((g) => g.rows.length > 0)
   const hasFindings = card.findings.length > 0
   const clean = card.verdict === 'proceed'

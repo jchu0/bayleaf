@@ -124,24 +124,44 @@ export function Provenance() {
   if (error) return <ErrorBox message={error} />
   if (!detail || !artifacts) return <Loading label="Loading provenance…" />
 
-  // Per-stage note for the drill-in band. Gate stages carry the worst gate result's rationale
-  // (rules-authored); non-gate stages get an honest derived note — never a fabricated one.
+  // Per-stage note for the drill-in band — every stage gets a real note, never an empty bar.
+  // Gate stages prefer the worst gate result's rationale (rules-authored); when that's missing
+  // (or whitespace-only), and for the ungated stages, we fall back to an honest derived status
+  // note — a count/state we actually know, never a fabricated metric.
   const noteFor = (stage: Stage): string => {
+    const n = detail.cards.length
+    const plural = n === 1 ? '' : 's'
+
+    // Alignment/variant-calling are honestly not run in this build (lineage starts from FASTQ).
+    // Short-circuit before the gate-rationale lookup so a stray variant-gate note can't surface.
+    if (stage.key === 'align')
+      return 'Not run in this build — lineage starts from FASTQ; alignment provenance is future work.'
+    if (stage.key === 'variant')
+      return 'Not run in this build — variant-calling provenance is future work.'
+
     if (stage.gate) {
       const results = detail.cards.flatMap((c) => c.gate_results).filter((g) => g.gate === stage.gate)
       if (results.length) {
         const worst = results.reduce((a, b) => (VERDICT_RANK[b.verdict] < VERDICT_RANK[a.verdict] ? b : a))
-        if (worst.rationale) return worst.rationale
+        if (worst.rationale.trim()) return worst.rationale
       }
     }
-    const n = detail.cards.length
+
     switch (stage.key) {
       case 'intake':
-        return `${n} sample${n === 1 ? '' : 's'} registered from the sample sheet.`
-      case 'align':
-        return 'Not run in this build — lineage starts from FASTQ; alignment provenance is future work.'
-      case 'variant':
-        return 'Not run in this build — variant-calling provenance is future work.'
+        return `${n} sample${plural} registered from the sample sheet.`
+      case 'demux':
+        return `Demultiplexed ${n} sample${plural} from the sample sheet.`
+      case 'qc': {
+        // Honest fallback when the QC gate carried no rationale: report how many samples the
+        // QC gate flagged (verdict below proceed), derived from the rules' own gate results.
+        const flagged = detail.cards.filter((c) =>
+          c.gate_results.some((g) => g.gate === 'qc' && g.verdict !== 'proceed'),
+        ).length
+        return flagged === 0
+          ? `Per-sample QC ran across ${n} sample${plural}; none flagged.`
+          : `Per-sample QC ran across ${n} sample${plural}; ${flagged} flagged.`
+      }
       case 'gate':
         return `Aggregates the three gates → overall verdict ${VERDICT_LABEL[runWorst]}.`
       default:
