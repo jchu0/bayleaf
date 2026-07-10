@@ -48,6 +48,7 @@ import {
 } from '../components/BuilderShared'
 import { useRole } from '../context/RoleContext'
 import { api } from '../api'
+import type { DiffResult, DryRunResult } from '../types'
 
 // The Pipeline Builder (#11) — the editable superset of the Provenance canvas: a left→right DAG
 // the operator *configures* (nodes, locators, the advisory agent), whose sole grounded output is
@@ -96,6 +97,13 @@ export function PipelineBuilder() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('draft')
   const [version, setVersion] = useState(3)
 
+  // Backend Dry-run/Diff — available once the graph is Saved (they resolve the stored pipeline).
+  const [savedName, setSavedName] = useState<string | null>(null)
+  const [dryRun, setDryRun] = useState<DryRunResult | null>(null)
+  const [dryRunBusy, setDryRunBusy] = useState(false)
+  const [diff, setDiff] = useState<DiffResult | null>(null)
+  const [diffBusy, setDiffBusy] = useState(false)
+
   const [runOpen, setRunOpen] = useState(false)
   const [authorOpen, setAuthorOpen] = useState(false)
   const [repairOpen, setRepairOpen] = useState(false)
@@ -133,6 +141,9 @@ export function PipelineBuilder() {
     setSaveStatus('draft')
     setEmitted(false)
     setEmittedSnap(null)
+    setSavedName(null)
+    setDryRun(null)
+    setDiff(null)
     setProfile(kind === 'blank' ? 'default' : 'giab_panel')
     setMode('edit')
     setNewOpen(false)
@@ -154,6 +165,9 @@ export function PipelineBuilder() {
     setSaveStatus('draft')
     setEmitted(false)
     setEmittedSnap(null)
+    setSavedName(null)
+    setDryRun(null)
+    setDiff(null)
     setProfile('giab_panel')
     setMode('view')
   }
@@ -218,6 +232,9 @@ export function PipelineBuilder() {
       })
       const t = await api.submitPipeline(name)
       setVersion(ack.version)
+      setSavedName(name) // the graph now exists in the store — Dry-run/Diff can resolve it
+      setDryRun(null)
+      setDiff(null)
       setSaveStatus(t.status === 'approved' ? 'approved' : t.status === 'pending_review' ? 'pending' : 'draft')
       toast(`Saved ${name} · v${ack.version} · ${t.status}`, 'success')
     } catch (e) {
@@ -236,6 +253,30 @@ export function PipelineBuilder() {
     } catch (e) {
       setSaveStatus('pending') // reconcile: approve failed, stays pending
       toast(`Couldn't approve pipeline — ${errMsg(e)}`, 'error')
+    }
+  }
+
+  // ── backend Dry-run / Diff (available once Saved) ──
+  const onBackendDryRun = async (rid: string) => {
+    if (!savedName || !rid) return
+    setDryRunBusy(true)
+    try {
+      setDryRun(await api.dryRunPipeline(savedName, rid))
+    } catch (e) {
+      toast(`Dry-run failed — ${errMsg(e)}`, 'error')
+    } finally {
+      setDryRunBusy(false)
+    }
+  }
+  const onBackendDiff = async () => {
+    if (!savedName) return
+    setDiffBusy(true)
+    try {
+      setDiff(await api.pipelineDiff(savedName))
+    } catch (e) {
+      toast(`Diff failed — ${errMsg(e)}`, 'error')
+    } finally {
+      setDiffBusy(false)
     }
   }
 
@@ -625,6 +666,13 @@ export function PipelineBuilder() {
           setDrawerOpen(true)
         }}
         onSelect={setSelected}
+        savedName={savedName}
+        dryRun={dryRun}
+        dryRunBusy={dryRunBusy}
+        onDryRun={onBackendDryRun}
+        diff={diff}
+        diffBusy={diffBusy}
+        onDiff={onBackendDiff}
       />
 
       {/* ── modals ── */}

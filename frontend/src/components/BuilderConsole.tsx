@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Check, Copy, Download, FileText, ShieldCheck } from 'lucide-react'
+import { Check, Copy, Download, FileText, Play, ShieldCheck } from 'lucide-react'
+import type { DiffResult, DryRunResult } from '../types'
 import {
   VAL_ROWS,
   dryRows,
@@ -39,10 +40,27 @@ type ConsoleProps = {
   onToggle: () => void
   onTab: (t: ConsoleTab) => void
   onSelect: (id: string) => void
+  // Backend seams: once the pipeline is Saved, Dry-run/Diff can resolve against the REAL endpoints
+  // (POST /{name}/dry-run, GET /{name}/diff) instead of only the client-side preview.
+  savedName: string | null
+  dryRun: DryRunResult | null
+  dryRunBusy: boolean
+  onDryRun: (runId: string) => void
+  diff: DiffResult | null
+  diffBusy: boolean
+  onDiff: () => void
+}
+
+const RESOLVE_CHIP: Record<string, string> = {
+  matched: 'text-proceed-fg bg-proceed-bg border-proceed-bd',
+  ambiguous: 'text-hold-fg bg-hold-bg border-hold-bd',
+  missing: 'text-escalate-fg bg-escalate-bg border-escalate-bd',
+  invalid: 'text-escalate-fg bg-escalate-bg border-escalate-bd',
 }
 
 export function BuilderConsole(props: ConsoleProps) {
   const [copied, setCopied] = useState(false)
+  const [runId, setRunId] = useState('mock_run_01') // the run dir Dry-run resolves against
   const tabs: { k: ConsoleTab; l: string }[] = [
     { k: 'validate', l: 'Validate' },
     { k: 'diff', l: 'Diff' },
@@ -142,20 +160,62 @@ export function BuilderConsole(props: ConsoleProps) {
               </div>
             )}
 
-            {props.tab === 'diff' &&
-              (!snap ? (
-                <div className="rounded-[9px] border border-dashed border-line-strong p-3.5 text-[12px] leading-relaxed text-text-2">
-                  No emitted version yet. Click <strong className="text-text">Emit</strong> to snapshot the config, then edit a locator to see the diff.
+            {props.tab === 'diff' && (
+              <div>
+                {/* Backend diff (GET /{name}/diff) once saved; else the client-side vs-last-Emit preview. */}
+                <div className="mb-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={props.onDiff}
+                    disabled={!props.savedName || props.diffBusy}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-card px-2.5 py-1 text-[11px] font-medium text-text-2 hover:border-line disabled:opacity-50"
+                    title={props.savedName ? 'Diff the saved graph vs its approved baseline' : 'Save the pipeline first'}
+                  >
+                    Diff vs approved baseline
+                  </button>
+                  <span className="text-[10.5px] text-text-3">
+                    {props.savedName ? (props.diffBusy ? 'diffing…' : `saved: ${props.savedName}`) : 'client-side preview — Save to diff against the store'}
+                  </span>
                 </div>
-              ) : diffRows.length === 0 ? (
-                <div className="flex items-center gap-2 rounded-[9px] border border-proceed-bd bg-proceed-bg px-3 py-2.5">
-                  <Check size={15} className="text-proceed" />
-                  <span className="text-[12px] font-medium text-proceed-fg">No changes since last emit.</span>
-                </div>
-              ) : (
-                <div>
-                  <div className="mb-2 text-[11px] text-text-3">{diffRows.length} locator(s) changed since the last emitted config</div>
+                {props.diff ? (
+                  props.diff.added.length + props.diff.removed.length + props.diff.changed.length === 0 ? (
+                    <div className="flex items-center gap-2 rounded-[9px] border border-proceed-bd bg-proceed-bg px-3 py-2.5">
+                      <Check size={15} className="text-proceed" />
+                      <span className="text-[12px] font-medium text-proceed-fg">
+                        {props.diff.has_baseline ? 'No drift from the approved baseline.' : 'No emitted baseline yet — nothing to diff.'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <div className="text-[11px] text-text-3">
+                        vs v{props.diff.emitted_version ?? '—'} · {props.diff.added.length} added · {props.diff.changed.length} changed · {props.diff.removed.length} removed · {props.diff.unchanged_count} unchanged
+                      </div>
+                      {[...props.diff.added.map((d) => ['added', d] as const), ...props.diff.changed.map((d) => ['changed', d] as const), ...props.diff.removed.map((d) => ['removed', d] as const)].map(([kind, d]) => (
+                        <div key={`${kind}-${d.key}`} className="rounded-[9px] border border-line px-3 py-2">
+                          <div className="mb-1 flex items-center gap-2 font-mono text-[11.5px] font-semibold text-text">
+                            {d.kind}
+                            <span className={`rounded-full border px-1.5 py-px text-[9px] font-semibold uppercase ${kind === 'added' ? 'text-proceed-fg bg-proceed-bg border-proceed-bd' : kind === 'removed' ? 'text-escalate-fg bg-escalate-bg border-escalate-bd' : 'text-hold-fg bg-hold-bg border-hold-bd'}`}>
+                              {kind}
+                            </span>
+                          </div>
+                          {d.before && <div className="font-mono text-[10px] text-escalate-fg line-through">{JSON.stringify(d.before)}</div>}
+                          {d.after && <div className="font-mono text-[10px] text-proceed-fg">{JSON.stringify(d.after)}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : !snap ? (
+                  <div className="rounded-[9px] border border-dashed border-line-strong p-3.5 text-[12px] leading-relaxed text-text-2">
+                    No emitted version yet. Click <strong className="text-text">Emit</strong> to snapshot the config, then edit a locator to see the diff — or Save + diff against the approved baseline.
+                  </div>
+                ) : diffRows.length === 0 ? (
+                  <div className="flex items-center gap-2 rounded-[9px] border border-proceed-bd bg-proceed-bg px-3 py-2.5">
+                    <Check size={15} className="text-proceed" />
+                    <span className="text-[12px] font-medium text-proceed-fg">No changes since last emit.</span>
+                  </div>
+                ) : (
                   <div className="flex flex-col gap-2">
+                    <div className="text-[11px] text-text-3">{diffRows.length} locator(s) changed since the last emitted config (preview)</div>
                     {diffRows.map((d) => (
                       <div key={d.kind} className="rounded-[9px] border border-hold-bd bg-hold-bg px-3 py-2.5">
                         <div className="mb-1.5 font-mono text-[11.5px] font-semibold text-text">{d.kind}</div>
@@ -164,27 +224,75 @@ export function BuilderConsole(props: ConsoleProps) {
                       </div>
                     ))}
                   </div>
-                </div>
-              ))}
+                )}
+              </div>
+            )}
 
             {props.tab === 'dryrun' && (
               <div>
-                <div className="mb-2 text-[11px] text-text-3">
-                  Locator resolution against a mock run dir · <span className="font-mono">{dryStats}</span>
+                {/* Backend dry-run (POST /{name}/dry-run?run_id=…) once saved; else client-side preview. */}
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <input
+                    value={runId}
+                    onChange={(e) => setRunId(e.target.value)}
+                    placeholder="run id"
+                    className="w-[150px] rounded-md border border-line bg-card px-2 py-1 font-mono text-[11px] text-text outline-none focus:border-accent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => props.onDryRun(runId.trim())}
+                    disabled={!props.savedName || props.dryRunBusy || !runId.trim()}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-card px-2.5 py-1 text-[11px] font-medium text-text-2 hover:border-line disabled:opacity-50"
+                    title={props.savedName ? 'Resolve the saved graph against this run dir' : 'Save the pipeline first'}
+                  >
+                    <Play size={11} /> Resolve against run
+                  </button>
+                  <span className="text-[10.5px] text-text-3">
+                    {props.savedName ? (props.dryRunBusy ? 'resolving…' : `saved: ${props.savedName}`) : 'client-side preview — Save to resolve against a real run dir'}
+                  </span>
                 </div>
-                <div className="flex flex-col">
-                  {dry.map((d) => (
-                    <div key={d.kind} className="flex items-center gap-2 border-b border-line py-2">
-                      <span className="w-[132px] shrink-0 truncate font-mono text-[11px] text-text">{d.kind}</span>
-                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3px] ${DRY_CHIP[d.status]}`}>
-                        {d.status}
+                {props.dryRun ? (
+                  <>
+                    <div className="mb-2 text-[11px] text-text-3">
+                      v{props.dryRun.version} vs run <span className="font-mono">{props.dryRun.run_id}</span> ·{' '}
+                      <span className="font-mono">
+                        matched {props.dryRun.summary.matched ?? 0} · ambiguous {props.dryRun.summary.ambiguous ?? 0} · missing {props.dryRun.summary.missing ?? 0} · invalid {props.dryRun.summary.invalid ?? 0}
                       </span>
-                      <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-text-3">{d.detail}</span>
                     </div>
-                  ))}
-                </div>
+                    <div className="flex flex-col">
+                      {props.dryRun.locators.map((l, i) => (
+                        <div key={`${l.kind}-${i}`} className="flex items-center gap-2 border-b border-line py-2">
+                          <span className="w-[132px] shrink-0 truncate font-mono text-[11px] text-text">{l.kind}</span>
+                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3px] ${RESOLVE_CHIP[l.status] ?? RESOLVE_CHIP.missing}`}>
+                            {l.status}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-text-3">
+                            {l.paths.length ? l.paths.join(', ') : l.pattern}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="mb-2 text-[11px] text-text-3">
+                      Locator resolution against a mock run dir (preview) · <span className="font-mono">{dryStats}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      {dry.map((d) => (
+                        <div key={d.kind} className="flex items-center gap-2 border-b border-line py-2">
+                          <span className="w-[132px] shrink-0 truncate font-mono text-[11px] text-text">{d.kind}</span>
+                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3px] ${DRY_CHIP[d.status]}`}>
+                            {d.status}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-text-3">{d.detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
                 <p className="mt-2.5 text-[10.5px] leading-relaxed text-text-3">
-                  Dry-run resolves paths only — it reads no bytes and runs nothing. A real run dir is checked at ingest.
+                  Dry-run resolves paths only — it reads no bytes and runs nothing (compose ≠ execute). A real run dir is checked at ingest.
                 </p>
               </div>
             )}
