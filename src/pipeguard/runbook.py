@@ -88,6 +88,9 @@ class Runbook(BaseModel):
     log_failure_markers: list[str] = Field(
         default_factory=lambda: ["ERROR", "FAILED", "exit code 1", "segmentation fault"]
     )
+    # Execution-trace task statuses that count as an operational failure (EXEC-001). A task is
+    # also a failure on a nonzero exit code, whatever its status. Illustrative/configurable.
+    trace_failure_statuses: list[str] = Field(default_factory=lambda: ["FAILED", "ABORTED"])
 
     def threshold_for(self, metric: str) -> QCThreshold | None:
         return next((t for t in self.qc_thresholds if t.metric == metric), None)

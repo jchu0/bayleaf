@@ -28,6 +28,7 @@ from .models import (
     RunArtifacts,
     Sample,
     SampleSheetEntry,
+    TraceRecord,
 )
 
 # Canonical intake fields; anything else on the row is preserved in `extra`.
@@ -232,6 +233,42 @@ def parse_log(path: Path) -> list[str]:
     return [line for line in path.read_text().splitlines() if line.strip()]
 
 
+def parse_execution_trace(path: Path) -> list[TraceRecord]:
+    """Parse a Nextflow/nf-core execution trace (`trace.txt`) into structured task rows.
+
+    Nextflow writes the trace tab-separated by default; we sniff the separator so a
+    comma-exported trace works too, and tolerate the common column spellings
+    (name/process, tag, status, exit). Tolerant at the boundary (CLAUDE.md data-handling 2):
+    an absent or unparseable file yields no records rather than crashing — the gate READS
+    this artifact, it never runs a pipeline (composes ≠ executes, ADR-0001/0003).
+    """
+    if not path.exists():
+        return []
+    try:
+        df = pd.read_csv(path, sep=None, engine="python", dtype=str)
+    except Exception:
+        return []
+    df.columns = [c.strip().lower() for c in df.columns]
+    col_task = _first_present(df.columns, ["task_id", "task", "id"])
+    col_proc = _first_present(df.columns, ["process", "name"])
+    col_tag = _first_present(df.columns, ["tag"])
+    col_status = _first_present(df.columns, ["status"])
+    col_exit = _first_present(df.columns, ["exit"])
+    records: list[TraceRecord] = []
+    for _, row in df.iterrows():
+        status = _clean(row.get(col_status)) if col_status else None
+        records.append(
+            TraceRecord(
+                task_id=_clean(row.get(col_task)) if col_task else None,
+                process=_clean(row.get(col_proc)) if col_proc else None,
+                tag=_clean(row.get(col_tag)) if col_tag else None,
+                status=status.upper() if status else None,
+                exit=_to_int(row.get(col_exit)) if col_exit else None,
+            )
+        )
+    return records
+
+
 def _first_present(columns: Iterable[str], candidates: list[str]) -> str | None:
     cols = list(columns)
     return next((c for c in candidates if c in cols), None)
@@ -261,6 +298,7 @@ def load_run(run_dir: str | Path, run_id: str | None = None) -> RunArtifacts:
     )
     qc = parse_qc_metrics(_maybe("qc_metrics.csv")) if _maybe("qc_metrics.csv").exists() else []
     log = parse_log(_maybe("pipeline.log"))
+    trace = parse_execution_trace(_maybe("trace.txt"))
 
     return RunArtifacts(
         run_id=run_id,
@@ -269,6 +307,7 @@ def load_run(run_dir: str | Path, run_id: str | None = None) -> RunArtifacts:
         demux=demux,
         qc=qc,
         log_lines=log,
+        execution_trace=trace,
         platform=header.platform,
         run_date=header.run_date,
         run_name=header.run_name,

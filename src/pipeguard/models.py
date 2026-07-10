@@ -407,6 +407,24 @@ class DemuxRecord(BaseModel):
     pct_reads: float | None = None
 
 
+class TraceRecord(BaseModel):
+    """One task row from a Nextflow/nf-core execution trace (`trace.txt`).
+
+    A STRUCTURED pipeline-execution signal the gate READS — it never runs a process
+    (composes ≠ executes, ADR-0001/0003). `tag` is the nf-core sample tag; `status` is the
+    task disposition (COMPLETED / FAILED / CACHED / ABORTED); `exit` is the process exit code
+    (0 = success). A failed task is the structured sibling of PIPE-001's free-text log marker
+    — the EXEC-001 rule maps it to RERUN. Every field is optional so a partial/garbled trace
+    is a signal, not a crash (CLAUDE.md data-handling 2).
+    """
+
+    task_id: str | None = None
+    process: str | None = None
+    tag: str | None = None
+    status: str | None = None
+    exit: int | None = None
+
+
 class RunArtifacts(BaseModel):
     """Everything the gate ingests for a single run, keyed by sample_id where possible."""
 
@@ -416,6 +434,8 @@ class RunArtifacts(BaseModel):
     demux: list[DemuxRecord] = Field(default_factory=list)
     qc: list[QCMetrics] = Field(default_factory=list)
     log_lines: list[str] = Field(default_factory=list)
+    # Structured Nextflow/nf-core execution trace (`trace.txt`) — READ, never run (EXEC-001).
+    execution_trace: list[TraceRecord] = Field(default_factory=list)
     # Run-level context parsed from the sample sheet's [Header] block (Illumina v2).
     # All optional: a sheet may omit any of them, and `run_date` stays the raw ISO
     # string — we never fabricate a datetime when the field is absent.

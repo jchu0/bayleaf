@@ -9,7 +9,7 @@ Rule families:
     provenance  - barcode/index mismatch, sample present in some artifacts but not others
     metadata    - required intake fields missing
     qc          - metric vs. runbook gate (borderline WARN vs. hard-fail CRITICAL)
-    pipeline    - failure markers in the run log referencing the sample
+    pipeline    - a run-log failure marker (PIPE-001) or a failed execution-trace task (EXEC-001)
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from .models import (
     SampleSheetEntry,
     Severity,
     SourceKind,
+    TraceRecord,
     Verdict,
 )
 from .runbook import DEFAULT_RUNBOOK, QCThreshold, Runbook
@@ -272,6 +273,47 @@ def _check_log(sid: str, log_lines: list[str], runbook: Runbook) -> Finding | No
     )
 
 
+def _check_execution_trace(sid: str, trace: list[TraceRecord], runbook: Runbook) -> Finding | None:
+    """EXEC-001: a failed pipeline PROCESS (from the structured Nextflow trace) → RERUN.
+
+    The structured sibling of PIPE-001: instead of grepping a free-text log it reads the task
+    table (`trace.txt`). A task belongs to this sample by its nf-core `tag` (EXACT match, so a
+    zero-padded id can't cross-fire the way a substring would); a task is a failure when its
+    status is in the runbook's failure set OR its exit code is nonzero. Operational failures
+    map to RERUN (qc_metrics.md verdict policy 3). Composes ≠ executes: this READS a trace the
+    run produced, it never runs a process.
+    """
+    fails = [
+        t
+        for t in trace
+        if t.tag == sid
+        and (
+            (t.status is not None and t.status in runbook.trace_failure_statuses)
+            or (t.exit is not None and t.exit != 0)
+        )
+    ]
+    if not fails:
+        return None
+    return Finding(
+        rule_id="EXEC-001",
+        sample_id=sid,
+        category=Category.PIPELINE,
+        severity=Severity.CRITICAL,
+        title="A pipeline process failed for this sample",
+        detail=f"The execution trace reports {len(fails)} failed task(s) for {sid}.",
+        evidence=[
+            Evidence(
+                source="trace.txt",
+                locator=t.process or t.task_id or "task",
+                value=f"status={t.status or '?'} exit={t.exit if t.exit is not None else '?'}",
+                source_kind=SourceKind.EXECUTION_TRACE,
+            )
+            for t in fails[:5]
+        ],
+        suggested_verdict=Verdict.RERUN,
+    )
+
+
 def evaluate_sample(sid: str, artifacts: RunArtifacts, runbook: Runbook) -> list[Finding]:
     meta = next((s for s in artifacts.samples if s.sample_id == sid), None)
     sheet = next((e for e in artifacts.sample_sheet if e.sample_id == sid), None)
@@ -301,6 +343,10 @@ def evaluate_sample(sid: str, artifacts: RunArtifacts, runbook: Runbook) -> list
     log_finding = _check_log(sid, artifacts.log_lines, runbook)
     if log_finding:
         findings.append(log_finding)
+
+    trace_finding = _check_execution_trace(sid, artifacts.execution_trace, runbook)
+    if trace_finding:
+        findings.append(trace_finding)
 
     return findings
 

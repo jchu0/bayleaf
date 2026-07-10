@@ -92,7 +92,13 @@ def planted_modes(n: int, *, seed: int) -> list[FailureMode]:
     if n < 1:
         raise ValueError(f"n must be >= 1, got {n}")
     rng = random.Random(seed)
-    non_clean = [m for m in FailureMode if m is not FailureMode.CLEAN]
+    # PROCESS_FAILURE is excluded from the auto-spread: it needs the extra `trace.txt`
+    # artifact (an opt-in execution-trace input), so it isn't part of the standard
+    # five-artifact QC/gate failure spread. Excluding it also keeps the committed scale
+    # run byte-identical as new modes are added to the enum.
+    non_clean = [
+        m for m in FailureMode if m not in (FailureMode.CLEAN, FailureMode.PROCESS_FAILURE)
+    ]
     modes: list[FailureMode] = []
     # Guarantee variety on runs with room to spare: one of every non-CLEAN mode up
     # front means all four operator verdicts always appear, never an all-PROCEED plate.

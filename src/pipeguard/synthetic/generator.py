@@ -70,6 +70,7 @@ class FailureMode(str, Enum):
     LOW_COVERAGE = "low_coverage"  # coverage below gate (QC-MEAN_COVERAGE) -> HOLD
     HIGH_DUP = "high_dup"  # duplication above gate (QC-DUP_RATE) -> HOLD
     PIPELINE_FAILURE = "pipeline_failure"  # failure marker in log (PIPE-001) -> RERUN
+    PROCESS_FAILURE = "process_failure"  # failed task in execution trace (EXEC-001) -> RERUN
 
 
 # The single source of truth for the mode -> verdict contract the test enforces.
@@ -82,6 +83,7 @@ INTENDED_VERDICT: dict[FailureMode, Verdict] = {
     FailureMode.LOW_COVERAGE: Verdict.HOLD,
     FailureMode.HIGH_DUP: Verdict.HOLD,
     FailureMode.PIPELINE_FAILURE: Verdict.RERUN,
+    FailureMode.PROCESS_FAILURE: Verdict.RERUN,
 }
 
 
@@ -410,6 +412,25 @@ def _render_log(spec: RunSpec) -> str:
     return _join(lines)
 
 
+def _render_trace(spec: RunSpec) -> str:
+    """Nextflow/nf-core execution trace (`trace.txt`, tab-separated).
+
+    One task row per sample, tagged by sample id (nf-core convention). A ``process_failure``
+    sample gets a FAILED task with a nonzero exit so EXEC-001 fires for it and nobody else;
+    every other sample COMPLETED with exit 0. Only emitted for runs that actually have a
+    process failure (see :func:`generate_run`), so runs without one stay byte-identical.
+    """
+    header = "task_id\tprocess\ttag\tstatus\texit"
+    rows = [
+        f"{i}\t{'ALIGN_BWA' if s.mode is FailureMode.PROCESS_FAILURE else 'FASTP'}"
+        f"\t{s.sample_id}"
+        f"\t{'FAILED' if s.mode is FailureMode.PROCESS_FAILURE else 'COMPLETED'}"
+        f"\t{1 if s.mode is FailureMode.PROCESS_FAILURE else 0}"
+        for i, s in enumerate(spec.samples, start=1)
+    ]
+    return "\n".join([header, *rows]) + "\n"
+
+
 # --------------------------------------------------------------------------- #
 # Public entry point
 # --------------------------------------------------------------------------- #
@@ -436,6 +457,11 @@ def generate_run(spec: RunSpec, out_dir: str | Path) -> Path:
         ("pipeline.log", _render_log),
     ):
         (run_dir / name).write_text(render(spec), encoding="utf-8", newline="\n")
+    # The structured execution trace (`trace.txt`) is emitted ONLY when the run actually has a
+    # process failure, so runs without one keep exactly their five artifacts (byte-identical /
+    # reproducible); a run WITH one carries the sixth file the EXEC-001 rule reads.
+    if any(s.mode is FailureMode.PROCESS_FAILURE for s in spec.samples):
+        (run_dir / "trace.txt").write_text(_render_trace(spec), encoding="utf-8", newline="\n")
     # Out-of-band origin marker, alongside the in-band pipeline.log tag. Writing it here
     # (not by hand, out of band) is what keeps the label honest: both the marker and the
     # log tag come from ORIGIN_LABEL, so a generated run can never carry two labels.

@@ -62,6 +62,7 @@ _EXPECTED_RULES: dict[FailureMode, set[str]] = {
     FailureMode.LOW_COVERAGE: {"QC-MEAN_COVERAGE"},
     FailureMode.HIGH_DUP: {"QC-DUP_RATE"},
     FailureMode.PIPELINE_FAILURE: {"PIPE-001"},
+    FailureMode.PROCESS_FAILURE: {"EXEC-001"},
 }
 
 
@@ -268,8 +269,13 @@ def test_planted_modes_is_deterministic() -> None:
 
 def test_planted_modes_guarantees_every_mode_on_large_runs() -> None:
     """A run larger than the mode set plants one of every failure mode, so a scaled
-    run's verdict mix is guaranteed non-degenerate regardless of the random draw."""
-    assert set(planted_modes(30, seed=99)) == set(FailureMode)
+    run's verdict mix is guaranteed non-degenerate regardless of the random draw.
+
+    PROCESS_FAILURE is deliberately excluded from the auto-spread (it needs the extra
+    `trace.txt` artifact — an opt-in execution-trace input), so the guarantee covers every
+    mode over the standard five artifacts, not the trace-failure mode."""
+    expected = {m for m in FailureMode if m is not FailureMode.PROCESS_FAILURE}
+    assert set(planted_modes(30, seed=99)) == expected
 
 
 def test_sample_ids_uniform_width_no_substrings() -> None:
