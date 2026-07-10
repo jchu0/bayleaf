@@ -234,3 +234,71 @@ API data loads).
 role toggle propagates popover→footer→API actor; page bg `#f5f7f9`.
 
 **Next:** Wave 2 (per-screen builds, parallel-safe) — pausing here for review per the agreed cadence.
+
+---
+
+## Wave 2 — all 9 operator screens (DONE, verified) — commit 40f829b
+
+Fanned out one builder agent per screen over the Wave-1 foundation with **disjoint file
+ownership** (the data contract, tokens, RoleContext, and shared primitives stayed frozen). All 9
+returned with no missing types/api — the Wave-1 contract held. `tsc -b` + `oxlint` clean; every
+screen browser-verified (no console errors after one fix).
+
+Screens: Submit (full upload/BaseSpace + editable samples table), Runs (scale-kit toolbar +
+facet counts + verdict-bar legend), Intake (collapsible rows + Refresh), Decision cards
+(QC-readout hero from qc-readout, cited-evidence split, ContextRail, states, ?filter=attention),
+Review queue (collapsible tickets + RBAC + status bar + repair advisory), Provenance (origin
+chips removed F19, artifact link rows), Agent triage (multi-line composer), Monitoring (single
+api.monitoring, searchable 5-col grid, honest F2/F3 placeholders), Settings (assay table +
+model tiering incl. claude-fable-5 + notifications, /api/runbook).
+
+Integration fixes: removed the now-dead `TriagePanel.tsx` (inline card triage dropped per F8);
+fixed an `AgentTriage` duplicate-key warning (subject card + composer were siblings both keyed by
+sample_id → distinct `subject-`/`composer-` prefixes).
+
+Flags resolved/handled in Wave 2: F2, F3, F4, F5, F7, F8, F9, F10, F12, F16, F17, F18, F19, F21,
+F26, F27, F28 (backend-blocked ones handled honestly, no fabrication). Remaining: F11 (half-circle
+ports — deferred cosmetic, Wave 3), F13 (durable RBAC stores — Wave 3 builder + settings wiring),
+F22 (builder View-default + Locators-editable — Wave 3).
+
+**Next:** Wave 3 — Pipeline Builder (in progress), then the end-of-run review + docs sweep.
+
+---
+
+## Wave 3 — Pipeline Builder (DONE, verified) — commit 89f353c
+
+Rebuilt via one focused agent (single cohesive stateful screen — not fanned out) into
+`PipelineBuilder.tsx` (585-line orchestrator) + six `Builder*` components. tsc + oxlint clean;
+browser-verified (View default, Edit unlocks palette/Connect/Tidy/Save-Approve/Author-node, no
+console errors). Fixed F22 (View default + Locators editable/Params read-only), typed-port
+kind-matching enforced (INV-e), minimap, Validate/Diff/Dry-run console, Run-handoff +
+Author-tool-node + repair + archivist modals. Integration fix: node-card spines mixed the
+`border` shorthand with `borderLeft*` longhand (React warning) → per-side border properties.
+Deferred (F13): Save/Approve optimistic-local; Diff/Dry-run client-side (mirrors prototype).
+
+## End-of-run review (deferred per maintainer) — commit 5b6ad3d
+
+Adversarial workflow: 11 per-area reviewers → each finding independently verified
+(refutation-first) → 6 confirmed, ALL low severity (0 blocker/high/medium). All 6 fixed:
+- **Guardrail/honesty:** ReviewQueue.resolutionNote no longer asserts a QC outcome that never
+  ran ("Rerun completed; the metric now clears its threshold" → "Requeue the sample to clear the
+  rerun"); ReviewRepairCard fallback no longer fabricates barcode advice for arbitrary signatures;
+  AgentTriage never relabels a model note as "rule-derived" via the demo source toggle.
+- **Correctness races:** DateRangePicker end-only label; ReviewQueue.syncAction per-ticket
+  de-dup (one server ticket, not two); Monitoring window-switch stale-response guard.
+
+## Docs sweep (doc-keeper) + session-end checklist
+
+doc-keeper swept per the Doc-update map: architecture.md §4, data-platform-and-archivist.md §4.5,
+functional.md (REQ-F-042/045), scope-and-wishlist.md (#5/#11), tasks.md (new T-062 + closed T-045
+phase-2), CLAUDE.md code map. Correctly determined `frontend/README.md` is the stock Vite scaffold,
+not a contract-obligated doc — left as-is. Waived docs (schemas/provenance/metric_registry/
+evaluation/agents/ToC/ADR) all named with reasons (backend/tests untouched — verified by an empty
+`git diff --stat` over tests/src/api).
+
+- **CHK-1** (docs the change obligates are updated): ✅ — 6 canonical docs swept; waivers justified.
+- **CHK-2** (crosslinks filled): ✅ — T-062 ↔ architecture/data-platform/functional/scope crosslinked.
+- **CHK-3** (journal distilled to canonical): ✅ — this journal → T-062 + the design/requirements docs.
+
+**Branch `frontend-design-replication`: 5 commits (ccbc548 design+hygiene · 7f55f60 W1 · 40f829b W2
+· 89f353c W3 · 5b6ad3d review-fixes). Not pushed / no PR (awaiting maintainer).**

@@ -179,7 +179,16 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    degrade-to-jsonl) joining feedback + pipeline stores; `api/card_readout.py` is an API-layer
    QC-readout projection (card `metric_values` ⋈ runbook `QCThreshold` →
    Metric·Observed·Threshold·Status), core card/gate untouched. `frontend/` = React + Vite +
-   Tailwind consuming the API — the 8 operator screens + the Pipeline Builder (ADR-0014).
+   Tailwind consuming the API — **rebuilt to the refreshed design prototype** (2026-07-09,
+   `docs/design/frontend/`, T-062): 9 operator screens in a two-group nav — Operate (submit
+   samplesheet → runs → intake gate → decision cards → review queue → provenance → agent
+   triage → monitoring) and Configure (pipeline builder → settings) — plus a shared
+   `RoleContext` (reviewer|approver) driving every RBAC surface (ADR-0014). The Pipeline
+   Builder adds free composition, a typed-port Connect mode, a minimap, and editable
+   Locators; its Save/Approve/Diff/Dry-run call the real endpoints but render
+   optimistic-local (fire-and-forget), a known limitation. Honest deferrals: Monitoring
+   first_seen/last_seen/trend + Median-review (no backend field), Provenance artifact URLs
+   (`RunArtifact` has no `url`), Submit is local-state only (no `POST /api/submissions`).
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
 

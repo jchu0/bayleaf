@@ -345,6 +345,15 @@ Landed additively in `api/` (the core untouched; aggregation stays in the API la
 2. **`GET /api/monitoring?window={7d|14d|30d|all default all}&signatures_limit={int}`.** One pre-aggregated dashboard payload — overall KPIs, per-run rows, per-gate flagged/total (for pass-rate), and ranked recurring signatures — replacing the frontend's N-fan-out of every run's detail. Windowed views place runs by their `[Header]` date; a run **lacking a header date** can't sit on the time axis and is dropped from a dated window, counted honestly in `n_runs_excluded_no_date` (`n_signatures_total` likewise reports the full distinct-signature count before `signatures_limit` caps the list). Aggregation reuses the existing `_aggregate_metrics()` (the same roll-up behind the Prometheus `/metrics` seam) and lives in the API layer, never the framework-agnostic core.
 3. **Honesty label.** The overall roll-up's `auto_proceed_pct` (share of samples the gate cleared with no human touch) is a **heuristic throughput ratio, not a calibrated probability or confidence** (CLAUDE.md life-science guardrail 2). Counts are lifetime tallies over the in-window runs, not calibrated rates.
 
+### 4.5 (Shipped 2026-07-09, T-062) — the Runs screen scale kit, reconciled against §4.1/§4.2
+
+The frontend design-replication rebuild (Waves 1–3) landed the "scale kit" a different way than §4.1 first sketched — noted here so the plan above isn't read as the as-built shape:
+
+1. **No separate `/runs` route.** `RunOverview.tsx` at `/` was enhanced in place (not replaced by a `RunsBrowser` at a new path) — §4.1 item 1 was **not adopted**.
+2. **No month-bucketing / `started_at`.** Instead: search (`q`) + verdict/status facet chips (mono count badges, sourced client-side over the full fetched array) + a sort segmented control (recent/urgent/date) + a `DateRangePicker` (filters client-side on the existing `RunSummary.run_date`, §4.4/REQ-F-046 — no new `started_at` field was added) + client-side pagination. §4.1 items 2–3 were **not adopted**; the filter/search/paginate goal of item 4 **was**, just against the already-shipped `run_date`/`status` fields instead of a new `started_at`.
+3. **Still consistent with §4.3's honest scale framing** — everything above runs over the one already-fetched `RunSummary[]` array (dozens of runs); no server keyset pagination, page envelope, or virtualization was built, matching §4.2 items 1/3 staying target-state (deliberately, not by omission).
+4. **Export UI** (§4.1 item 5, per-run + batch) remains **not built** on `RunsBrowser`/`RunDetail` — the `GET /api/export` endpoint (§2.1) has no frontend download affordance yet (tracked under [T-030](../planning/tasks.md)'s open frontend half).
+
 ---
 
 ## 5. The Archivist agent (#3) — **BUILT (T-059, 2026-07-09)**

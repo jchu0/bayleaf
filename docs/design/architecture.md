@@ -77,9 +77,23 @@ Every finding and verdict is labelled with the gate it came from:
    All are stub-first ($0), import `anthropic` lazily, and fall back to the stub on any error.
 4. **Delivery layers (thin, over the core).** `app/` Streamlit (offline demo / fallback);
    `api/` FastAPI — the production read-API seam (ADR-0010/0014/0016); `frontend/` React —
-   **all 8 operator screens built + migrated to the light-theme handoff, plus the Pipeline
-   Builder**: run overview → intake/preflight → decision cards → agent triage → review queue →
-   provenance → monitoring → settings → pipeline builder (a `DecisionCard` carries `run_id`).
+   **rebuilt to the refreshed design prototype** (`docs/design/frontend/`, 2026-07-09, Waves 1–3):
+   **9 operator screens** in a two-group nav — **Operate** (submit samplesheet → runs → intake/
+   preflight → decision cards → review queue → provenance → agent triage → monitoring) and
+   **Configure** (pipeline builder → settings) — plus a shared `RoleContext` (reviewer|approver)
+   that drives every RBAC surface (a `DecisionCard` carries `run_id`). The **Pipeline Builder**
+   now also realizes free composition (palette-add/drag/delete user nodes), a typed-port
+   **Connect mode** (kind-matched, INV-e), a minimap, and editable Locators with live
+   `run_layout.yaml` regen; its Save/Approve/Diff/Dry-run write through the real `api.ts`
+   methods (`savePipeline`/`approvePipeline`/`dryRunPipeline`/`pipelineDiff`) but render
+   **optimistic-local** (fire-and-forget, `.catch(() => {})`) — the UI reflects the local
+   edit immediately rather than the server's response, a known limitation until the
+   `pipelines_lifecycle` round trip is surfaced in the UI. **Honest, labelled frontend
+   deferrals (no fabrication):** Monitoring's `first_seen`/`last_seen`/`trend` columns and the
+   Median-review KPI (both omitted — no backend field yet); Provenance artifact links (`RunArtifact`
+   has no `url`); Submit is local-state only (no `POST /api/submissions`, no BaseSpace connector —
+   still wishlist, T-057). Submit's screen is new; the other 8 were migrated from
+   [T-022b](../planning/tasks.md)'s 1:1 fidelity pass to the refreshed handoff.
    The `api/` surface (all additive / backward-compatible; the core is untouched — sorting,
    paging, aggregation, product writes, the draft→approve authoring lifecycle, and auth all live
    in `api/`, never `src/pipeguard/`):

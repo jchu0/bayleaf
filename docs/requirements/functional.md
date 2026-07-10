@@ -181,17 +181,24 @@ node-authoring agent).
    pipeline-repair (REQ-F-023) and archivist (REQ-F-024) calls, each invoking an advisory agent
    **without re-entering the verdict path** — all read-only over already-decided artifacts.
    *Trace:* [architecture.md](../design/architecture.md), [agents.md](../design/agents.md), ADR-0010.
-3. **REQ-F-042 — Operator screens.** The UI presents the full screen set (**all built +
-   migrated 1:1** to the design handoff's light theme, T-022b): run overview (per-verdict
-   counts + needs-attention), intake/preflight (run-level QC rollup + per-sample admission
-   with manual override), decision cards (verdict + per-gate strip + cited evidence),
-   agent triage (advisory note + citations + offline/live), provenance (pipeline
-   **compute-DAG** with a per-stage data-I/O drill-in), review queue (tickets w/
-   reviewer-vs-approver RBAC + recurring-issue banner), monitoring, and settings (runbook
-   thresholds, labelled illustrative). Screens state their data boundary rather than
-   fabricate instrument/compute artifacts the FASTQ-first build doesn't capture. *Trace:*
-   [demo_plan.md](../demo/demo_plan.md), [architecture.md](../design/architecture.md),
-   [tasks T-022/T-022b/T-037](../planning/tasks.md).
+3. **REQ-F-042 — Operator screens.** The UI presents **9 operator screens**, rebuilt to the
+   refreshed design prototype (`docs/design/frontend/`, 2026-07-09) in a two-group nav —
+   **Operate:** submit samplesheet (register a run's SampleSheet/FASTQ locally, compose-only —
+   no backend endpoint yet, REQ-F-045's compose≠execute invariant applies equally here), runs
+   overview (per-verdict counts + needs-attention + a client-side scale kit: search/facet/sort/
+   date-range/paginate), intake/preflight (run-level QC rollup + per-sample admission with
+   manual override), decision cards (verdict + per-gate strip + a QC-readout hero from
+   REQ-F-064 + cited evidence), review queue (tickets w/ reviewer-vs-approver RBAC +
+   recurring-issue banner), provenance (pipeline **compute-DAG** with a per-stage data-I/O
+   drill-in), agent triage (advisory note + citations + offline/live); **Configure:** pipeline
+   builder (REQ-F-045) and settings (runbook thresholds, labelled illustrative). A shared
+   `RoleContext` (reviewer|approver) drives every RBAC-gated control. Screens state their data
+   boundary rather than fabricate instrument/compute artifacts the FASTQ-first build doesn't
+   capture, and two now-honest gaps are explicitly rendered empty rather than invented: Monitoring's
+   `first_seen`/`last_seen`/`trend` + Median-review KPI (no backend field), and Provenance
+   artifact links (`RunArtifact` has no `url`). *Trace:* [demo_plan.md](../demo/demo_plan.md),
+   [architecture.md](../design/architecture.md),
+   [tasks T-022/T-022b/T-037/T-062](../planning/tasks.md).
 4. **REQ-F-044 — In-app feedback (off-gate telemetry).** The app captures product feedback
    via the app's first write endpoint (now one of several off-gate product-domain writes),
    `POST /api/feedback` — a per-decision agree/disagree signal
@@ -221,10 +228,20 @@ node-authoring agent).
    lifecycle (`status` + reviewer/approver fields, server-authored, no identity via the
    `extra="forbid"` body); the approve transition + auth are now realized in REQ-F-061
    (`api/routers/pipelines_lifecycle.py` + `api/auth.py`,
-   [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md)). *Trace:*
+   [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md)). **Frontend rebuild
+   (2026-07-09, Wave 3):** the screen now also ships free composition (add/drag/delete
+   user nodes from the palette), a typed-port **Connect mode** (kind-matched wiring only,
+   INV-e), a minimap, and editable Locators with live YAML regen. Its Save/Approve/Diff/
+   Dry-run buttons call the real endpoints above, but update the on-screen status
+   **optimistically (client-first, fire-and-forget)** rather than waiting on/rendering the
+   server's response — a known, labelled limitation (not a fabricated success) until the UI
+   is wired to read back the `pipelines_lifecycle` result. The "Author a tool node" /
+   "Pipeline-repair" / "Archivist" modals inside the Builder are **static UI previews**
+   labelled `phase-2` in-app — they do not call the live advisory-agent endpoints (those are
+   wired elsewhere: REQ-F-041). *Trace:*
    [pipeline-builder-brief.md](../design/frontend/pipeline-builder-brief.md),
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
-   [tasks T-044/T-049](../planning/tasks.md).
+   [tasks T-044/T-049/T-062](../planning/tasks.md).
 7. **REQ-F-046 — Honest run lifecycle status + run metadata.** `RunSummary` carries a real
    `status` — `running` (no completion event yet) / `needs_review` (completed, actionable
    samples) / `released` (completed, none) — derived from the provenance ledger, **not** inferred
