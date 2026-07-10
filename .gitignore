@@ -110,3 +110,6 @@ Thumbs.db
 /source/
 /briefs/
 /handoffs/
+
+# Real-GIAB end-to-end run output (derived from git-ignored reads; local E2E test)
+data/RUN-*-GIAB-*/

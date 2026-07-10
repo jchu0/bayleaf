@@ -107,3 +107,31 @@ parsers' on-disk shape, and gates it with a coverage-focused runbook (reusing `r
 and the registry-backed rules unchanged). Honest scope: a BAM yields coverage/breadth, not
 the fastq/run metrics (Q30/dup/PF) — so it gates the metric the artifact actually holds.
 Validated end-to-end: HG002 panel = **55.8× coverage** (clears the 30× gate), **99% ≥ 20×**.
+
+## `run_giab_pipeline.py` — real GIAB fastqs through the *outlined* pipeline → dashboard
+
+Where `gate_giab.py` reads the pre-aligned NIST panel BAM, this **actually executes the
+Pipeline-Builder germline chain from raw reads** on the real GIAB HG002 panel fastqs, then
+lands a **dashboard-discoverable** run so the operator UI shows it exactly like a mock run —
+every number derived from real reads:
+
+```bash
+# needs the bioconda toolchain on PATH: fastp, bwa-mem2, samtools, mosdepth, bcftools
+conda install -n hackathon -c conda-forge -c bioconda fastp bwa-mem2 samtools mosdepth bcftools
+# one-time reference prep (git-ignored): chr20 GRCh38 + bwa-mem2 index
+#   curl -o data/real-giab/ref/chr20.fa.gz https://hgdownload.soe.ucsc.edu/goldenPath/hg38/chromosomes/chr20.fa.gz
+#   gunzip data/real-giab/ref/chr20.fa.gz && samtools faidx data/real-giab/ref/chr20.fa && bwa-mem2 index data/real-giab/ref/chr20.fa
+PATH=/path/to/env/bin:$PATH uv run python scripts/run_giab_pipeline.py
+```
+
+Chain: `fastp` (trim + Q30/dup/PF) → `bwa-mem2 mem` (align to chr20 — the panel is chr20 windows)
+→ `samtools fixmate/markdup` → `{mosdepth --by <panel>, bcftools mpileup|call -mv|norm}`. It writes
+`data/<run_id>/` with the frozen-five CSVs (real `qc_metrics.csv`) + a narrated `pipeline.log` +
+`origin=real-giab`, then runs the *unchanged* `run_gate` with the **default runbook** — the same
+recompute the read-API serves, so the run appears in the operator UI. **compose ≠ execute** holds:
+this is a standalone driver of the external toolchain, not the app running a tool.
+
+Validated E2E: HG002 panel → **Q30 88.2% · reads-PF 99.3% · 54.2× · dup 0.006% · 553 variants**;
+the four measurable metrics clear their gates, and the run gates to **HOLD** on the honest
+*cluster-PF-missing* signal (a run-level SAV metric a fastq→BAM path can't produce — flagged, not
+fabricated). The run dir is git-ignored (derived from the git-ignored reads).
