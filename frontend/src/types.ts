@@ -330,7 +330,9 @@ export type MetricReadout = {
   within_borderline_band: boolean
   flagged: boolean
 }
-export type GateReadout = { gate: Gate; rows: MetricReadout[]; flagged_count: number }
+// `note` (frontend-only) is an honest empty-state line for a gate with no metric rows — e.g.
+// preflight (rule-based, scored in the gate strip) or variant (no metrics extracted this build).
+export type GateReadout = { gate: Gate; rows: MetricReadout[]; flagged_count: number; note?: string }
 export type QcReadout = { sample_id: string; gates: GateReadout[]; flagged_count: number }
 // origin/sample_type/library_prep are honestly nullable; not_captured lists the missing ones.
 export type CardHeader = {
@@ -353,10 +355,11 @@ export type RunbookThreshold = {
   metric: string
   our_key: string
   label: string
-  gate: Gate
+  gate: number // numeric pass-threshold VALUE in canonical units (e.g. 0.85) — NOT the pipeline gate
   hard_fail: number
   unit: string
   direction: 'higher_is_better' | 'lower_is_better'
+  pipeline_gate: Gate // preflight | qc | variant — the metric's gate, for grouping policy by gate
 }
 export type RunbookPolicy = {
   disclaimer: string

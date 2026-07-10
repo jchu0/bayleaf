@@ -152,9 +152,13 @@ _RUNBOOK_UNITS_NOTE = (
 class RunbookThreshold(BaseModel):
     """One QC gate's policy, flattened for operators/integrators (the settings screen).
 
-    `gate`/`hard_fail` are in the metric's canonical unit (fractions for rates, x for
-    coverage — the same scale the rules gate on); `unit` is the display symbol. `direction`
-    reports the comparison sense so an integrator reads a one-sided gate correctly.
+    `gate`/`hard_fail` are the numeric threshold VALUES in the metric's canonical unit
+    (fractions for rates, x for coverage — the same scale the rules gate on); `unit` is the
+    display symbol. `direction` reports the comparison sense so an integrator reads a one-sided
+    gate correctly. `pipeline_gate` is the metric's PIPELINE gate (preflight|qc|variant), from
+    the registry — distinct from the numeric `gate` value, so a consumer can group policy by gate
+    without conflating the two (the old shape only carried the value, forcing the frontend to
+    mistype it as the gate).
     """
 
     metric: str
@@ -164,6 +168,7 @@ class RunbookThreshold(BaseModel):
     hard_fail: float
     unit: str
     direction: str  # "higher_is_better" | "lower_is_better"
+    pipeline_gate: Gate  # preflight | qc | variant — the metric's gate (registry), not the value
 
 
 class RunbookPolicy(BaseModel):
@@ -837,6 +842,7 @@ def get_runbook() -> RunbookPolicy:
     ILLUSTRATIVE / configurable demo policy — not clinical cutoffs (see `disclaimer`;
     CLAUDE.md life-science guardrail 3). Complements the raw dump at `GET /api/config`.
     """
+    registry = default_registry()
     thresholds = [
         RunbookThreshold(
             metric=t.metric,
@@ -846,6 +852,9 @@ def get_runbook() -> RunbookPolicy:
             hard_fail=t.hard_fail,
             unit=t.unit,
             direction="higher_is_better" if t.higher_is_better else "lower_is_better",
+            # Pipeline gate from the registry — the authoritative gate for this our_key, so the
+            # frontend can group policy by gate (and build the not-measured placeholders) honestly.
+            pipeline_gate=registry.entry(t.our_key).gate,
         )
         for t in DEFAULT_RUNBOOK.qc_thresholds
     ]

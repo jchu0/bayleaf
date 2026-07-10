@@ -10,7 +10,7 @@ import { DecisionVerdictBar } from '../components/DecisionVerdictBar'
 import { CitedEvidence } from '../components/EvidenceTable'
 import { FacetChip } from '../components/FacetChip'
 import { GateResultStrip } from '../components/GateResultStrip'
-import { QCReadout, notMeasuredGroup, type ReadoutGroup } from '../components/MetricsPanel'
+import { QCReadout, emptyGateGroup, notMeasuredGroup, type ReadoutGroup } from '../components/MetricsPanel'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { ErrorBox } from '../components/States'
@@ -42,7 +42,8 @@ const LAYOUTS: { value: Density; label: string }[] = [
 // The design's origin tags — where a card's verdict originated (qc/variant read as "… gate").
 const GATE_TAG: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', variant: 'Variant gate' }
 // Pipeline order for the QC-readout gate groups, so an injected placeholder group sorts into place.
-const GATE_ORDER: Record<Gate, number> = { preflight: 0, qc: 1, variant: 2 }
+// Pipeline order for building the full three-gate readout skeleton (hero shows all three).
+const GATE_SEQUENCE: Gate[] = ['preflight', 'qc', 'variant']
 
 export function RunDetail() {
   const { runId = '' } = useParams()
@@ -383,18 +384,23 @@ function CardBody({
   platform: string | null
   date: string | null
 }) {
-  // QC checks must stay visible whenever the QC gate applies. When the gate ran but produced no
-  // measured metrics (empty metric_values → no QC rows in the projection), fall back to the runbook
-  // thresholds as `not_measured` placeholder rows instead of dropping the whole hero (S3). The
-  // status stays rules-derived (never a confidence meter); a missing runbook degrades to hiding.
-  const realGates = readout?.readout.gates ?? []
-  const qcApplies = card.gate_results.some((g) => g.gate === 'qc')
-  const qcHasRows = realGates.some((g) => g.gate === 'qc' && g.rows.length > 0)
-  const placeholder = qcApplies && !qcHasRows && runbook ? notMeasuredGroup('qc', runbook) : null
-  const gates: ReadoutGroup[] = placeholder
-    ? [...realGates, placeholder].sort((a, b) => GATE_ORDER[a.gate] - GATE_ORDER[b.gate])
-    : realGates
-  const hasReadout = gates.some((g) => g.rows.length > 0)
+  // Build the full three-gate readout so the card shows the whole pipeline architecture, not just
+  // the one gate that happened to carry metrics. Per gate, in pipeline order:
+  //   1. the real projection group if it measured anything;
+  //   2. else, when the gate ran but measured nothing, the runbook thresholds as `not_measured`
+  //      placeholder rows (keeps QC checks visible instead of dropping the hero — S3);
+  //   3. else an honest empty-state note (preflight is rule-based; variant extracts no metrics),
+  //      so the gate keeps its place without fabricating rows.
+  // Status stays rules-derived (never a confidence meter); a missing runbook degrades gracefully.
+  const realByGate = new Map(readout?.readout.gates.map((g) => [g.gate, g as ReadoutGroup]) ?? [])
+  const gateRan = (gate: Gate) => card.gate_results.some((g) => g.gate === gate)
+  const gates: ReadoutGroup[] = GATE_SEQUENCE.map((gate) => {
+    const real = realByGate.get(gate)
+    if (real && real.rows.length > 0) return real
+    const placeholder = gateRan(gate) && runbook ? notMeasuredGroup(gate, runbook) : null
+    return placeholder ?? emptyGateGroup(gate)
+  }).filter((g): g is ReadoutGroup => g !== null)
+  const hasReadout = gates.some((g) => g.rows.length > 0 || g.note)
   const hasFindings = card.findings.length > 0
   const clean = card.verdict === 'proceed'
   const actionable = card.verdict !== 'proceed'

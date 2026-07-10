@@ -27,7 +27,8 @@ export type ReadoutRow = {
   threshold_display: string | null
   status: ReadoutRowStatus
 }
-export type ReadoutGroup = { gate: Gate; rows: ReadoutRow[]; flagged_count: number }
+// `note` carries an honest empty-state line for a gate with no metric rows (see emptyGateGroup).
+export type ReadoutGroup = { gate: Gate; rows: ReadoutRow[]; flagged_count: number; note?: string }
 
 // Per-status treatment. Deliberately independent of verdict.ts STATUS_CHIP (which maps a
 // finding's severity, and uses ESCALATE for critical): the design's metric-status chip maps
@@ -57,7 +58,7 @@ const GROUP_LABEL: Record<Gate, string> = {
 // at this gate (caller degrades to hiding the block, the pre-S3 behavior).
 export function notMeasuredGroup(gate: Gate, runbook: RunbookPolicy): ReadoutGroup | null {
   const rows = runbook.thresholds
-    .filter((t) => t.gate === gate)
+    .filter((t) => t.pipeline_gate === gate)
     .map<ReadoutRow>((t) => ({
       metric: t.our_key,
       label: t.label,
@@ -66,6 +67,24 @@ export function notMeasuredGroup(gate: Gate, runbook: RunbookPolicy): ReadoutGro
       status: 'not_measured',
     }))
   return rows.length ? { gate, rows, flagged_count: 0 } : null
+}
+
+// Honest empty-state copy for a gate the readout table can't populate — NOT because the sample
+// skipped it, but because that gate is not scored by metric thresholds in this build. Keeps the
+// full three-gate architecture visible on the card without fabricating rows (compose ≠ execute;
+// life-science honesty guardrail). Preflight IS evaluated — by rule-based checks shown in the gate
+// strip + evidence trail, not a metric table; variant calling runs but extracts no gating metrics.
+const EMPTY_GATE_NOTE: Partial<Record<Gate, string>> = {
+  preflight:
+    'Provenance & metadata are evaluated by rule-based preflight checks — see the gate strip and evidence trail, not a metric table.',
+  variant: 'No variant-tier QC metrics are extracted in this pipeline build.',
+}
+
+// A rows-less group carrying only an honest note, so a gate with no metric table still shows its
+// place in the pipeline. Returns null for a gate we have no honest note for (caller omits it).
+export function emptyGateGroup(gate: Gate): ReadoutGroup | null {
+  const note = EMPTY_GATE_NOTE[gate]
+  return note ? { gate, rows: [], flagged_count: 0, note } : null
 }
 
 // The runbook only carries the hard-fail bound + a direction — render it as a one-sided threshold
@@ -113,50 +132,71 @@ function Rollup({ group }: { group: ReadoutGroup }) {
 }
 
 export function QCReadout({ gates, variant }: { gates: ReadoutGroup[]; variant: Variant }) {
-  // Empty gate groups recede — a sample that never reached a gate has nothing to show there.
-  const groups = gates.filter((g) => g.rows.length > 0)
+  // In the hero (split) keep gates with rows OR an honest empty-state note, so the full three-gate
+  // architecture stays visible; the compact brief/dense modes show only populated groups.
+  const groups =
+    variant === 'split'
+      ? gates.filter((g) => g.rows.length > 0 || g.note)
+      : gates.filter((g) => g.rows.length > 0)
   if (groups.length === 0) return null
 
   if (variant === 'split') {
     return (
       <div className="flex flex-col gap-3">
-        {groups.map((g) => (
-          <div key={g.gate} className="overflow-hidden rounded-[10px] border border-line">
-            <div className="flex items-center gap-2 border-b border-line bg-card-2 px-[13px] py-2">
-              <span className={`h-[7px] w-[7px] rounded-full ${GATE_DOT[g.gate]}`} />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.4px] text-text-2">
-                {GROUP_LABEL[g.gate]}
-              </span>
-              <Rollup group={g} />
-            </div>
-            <div className="grid grid-cols-[1.7fr_0.8fr_1fr_0.7fr] text-[9px] font-semibold uppercase tracking-[0.4px] text-text-3">
-              <div className="px-[13px] py-1.5">Metric</div>
-              <div className="px-2 py-1.5">Observed</div>
-              <div className="px-2 py-1.5">Threshold</div>
-              <div className="px-2 py-1.5">Status</div>
-            </div>
-            {g.rows.map((m) => (
-              <div
-                key={m.metric}
-                className="grid grid-cols-[1.7fr_0.8fr_1fr_0.7fr] items-center border-t border-line"
-              >
-                <div className="flex min-w-0 items-start gap-2 px-[13px] py-2">
-                  <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${READOUT[m.status].dot}`} />
-                  <div className="min-w-0 text-[12px] text-text">{m.label}</div>
-                </div>
-                <div className="px-2 py-2 font-mono text-[12px] font-semibold text-text">
-                  {m.observed_display}
-                </div>
-                <div className="px-2 py-2 font-mono text-[11px] text-text-3">
-                  {m.threshold_display ?? '—'}
-                </div>
-                <div className="px-2 py-2">
-                  <StatusChip status={m.status} />
-                </div>
+        {groups.map((g) => {
+          const noteOnly = g.rows.length === 0 && !!g.note
+          return (
+            <div key={g.gate} className="overflow-hidden rounded-[10px] border border-line">
+              <div className="flex items-center gap-2 border-b border-line bg-card-2 px-[13px] py-2">
+                <span className={`h-[7px] w-[7px] rounded-full ${GATE_DOT[g.gate]}`} />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.4px] text-text-2">
+                  {GROUP_LABEL[g.gate]}
+                </span>
+                {noteOnly ? (
+                  <span className="ml-auto rounded-full border border-dashed border-line bg-card-2 px-2 py-px text-[9.5px] font-semibold text-text-3">
+                    not scored here
+                  </span>
+                ) : (
+                  <Rollup group={g} />
+                )}
               </div>
-            ))}
-          </div>
-        ))}
+              {noteOnly ? (
+                <div className="px-[13px] py-2.5 text-[11px] leading-relaxed text-text-3">
+                  {g.note}
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-[1.7fr_0.8fr_1fr_0.7fr] text-[9px] font-semibold uppercase tracking-[0.4px] text-text-3">
+                    <div className="px-[13px] py-1.5">Metric</div>
+                    <div className="px-2 py-1.5">Observed</div>
+                    <div className="px-2 py-1.5">Threshold</div>
+                    <div className="px-2 py-1.5">Status</div>
+                  </div>
+                  {g.rows.map((m) => (
+                    <div
+                      key={m.metric}
+                      className="grid grid-cols-[1.7fr_0.8fr_1fr_0.7fr] items-center border-t border-line"
+                    >
+                      <div className="flex min-w-0 items-start gap-2 px-[13px] py-2">
+                        <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${READOUT[m.status].dot}`} />
+                        <div className="min-w-0 text-[12px] text-text">{m.label}</div>
+                      </div>
+                      <div className="px-2 py-2 font-mono text-[12px] font-semibold text-text">
+                        {m.observed_display}
+                      </div>
+                      <div className="px-2 py-2 font-mono text-[11px] text-text-3">
+                        {m.threshold_display ?? '—'}
+                      </div>
+                      <div className="px-2 py-2">
+                        <StatusChip status={m.status} />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )
+        })}
       </div>
     )
   }
