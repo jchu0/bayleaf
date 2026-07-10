@@ -546,3 +546,26 @@ export type RunLayoutConfig = {
   locators: Record<string, LayoutLocator>
 }
 export type ProposedFlag = { flag: string; value: string; enabled: boolean; help: string }
+
+// Submit → run execution (POST /api/runs). The endpoint TRIGGERS the pipeline driver (the core
+// still never runs a tool). Only samples with reads on disk are processed; the rest are skipped.
+export type SubmitRunIn = {
+  run_name: string
+  study?: string
+  assay?: string
+  platform?: string
+  samples: { sample: string; type?: string; i7?: string; i5?: string; study?: string }[]
+}
+export type SubmitRunAck = {
+  run_id: string
+  status: string
+  processed_samples: string[]
+  skipped_samples: string[]
+}
+export type IntakeStatus = {
+  run_id: string
+  status: 'queued' | 'running' | 'complete' | 'failed'
+  error?: string | null
+  processed_samples: string[]
+  skipped_samples: string[]
+}

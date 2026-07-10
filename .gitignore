@@ -113,3 +113,6 @@ Thumbs.db
 
 # Real-GIAB end-to-end run output (derived from git-ignored reads; local E2E test)
 data/RUN-*-GIAB-*/
+
+# Submitted-run outputs from POST /api/runs (real-giab-derived, local; regenerate via Submit)
+data/RUN-SUBMIT-*/

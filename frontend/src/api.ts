@@ -13,6 +13,7 @@ import type {
   DryRunResult,
   FeedbackAck,
   FeedbackIn,
+  IntakeStatus,
   MetricCatalog,
   MonitoringMetrics,
   MonitoringWindow,
@@ -27,6 +28,8 @@ import type {
   RunStatus,
   RunSummary,
   RunsPage,
+  SubmitRunAck,
+  SubmitRunIn,
   ThresholdOverride,
   ThresholdOverrideAck,
   ThresholdOverrideIn,
@@ -122,6 +125,10 @@ async function fetchRunsPage(opts: RunsQuery = {}): Promise<RunsPage> {
 const enc = encodeURIComponent
 
 export const api = {
+  // ── intake: submit a run for processing (the execution boundary) ──
+  submitRun: (body: SubmitRunIn) => write<SubmitRunAck>('/api/runs', 'POST', body),
+  intakeStatus: (runId: string) => get<IntakeStatus>(`/api/runs/${enc(runId)}/intake-status`),
+
   // ── runs + cards (reads) ──
   runs: (opts?: RunsQuery) => get<RunSummary[]>(`/api/runs${runsQs(opts)}`),
   runsPage: (opts?: RunsQuery) => fetchRunsPage(opts),

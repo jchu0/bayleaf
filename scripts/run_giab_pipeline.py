@@ -23,12 +23,14 @@ Prereqs (bioconda, e.g. the ``hackathon`` conda env on PATH): ``fastp``, ``bwa-m
 
 from __future__ import annotations
 
+import argparse
 import gzip
 import json
 import re
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -47,6 +49,19 @@ _RUN_ID = "RUN-2026-07-08-GIAB-HG002"
 _RUN_DIR = _REPO / "data" / _RUN_ID
 _PLATFORM = "HiSeq 2500"  # the NIST 2x250bps instrument these reads come from
 _RUN_DATE = "2026-07-08"
+
+
+@dataclass(frozen=True)
+class RunConfig:
+    """Per-run identifiers — overridable via CLI so the API intake endpoint can drive a fresh run.
+    The processed reads stay the HG002 panel fixtures; only the run's identity varies."""
+
+    run_id: str
+    run_dir: Path
+    platform: str
+    run_date: str
+    submitted_by: str
+
 
 _LOG: list[str] = []
 
@@ -223,18 +238,18 @@ def parse_fastp(fastp_json: Path) -> tuple[float, float, float, int]:
 
 
 def write_run_dir(
-    q30: float, reads_pf: float, coverage: float, dup: float, total_reads: int
+    cfg: RunConfig, q30: float, reads_pf: float, coverage: float, dup: float, total_reads: int
 ) -> None:
     """Write the frozen-five-CSV run dir the read-API discovers + gates (data/<run_id>/)."""
-    _RUN_DIR.mkdir(parents=True, exist_ok=True)
+    cfg.run_dir.mkdir(parents=True, exist_ok=True)
 
     def w(name: str, text: str) -> None:
-        (_RUN_DIR / name).write_text(text, encoding="utf-8", newline="\n")
+        (cfg.run_dir / name).write_text(text, encoding="utf-8", newline="\n")
 
     w(
         "SampleSheet.csv",
-        f"[Header]\nFileFormatVersion,2\nRunName,{_RUN_ID}\n"
-        f"InstrumentPlatform,{_PLATFORM}\nDate,{_RUN_DATE}\n\n"
+        f"[Header]\nFileFormatVersion,2\nRunName,{cfg.run_id}\n"
+        f"InstrumentPlatform,{cfg.platform}\nDate,{cfg.run_date}\n\n"
         "[Reads]\nRead1Cycles,250\nRead2Cycles,250\n\n"
         "[BCLConvert_Data]\nSample_ID,index,index2\n"
         f"{_SAMPLE},NA,NA\n",
@@ -242,7 +257,7 @@ def write_run_dir(
     w(
         "sample_metadata.csv",
         "sample_id,subject_id,tissue,library_prep,submitted_by\n"
-        f"{_SAMPLE},{_SAMPLE},blood,PCR-free,giab\n",
+        f"{_SAMPLE},{_SAMPLE},blood,PCR-free,{cfg.submitted_by}\n",
     )
     # Real read count from fastp; single sample so 100% of reads are this sample.
     w("demux_stats.csv", f"SampleID,Index,# Reads,% Reads\n{_SAMPLE},NA,{total_reads},100.0\n")
@@ -257,6 +272,20 @@ def write_run_dir(
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser(description="Run the GIAB panel pipeline into data/<run_id>/.")
+    ap.add_argument("--run-id", default=_RUN_ID, help="run id / data dir name (slug)")
+    ap.add_argument("--run-date", default=_RUN_DATE, help="ISO date for the [Header]")
+    ap.add_argument("--platform", default=_PLATFORM, help="Illumina InstrumentPlatform")
+    ap.add_argument("--submitted-by", default="giab", help="operator id for sample_metadata")
+    args = ap.parse_args()
+    cfg = RunConfig(
+        run_id=args.run_id,
+        run_dir=_REPO / "data" / args.run_id,
+        platform=args.platform,
+        run_date=args.run_date,
+        submitted_by=args.submitted_by,
+    )
+
     for path, hint in (
         (_REF, "build the chr20 reference index first"),
         (_RAW_R1, "fetch the panel fastqs"),
@@ -265,7 +294,7 @@ def main() -> int:
         if not path.exists():
             sys.exit(f"required input missing: {path} — {hint}")
 
-    _log("intake", f"registering run {_RUN_ID} — sample {_SAMPLE} (real GIAB HG002 panel reads)")
+    _log("intake", f"registering run {cfg.run_id} — sample {_SAMPLE} (real GIAB HG002 panel reads)")
     fastp_json = step_fastp()
     dedup = step_align_markdup()
     coverage, b20, b30 = step_mosdepth(dedup)
@@ -276,9 +305,9 @@ def main() -> int:
         f"handing the run/ outputs to run_gate (Q30 {q30:.1f}%, reads-PF {reads_pf:.1f}%, "
         f"cov {coverage:.1f}x, dup {dup:.3f}%, {n_variants} variants)",
     )
-    write_run_dir(q30, reads_pf, coverage, dup, total_reads)
+    write_run_dir(cfg, q30, reads_pf, coverage, dup, total_reads)
 
-    _, cards = run_gate_from_dir(_RUN_DIR)  # default runbook — same recompute the read-API serves
+    _, cards = run_gate_from_dir(cfg.run_dir)  # default runbook — the read-API's recompute
     card = cards[0]
 
     print("\n=== REAL GIAB HG002 panel fastqs → outlined pipeline → gate ===")
@@ -289,7 +318,7 @@ def main() -> int:
     print(f"  duplication         : {dup:.3f}%  (fastp)")
     print(f"  breadth             : {b20 * 100:.1f}% >=20x, {b30 * 100:.1f}% >=30x")
     print(f"  variants (norm)     : {n_variants}   (bcftools call | norm)")
-    print(f"\n  run dir: {_RUN_DIR.relative_to(_REPO)}  (discoverable by the read-API)")
+    print(f"\n  run dir: {cfg.run_dir.relative_to(_REPO)}  (discoverable by the read-API)")
     print(f"  sample {card.sample_id}: {card.verdict.value.upper()} — {card.headline}")
     for f in card.findings:
         print(f"    - [{f.severity.value}] {f.rule_id}: {f.title}")

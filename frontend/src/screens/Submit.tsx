@@ -14,7 +14,8 @@ import {
 import { api } from '../api'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl } from '../components/SegmentedControl'
-import type { SampleRow } from '../types'
+import { useToast } from '../components/Toast'
+import type { SampleRow, SubmitRunIn } from '../types'
 
 // Submit samplesheet (§5.1) — the pipeline's front door: registers a run + its samples BEFORE
 // processing. Compose ≠ execute: this screen only records run/sample metadata and hands off to
@@ -59,6 +60,8 @@ const INPUT_CLS =
 
 export function Submit() {
   const navigate = useNavigate()
+  const { toast } = useToast()
+  const [submitting, setSubmitting] = useState(false)
   const [method, setMethod] = useState<'upload' | 'basespace'>('upload')
   const [meta, setMeta] = useState<RunMeta>(SEED_META)
   const [samples, setSamples] = useState<SampleRow[]>(SEED_SAMPLES)
@@ -107,14 +110,41 @@ export function Submit() {
     setImported(true)
   }
 
-  function submit() {
-    // Registration + navigation only — MUST NOT start processing. The mock switches to the
-    // preflight view with no run context; the routed gate is per-run, so hand off to the first
-    // known run's intake gate (assumption: this local draft is not persisted as a real run).
-    api
-      .runs()
-      .then((rs) => navigate(rs[0]?.run_id ? `/runs/${rs[0].run_id}/intake` : '/runs'))
-      .catch(() => navigate('/runs'))
+  // Submit registers the run, then hands off to the execution boundary (POST /api/runs) — the
+  // API triggers the pipeline driver (the core still never runs a tool). We poll intake-status and
+  // navigate to the run once processing completes. Only samples with reads on disk are processed.
+  async function submit() {
+    setSubmitting(true)
+    const body: SubmitRunIn = {
+      run_name: meta.runName,
+      study: meta.study,
+      assay: meta.assay,
+      platform: meta.platform,
+      samples: samples.map((s) => ({ sample: s.sample, type: s.type, i7: s.i7, i5: s.i5, study: s.study })),
+    }
+    try {
+      const ack = await api.submitRun(body)
+      const skip = ack.skipped_samples.length
+        ? ` Skipped ${ack.skipped_samples.join(', ')} — no reads on disk for this demo.`
+        : ''
+      toast(`Processing ${ack.processed_samples.join(', ')} through the pipeline…${skip}`, 'info')
+      const poll = async (): Promise<void> => {
+        const st = await api.intakeStatus(ack.run_id)
+        if (st.status === 'complete') {
+          toast(`Run ${ack.run_id} processed — opening decision cards.`, 'success')
+          navigate(`/runs/${ack.run_id}`)
+        } else if (st.status === 'failed') {
+          toast(`Pipeline failed — ${st.error ?? 'unknown error'}`, 'error')
+          setSubmitting(false)
+        } else {
+          setTimeout(() => void poll(), 2500)
+        }
+      }
+      void poll()
+    } catch (e) {
+      toast(`Couldn't submit run — ${e instanceof Error ? e.message : String(e)}`, 'error')
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -439,10 +469,11 @@ export function Submit() {
         <button
           type="button"
           onClick={submit}
-          className="inline-flex items-center gap-2 rounded-[9px] bg-accent px-[18px] py-2.5 text-[13px] font-semibold text-white"
+          disabled={submitting || count === 0}
+          className="inline-flex items-center gap-2 rounded-[9px] bg-accent px-[18px] py-2.5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-60"
         >
           <ArrowRight size={15} strokeWidth={2} />
-          Submit to pipeline
+          {submitting ? 'Processing…' : 'Submit to pipeline'}
         </button>
       </div>
     </div>
