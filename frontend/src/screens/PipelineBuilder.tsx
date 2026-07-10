@@ -137,6 +137,26 @@ export function PipelineBuilder() {
     setMode('edit')
     setNewOpen(false)
   }
+
+  // Cancel/exit a draft: discard the in-progress build and return to the original linked pipeline
+  // (View). Restores the same initial state the builder opens in, so nothing composed leaks over.
+  function cancelDraft() {
+    setDocKind('germline')
+    setDocName(GRAPH_ID)
+    setUserNodes([])
+    setUserEdges([])
+    setLocEdits({})
+    setRefLoc({})
+    setSelected(null)
+    setConnectMode(false)
+    setConnectFrom(null)
+    setVersion(3)
+    setSaveStatus('draft')
+    setEmitted(false)
+    setEmittedSnap(null)
+    setProfile('giab_panel')
+    setMode('view')
+  }
   const selTool = useMemo(() => TOOLS.find((t) => t.id === selected) ?? null, [selected])
   const selRef = useMemo(() => REFS.find((r) => r.id === selected) ?? null, [selected])
   const isGate = selected === 'g_gate'
@@ -243,7 +263,31 @@ export function PipelineBuilder() {
     setUserNodes((ns) => ns.filter((n) => n.id !== id))
     setUserEdges((es) => es.filter((ed) => ed.from.node !== id && ed.to.node !== id))
   }
-  const tidy = () => setUserNodes((ns) => ns.map((n, i) => ({ ...n, x: 150 + i * 170, y: 56 })))
+  // Tidy = a flow-preserving auto-layout: place each node in the column of its longest-path depth
+  // from a source (so upstream→downstream reads left→right), and stack parallel nodes in a column.
+  // This keeps the connection structure legible instead of dropping every card into one row.
+  const tidy = () =>
+    setUserNodes((ns) => {
+      if (!ns.length) return ns
+      const depth = new Map(ns.map((n) => [n.id, 0]))
+      // Relax longest-path depths over the DAG (|V| passes is a safe upper bound).
+      for (let i = 0; i < ns.length; i++) {
+        for (const e of userEdges) {
+          const d = (depth.get(e.from.node) ?? 0) + 1
+          if (d > (depth.get(e.to.node) ?? 0)) depth.set(e.to.node, d)
+        }
+      }
+      const rowOf = new Map<number, number>() // next free row per column
+      const pos = new Map<string, { x: number; y: number }>()
+      // Deterministic order: by depth, then original x, so a re-tidy is stable.
+      for (const n of [...ns].sort((a, b) => (depth.get(a.id)! - depth.get(b.id)!) || a.x - b.x)) {
+        const col = depth.get(n.id) ?? 0
+        const row = rowOf.get(col) ?? 0
+        rowOf.set(col, row + 1)
+        pos.set(n.id, { x: 60 + col * 230, y: 56 + row * 120 })
+      }
+      return ns.map((n) => ({ ...n, ...(pos.get(n.id) ?? { x: n.x, y: n.y }) }))
+    })
 
   const nodeDrag = (id: string, e: React.MouseEvent) => {
     if (connectMode) return
@@ -363,6 +407,16 @@ export function PipelineBuilder() {
           <Plus size={13} />
           New
         </button>
+        {!isLinked && (
+          <button
+            onClick={cancelDraft}
+            title="Discard this draft and return to the linked pipeline"
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-line-strong"
+          >
+            <X size={13} />
+            Cancel
+          </button>
+        )}
         <span className="max-w-[200px] truncate font-mono text-[11.5px] font-semibold text-text">{docName}</span>
         <span
           className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${

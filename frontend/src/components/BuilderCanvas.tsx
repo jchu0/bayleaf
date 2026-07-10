@@ -277,7 +277,7 @@ export function BuilderCanvas(props: CanvasProps) {
       {/* Minimap — a bigger, proportional mirror of the whole canvas (uniform scale, no distortion):
           seeded tool cards + references + the terminal gate + any composed nodes, each to scale. */}
       <div
-        className="absolute bottom-3.5 right-3.5 z-[6] overflow-hidden rounded-lg border border-line-strong bg-card shadow-card"
+        className="absolute right-3.5 top-3.5 z-[6] overflow-hidden rounded-lg border border-line-strong bg-card shadow-card"
         style={{ width: MM_W, height: MM_H }}
       >
         <div className="absolute inset-0 bg-card-2" />
