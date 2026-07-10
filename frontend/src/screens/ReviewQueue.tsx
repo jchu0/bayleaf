@@ -17,6 +17,7 @@ import { FacetChip } from '../components/FacetChip'
 import { PageHeader } from '../components/PageHeader'
 import { ReviewRepairCard, type RepairApproval } from '../components/ReviewRepairCard'
 import { ReviewStatusBar, type ReviewStatusSegment } from '../components/ReviewStatusBar'
+import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { ErrorBox, Loading } from '../components/States'
 import { useToast } from '../components/Toast'
 import { useRole } from '../context/RoleContext'
@@ -66,6 +67,14 @@ const STATUS_FILTERS: { key: 'all' | TicketStatus; label: string }[] = [
   { key: 'open', label: 'Open' },
   { key: 'in_review', label: 'In review' },
   { key: 'resolved', label: 'Resolved' },
+]
+
+// Ticket pagination, mirroring Monitoring's recurring-signature pager so the two lists are consistent.
+type TicketPerPage = '25' | '50' | '100'
+const TICKET_PER_PAGE: SegmentOption<TicketPerPage>[] = [
+  { value: '25', label: '25' },
+  { value: '50', label: '50' },
+  { value: '100', label: '100' },
 ]
 
 // A ticket derived from a flagged card (recurrence + issue class stay frontend-derived per the
@@ -173,7 +182,11 @@ export function ReviewQueue() {
   const [details, setDetails] = useState<RunDetail[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ui, setUi] = useState<Record<string, TicketUi>>({})
-  const [filter, setFilter] = useState<'all' | TicketStatus>('all')
+  // Default to Open so resolved (and in-review) tickets leave the active list but stay reachable via
+  // their facet chip (part c) — resolved is still a searchable TicketStatus, never dropped.
+  const [filter, setFilter] = useState<'all' | TicketStatus>('open')
+  const [perPage, setPerPage] = useState<TicketPerPage>('25')
+  const [page, setPage] = useState(1)
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const seededRef = useRef(false)
   // Per-key sync de-dup state (see syncAction): a synchronous server-id map + an in-flight
@@ -254,6 +267,11 @@ export function ReviewQueue() {
     }
   }, [tickets])
 
+  // Reset to page 1 when the filter or per-page changes (mirror Monitoring).
+  useEffect(() => {
+    setPage(1)
+  }, [filter, perPage])
+
   if (error) return <ErrorBox message={error} />
   if (!details) return <Loading label="Loading queue…" />
 
@@ -333,6 +351,28 @@ export function ReviewQueue() {
   }
   const shown = tickets.filter((t) => filter === 'all' || statusOf(t) === filter)
 
+  // Client-side pagination over the filtered tickets, mirroring Monitoring's recurring-signature
+  // pager. Clamp the current page so a narrowing filter can't strand the pager on an empty page.
+  const per = Number(perPage)
+  const total = shown.length
+  const pages = Math.max(1, Math.ceil(total / per))
+  const curPage = Math.min(page, pages)
+  const fromIdx = total === 0 ? 0 : (curPage - 1) * per + 1
+  const toIdx = Math.min(curPage * per, total)
+  const pagedTickets = shown.slice((curPage - 1) * per, curPage * per)
+
+  // Group the PAGINATED slice by run so tickets read under their run. The slice is already
+  // verdict-sorted (see the `tickets` memo), so Map insertion order preserves both the group order
+  // and per-group ordering; we re-sort each group defensively to keep the verdict sort explicit.
+  const grouped = new Map<string, QueueTicket[]>()
+  for (const t of pagedTickets) {
+    const g = grouped.get(t.runId)
+    if (g) g.push(t)
+    else grouped.set(t.runId, [t])
+  }
+  const groups = Array.from(grouped.entries())
+  for (const [, g] of groups) g.sort((a, b) => VERDICT_ORDER[a.card.verdict] - VERDICT_ORDER[b.card.verdict])
+
   const segments: ReviewStatusSegment[] = [
     { verdict: 'escalate', label: 'Escalations', count: tickets.filter((t) => t.card.verdict === 'escalate').length },
     { verdict: 'rerun', label: 'Reruns', count: tickets.filter((t) => t.card.verdict === 'rerun').length },
@@ -411,31 +451,98 @@ export function ReviewQueue() {
           </p>
         </div>
       ) : (
-        <div className="mt-4 flex flex-col gap-[13px]">
-          {shown.map((t) => {
-            const key = keyOf(t)
-            return (
-              <TicketCard
-                key={key}
-                t={t}
-                ui={ui[key] ?? {}}
-                recurrence={recurrence.get(t.primary.rule_id)}
-                open={!!open[key]}
-                isApprover={isApprover}
-                onToggle={() => setOpen((m) => ({ ...m, [key]: !m[key] }))}
-                on={{
-                  ack: () => act(t, 'acknowledge'),
-                  resolve: () => act(t, 'resolve'),
-                  reopen: () => act(t, 'reopen'),
-                  escalate: () => act(t, 'escalate'),
-                  suppress: () => toggleSuppress(t),
-                  escalateRepair: () => void escalateRepair(t),
-                  approveFix: (scope) => approveFix(t, scope),
-                }}
-              />
-            )
-          })}
-        </div>
+        <>
+          {/* Grouped by run: each group sits under a sticky run subheader; the verdict sort is
+              preserved inside every group (see the grouping block above). */}
+          <div className="mt-4 flex flex-col gap-5">
+            {groups.map(([runId, groupTickets]) => {
+              const groupDate = formatDate(groupTickets[0].runDate)
+              return (
+                <div key={runId} className="flex flex-col gap-[13px]">
+                  {/* Sticky run subheader — the mono run-id + date idiom from the ticket header. */}
+                  <div className="sticky top-0 z-10 flex items-center gap-2 bg-page py-2">
+                    <span className="font-mono text-[12px] font-semibold text-text-2">{runId}</span>
+                    {groupDate && <span className="text-[11.5px] text-text-3">· {groupDate}</span>}
+                    <span className="text-[11px] text-text-3">
+                      {groupTickets.length} ticket{groupTickets.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  {groupTickets.map((t) => {
+                    const key = keyOf(t)
+                    return (
+                      <TicketCard
+                        key={key}
+                        t={t}
+                        ui={ui[key] ?? {}}
+                        recurrence={recurrence.get(t.primary.rule_id)}
+                        open={!!open[key]}
+                        isApprover={isApprover}
+                        onToggle={() => setOpen((m) => ({ ...m, [key]: !m[key] }))}
+                        on={{
+                          ack: () => act(t, 'acknowledge'),
+                          resolve: () => act(t, 'resolve'),
+                          reopen: () => act(t, 'reopen'),
+                          escalate: () => act(t, 'escalate'),
+                          suppress: () => toggleSuppress(t),
+                          escalateRepair: () => void escalateRepair(t),
+                          approveFix: (scope) => approveFix(t, scope),
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+
+          {total > 0 && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-[11.5px] text-text-2">
+              <span>
+                Showing {fromIdx}–{toIdx} of {total} tickets
+              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11.5px] text-text-3">Per page</span>
+                  <SegmentedControl<TicketPerPage> options={TICKET_PER_PAGE} value={perPage} onChange={setPerPage} />
+                </div>
+                {pages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setPage(Math.max(1, curPage - 1))}
+                      className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
+                      aria-label="Previous page"
+                    >
+                      ‹
+                    </button>
+                    {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setPage(n)}
+                        className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] transition-colors ${
+                          n === curPage
+                            ? 'bg-accent font-semibold text-white'
+                            : 'border border-line bg-card text-text-2 hover:border-line-strong'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setPage(Math.min(pages, curPage + 1))}
+                      className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
+                      aria-label="Next page"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

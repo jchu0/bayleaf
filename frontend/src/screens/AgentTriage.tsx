@@ -7,7 +7,7 @@ import { PageHeader } from '../components/PageHeader'
 import { AgentComposer } from '../components/AgentComposer'
 import { AgentSourceToggle } from '../components/AgentSourceToggle'
 import { AgentSubjectCard } from '../components/AgentSubjectCard'
-import { VERDICT_DOT } from '../verdict'
+import { GATE_DOT, GATE_LABEL, VERDICT_DOT, VERDICT_LABEL } from '../verdict'
 import type { RunDetail, TriageNote } from '../types'
 
 const VERDICT_RANK: Record<string, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
@@ -116,27 +116,67 @@ export function AgentTriage() {
             </div>
           )}
 
-          {/* Multi-sample picker — a real run has several flagged samples (not in the single-subject
-              design); the design's per-subject header layout governs whichever is selected. */}
-          {flagged.length > 1 && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {flagged.map((c) => (
-                <button
-                  key={c.sample_id}
-                  onClick={() => setPicked(c.sample_id)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[12px] transition-colors ${
-                    c.sample_id === active?.sample_id
-                      ? 'border-accent bg-accent-weak text-accent'
-                      : 'border-line bg-card text-text-2 hover:text-text'
-                  }`}
-                >
-                  {/* Verdict signal so escalate reads apart from hold at a glance (rules decide the verdict). */}
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${VERDICT_DOT[c.verdict]}`} />
-                  {c.sample_id}
-                </button>
-              ))}
+          {/* Flagged-sample selector — a real run has several flagged samples (not in the single-
+              subject design). A table (not pills) scales to a full run's worth of rows; the design's
+              per-subject header layout governs whichever row is selected. Verdict-rank order (escalate
+              first) is inherited from `flagged`. Rendered for any non-empty run, one row per sample. */}
+          <div className="mt-4">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.4px] text-text-3">
+              Flagged samples · select a row to triage
             </div>
-          )}
+            <div className="overflow-hidden rounded-[10px] border border-line">
+              <div className="grid grid-cols-[1.1fr_1fr_0.9fr_2fr_0.6fr] bg-card-2 text-[9.5px] font-semibold uppercase tracking-[0.4px] text-text-3">
+                <div className="px-[13px] py-[9px]">Sample</div>
+                <div className="px-[10px] py-[9px]">Verdict</div>
+                <div className="px-[10px] py-[9px]">Gate</div>
+                <div className="px-[10px] py-[9px]">Headline</div>
+                <div className="px-[10px] py-[9px] text-center">Findings</div>
+              </div>
+              {flagged.map((c, i) => {
+                const isActive = c.sample_id === active?.sample_id
+                // The gate that drove this card's verdict (else the leading finding's gate) — the
+                // same governing-gate derivation CardHead uses. Rules decide the verdict; this only
+                // labels where it originated.
+                const gate = c.gate_results.find((g) => g.verdict === c.verdict)?.gate ?? c.findings[0]?.gate ?? null
+                return (
+                  <button
+                    key={c.sample_id}
+                    type="button"
+                    onClick={() => setPicked(c.sample_id)}
+                    aria-pressed={isActive}
+                    className={`grid w-full grid-cols-[1.1fr_1fr_0.9fr_2fr_0.6fr] items-center border-t border-line text-left transition-colors ${
+                      isActive ? 'bg-accent-weak' : i % 2 === 1 ? 'bg-card-2 hover:bg-accent-weak' : 'bg-card hover:bg-accent-weak'
+                    }`}
+                  >
+                    <div
+                      className={`px-[13px] py-[10px] font-mono text-[12.5px] font-semibold ${isActive ? 'text-accent' : 'text-text'}`}
+                    >
+                      {c.sample_id}
+                    </div>
+                    <div className="flex items-center gap-[6px] px-[10px] py-[10px]">
+                      {/* Verdict signal so escalate reads apart from hold at a glance (rules decide the verdict). */}
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${VERDICT_DOT[c.verdict]}`} />
+                      <span className="text-[12px] text-text-2">{VERDICT_LABEL[c.verdict]}</span>
+                    </div>
+                    <div className="flex items-center gap-[6px] px-[10px] py-[10px] text-[12px] text-text-2">
+                      {gate ? (
+                        <>
+                          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${GATE_DOT[gate]}`} />
+                          {GATE_LABEL[gate]}
+                        </>
+                      ) : (
+                        <span className="text-text-3">—</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 truncate px-[10px] py-[10px] text-[12.5px] text-text">{c.headline}</div>
+                    <div className="px-[10px] py-[10px] text-center font-mono text-[12px] font-semibold text-text-2">
+                      {c.findings.length}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
           {(noteState === 'loading' || noteState === 'idle') && (
             <div className="mt-4">

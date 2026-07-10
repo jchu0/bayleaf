@@ -98,30 +98,30 @@ function RunCard({ run }: { run: RunSummary }) {
         attn ? 'border-line-strong' : 'border-line'
       }`}
     >
-      <div className="flex items-center gap-3.5">
-        <div className="min-w-[172px]">
-          <div className="font-mono text-[14px] font-semibold text-text">{run.run_id}</div>
-          <div className="mt-[3px] text-[11.5px] text-text-3">{meta}</div>
+      <div className="flex flex-col gap-2.5">
+        {/* Row 1 — identity: id + meta + samples + status + attention wrap together, so a long
+            run_id reflows onto its own line instead of squeezing the full-width bar in Row 2. */}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+          <span className="font-mono text-[14px] font-semibold text-text">{run.run_id}</span>
+          <span className="text-[11.5px] text-text-3">{meta}</span>
+          <span className="text-[12px] text-text-2">
+            <strong className="font-mono text-text">{run.n_samples}</strong> samples
+          </span>
+          <StatusPill status={run.status} />
+          <span className="ml-auto flex items-center gap-2.5">
+            {attn && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-hold-bd bg-hold-bg px-[9px] py-[3px] text-[11.5px] font-semibold text-hold-fg">
+                <AlertTriangle size={13} /> {run.n_attention} need attention
+              </span>
+            )}
+            <ChevronRight size={18} className="shrink-0 text-text-3" />
+          </span>
         </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="mb-[7px] flex items-center gap-2.5">
-            <span className="text-[12px] text-text-2">
-              <strong className="font-mono text-text">{run.n_samples}</strong> samples
-            </span>
-            <StatusPill status={run.status} />
-          </div>
+        {/* Row 2 — full-width verdict bar; min-w-0 lets it shrink correctly inside the column. */}
+        <div className="min-w-0">
           <VerdictBar counts={run.counts} running={running} />
           {run.status === 'needs_review' && <VerdictLegend counts={run.counts} />}
-        </div>
-
-        <div className="flex w-[190px] items-center justify-end gap-2.5">
-          {attn && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-hold-bd bg-hold-bg px-[9px] py-[3px] text-[11.5px] font-semibold text-hold-fg">
-              <AlertTriangle size={13} /> {run.n_attention} need attention
-            </span>
-          )}
-          <ChevronRight size={18} className="shrink-0 text-text-3" />
         </div>
       </div>
     </Link>

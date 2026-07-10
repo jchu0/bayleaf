@@ -1,6 +1,7 @@
 import { RotateCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
+import { DateRangePicker } from '../components/DateRangePicker'
 import { MonitoringSignatureRow } from '../components/MonitoringSignatureRow'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
@@ -46,6 +47,10 @@ export function Monitoring() {
   const [data, setData] = useState<MonitoringMetrics | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  // Date-range refinement for the throughput chart only (see the chart note below). api.monitoring
+  // takes a window enum, not date params, so this filters the already-fetched runs client-side.
+  const [dateStart, setDateStart] = useState<string | null>(null)
+  const [dateEnd, setDateEnd] = useState<string | null>(null)
   const [openSigs, setOpenSigs] = useState<Set<string>>(new Set())
   const [sigPerPage, setSigPerPage] = useState<SigPerPage>('25')
   const [sigPage, setSigPage] = useState(1)
@@ -93,6 +98,7 @@ export function Monitoring() {
   const control = (
     <div className="flex items-center gap-2">
       <SegmentedControl options={WINDOW_OPTIONS} value={window} onChange={setWindow} />
+      <DateRangePicker start={dateStart} end={dateEnd} onChange={(s, e) => { setDateStart(s); setDateEnd(e) }} />
       <button
         type="button"
         onClick={() => refresh().catch((e) => setError(String(e)))}
@@ -118,7 +124,20 @@ export function Monitoring() {
   if (!data) return <div className="mx-auto max-w-[1040px]">{header}<Loading label="Loading monitoring…" /></div>
 
   const o = data.overall
-  const maxSamples = Math.max(...data.runs.map((r) => r.n_samples), 1)
+  // The date range refines ONLY the throughput chart. api.monitoring(window) has no date params, so
+  // KPIs (o) and gate-pass (data.gates) are server-aggregated over the whole window and can't be
+  // re-derived client-side — we filter the already-fetched per-run rows and note the scope limit.
+  const hasDateFilter = !!(dateStart || dateEnd)
+  const chartRuns = hasDateFilter
+    ? data.runs.filter((r) => {
+        const iso = r.run_date // already ISO YYYY-MM-DD → lexicographic compare is date-correct
+        if (!iso) return false
+        if (dateStart && iso < dateStart) return false
+        if (dateEnd && iso > dateEnd) return false
+        return true
+      })
+    : data.runs
+  const maxSamples = Math.max(...chartRuns.map((r) => r.n_samples), 1)
 
   const kpis: { label: string; value: string; hint?: string }[] = [
     { label: `Runs · ${windowShort}`, value: String(o.n_runs) },
@@ -150,35 +169,90 @@ export function Monitoring() {
       {/* Two-column band: verdicts-over-time (1.5fr) + gate pass rate (1fr) */}
       <div className="mt-[14px] grid gap-[14px] lg:grid-cols-[1.5fr_1fr]">
         <div className="rounded-[14px] border border-line bg-card px-[18px] py-4">
-          <div className="text-[13.5px] font-semibold text-text">Verdicts over time</div>
-          {data.runs.length === 0 ? (
-            <p className="mt-4 text-[12.5px] text-text-3">No dated runs in this window.</p>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <div className="text-[13.5px] font-semibold text-text">Verdicts over time</div>
+            {/* Honest scope note (a): the date range narrows only this chart. The KPI tiles and the
+                gate-pass rate stay aggregated over the selected window because api.monitoring exposes
+                a window enum, not date params, so they cannot be re-derived client-side. */}
+            <div className="text-[10.5px] text-text-3">
+              Date range refines this chart only · KPIs &amp; gate-pass stay {windowShort}-scoped
+            </div>
+          </div>
+          {chartRuns.length === 0 ? (
+            <p className="mt-4 text-[12.5px] text-text-3">
+              {hasDateFilter ? 'No runs in the selected date range.' : 'No dated runs in this window.'}
+            </p>
           ) : (
-            <div className="mt-4 flex h-[168px] items-end gap-[10px]">
-              {data.runs.map((r) => (
-                <div
-                  key={r.run_id}
-                  className="flex h-full min-w-0 flex-1 flex-col items-center gap-[7px]"
-                  title={`${r.run_id} · ${r.n_samples} samples`}
-                >
-                  <div className="flex w-[26px] flex-1 flex-col justify-end gap-[2px]">
-                    {STACK_ORDER.map((v) => {
-                      const n = r.counts[v] ?? 0
-                      return n ? (
-                        <div
-                          key={v}
-                          className={`w-full rounded-[2px] ${VERDICT_BAR[v]}`}
-                          style={{ height: `${(n / maxSamples) * 100}%` }}
-                          title={`${VERDICT_LABEL[v]}: ${n}`}
-                        />
-                      ) : null
-                    })}
+            <div className="mt-4 flex gap-2">
+              {/* Y-axis gutter: a rotated "samples" axis label + max / half / 0 tick labels aligned to
+                  the plot height (kept in its own flex sub-columns so the label never overlaps a tick). */}
+              <div className="flex h-[150px] shrink-0 gap-1" aria-hidden="true">
+                <div className="relative w-3">
+                  <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 whitespace-nowrap text-[9px] font-medium tracking-wide text-text-3">
+                    samples
+                  </span>
+                </div>
+                <div className="relative w-6">
+                  <span className="absolute right-0 top-0 -translate-y-1/2 font-mono text-[9px] text-text-3">
+                    {maxSamples}
+                  </span>
+                  <span className="absolute right-0 top-1/2 -translate-y-1/2 font-mono text-[9px] text-text-3">
+                    {Math.round(maxSamples / 2)}
+                  </span>
+                  <span className="absolute bottom-0 right-0 translate-y-1/2 font-mono text-[9px] text-text-3">
+                    0
+                  </span>
+                </div>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                {/* Plot area: gridlines (0 / half / max) drawn behind the bars, both 150px tall so the
+                    stacked bar % heights read against the same scale the ticks label. */}
+                <div className="relative h-[150px]">
+                  <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+                    {[0, 0.5, 1].map((f) => (
+                      <div
+                        key={f}
+                        className="absolute inset-x-0 border-t border-dashed border-line"
+                        style={{ top: `${(1 - f) * 100}%` }}
+                      />
+                    ))}
                   </div>
-                  <div className="whitespace-nowrap font-mono text-[9px] text-text-3">
-                    {shortDate(r.run_date, r.run_id)}
+                  <div className="relative flex h-full items-end gap-[10px]">
+                    {chartRuns.map((r) => (
+                      <div
+                        key={r.run_id}
+                        className="flex h-full min-w-0 flex-1 flex-col justify-end"
+                        title={`${r.run_id} · ${r.n_samples} samples`}
+                      >
+                        <div className="mx-auto flex h-full w-[26px] flex-col justify-end gap-[2px]">
+                          {STACK_ORDER.map((v) => {
+                            const n = r.counts[v] ?? 0
+                            return n ? (
+                              <div
+                                key={v}
+                                className={`w-full rounded-[2px] ${VERDICT_BAR[v]}`}
+                                style={{ height: `${(n / maxSamples) * 100}%` }}
+                                title={`${VERDICT_LABEL[v]}: ${n}`}
+                              />
+                            ) : null
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
+                {/* Date labels — mirror the bar flex so each sits centered under its column. */}
+                <div className="mt-[7px] flex gap-[10px]">
+                  {chartRuns.map((r) => (
+                    <div key={r.run_id} className="min-w-0 flex-1 text-center">
+                      <span className="whitespace-nowrap font-mono text-[9px] text-text-3">
+                        {shortDate(r.run_date, r.run_id)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
           <div className="mt-[14px] flex flex-wrap gap-[14px] border-t border-line pt-3">
