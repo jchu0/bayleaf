@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md) |
 
 ## Overview
 
@@ -256,11 +256,22 @@ node-authoring agent).
    `germlineTemplate()` now instantiates the same fastp→…→MultiQC chain as real, editable
    `UserNode`/`UserEdge`s, and `showSeeded` is gated on `isLinked` so **only** the original
    linked pipeline still renders read-only — Save now sends the true composed 7-node graph
-   (was empty for the seeded doc). *Trace:*
+   (was empty for the seeded doc). **Canvas + palette polish (2026-07-10, commits
+   `14c9f3c`/`c6a6210`, T-085/T-086):** Tidy is now a **flow-preserving auto-layout** — each
+   node's longest-path depth from a source is relaxed over the composed edges, then placed in
+   the column of its depth with parallel nodes stacked, so upstream→downstream reads
+   left→right instead of one row losing the connection structure; a **Cancel** button
+   (draft-only) discards an in-progress build and returns to the linked pipeline in View; the
+   minimap moved bottom-right→top-right. The palette gained a **References** section
+   (Reference FASTA/Panel BED/Truth VCF — no-input source nodes emitting their reference
+   artifact, typed-wired so a fasta can't land on a fastq port), fixing the earlier "no way to
+   add bed/vcf/reference cards" gap, and its sections are now **collapsible** (chevron +
+   per-section count, overridden by an active search). *Trace:*
    [pipeline-builder-brief.md](../design/frontend/pipeline-builder-brief.md),
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
    [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md),
-   [tasks T-044/T-049/T-062](../planning/tasks.md).
+   [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md),
+   [tasks T-044/T-049/T-062/T-085/T-086](../planning/tasks.md).
 7. **REQ-F-046 — Honest run lifecycle status + run metadata.** `RunSummary` carries a real
    `status` — `running` (no completion event yet) / `needs_review` (completed, actionable
    samples) / `released` (completed, none) — derived from the provenance ledger, **not** inferred
@@ -399,7 +410,13 @@ had reserved or listed as *not-yet-built*.
    backend user store; `api/auth.py` is a header dev-shim) with a per-user role selector and an
    "Act as" control wired to `RoleContext.setActor` (switches id+role together) so an operator can
    preview any seeded actor's RBAC surface, plus a persistent "dev auth shim, not an identity
-   system" banner; **(b) Activity log** — a REAL, zero-new-backend audit feed merging
+   system" banner. **Role-staging (2026-07-10, T-092, commit `5774143`, "A1"):** a role change
+   no longer applies on the first click of a toggle (a stray click could reassign a role) —
+   the control is a dropdown, and a change **stages into a draft** ("unsaved" badge) behind an
+   explicit Save/Discard bar; only Save writes the roster (re-syncing the live actor if its own
+   role changed), and "Act as" now confirms before impersonating. Still the same client-mock
+   roster ([risks.md](../quality/risks.md) RISK-035) — this hardens the legitimate UI path, not
+   the underlying (already non-production) security boundary; **(b) Activity log** — a REAL, zero-new-backend audit feed merging
    `GET /api/settings/thresholds` + `GET /api/pipelines` + `GET /api/review/tickets` into one
    append-only when/actor/kind/target/status table, facet-filterable by kind (threshold/pipeline/
    ticket); **(c) System** — REAL reads of `GET /api/health` (new, trivial liveness endpoint) +
@@ -411,7 +428,8 @@ had reserved or listed as *not-yet-built*.
    [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
    [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), REQ-F-060, REQ-F-069,
    [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md) (commit
-   `ce396f7`), [tasks T-066](../planning/tasks.md).
+   `ce396f7`), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md)
+   (commit `5774143`), [tasks T-066/T-092](../planning/tasks.md).
 8. **REQ-F-067 — Samplesheet submission triggers the real pipeline (execution boundary).**
    `POST /api/runs` (new `api/routers/intake.py`) registers a submitted samplesheet and
    **triggers** `scripts/run_giab_pipeline.py` as a background subprocess (an in-process job
@@ -474,9 +492,18 @@ had reserved or listed as *not-yet-built*.
     now attaches each file to a **list** of `(stage, role)` edges (was one), so
     `demux_stats.csv`/`reads` are both the demux stage's OUTPUT and the QC stage's INPUT — the
     same bytes feed the QC node in the Provenance compute-DAG (REQ-F-042), which previously
-    rendered with no input edge at all. *Trace:* [architecture.md](../design/architecture.md) §4,
+    rendered with no input edge at all. **View vs. download split (2026-07-10, T-090, commit
+    `de5fa94`):** the endpoint gained `download: bool = False` — `Content-Disposition` is
+    `inline` by default (name-click views the artifact at its location) and `attachment` only on
+    `?download=1` (the Download button); previously both hit the same always-attachment URL and
+    both forced a save. The Provenance screen also gained a hover explainer distinguishing
+    `sample_metadata.csv` (intake · LIMS/subject sheet) from `SampleSheet.csv` (demux · Illumina
+    barcode manifest) — the difference previously lived only in the stage grouping. *Trace:*
+    [architecture.md](../design/architecture.md) §4,
     REQ-F-040, [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) (commits
-    `71a06d6`, `eb7d016`), [tasks T-077/T-080](../planning/tasks.md).
+    `71a06d6`, `eb7d016`),
+    [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md) (commit
+    `de5fa94`), [tasks T-077/T-080/T-090](../planning/tasks.md).
 12. **REQ-F-071 — QC enrichment: registered preflight/QC/variant metrics wired end-to-end.** The
     core `QCMetrics` model, `parsers.parse_qc_metrics`, and the QCMetrics→registry mapping gain 8
     additional registered fields beyond the frozen-CSV five (`preflight.phix_aligned`;
@@ -498,6 +525,45 @@ had reserved or listed as *not-yet-built*.
     §Implementation status, REQ-F-012/REQ-F-013/REQ-F-064/REQ-F-068,
     [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) (commits `a8fc73b`,
     `a9b06ad`), [tasks T-082](../planning/tasks.md).
+13. **REQ-F-072 — Gate dependency: an unclear upstream gate blocks its downstream ones
+    (re-presentation).** The maintainer's two-tier gate model: sequencing-tier QC (preflight)
+    gates sample **processing**; sample-tier QC gates **downstream analysis** (variant). Every
+    gate the QC-readout hero renders now carries `blocked_by: Gate | None`
+    (`api/card_readout.py`'s `GateReadout`): `build_qc_readout` marks a gate "not clear" when the
+    card carries a non-`PROCEED` `gate_result` for it, then `_blocking_gate()` returns the
+    nearest **upstream** not-clear gate. A gate blocked this way renders "blocked · clear
+    \<upstream\> first" instead of "all clear" (a `hold`-toned pill, taking priority over
+    "all clear"/`not_measured`), so a QC hold no longer looks like the sample proceeded to
+    variant calling. **Pure re-presentation, no rule or verdict change** — the card's verdict
+    already reflects the upstream finding (REQ-F-003, REQ-F-014 hold); confirmed by diff that
+    `rules.py`/`synthesis/` are untouched. The frontend (`MetricsPanel.tsx`'s `Rollup`,
+    `RunDetail.tsx`'s `CardBody`) mirrors the same nearest-upstream computation for the
+    placeholder/empty gate groups it synthesizes client-side (REQ-F-068), so the presentation is
+    consistent whether or not the API returned real rows for that gate. New test
+    `test_qc_hold_blocks_the_downstream_variant_gate` (`tests/test_card_readout.py`). This is
+    "part 1" of the two-tier model per the maintainer; **part 2** (user-clearable HOLD/ESCALATE,
+    individually + in batches) is not yet built. *Trace:*
+    [architecture.md](../design/architecture.md) §4, REQ-F-003, REQ-F-014, REQ-F-064, REQ-F-068,
+    [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+    [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md),
+    [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md) (commit
+    `545c893`), [tasks T-087](../planning/tasks.md).
+14. **REQ-F-073 — Persisted user preferences (theme, density).** A new
+    `frontend/src/context/PrefsContext.tsx` makes the Settings dialog's Theme
+    (light/dark/system) and Density (split/brief/dense) controls real, `localStorage`-persisted
+    preferences, replacing local state wired to nothing. Theme resolves `system` via
+    `matchMedia('(prefers-color-scheme: dark)')` and stamps `document.documentElement.dataset.theme`,
+    following the OS live while on `system`; a full dark theme in `index.css`
+    (`:root[data-theme="dark"]` overriding the `@theme --color-*` custom properties — page/card/
+    surfaces/text/accent + dark verdict bg/border/fg + shadows) retargets every existing Tailwind
+    utility with **no per-component change**. Density is now **one** setting read/written by
+    both the Settings dialog and `RunDetail.tsx`'s own card-Layout control (previously two
+    independent, disconnected `useState`s), so the operator's choice survives across runs and a
+    page refresh. This is a **client-only demo preference store**, not a server-synced profile
+    (a production seam, like the auth session, REQ-F-069) — it never touches a verdict, finding,
+    or the provenance ledger. *Trace:* [design/frontend/README.md](../design/frontend/README.md)
+    §4, [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md)
+    (commit `08a42ad`), [tasks T-091](../planning/tasks.md).
 
 ## Notes / deferred
 

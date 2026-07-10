@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md) |
+| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md) |
 
 ## Overview
 
@@ -19,14 +19,15 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **363 tests across 22 files** — 360 pass and 3 skip (the Postgres
+The offline suite is **364 tests across 22 files** — 361 pass and 3 skip (the Postgres
 live-integration checks in `test_persistence_postgres_live`, which need a reachable Postgres
 and are off by default). By collected size: `test_api` (42), `test_notify` (36),
 `test_synthetic` (33), `test_fetch_giab` (32), `test_gate` (29), `test_persistence` (17),
 `test_archivist` (17, the advisory archivist/librarian agent), `test_metrics` (17),
 `test_triage` (16), `test_pipeline_repair` (16, the advisory pipeline-repair agent),
 `test_settings` (13, config-override authoring), `test_review_queue` (13, the ticket domain),
-`test_card_readout` (12, the QC-readout projection), `test_pipeline_lifecycle` (11,
+`test_card_readout` (13, the QC-readout projection incl. the gate-dependency `blocked_by`
+case, T-087), `test_pipeline_lifecycle` (11,
 submit/approve/dry-run/diff), `test_auth` (10, the RBAC dev shim), `test_gate_notify` (9),
 `test_artifacts_s3` (9), `test_execution_trace` (8, the structured execution-trace feed →
 EXEC-001), `test_pipelines` (8, the Pipeline Builder save/version store),

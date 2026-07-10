@@ -62,6 +62,14 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
 - **Content:** light surface (`--bg #f5f7f9`, cards `--surface #fff`), max-width per screen.
 - **Type:** IBM Plex Sans throughout; **IBM Plex Mono** for every id, path, hash, index,
   version, kind, size.
+- **Theme + density (Shipped 2026-07-10, T-091, commit `08a42ad`).** The Settings dialog's
+  Theme (light/dark/system) and Density (split/brief/dense) controls now take effect and
+  persist to `localStorage` via a new `context/PrefsContext.tsx`; `system` follows the OS
+  live. A full dark theme lives in `index.css` (`:root[data-theme="dark"]` overriding the
+  `@theme --color-*` vars — page/card/surfaces/text/accent + dark verdict bg/border/fg +
+  shadows), so every existing Tailwind utility retargets with no per-component change. Density
+  is now **one** setting shared by the dialog and the Decision-cards Layout control (§5.4) —
+  it survives across runs and a refresh.
 
 ---
 
@@ -124,6 +132,22 @@ Per-sample verdict cards for a run.
   the registry's display name, e.g. "Ts/Tv ratio," not the raw key). The **real** GIAB HG002 card
   stays honest about what it actually measured — it now also shows real `breadth_20x`/`breadth_30x`
   from its own mosdepth, but nothing it doesn't produce is invented.
+- **Gate dependency (Shipped 2026-07-10, T-087, commit `545c893`, "DC2 part 1" of the
+  maintainer's two-tier gate model).** Sequencing-tier QC (preflight) gates sample processing;
+  sample-tier QC gates downstream analysis (variant). A gate group whose **upstream** gate isn't
+  clear now reads "**blocked · clear \<upstream\> first**" (a `hold`-toned pill, takes priority
+  over "all clear"/`not_measured`) instead of silently reading as clear — so a QC hold no longer
+  looks like the sample proceeded to variant calling. `api/card_readout.py`'s `GateReadout`
+  carries the new `blocked_by: Gate | None`; **pure re-presentation** — the card's verdict
+  already reflects the QC finding, no rule/gate logic changed (ADR-0001 intact). Part 2
+  (user-clearable HOLD/ESCALATE, individually + in batches) is the next slice, not yet built.
+- **Pill polish (Shipped 2026-07-10):** the top gate-results strip's "Passed" chip is now
+  **green** (proceed tokens; T-089, commit `d5fdcb2`) rather than a neutral grey — a "Not run"
+  (hard-blocked-upstream) chip stays grey. This is a **different** pill from the gate-dependency
+  one above (top-strip chip = the card's own verdict; QC-readout Rollup chip = the gate
+  dependency). The card's redundant 3px verdict-colored left spine is **dropped** (T-088, commit
+  `24940e1`) — the verdict is already carried by badges/pills; the colored rail is now reserved
+  for Pipeline-Builder tool cards (§6), which keep their own spine.
 
 ### 5.5 Review queue  (`view: 'queue'`)
 Cross-run triage. **Reviewer/approver RBAC**, **first-open + Expand/Collapse all**,
@@ -146,6 +170,13 @@ Left→right stage DAG + a per-stage I/O inspector.
   longer reads as orphaned.
 - **Shipped 2026-07-10 (T-080, commit `eb7d016`):** the digest column now reads "hash"/"content
   hash," not "sha256," on screen (defense-in-depth — the wire field and its value are unchanged).
+- **Shipped 2026-07-10 (T-090, commit `de5fa94`, P1/P2):** clicking the artifact **name** and
+  clicking **Download** used to hit the same URL and both forced a save. `GET
+  /api/runs/{id}/artifacts/{name}` now serves **inline by default** (name-click views the file at
+  its location) and attaches only when the Download link passes `?download=1` (traversal-hardening
+  unchanged). P2: an explanatory hover on `sample_metadata.csv` ("Intake · LIMS/subject metadata
+  sheet") vs `SampleSheet.csv` ("Demux · Illumina barcode/index manifest") surfaces the
+  intake-vs-demux distinction that previously lived only in the stage grouping.
 
 ### 5.7 Agent triage  (`view: 'agent'`)
 Advisory triage assistant. **Chat composer**: multi-line text window, **Enter** sends,
@@ -191,12 +222,18 @@ authoring.
 tool node" replaced by a read-only note). **Edit** enables all authoring.
 
 **Canvas.** Large, pannable in any direction; loads centered on the pipeline. Dot-grid = 20px
-snap grid. Bottom-right **minimap** (spine + gate + composed nodes) — **grown to a 210×108
-proportional mirror** (was 168×46), 2026-07-10, T-084. Floating zoom + **Tidy**
+snap grid. Top-right **minimap** (spine + gate + composed nodes — moved from bottom-right
+2026-07-10, T-085, commit `14c9f3c`, so it no longer sits under the feedback bubble) — **grown to
+a 210×108 proportional mirror** (was 168×46), 2026-07-10, T-084. Floating zoom + **Tidy**
 (auto-layout) + **Connect** controls, plus (2026-07-10, T-084) a native ctrl-wheel/trackpad-pinch
 zoom on the canvas itself (`{ passive: false }`, since React's `onWheel` can't `preventDefault`;
 plain wheel still pans; clamped 0.6–1.4), and **Fit** now centers/zooms to the pipeline's actual
-bounding box instead of only resetting the zoom level.
+bounding box instead of only resetting the zoom level. **Tidy is flow-preserving** (2026-07-10,
+T-085): each node lands in the column of its longest-path depth from a source
+(upstream→downstream reads left→right, parallel nodes stacked in a column) instead of dropping
+every card into one row and losing the connection structure. A **Cancel** button (shown only
+while composing a draft) discards the in-progress build and returns to the linked pipeline in
+View.
 
 **Nodes.** Three kinds — `tool`, `agent`, `gate`:
 - **Seeded germline chain** (fastp → bwa-mem2 → samtools markdup → {mosdepth, bcftools call →
@@ -214,6 +251,13 @@ bounding box instead of only resetting the zoom level.
 - **Free composition (Edit):** click a palette tool to add a node; **drag** to place
   (grid-snap); delete per-node. Composed cards are **visually identical to the seeded DAG
   cards** — the tool's own icon, version, and typed I/O ports.
+- **Reference SOURCE cards from the palette (Shipped 2026-07-10, T-086, commit `c6a6210`).** A
+  new **References** palette section — Reference FASTA, Panel BED, Truth VCF — adds a no-input
+  node emitting its reference artifact (`reference_fasta`/`panel_bed`/`truth_vcf`), so an
+  operator can drop a reference and **Connect** it into a tool's ref input; typed wiring keeps a
+  fasta off a fastq port. Fills the earlier "no way to add bed/vcf/reference cards" gap. The
+  palette's sections are now **collapsible** (chevron + per-section item count) so a growing tool
+  list stays navigable; an active search overrides collapse so matches always show.
 - **Shipped 2026-07-09 (T-075, commit `01ba673`):** "New → From template" now seeds this free
   composition with the germline chain as **editable** nodes/edges (`germlineTemplate()`),
   not a re-shown read-only copy of the seeded DAG — closing a gap where the demo's own
@@ -349,6 +393,13 @@ governance; **not** "any approver," which was the original, now-corrected framin
    `api/auth.py` is a header dev-shim) with a per-user role selector and an "Act as" control wired
    to `RoleContext.setActor` (switches id+role together) so an operator can preview any seeded
    actor's RBAC surface, plus a persistent "dev auth shim, not an identity system" banner.
+   **Shipped 2026-07-10 (T-092, commit `5774143`, "A1"):** a role change no longer applies on
+   every click of a 3-way toggle (a stray click could reassign a role) — the control is now a
+   dropdown, and a change **stages into a draft** ("unsaved" badge) behind an explicit **Save
+   role changes / Discard** bar; only Save commits it (and re-syncs the live actor if its own
+   role changed). "Act as" now **confirms** before impersonating, naming the target user + role,
+   since it is already admin-panel-gated. Still the same client-mock roster — this hardens the
+   legitimate UI path, not the underlying security boundary ([risks.md RISK-035](../../quality/risks.md)).
 2. **Activity log** — a REAL, zero-new-backend audit feed merging `GET /api/settings/thresholds`
    + `GET /api/pipelines` + `GET /api/review/tickets` into one append-only when/actor/kind/target/
    status table, facet-filterable by kind.

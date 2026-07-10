@@ -239,6 +239,33 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    now serves a real artifact **download** + a "show full" 64-char digest toggle (labelled
    "hash," not "sha256," in the UI — defense-in-depth; the wire field is unchanged, T-077/T-080)
    and the QC node reads as fed (`_ARTIFACT_STAGE` maps demux output → QC input too, T-077).
+   **Batch 5 (2026-07-10, commits `14c9f3c`→`5774143`, T-085–T-092), all re-presentation/UX —
+   no verdict, gate, or ADR-0001 boundary changed.** Builder Tidy is now a flow-preserving
+   auto-layout (longest-path column per node over `userEdges`, upstream→downstream reads
+   left→right, was one row); a Cancel button (draft-only) discards an in-progress build back to
+   the linked pipeline in View; the minimap moved bottom-right→top-right. The palette gained a
+   **References** section (Reference FASTA / Panel BED / Truth VCF — no-input source nodes
+   emitting their ref artifact, typed-wired so a fasta can't land on a fastq port) and
+   collapsible sections with per-section counts (search overrides collapse). `api/card_readout.py`'s
+   `GateReadout` gains `blocked_by` — the maintainer's two-tier gate-dependency model
+   (sequencing-tier QC gates sample processing, sample-tier QC gates downstream analysis): a gate
+   with any non-proceed **upstream** gate now reads "blocked · clear \<upstream\> first" instead
+   of "all clear" (pure re-presentation over already-computed `gate_results`; the frontend mirrors
+   it for synthesized placeholder gates; part 2, user-clearable HOLD/ESCALATE, is next). The
+   decision card's top-strip "Passed" chip is now green (proceed tokens, was neutral grey; "Not
+   run" stays grey), and the redundant 3px verdict-colored left spine is dropped (verdict is
+   already carried by the badges; the colored rail is reserved for Pipeline-Builder tool cards).
+   `GET /api/runs/{id}/artifacts/{name}` now serves **inline by default** (click-to-view) and
+   attaches only on `?download=1` — the artifact name views, the Download button downloads;
+   Provenance also gained a hover explainer distinguishing `sample_metadata.csv` (intake) from
+   `SampleSheet.csv` (demux). A new `frontend/src/context/PrefsContext.tsx` makes the Settings
+   dialog's theme (light/dark/system) and density (split/brief/dense) controls real and
+   `localStorage`-persisted — a full dark theme now lives in `index.css`
+   (`:root[data-theme="dark"]` overriding the `@theme --color-*` vars, so every existing Tailwind
+   utility retargets); one density setting now backs both the dialog and `RunDetail`'s own Layout
+   control. Admin role edits now **stage into a draft** (a dropdown, not the old 3-way toggle that
+   reassigned on every click) behind an explicit Save/Discard bar, and Act-as confirms before
+   impersonating (still the client-mock roster; `api/auth.py` unchanged). 364 tests (was 363).
    Honest deferrals: Median-review KPI (no backend field), Submit now hands off to the real
    `POST /api/runs` execution boundary but still has no BaseSpace connector (T-057), Builder
    Dry-run/Diff/Export/Archivist-modal wiring (endpoints exist, UI is a preview).

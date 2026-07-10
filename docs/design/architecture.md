@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md) |
 
 ## Overview
 
@@ -152,7 +152,14 @@ Every finding and verdict is labelled with the gate it came from:
    - **Admin (`screens/Admin.tsx`), `isAdmin`-gated governance off the gate.** Three tabs: **Users
      & roles** — an explicit **client-mock** roster (there is no backend user store; `api/auth.py`
      is a header dev-shim) with a role selector and "Act as" wired to `RoleContext.setActor`, plus
-     a persistent "dev auth shim, not an identity system" banner; **Activity log** — a REAL,
+     a persistent "dev auth shim, not an identity system" banner. **Role-staging hardening
+     (2026-07-10, T-092, commit `5774143`):** a role change no longer applies on the first click of
+     a toggle — the control is now a dropdown, and a change **stages into a draft** ("unsaved"
+     badge) behind an explicit Save/Discard bar (only Save writes the roster, re-syncing the live
+     actor if its own role changed), and "Act as" now `window.confirm()`s before impersonating.
+     Still the same client-mock roster ([risks.md](../quality/risks.md) RISK-035) — this hardens
+     the legitimate UI path, not the underlying (already non-production) security boundary.
+     **Activity log** — a REAL,
      zero-new-backend audit feed merging `listThresholds` + `listPipelines` + `listTickets` into
      one append-only when/actor/kind/target/status table, facet-filterable by kind; **System** —
      REAL reads of `GET /api/health` + runbook gate count + metric-registry version/gated-count,
@@ -179,6 +186,32 @@ Every finding and verdict is labelled with the gate it came from:
      **Dry-run/Diff remain a client-side-only projection** (`BuilderConsole`/`BuilderShared`) —
      `api.ts`'s `dryRunPipeline`/`pipelineDiff` exist but the Builder screen does not call them
      yet.
+   - **Frontend fixes batch 5 (2026-07-10, commits `14c9f3c`→`5774143`, T-085–T-092,
+     [journal](../journal/2026-07-10-batch5-builder-card-admin-prefs.md)), 8 UI-polish items —
+     all re-presentation/UX, no verdict/gate/ADR-0001 boundary changed.** (1) **Builder Tidy is
+     flow-preserving** (T-085, `14c9f3c`): each node's longest-path depth from a source is
+     relaxed over the composed edges, then placed in the column of its depth (parallel nodes
+     stacked), so upstream→downstream reads left→right instead of one row losing the connection
+     structure; a **Cancel** button (draft-only) discards the in-progress build back to the
+     linked pipeline in View; the minimap moved bottom-right→top-right. (2) **Reference SOURCE
+     palette cards + collapsible sections** (T-086, `c6a6210`): a new References section
+     (Reference FASTA/Panel BED/Truth VCF, no-input nodes emitting their ref artifact) fills the
+     earlier "no way to add bed/vcf/reference cards" gap; palette sections collapse (chevron +
+     count), overridden by an active search. (3) **Gate dependency, `blocked_by`** (T-087,
+     `545c893`, "DC2 part 1" of the maintainer's two-tier gate model — see the Card QC-readout
+     projection bullet below for the full mechanism). (4)/(5) **Decision-card pill polish**
+     (T-088/T-089, `24940e1`/`d5fdcb2`): the top-strip "Passed" gate chip is now green (proceed
+     tokens, was neutral grey; "Not run" stays grey), and the redundant 3px verdict-colored left
+     spine is dropped (verdict is already carried by badges/pills; the colored rail is now
+     reserved for Pipeline-Builder tool cards). (6) **Provenance: view vs. download split**
+     (T-090, `de5fa94`, see the Runs read-API bullet below). (7) **Real, persisted theme +
+     density** (T-091, `08a42ad`): a new `context/PrefsContext.tsx` (theme light/dark/system,
+     density split/brief/dense, `localStorage`-persisted) makes the previously-inert Settings
+     dialog controls real; a full dark theme in `index.css`
+     (`:root[data-theme="dark"]` overriding the `@theme --color-*` vars) retargets every
+     existing Tailwind utility with no per-component change; density is now one setting shared
+     by the dialog and `RunDetail`'s own Layout control. (8) **Admin role-staging** (T-092,
+     `5774143`, see the Admin bullet below).
    **Honest, labelled frontend deferrals (no fabrication):** the Monitoring **Median-review KPI**
    (no backend field yet — the signature-level `first_seen`/`last_seen`/`trend`/`affected_run_ids`
    fields below ARE shipped); Submit now
@@ -215,7 +248,12 @@ Every finding and verdict is labelled with the gate it came from:
    - **Runs read-API.** `GET /api/runs` (+ `/{id}`, `/{id}/cards/{sample}`, `/{id}/artifacts`, and
      now `/{id}/artifacts/{name}` — a traversal-hardened download, `FileResponse`, name must be a
      bare filename resolving inside the run dir; `RunArtifact` gained a `url` field pointing at it,
-     closing the earlier "no download URL" deferral, T-077 `71a06d6`). The artifact-stage map
+     closing the earlier "no download URL" deferral, T-077 `71a06d6`). **View vs. download split
+     (2026-07-10, T-090, commit `de5fa94`):** the endpoint gained a `download: bool = False` query
+     param — `Content-Disposition` is `inline` by default (click-to-view at its location) and
+     `attachment` only on `?download=1`; the frontend's artifact-name click uses the bare `url`
+     (view) and the Download button appends `?download=1` (save) — previously both hit the same
+     always-`attachment` URL. The artifact-stage map
      (`_ARTIFACT_STAGE`) now attaches each file to a **list** of `(stage, role)` edges rather than
      one, so `demux_stats.csv`/`reads` are both the demux stage's OUTPUT *and* the QC stage's INPUT
      — the same bytes feed the QC node in the Provenance compute-DAG, which previously read as
@@ -310,7 +348,20 @@ Every finding and verdict is labelled with the gate it came from:
      GIAB HG002 driver (`scripts/run_giab_pipeline.py`) now also writes its own real
      `breadth_20x`/`breadth_30x` from mosdepth (honest extra QC from that run's own data, not
      contrived) while everything it doesn't produce stays blank — no result is ever fabricated,
-     and the gate's verdict logic is unchanged.
+     and the gate's verdict logic is unchanged. **Gate dependency, `blocked_by`** (2026-07-10,
+     T-087, commit `545c893`, "DC2 part 1" of the maintainer's two-tier gate model: sequencing-tier
+     QC gates sample **processing**, sample-tier QC gates **downstream analysis**): `GateReadout`
+     gains `blocked_by: Gate | None`. `build_qc_readout` computes `unclear = {gr.gate for gr in
+     card.gate_results if gr.verdict is not PROCEED}` (a gate only carries a `gate_result` when it
+     has findings, so "has one" ⟺ "not clear") and `_blocking_gate()` walks upstream from each gate
+     to the nearest gate in `unclear`. A gate blocked by an unclear upstream gate now renders
+     "blocked · clear \<upstream\> first" instead of "all clear," so a QC hold no longer looks like
+     the sample proceeded to variant calling. **Pure re-presentation** — the card's own verdict
+     already reflects the QC finding; this only stops a *downstream* gate's UI from misreading as
+     clear (ADR-0001 intact; `rules.py`/`synthesis/` untouched, verified by diff). The frontend
+     (`MetricsPanel.tsx`'s `Rollup`, `RunDetail.tsx`'s `CardBody`) mirrors the same nearest-upstream
+     computation for the placeholder/empty gate groups it synthesizes client-side. Part 2
+     (user-clearable HOLD/ESCALATE, individually + in batches) is the next slice, not yet built.
    - **Advisory agent reads (off the gate).** Three on-demand, read-only endpoints surface the
      advisory agents without re-entering the core: `GET /api/monitoring/signatures/{signature}/repair`
      returns the pipeline-repair agent's cited `RepairProposal` for a recurring signature, and

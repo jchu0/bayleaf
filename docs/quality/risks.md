@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | all |
-| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md) |
+| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md) |
 
 ## Overview
 
@@ -311,6 +311,12 @@ at least at the UI layer.
 **Owner / revisit trigger.** Any move toward a real multi-tenant deployment (swap `current_actor`
 per ADR-0017's Follow-ups, then also replace `auth.ts` with a real OIDC/session flow before any
 non-demo audience sees the app); any session that hardens `api/auth.py`.
+
+**Related hardening (2026-07-10, T-092, commit `5774143`):** the Admin panel's "Users & roles"
+tab (still the same client-mock roster this risk describes) now stages a role change into a
+draft behind an explicit Save/Discard bar, and "Act as" confirms before impersonating — this
+makes the **legitimate** UI path deliberate/auditable but does **not** change the underlying
+posture above (a viewer can still bypass the UI entirely via `localStorage`).
 
 ---
 
