@@ -29,6 +29,9 @@ const UROW = 18 // user-node port-row pitch
 
 type CanvasProps = {
   mode: Mode
+  // false for a blank/new pipeline: render only the terminal gate + ingest band + user nodes,
+  // not the hardcoded seeded germline chain (so a "New → Blank" canvas is actually empty).
+  showSeeded: boolean
   selected: string | null
   zoom: number
   userNodes: UserNode[]
@@ -45,7 +48,7 @@ type CanvasProps = {
 }
 
 export function BuilderCanvas(props: CanvasProps) {
-  const { mode, selected, zoom, userNodes, userEdges, connectMode, connectFrom } = props
+  const { mode, showSeeded, selected, zoom, userNodes, userEdges, connectMode, connectFrom } = props
   const isView = mode === 'view'
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const centered = useRef(false)
@@ -104,9 +107,10 @@ export function BuilderCanvas(props: CanvasProps) {
           }}
         >
           <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={INNER_W} height={INNER_H}>
-            {EDGES.map((e, i) => (
-              <path key={i} d={e.d} fill="none" stroke={e.s} strokeWidth={e.w} strokeDasharray={e.dash} />
-            ))}
+            {showSeeded &&
+              EDGES.map((e, i) => (
+                <path key={i} d={e.d} fill="none" stroke={e.s} strokeWidth={e.w} strokeDasharray={e.dash} />
+              ))}
             {edgePaths.map((d, i) => (
               <path key={`u${i}`} d={d} fill="none" stroke="var(--color-accent)" strokeWidth={1.8} />
             ))}
@@ -118,14 +122,16 @@ export function BuilderCanvas(props: CanvasProps) {
 
           <IngestBand />
 
-          {TOOLS.map((t) => (
-            <ToolCard key={t.id} t={t} isView={isView} selected={selected === t.id} onSelect={props.onSelect} />
-          ))}
-          {REFS.map((r) => (
-            <RefCard key={r.id} r={r} selected={selected === r.id} onSelect={props.onSelect} />
-          ))}
+          {showSeeded &&
+            TOOLS.map((t) => (
+              <ToolCard key={t.id} t={t} isView={isView} selected={selected === t.id} onSelect={props.onSelect} />
+            ))}
+          {showSeeded &&
+            REFS.map((r) => (
+              <RefCard key={r.id} r={r} selected={selected === r.id} onSelect={props.onSelect} />
+            ))}
           <GateCard isView={isView} selected={selected === 'g_gate'} segs={segs} onSelect={props.onSelect} />
-          <AgentPill selected={selected === 'a_qc_triage'} onSelect={props.onSelect} />
+          {showSeeded && <AgentPill selected={selected === 'a_qc_triage'} onSelect={props.onSelect} />}
 
           {userNodes.map((n) => (
             <UserCard

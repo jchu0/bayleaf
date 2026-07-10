@@ -8,9 +8,11 @@ import {
   GitBranch,
   LayoutGrid,
   Play,
+  Plus,
   Save,
   Search,
   ShieldCheck,
+  X,
 } from 'lucide-react'
 import { SegmentedControl } from '../components/SegmentedControl'
 import type { SegmentOption } from '../components/SegmentedControl'
@@ -91,7 +93,39 @@ export function PipelineBuilder() {
   const [repairOpen, setRepairOpen] = useState(false)
   const [archivistOpen, setArchivistOpen] = useState(false)
 
+  // Active-document identity: the builder normally opens the one seeded germline pipeline (the
+  // LINKED doc). "New pipeline" switches to a fresh draft — 'blank' (empty canvas) or 'germline'
+  // (seeded from the panel template). docName drives the toolbar id; only the original seeded
+  // doc reads as "Linked".
+  const [docKind, setDocKind] = useState<'germline' | 'blank'>('germline')
+  const [docName, setDocName] = useState<string>(GRAPH_ID)
+  const [newOpen, setNewOpen] = useState(false)
+
   const isView = mode === 'view'
+  // Only the original seeded pipeline is the LINKED doc; a new draft (blank or template) is not.
+  const isLinked = docKind === 'germline' && docName === GRAPH_ID
+  const linkedView = isLinked && isView
+
+  // Create a new pipeline document. Explicit authoring action, so it opens in Edit (View-default
+  // only guards accidental edits to the EXISTING linked pipeline). Blank = empty canvas; template
+  // = seeded from the germline panel. Clears composition + resets version/status.
+  function newPipeline(kind: 'blank' | 'germline', rawName: string) {
+    const name = rawName.trim() || (kind === 'blank' ? 'PIPE-DRAFT' : 'PIPE-FROM-TEMPLATE')
+    setDocKind(kind)
+    setDocName(name)
+    setUserNodes([])
+    setUserEdges([])
+    setLocEdits({})
+    setRefLoc({})
+    setSelected(null)
+    setVersion(1)
+    setSaveStatus('draft')
+    setEmitted(false)
+    setEmittedSnap(null)
+    setProfile(kind === 'blank' ? 'default' : 'giab_panel')
+    setMode('edit')
+    setNewOpen(false)
+  }
   const selTool = useMemo(() => TOOLS.find((t) => t.id === selected) ?? null, [selected])
   const selRef = useMemo(() => REFS.find((r) => r.id === selected) ?? null, [selected])
   const isGate = selected === 'g_gate'
@@ -273,14 +307,22 @@ export function PipelineBuilder() {
       {/* ── sub-header toolbar ── */}
       <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-line bg-card px-3.5">
         <SegmentedControl options={modeOptions} value={mode} onChange={setMode} />
-        <span className="max-w-[220px] truncate font-mono text-[11.5px] font-semibold text-text">{GRAPH_ID}</span>
+        <button
+          onClick={() => setNewOpen(true)}
+          title="Create a new pipeline (blank or from template)"
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line-strong bg-card px-2.5 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
+        >
+          <Plus size={13} />
+          New
+        </button>
+        <span className="max-w-[200px] truncate font-mono text-[11.5px] font-semibold text-text">{docName}</span>
         <span
           className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
-            isView ? 'border-[#cfe0fb] bg-accent-weak text-accent-strong' : 'border-line-strong bg-card-2 text-text-2'
+            linkedView ? 'border-[#cfe0fb] bg-accent-weak text-accent-strong' : 'border-line-strong bg-card-2 text-text-2'
           }`}
         >
-          <span className={`h-1.5 w-1.5 rounded-full ${isView ? 'bg-accent' : 'bg-text-3'}`} />
-          {isView ? `Linked · ${LINKED_RUN}` : 'Draft — not run'}
+          <span className={`h-1.5 w-1.5 rounded-full ${linkedView ? 'bg-accent' : 'bg-text-3'}`} />
+          {linkedView ? `Linked · ${LINKED_RUN}` : 'Draft — not run'}
         </span>
 
         <div className="ml-auto flex items-center gap-2">
@@ -354,8 +396,8 @@ export function PipelineBuilder() {
         </div>
       </div>
 
-      {/* ── linked-run strip (View only) ── */}
-      {isView && (
+      {/* ── linked-run strip (the seeded linked pipeline, View only) ── */}
+      {linkedView && (
         <div className="flex h-12 shrink-0 items-center gap-3.5 border-b border-line bg-card px-4">
           <span className="whitespace-nowrap text-[12px] text-text-2">
             Linked to <span className="font-mono font-semibold text-text">{LINKED_RUN}</span>
@@ -417,6 +459,7 @@ export function PipelineBuilder() {
 
         <BuilderCanvas
           mode={mode}
+          showSeeded={docKind === 'germline'}
           selected={selected}
           zoom={zoom}
           userNodes={userNodes}
@@ -479,6 +522,83 @@ export function PipelineBuilder() {
       {authorOpen && <AuthorToolNodeModal onClose={() => setAuthorOpen(false)} />}
       {repairOpen && <PipelineRepairModal onClose={() => setRepairOpen(false)} />}
       {archivistOpen && <ArchivistModal onClose={() => setArchivistOpen(false)} />}
+      {newOpen && <NewPipelineModal onClose={() => setNewOpen(false)} onCreate={newPipeline} />}
+    </div>
+  )
+}
+
+// "New pipeline" choice modal — blank canvas or seeded-from-template, with an optional name.
+// Composes a new draft document; it never runs anything (compose != execute).
+function NewPipelineModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void
+  onCreate: (kind: 'blank' | 'germline', name: string) => void
+}) {
+  const [kind, setKind] = useState<'blank' | 'germline'>('blank')
+  const [name, setName] = useState('')
+  const choices = [
+    ['blank', 'Blank graph', 'Start from an empty canvas — just the terminal Decision gate.'],
+    ['germline', 'From template', 'Seed from the germline panel chain (fastp → … → MultiQC).'],
+  ] as const
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-[460px] max-w-full overflow-hidden rounded-2xl border border-line bg-card shadow-pop">
+        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+          <h2 className="font-serif text-[18px] font-medium text-text">New pipeline</h2>
+          <button
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-lg text-text-2 hover:bg-page"
+            aria-label="Close"
+          >
+            <X size={17} />
+          </button>
+        </div>
+        <div className="px-5 py-4">
+          <p className="mb-3 text-[12.5px] leading-relaxed text-text-2">
+            Composes a new pipeline document, opened in Edit as a fresh draft — your existing linked
+            pipeline stays untouched. Emitting a config never runs a tool.
+          </p>
+          <div className="grid grid-cols-2 gap-2.5">
+            {choices.map(([k, title, sub]) => (
+              <button
+                key={k}
+                onClick={() => setKind(k)}
+                className={`rounded-xl border p-3 text-left transition-colors ${
+                  kind === k ? 'border-accent bg-accent-weak' : 'border-line hover:border-line-strong'
+                }`}
+              >
+                <div className="text-[13px] font-semibold text-text">{title}</div>
+                <div className="mt-0.5 text-[11.5px] leading-snug text-text-2">{sub}</div>
+              </button>
+            ))}
+          </div>
+          <label className="mt-4 block">
+            <span className="text-[12px] font-medium text-text-2">Name (optional)</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="PIPE-2026-…"
+              className="mt-1 w-full rounded-lg border border-line bg-card px-2.5 py-1.5 font-mono text-[12.5px] text-text outline-none focus:border-accent"
+            />
+          </label>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-line bg-card px-3.5 py-1.5 text-[13px] font-medium text-text-2 hover:bg-page"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onCreate(kind, name)}
+            className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-accent-strong"
+          >
+            Create pipeline
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
