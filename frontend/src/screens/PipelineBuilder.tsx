@@ -31,6 +31,7 @@ import {
   TOOLS,
   curLocMap,
   gateSegs,
+  germlineTemplate,
   isEditableProfile,
   makeUserNode,
   mergedLoc,
@@ -113,14 +114,17 @@ export function PipelineBuilder() {
   const linkedView = isLinked && isView
 
   // Create a new pipeline document. Explicit authoring action, so it opens in Edit (View-default
-  // only guards accidental edits to the EXISTING linked pipeline). Blank = empty canvas; template
-  // = seeded from the germline panel. Clears composition + resets version/status.
+  // only guards accidental edits to the EXISTING linked pipeline). Blank = empty canvas; template =
+  // the germline panel chain instantiated as EDITABLE user nodes (draggable/wireable/removable) —
+  // NOT the read-only seeded cards. Because the new doc's name is never GRAPH_ID it is not the
+  // linked doc, so `showSeeded` is off and the composed nodes are what render. Resets version/status.
   function newPipeline(kind: 'blank' | 'germline', rawName: string) {
     const name = rawName.trim() || (kind === 'blank' ? 'PIPE-DRAFT' : 'PIPE-FROM-TEMPLATE')
+    const seed = kind === 'germline' ? germlineTemplate() : { nodes: [], edges: [] }
     setDocKind(kind)
     setDocName(name)
-    setUserNodes([])
-    setUserEdges([])
+    setUserNodes(seed.nodes)
+    setUserEdges(seed.edges)
     setLocEdits({})
     setRefLoc({})
     setSelected(null)
@@ -449,10 +453,8 @@ export function PipelineBuilder() {
             Open Decision cards
           </Link>
           <button
-            onClick={() => {
-              setMode('edit')
-              setEmitted(false)
-            }}
+            onClick={() => newPipeline('germline', `${GRAPH_ID}-fork`)}
+            title="Copy the linked pipeline into an editable draft"
             className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
           >
             <GitBranch size={13} />
@@ -486,7 +488,9 @@ export function PipelineBuilder() {
 
         <BuilderCanvas
           mode={mode}
-          showSeeded={docKind === 'germline'}
+          // Only the ORIGINAL linked pipeline renders the read-only seeded DAG; a new/forked draft
+          // shows its editable composed nodes (germlineTemplate) instead, so the chain is modifiable.
+          showSeeded={isLinked}
           selected={selected}
           zoom={zoom}
           userNodes={userNodes}

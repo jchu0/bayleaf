@@ -225,6 +225,47 @@ export function makeUserNode(name: string, kind: string, index: number): UserNod
   return { id: `u${Date.now().toString(36)}${index}`, name, kind, version: spec.version, icon: spec.icon, ins: spec.ins, outs: spec.outs, x, y }
 }
 
+// The germline panel chain as EDITABLE user nodes + wired edges (the exact fastp → bwa-mem2 →
+// samtools markdup → {mosdepth, bcftools call → norm} → MultiQC pipeline the demo ran). Powers
+// "New → From template" and "Fork" so those open a MODIFIABLE draft instead of the read-only
+// seeded cards (the hard-coded-DAG report). Node ids/positions/ports mirror the seeded TOOLS, so
+// the layout, the typed-port wiring, and the Validate focus refs all line up. Pure — no run state.
+export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
+  const nodes: UserNode[] = TOOLS.map((t) => ({
+    id: t.id,
+    name: t.tool,
+    kind: t.outputs[0]?.kind ?? 'artifact',
+    version: t.version,
+    icon: t.icon,
+    ins: t.inputs.map((p) => p.kind),
+    outs: t.outputs.map((p) => p.kind),
+    x: t.x,
+    y: t.y,
+  }))
+  // Resolve a port index by kind (0 if absent), so the wiring can never forge a mismatched edge.
+  const portIdx = (nodeId: string, side: 'ins' | 'outs', kind: string): number => {
+    const n = nodes.find((x) => x.id === nodeId)
+    const i = n ? n[side].indexOf(kind) : -1
+    return i < 0 ? 0 : i
+  }
+  const wire = (fromId: string, outKind: string, toId: string, inKind: string): UserEdge => ({
+    from: { node: fromId, idx: portIdx(fromId, 'outs', outKind) },
+    to: { node: toId, idx: portIdx(toId, 'ins', inKind) },
+  })
+  const edges: UserEdge[] = [
+    wire('n_fastp', 'fastq', 'n_bwa', 'fastq'),
+    wire('n_bwa', 'bam', 'n_markdup', 'bam'),
+    wire('n_markdup', 'bam', 'n_mosdepth', 'bam'),
+    wire('n_markdup', 'bam', 'n_call', 'bam'),
+    wire('n_call', 'vcf', 'n_norm', 'vcf'),
+    wire('n_fastp', 'fastp_json', 'n_multiqc', 'fastp_json'),
+    wire('n_markdup', 'markdup_metrics', 'n_multiqc', 'markdup_metrics'),
+    wire('n_markdup', 'samtools_stats', 'n_multiqc', 'samtools_stats'),
+    wire('n_mosdepth', 'mosdepth_summary', 'n_multiqc', 'mosdepth_summary'),
+  ]
+  return { nodes, edges }
+}
+
 // ── the emitted locator set (giab_panel), in emit order ──────────────────────
 export type GiabLoc = {
   k: string
