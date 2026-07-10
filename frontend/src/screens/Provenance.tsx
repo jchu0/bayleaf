@@ -316,6 +316,17 @@ function ProvArtifactRow({ art }: { art: RunArtifact }) {
   const [copied, setCopied] = useState(false)
   const [showFull, setShowFull] = useState(false)
 
+  // Surface the two intake sheets' distinction (they look similar but are different files at
+  // different stages): sample_metadata.csv is the LIMS/subject sheet (intake); SampleSheet.csv is
+  // the Illumina barcode/index manifest demux consumes (demux). Shown on hover of the name.
+  const lower = art.name.toLowerCase()
+  const nameTitle =
+    lower === 'sample_metadata.csv'
+      ? 'Intake · LIMS/subject metadata sheet — click to view'
+      : lower === 'samplesheet.csv'
+        ? 'Demux · Illumina barcode/index manifest — click to view'
+        : 'Open artifact at its location (view)'
+
   const copyDigest = () => {
     if (!art.sha256) return
     void navigator.clipboard?.writeText(art.sha256).then(
@@ -334,7 +345,7 @@ function ProvArtifactRow({ art }: { art: RunArtifact }) {
           href={art.url}
           target="_blank"
           rel="noopener noreferrer"
-          title="Open artifact in store"
+          title={nameTitle}
           className="inline-flex items-center gap-[5px] break-all font-mono text-[12.5px] font-medium text-accent-strong hover:underline"
         >
           <ExternalLink size={12} strokeWidth={1.9} className="shrink-0" />
@@ -366,7 +377,7 @@ function ProvArtifactRow({ art }: { art: RunArtifact }) {
         <span className="text-[11px] text-text-3">{fmtSize(art.size_bytes)}</span>
         <span className="text-[11px] text-text-3">·</span>
         <a
-          href={art.url}
+          href={`${art.url}?download=1`}
           download={art.name}
           title="Download artifact"
           className="text-[11px] text-accent-strong hover:underline"

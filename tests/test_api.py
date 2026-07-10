@@ -108,9 +108,12 @@ def test_artifacts_endpoint_maps_stages_with_real_hash_and_origin():
 
 
 def test_artifact_download_serves_file_and_blocks_traversal():
-    # A real artifact downloads with its bytes...
+    # A real artifact serves its bytes INLINE by default (click-to-view), attachment on ?download=1.
     ok = client.get("/api/runs/mock_run_01/artifacts/SampleSheet.csv")
     assert ok.status_code == 200 and len(ok.content) > 0
+    assert "inline" in ok.headers.get("content-disposition", "")
+    dl = client.get("/api/runs/mock_run_01/artifacts/SampleSheet.csv?download=1")
+    assert dl.status_code == 200 and "attachment" in dl.headers.get("content-disposition", "")
     # ...a bogus name / unknown run 404s...
     assert client.get("/api/runs/mock_run_01/artifacts/nope.csv").status_code == 404
     assert client.get("/api/runs/NOPE/artifacts/SampleSheet.csv").status_code == 404

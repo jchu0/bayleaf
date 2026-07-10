@@ -595,13 +595,14 @@ def list_run_artifacts(run_id: str) -> list[RunArtifact]:
 
 
 @app.get("/api/runs/{run_id}/artifacts/{name}")
-def get_run_artifact(run_id: str, name: str) -> FileResponse:
-    """Serve one run artifact for download / open-in-store (the provenance drill-in links).
+def get_run_artifact(run_id: str, name: str, download: bool = False) -> FileResponse:
+    """Serve one run artifact — inline to VIEW it (open-in-store), or as an attachment to download.
 
-    Read-only and traversal-hardened: ``name`` must be a bare filename (no path segments, no
-    ``..``) and the resolved path must be a real direct child file of the run dir — a crafted
-    name can never aim this outside ``data/<run_id>/``. Skips the same non-data markers/sidecars
-    the listing does, so only genuine artifacts are served.
+    ``download=1`` forces a save (Content-Disposition: attachment); the default serves it inline so
+    clicking the artifact name opens the file at its location rather than downloading it. Read-only
+    and traversal-hardened: ``name`` must be a bare filename (no path segments, no ``..``) and the
+    resolved path must be a real direct child file of the run dir — a crafted name can never aim
+    this outside ``data/<run_id>/``. Skips the same non-data markers/sidecars the listing does.
     """
     run_dir = DATA_ROOT / run_id
     if not run_dir.is_dir():
@@ -612,7 +613,8 @@ def get_run_artifact(run_id: str, name: str) -> FileResponse:
     target = (run_dir / name).resolve()
     if not target.is_relative_to(run_dir.resolve()) or not target.is_file():
         raise HTTPException(status_code=404, detail="Unknown artifact")
-    return FileResponse(target, filename=name)
+    disposition = "attachment" if download else "inline"
+    return FileResponse(target, filename=name, content_disposition_type=disposition)
 
 
 @app.get("/api/config")
