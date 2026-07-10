@@ -54,6 +54,11 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
           badge: flagged || undefined,
         },
         { label: 'Review queue', to: '/queue', icon: Inbox, active: pathname.startsWith('/queue') },
+      ],
+    },
+    {
+      heading: 'Analyze',
+      items: [
         {
           label: 'Provenance',
           to: run ? `/runs/${run}/provenance` : '/',

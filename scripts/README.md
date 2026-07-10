@@ -108,6 +108,28 @@ and the registry-backed rules unchanged). Honest scope: a BAM yields coverage/br
 the fastq/run metrics (Q30/dup/PF) — so it gates the metric the artifact actually holds.
 Validated end-to-end: HG002 panel = **55.8× coverage** (clears the 30× gate), **99% ≥ 20×**.
 
+## `seed_giab_demo.py` — populate the live app with GIAB-themed **synthetic** runs
+
+Seeds ~24 **synthetic** runs (`origin=contrived`) with **GIAB sample names** (HG00x / NA2xxxx)
+directly into `data/` so the live operator UI has volume for UI/UX testing — Runs pagination +
+status/verdict/platform facets, Monitoring windows, Provenance, Archive, and (with `--tickets`)
+the Review queue all populate. Honest: the run data is contrived, only the sample labels are
+GIAB-flavored; it never touches the genuinely-fetched `data/RUN-2026-07-08-GIAB-HG002`
+(`origin=real-giab`) or the committed `mock_run_0x`. The generated dirs are git-ignored
+(`data/RUN-*-GIAB-*/`) — this script is the reproducible record.
+
+```bash
+uv run python scripts/seed_giab_demo.py                 # write ~24 RUN-*-GIAB-{A,B} dirs
+uv run python scripts/seed_giab_demo.py --tickets        # + POST ~8 Review-queue tickets (API up)
+uv run python scripts/seed_giab_demo.py --clean          # regenerate (remove prior seed dirs first)
+```
+
+Uses the failure-mode generator so each planted mode round-trips to a real verdict (~1/3 of runs
+all-CLEAN → **released**, the rest a hold/rerun/escalate mix → **needs_review**), rotates four
+platforms (NovaSeq X / NextSeq 2000 / NovaSeq 6000 / MiSeq), and spreads dates across ~5 weeks so
+the Monitoring 7/14/30d windows split. Sample IDs use an anti-substring GIAB pool (never
+lane-suffixed) so the `pipeline.log` substring rules don't cross-fire.
+
 ## `run_giab_pipeline.py` — real GIAB fastqs through the *outlined* pipeline → dashboard
 
 Where `gate_giab.py` reads the pre-aligned NIST panel BAM, this **actually executes the

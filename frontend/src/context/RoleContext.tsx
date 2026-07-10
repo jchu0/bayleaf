@@ -12,6 +12,7 @@ type RoleState = {
   role: Role
   isReviewer: boolean
   isApprover: boolean
+  setActor: (actor: Actor) => void
   setRole: (role: Role) => void
   toggleRole: () => void
 }
@@ -21,17 +22,20 @@ const DEFAULT_ACTOR: Actor = { id: 'a.rivera', role: 'reviewer' }
 const RoleContext = createContext<RoleState | null>(null)
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const [role, setRoleState] = useState<Role>(DEFAULT_ACTOR.role)
-  const actor = useMemo<Actor>(() => ({ id: DEFAULT_ACTOR.id, role }), [role])
+  // Full actor (id + role) so the Admin "Act as" flow can switch WHO is acting, not just the
+  // role — every audited write is then attributed to the chosen actor, and `viewer` is reachable.
+  const [actor, setActorState] = useState<Actor>(DEFAULT_ACTOR)
+  const role = actor.role
 
-  // Keep the API client's actor in lockstep so every write carries the current role.
+  // Keep the API client's actor in lockstep so every write carries the current id + role.
   useEffect(() => {
     setApiActor(actor)
   }, [actor])
 
-  const setRole = useCallback((next: Role) => setRoleState(next), [])
+  const setActor = useCallback((next: Actor) => setActorState(next), [])
+  const setRole = useCallback((next: Role) => setActorState((a) => ({ ...a, role: next })), [])
   const toggleRole = useCallback(
-    () => setRoleState((r) => (r === 'approver' ? 'reviewer' : 'approver')),
+    () => setActorState((a) => ({ ...a, role: a.role === 'approver' ? 'reviewer' : 'approver' })),
     [],
   )
 
@@ -41,10 +45,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       role,
       isReviewer: role === 'reviewer' || role === 'approver',
       isApprover: role === 'approver',
+      setActor,
       setRole,
       toggleRole,
     }),
-    [actor, role, setRole, toggleRole],
+    [actor, role, setActor, setRole, toggleRole],
   )
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>

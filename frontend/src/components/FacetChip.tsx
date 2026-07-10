@@ -19,13 +19,17 @@ export function FacetChip({
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px] transition-colors ${
         active
-          ? 'border-accent bg-accent-weak font-medium text-accent-strong'
-          : 'border-line bg-card text-text-2 hover:border-line-strong'
+          ? 'border-accent bg-accent-weak font-semibold text-accent-strong'
+          : 'border-line-strong bg-card font-medium text-text-2 hover:border-line-strong hover:text-text'
       }`}
     >
       {label}
       {count != null && (
-        <span className={`font-mono text-[11px] ${active ? 'text-accent-strong' : 'text-text-3'}`}>
+        <span
+          className={`rounded-[10px] px-[7px] py-px font-mono text-[11px] font-semibold ${
+            active ? 'bg-accent text-white' : 'bg-card-3 text-text-2'
+          }`}
+        >
           {count}
         </span>
       )}

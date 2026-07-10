@@ -171,6 +171,7 @@ class RunSpec(BaseModel):
     date: str = Field(..., description="ISO date 'YYYY-MM-DD' for the sample sheet + log")
     samples: list[SampleSpec]
     subject_base: int = Field(1000, description="Offset for auto-derived SUBJ-* IDs")
+    platform: str = Field("NovaSeq", description="Illumina InstrumentPlatform in the [Header]")
 
     def expected_verdicts(self) -> dict[str, Verdict]:
         """Map each sample_id to the verdict the gate should produce for it."""
@@ -260,7 +261,7 @@ def _render_sample_sheet(spec: RunSpec) -> str:
         "[Header]",
         "FileFormatVersion,2",
         f"RunName,{spec.run_name}",
-        "InstrumentPlatform,NovaSeq",
+        f"InstrumentPlatform,{spec.platform}",
         f"Date,{spec.date}",
         "",
         "[Reads]",
