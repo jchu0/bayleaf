@@ -19,6 +19,14 @@ const WINDOW_OPTIONS: SegmentOption<MonitoringWindow>[] = [
 ]
 const WINDOW_LABEL: Record<string, string> = { '7d': '7 days', '14d': '14 days', '30d': '30 days', all: 'all time' }
 
+// Recurring-signature pagination, mirroring the Runs list (RunOverview) so the two are consistent.
+type SigPerPage = '25' | '50' | '100'
+const SIG_PER_PAGE: SegmentOption<SigPerPage>[] = [
+  { value: '25', label: '25' },
+  { value: '50', label: '50' },
+  { value: '100', label: '100' },
+]
+
 // Stacked-bar order, top→bottom (escalate on top, proceed at the baseline).
 const STACK_ORDER: Verdict[] = ['escalate', 'rerun', 'hold', 'proceed']
 // Legend order per the design.
@@ -39,6 +47,8 @@ export function Monitoring() {
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [openSigs, setOpenSigs] = useState<Set<string>>(new Set())
+  const [sigPerPage, setSigPerPage] = useState<SigPerPage>('25')
+  const [sigPage, setSigPage] = useState(1)
 
   // Single pre-aggregated call (drops the old N+1 runs.map(api.run) reassembly, F21). A request
   // id guards against out-of-order responses on a window switch — only the latest may commit.
@@ -66,6 +76,19 @@ export function Monitoring() {
       `${s.rule_id} ${s.title} ${s.signature}`.toLowerCase().includes(q),
     )
   }, [data, query])
+
+  // Client-side pagination over the filtered signatures (the payload is uncapped, F21).
+  const sigPer = Number(sigPerPage)
+  const sigTotal = filteredSigs.length
+  const sigPages = Math.max(1, Math.ceil(sigTotal / sigPer))
+  const sigCurPage = Math.min(sigPage, sigPages) // clamp so a narrowing filter can't strand the pager
+  const sigFrom = sigTotal === 0 ? 0 : (sigCurPage - 1) * sigPer + 1
+  const sigTo = Math.min(sigCurPage * sigPer, sigTotal)
+  const pagedSigs = filteredSigs.slice((sigCurPage - 1) * sigPer, sigCurPage * sigPer)
+  // Reset to page 1 when the window, search, or per-page changes.
+  useEffect(() => {
+    setSigPage(1)
+  }, [window, query, sigPerPage])
 
   const control = (
     <div className="flex items-center gap-2">
@@ -225,7 +248,7 @@ export function Monitoring() {
         </div>
 
         <div className="mt-3 flex flex-col gap-[9px]">
-          {filteredSigs.map((s) => (
+          {pagedSigs.map((s) => (
             <MonitoringSignatureRow
               key={s.signature}
               sig={s}
@@ -252,6 +275,54 @@ export function Monitoring() {
               <Empty message={`No recurring issue signatures in the last ${windowLabel}.`} />
             ))}
         </div>
+
+        {sigTotal > 0 && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-[11.5px] text-text-2">
+            <span>
+              Showing {sigFrom}–{sigTo} of {sigTotal} signatures
+            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11.5px] text-text-3">Per page</span>
+                <SegmentedControl<SigPerPage> options={SIG_PER_PAGE} value={sigPerPage} onChange={setSigPerPage} />
+              </div>
+              {sigPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSigPage(Math.max(1, sigCurPage - 1))}
+                    className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
+                    aria-label="Previous page"
+                  >
+                    ‹
+                  </button>
+                  {Array.from({ length: sigPages }, (_, i) => i + 1).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setSigPage(n)}
+                      className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] transition-colors ${
+                        n === sigCurPage
+                          ? 'bg-accent font-semibold text-white'
+                          : 'border border-line bg-card text-text-2 hover:border-line-strong'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setSigPage(Math.min(sigPages, sigCurPage + 1))}
+                    className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
+                    aria-label="Next page"
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
