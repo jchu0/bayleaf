@@ -103,3 +103,10 @@ Thumbs.db
 .claude/launch.json
 # Background-agent scratch (git worktrees + agent outputs) — never committed
 .claude/worktrees/
+
+# Design-prototype strays — the canonical package lives in docs/design/frontend/.
+# Guard the repo root against re-extracting the design zip here (F25).
+/PipeGuard.html
+/source/
+/briefs/
+/handoffs/
