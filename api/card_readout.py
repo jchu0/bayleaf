@@ -90,6 +90,23 @@ _STATUS_ORDER: dict[ReadoutStatus, int] = {
 
 _GATE_ORDER: tuple[Gate, ...] = (Gate.PREFLIGHT, Gate.QC, Gate.VARIANT)
 
+# Gate DEPENDENCY chain (maintainer's two-tier model): sequencing-tier QC (preflight — PhiX, reads
+# PF, cluster PF) gates sample PROCESSING, and sample-tier QC (coverage/depth/breadth) gates
+# DOWNSTREAM analysis (variant). So each gate depends on every gate before it: if an upstream gate
+# is not clear, the downstream one is "blocked — clear <upstream> first" rather than "all clear".
+_GATE_DEP_ORDER: tuple[Gate, ...] = (Gate.PREFLIGHT, Gate.QC, Gate.VARIANT)
+
+
+def _blocking_gate(gate: Gate, unclear: set[Gate]) -> Gate | None:
+    """The nearest UPSTREAM gate that is not clear (so it gates ``gate`` downstream), else None."""
+    if gate not in _GATE_DEP_ORDER:
+        return None
+    idx = _GATE_DEP_ORDER.index(gate)
+    for up in reversed(_GATE_DEP_ORDER[:idx]):  # nearest upstream wins
+        if up in unclear:
+            return up
+    return None
+
 
 # --- Projection models ----------------------------------------------------------------------
 
@@ -134,6 +151,13 @@ class GateReadout(BaseModel):
     gate: Gate
     rows: list[MetricReadout]
     flagged_count: int = Field(..., description="Number of fail/borderline rows in this gate")
+    blocked_by: Gate | None = Field(
+        None,
+        description="An UPSTREAM gate that is not clear, which gates this one downstream — the "
+        "reason this gate reads 'blocked, clear <upstream> first' rather than proceeding. None "
+        "when nothing upstream blocks it. A pure re-presentation: the sample's verdict already "
+        "reflects the upstream finding; this only stops downstream from reading as 'all clear'.",
+    )
 
 
 class QcReadout(BaseModel):
@@ -301,6 +325,11 @@ def build_qc_readout(card: DecisionCard, runbook: Runbook | None = None) -> QcRe
     # Index thresholds by the registry key the card's metrics carry (metric_key == our_key).
     by_key: dict[str, QCThreshold] = {t.our_key: t for t in book.qc_thresholds}
 
+    # Gates that are NOT clear (the deterministic gate already emitted a non-proceed result for
+    # them) — an upstream one of these blocks its downstream gates. A gate only gets a gate_result
+    # when it has findings, so "has a gate_result" ⟺ "not clear".
+    unclear: set[Gate] = {gr.gate for gr in card.gate_results if gr.verdict is not Verdict.PROCEED}
+
     buckets: dict[Gate, list[MetricReadout]] = {}
     for mv in card.metric_values:
         row = _row_for(mv, by_key.get(mv.metric_key))
@@ -316,7 +345,14 @@ def build_qc_readout(card: DecisionCard, runbook: Runbook | None = None) -> QcRe
         rows.sort(key=lambda r: _STATUS_ORDER[r.status])
         flagged = sum(1 for r in rows if r.flagged)
         total_flagged += flagged
-        gates.append(GateReadout(gate=gate, rows=rows, flagged_count=flagged))
+        gates.append(
+            GateReadout(
+                gate=gate,
+                rows=rows,
+                flagged_count=flagged,
+                blocked_by=_blocking_gate(gate, unclear),
+            )
+        )
 
     # Any gate not in the canonical order (defensive) still gets surfaced, appended after.
     for gate, rows in buckets.items():
@@ -325,7 +361,14 @@ def build_qc_readout(card: DecisionCard, runbook: Runbook | None = None) -> QcRe
         rows.sort(key=lambda r: _STATUS_ORDER[r.status])
         flagged = sum(1 for r in rows if r.flagged)
         total_flagged += flagged
-        gates.append(GateReadout(gate=gate, rows=rows, flagged_count=flagged))
+        gates.append(
+            GateReadout(
+                gate=gate,
+                rows=rows,
+                flagged_count=flagged,
+                blocked_by=_blocking_gate(gate, unclear),
+            )
+        )
 
     return QcReadout(sample_id=card.sample_id, gates=gates, flagged_count=total_flagged)
 

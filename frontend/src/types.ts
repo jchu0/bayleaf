@@ -333,7 +333,9 @@ export type MetricReadout = {
 }
 // `note` (frontend-only) is an honest empty-state line for a gate with no metric rows — e.g.
 // preflight (rule-based, scored in the gate strip) or variant (no metrics extracted this build).
-export type GateReadout = { gate: Gate; rows: MetricReadout[]; flagged_count: number; note?: string }
+// `blocked_by` names an upstream gate that isn't clear (so this gate is gated downstream — reads
+// "blocked, clear <upstream> first" rather than "all clear"). Verdict already reflects the finding.
+export type GateReadout = { gate: Gate; rows: MetricReadout[]; flagged_count: number; note?: string; blocked_by?: Gate | null }
 export type QcReadout = { sample_id: string; gates: GateReadout[]; flagged_count: number }
 // origin/sample_type/library_prep are honestly nullable; not_captured lists the missing ones.
 export type CardHeader = {

@@ -394,11 +394,21 @@ function CardBody({
   // Status stays rules-derived (never a confidence meter); a missing runbook degrades gracefully.
   const realByGate = new Map(readout?.readout.gates.map((g) => [g.gate, g as ReadoutGroup]) ?? [])
   const gateRan = (gate: Gate) => card.gate_results.some((g) => g.gate === gate)
+  // Gate dependency (mirrors card_readout._blocking_gate): a downstream gate is "blocked" when an
+  // upstream gate isn't clear. The API-projected groups already carry blocked_by; the placeholder /
+  // empty groups the frontend synthesizes need it computed from the card's gate_results too.
+  const unclearGates = new Set(card.gate_results.filter((g) => g.verdict !== 'proceed').map((g) => g.gate))
+  const blockingGate = (gate: Gate): Gate | null => {
+    const idx = GATE_SEQUENCE.indexOf(gate)
+    for (let i = idx - 1; i >= 0; i--) if (unclearGates.has(GATE_SEQUENCE[i])) return GATE_SEQUENCE[i]
+    return null
+  }
   const gates: ReadoutGroup[] = GATE_SEQUENCE.map((gate) => {
     const real = realByGate.get(gate)
     if (real && real.rows.length > 0) return real
     const placeholder = gateRan(gate) && runbook ? notMeasuredGroup(gate, runbook) : null
-    return placeholder ?? emptyGateGroup(gate)
+    const g = placeholder ?? emptyGateGroup(gate)
+    return g ? { ...g, blocked_by: blockingGate(gate) } : null
   }).filter((g): g is ReadoutGroup => g !== null)
   const hasReadout = gates.some((g) => g.rows.length > 0 || g.note)
   const hasFindings = card.findings.length > 0

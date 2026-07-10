@@ -28,7 +28,15 @@ export type ReadoutRow = {
   status: ReadoutRowStatus
 }
 // `note` carries an honest empty-state line for a gate with no metric rows (see emptyGateGroup).
-export type ReadoutGroup = { gate: Gate; rows: ReadoutRow[]; flagged_count: number; note?: string }
+// `blocked_by` names an upstream gate that isn't clear, so this gate reads "blocked, clear it first"
+// instead of "all clear" (the gate-dependency: seq-QC gates processing, sample-QC gates downstream).
+export type ReadoutGroup = {
+  gate: Gate
+  rows: ReadoutRow[]
+  flagged_count: number
+  note?: string
+  blocked_by?: Gate | null
+}
 
 // Per-status treatment. Deliberately independent of verdict.ts STATUS_CHIP (which maps a
 // finding's severity, and uses ESCALATE for critical): the design's metric-status chip maps
@@ -112,6 +120,15 @@ function StatusChip({ status }: { status: ReadoutRowStatus }) {
 // never read as a green "all clear"; otherwise "all clear". Reads `flagged_count` for the amber
 // count so it can't disagree with the rows below it.
 function Rollup({ group }: { group: ReadoutGroup }) {
+  // Gate dependency: a gate blocked by an unclear upstream gate never reads "all clear" — it reads
+  // "blocked · clear <upstream> first", so a QC hold no longer looks like variant proceeded.
+  if (group.blocked_by) {
+    return (
+      <span className="ml-auto rounded-full border border-hold-bd bg-hold-bg px-2 py-px text-[9.5px] font-semibold text-hold-fg">
+        blocked · clear {GROUP_LABEL[group.blocked_by].replace(' gate', '')} first
+      </span>
+    )
+  }
   const measured = group.rows.some((r) => r.status !== 'not_measured')
   if (!measured && group.rows.length > 0) {
     return (
@@ -152,7 +169,7 @@ export function QCReadout({ gates, variant }: { gates: ReadoutGroup[]; variant: 
                 <span className="text-[10px] font-semibold uppercase tracking-[0.4px] text-text-2">
                   {GROUP_LABEL[g.gate]}
                 </span>
-                {noteOnly ? (
+                {noteOnly && !g.blocked_by ? (
                   <span className="ml-auto rounded-full border border-dashed border-line bg-card-2 px-2 py-px text-[9.5px] font-semibold text-text-3">
                     not scored here
                   </span>

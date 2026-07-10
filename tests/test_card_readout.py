@@ -233,3 +233,26 @@ def test_router_404s_on_unknown_run_and_sample() -> None:
     client = _client()
     assert client.get("/api/runs/no_such_run/cards/S5/qc-readout").status_code == 404
     assert client.get("/api/runs/mock_run_01/cards/NOPE/qc-readout").status_code == 404
+
+
+# --- Gate dependency: an unclear upstream gate blocks its downstream ones --------------------
+def test_qc_hold_blocks_the_downstream_variant_gate() -> None:
+    """Maintainer's two-tier gate model: sample-tier QC gates downstream analysis. A sample whose
+    QC gate isn't clear reads its Variant gate as blocked-by-qc (not 'all clear'); a fully clear
+    sample blocks nothing. Pure re-presentation — the verdict already reflects the QC finding."""
+    _, cards = run_gate_from_dir("data/mock_run_02")
+    qc_unclear = next(
+        c
+        for c in cards
+        if any(gr.gate is Gate.QC and gr.verdict is not Verdict.PROCEED for gr in c.gate_results)
+    )
+    readout = build_qc_readout(qc_unclear)
+    variant = next(g for g in readout.gates if g.gate is Gate.VARIANT)
+    assert variant.blocked_by is Gate.QC
+    # The blocking gate itself, and anything upstream of it, is not blocked.
+    for g in readout.gates:
+        if g.gate in (Gate.PREFLIGHT, Gate.QC):
+            assert g.blocked_by is None
+
+    clear = next(c for c in cards if not c.gate_results)  # no findings ⇒ every gate clear
+    assert all(g.blocked_by is None for g in build_qc_readout(clear).gates)
