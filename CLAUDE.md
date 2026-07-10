@@ -168,8 +168,17 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    read-only: `GET /api/monitoring/signatures/{signature}/repair`, `GET /api/runs/{id}/archive-digest`,
    `GET /api/archive/index`) + runs pagination/search with
    **Tier-0 params** (status filter, platform-aware `q`, sort aliases, facet-count header) +
-   honest `RunSummary` status/platform/date (from the SampleSheet `[Header]`), the production
-   seam (ADR-0010/0016). Authz lives in the dev-shim `api/auth.py` (Role viewer|reviewer|approver
+   honest `RunSummary` status/platform/date (from the SampleSheet `[Header]`) + an **intake
+   execution boundary** (`api/routers/intake.py`, T-057): `POST /api/runs` registers a submitted
+   samplesheet and triggers `scripts/run_giab_pipeline.py` as a background subprocess
+   (in-process job registry; HG002-fixture-scoped, honest-skips the rest; 409 on a dup run id),
+   `GET /api/runs/{id}/intake-status` polls `queued|running|complete|failed` — `src/pipeguard/`
+   still never runs a tool (compose ≠ execute holds at the core), but the API layer now DOES
+   trigger an external driver, closing the old "Submit never runs anything" gap. `GET
+   /api/runbook`'s `RunbookThreshold` now also carries `pipeline_gate` (the registry gate)
+   distinct from the numeric `gate` value, powering the decision card's honest three-gate
+   (preflight/qc/variant) readout with an empty-state note where a gate has no metric table —
+   the production seam (ADR-0010/0016). Authz lives in the dev-shim `api/auth.py` (Role viewer|reviewer|approver
    + `Actor` + `current_actor()` from `X-PipeGuard-Actor/-Role` headers, permissive dev-default,
    `require_role`) — the shared authz source for the draft→approve flows and the single swap point
    for real auth; feature-area routers under `api/routers/` (`settings.py` config-override authoring
@@ -188,9 +197,14 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    deterministic gate: Users & roles client-mock roster + "Act as" wired to the now-full
    `RoleContext.setActor(actor)` [id+role together, not just a role toggle]; Activity log — a
    real audit feed merging thresholds/pipelines/tickets; System — real reads of `GET
-   /api/health` + runbook + metric-registry; never a verdict/confidence). The Pipeline
+   /api/health` + runbook + metric-registry; never a verdict/confidence). A shared
+   `RUN_STATUS_META` (`verdict.ts`) now drives every run-status dot; the top-bar run switcher
+   was rebuilt into a searchable, 8-row-capped combobox (search by id/platform, "view all"
+   footer) whose dot reads the run's real `status`, not `n_attention` (fixed F17). The Pipeline
    Builder adds free composition, a typed-port Connect mode, a minimap, and editable
-   Locators; its Save now chains `savePipeline`→`submitPipeline` and Approve calls
+   Locators — "New → From template" now seeds an **editable** germline-chain draft
+   (`germlineTemplate()`) rather than the old read-only seeded DAG (only the original linked
+   pipeline still renders read-only); its Save now chains `savePipeline`→`submitPipeline` and Approve calls
    `approvePipeline` — both **await + reconcile local state from the response** (no longer
    fire-and-forget); Dry-run/Diff remain a client-side-only projection (`api.ts`'s
    `dryRunPipeline`/`pipelineDiff` exist but aren't called yet — still a known limitation). A
@@ -202,7 +216,8 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    `MonitoringSignature` additively carries `first_seen`/`last_seen`/`trend`/
    `affected_run_ids`; the Median-review KPI stays a documented, not-yet-built seam. Honest
    deferrals: Median-review KPI (no backend field), Provenance artifact URLs (`RunArtifact`
-   has no `url`), Submit is local-state only (no `POST /api/submissions`), Builder
+   has no `url`), Submit now hands off to the real `POST /api/runs` execution boundary but
+   still has no BaseSpace connector (T-057), Builder
    Dry-run/Diff/Export/Archivist-modal wiring (endpoints exist, UI is a preview).
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).

@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / all |
-| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
+| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md) |
 
 ## Overview
 
@@ -354,6 +354,12 @@ outside it, absence of a call is not evidence. Requires the genomics toolchain
 3. **No performance SLA.** No throughput/latency benchmark is measured at this stage
    (see [risks.md](risks.md), [nonfunctional.md](../requirements/nonfunctional.md)
    REQ-NF-032).
+4. **The new execution boundary (`POST /api/runs`, T-057, 2026-07-09) has no automated
+   test yet.** It was verified **manually** ("Submit → Processing… → gated HOLD," commit
+   `e77c2e6`) — grepped `tests/` for `intake`/`submit_run`/`SubmitRunIn`: no hits. The 362-test
+   count above is unchanged by this session's five commits (confirmed:
+   `git diff --stat a111703..01ba673 -- tests/` is empty). Tracked as an open gap, not silently
+   assumed covered ([risks.md](risks.md) RISK-034).
 
 ---
 

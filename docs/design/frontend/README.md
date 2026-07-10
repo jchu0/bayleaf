@@ -41,6 +41,13 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
 - **User panel (nav footer).** Avatar + name → popover: **Role** row (reflects & toggles
   **reviewer/approver** RBAC — the same flag the Review queue and approval flows read),
   **Settings** (opens the Settings dialog), **Sign out**.
+- **Top bar — run switcher (Shipped 2026-07-09, T-074, commit `17a3e56`).** The run-context
+  pill opens a searchable combobox (filters by run id or platform), capped at 8 rows, with a
+  "View all runs · N runs →" footer to the Runs list and an honest "No runs match" empty
+  state. The pill's dot and every row's dot read the run's real lifecycle `status`
+  (`needs_review`/`running`/`released`) via a shared `RUN_STATUS_META`, never inferred from
+  attention count — a running run with 0 flagged samples reads "Sequencing," not a green
+  "all clear."
 - **Content:** light surface (`--bg #f5f7f9`, cards `--surface #fff`), max-width per screen.
 - **Type:** IBM Plex Sans throughout; **IBM Plex Mono** for every id, path, hash, index,
   version, kind, size.
@@ -59,7 +66,15 @@ The pipeline's front door — registers a run + its samples **before processing*
 - **Samples table** (editable): `# · sample name · sample type · i7 (index) · i5 (index2) ·
   study`; add / remove rows; sample type cycles a fixed set.
 - Footer: guardrail note ("barcodes checked at preflight, not here"), **Save draft**,
-  **Submit to pipeline** → Intake gate. Registration only — never runs anything.
+  **Submit to pipeline** → Intake gate.
+- **Shipped 2026-07-09 (T-057, commit `e77c2e6`):** Submit now hands off to a real execution
+  boundary — `POST /api/runs` registers the run and triggers the pipeline driver
+  (`scripts/run_giab_pipeline.py`) as a background subprocess; the UI polls
+  `GET /api/runs/{id}/intake-status` and navigates to Decision cards on completion. This demo
+  build only has real reads on disk for `HG002`; other samples are honestly reported as
+  *skipped*, never fabricated. **Compose ≠ execute still holds at the core** — `src/pipeguard/`
+  itself never runs a tool; only the API layer triggers the external driver (see §8). A
+  BaseSpace connector remains wishlist (T-057).
 
 ### 5.2 Runs  (`view: 'overview'`)
 Scale-kit list surface:
@@ -84,6 +99,12 @@ Per-sample verdict cards for a run.
   from `DecisionCard.metric_values` (flagged-first, gate-grouped) — recreate with the app's
   `MetricsPanel`. Plus a context rail and clear loading / empty / released / synthesis-error
   states.
+- **Shipped 2026-07-09 (T-073, commit `12ffa30`):** the hero now shows all **three** gates
+  (preflight → qc → variant) honestly — a gate with real metric rows shows them; a gate the
+  runbook thresholds but the card didn't measure shows a `not_measured` placeholder; a gate
+  with no metric table at all (preflight is rule-based — see the gate strip/evidence; variant
+  extracts no metrics in this build) shows an explicit empty-state note instead of vanishing.
+  Nothing is fabricated; the gate stays byte-for-byte unchanged.
 
 ### 5.5 Review queue  (`view: 'queue'`)
 Cross-run triage. **Reviewer/approver RBAC**, **first-open + Expand/Collapse all**,
@@ -141,6 +162,11 @@ snap grid. Bottom-right **minimap** (spine + gate + composed nodes). Floating zo
 - **Free composition (Edit):** click a palette tool to add a node; **drag** to place
   (grid-snap); delete per-node. Composed cards are **visually identical to the seeded DAG
   cards** — the tool's own icon, version, and typed I/O ports.
+- **Shipped 2026-07-09 (T-075, commit `01ba673`):** "New → From template" now seeds this free
+  composition with the germline chain as **editable** nodes/edges (`germlineTemplate()`),
+  not a re-shown read-only copy of the seeded DAG — closing a gap where the demo's own
+  pipeline couldn't be modified in Edit. Only the **original linked** pipeline still renders
+  the read-only seeded DAG; any new or forked draft is fully editable.
 - **Ports** render as **half-circles on the card edge**, becoming **full circles in Connect
   mode**. **Port-to-port connect:** toggle **Connect**, click an **output** circle, then an
   **input** circle on another card; the elbow edge anchors to those exact ports. Enforce
@@ -228,8 +254,12 @@ connect + `GET /basespace/runs` + import.
 
 ## 8. Invariants (never cross)
 Rules decide / AI advises · **agents off the critical path** (port-less; the triage chat and
-node-author agent never change a verdict) · **composes/registers ≠ executes** (Submit
-registers, Builder emits, Run hands off — none run a tool) · the gate reads the frozen five
+node-author agent never change a verdict) · **compose ≠ execute holds at the core**: `src/pipeguard/`
+never runs a tool; Submit now hands off to a real **execution boundary**
+(`POST /api/runs` → `api/routers/intake.py` triggers `scripts/run_giab_pipeline.py` as a
+background subprocess, T-057, 2026-07-09) and Builder emits `run_layout.yaml` for a hand-off —
+the API layer may trigger an external driver, but only the driver (never PipeGuard itself)
+runs a genomics tool · the gate reads the frozen five
 `run/` CSVs · **origin never relabels up** (stamped at ingest, never authored — incl.
 provenance links, locators, reference cards) · reuse the existing event vocabulary · **no
 confidence meter** · no clinical/diagnostic claims.

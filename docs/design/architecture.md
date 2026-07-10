@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md) |
 
 ## Overview
 
@@ -90,6 +90,35 @@ Every finding and verdict is labelled with the gate it came from:
    preview any seeded actor's RBAC view. The **Pipeline Builder** also realizes free composition
    (palette-add/drag/delete user nodes), a typed-port **Connect mode** (kind-matched, INV-e), a
    minimap, and editable Locators with live `run_layout.yaml` regen.
+   - **Frontend fixes batch 3 (2026-07-09, commits `e5d5043`→`01ba673`, [journal](../journal/2026-07-09-frontend-batch3.md)),
+     four maintainer-reported gaps closed.** (1) **Submit is a real execution boundary, not
+     registration-only** (T-057, `e77c2e6`): new `api/routers/intake.py` — `POST /api/runs`
+     registers a submitted samplesheet and triggers `scripts/run_giab_pipeline.py` as a
+     background subprocess (in-process job registry, `require_role(reviewer|approver)`, 409 on a
+     dup run id, HG002-fixture-scoped with the rest honestly *skipped*, not fabricated), `GET
+     /api/runs/{id}/intake-status` polls `queued|running|complete|failed`; `Submit.tsx` submits →
+     polls → navigates to the new run's cards. **Compose ≠ execute still holds at the core** —
+     `src/pipeguard/` never runs a tool; the API layer now triggers the external driver, exactly
+     like the Builder's hand-off concept, but wired. (2) **Decision card: honest three-gate
+     readout** (T-073, `12ffa30`): `GET /api/runbook`'s `RunbookThreshold` gains `pipeline_gate`
+     (from the metric registry), distinct from the numeric `gate` value the frontend had been
+     mistyping as the gate enum (so the preflight/variant groups silently never matched and
+     vanished); the card now always shows all three gates — real metric rows, else a
+     `not_measured` runbook placeholder, else an honest empty-state note (preflight is
+     rule-based; variant extracts no metrics this build) — never a fabricated row, gate
+     byte-for-byte unchanged. (3) **Top bar run switcher + F17 fix** (T-074, `17a3e56`): the flat
+     run dropdown is now a searchable, 8-row-capped combobox (search by id/platform, "view all"
+     footer); a shared `RUN_STATUS_META` (`verdict.ts`) now drives both the Runs list and the
+     switcher's dots off the run's real lifecycle `status`, fixing a bug (F17) where the
+     switcher's dot read `n_attention` and showed a running run with 0 flagged samples as a
+     green "all clear." (4) **Pipeline Builder: germline template is now an editable draft**
+     (T-075, `01ba673`): "New → From template" previously re-showed the read-only seeded DAG;
+     `germlineTemplate()` now instantiates the same chain as real `UserNode`/`UserEdge`s, and
+     `showSeeded` is gated on `isLinked` so only the original linked pipeline stays read-only —
+     Save now sends the true composed graph. A fifth, smaller fix: **Monitoring's
+     recurring-signatures list is now client-side paginated** (25/50/100 + pager, `e5d5043`,
+     mirroring the Runs-list pattern) — distinct from the still-open per-run `rows` pagination
+     gap ([tasks T-072](../planning/tasks.md)).
    - **Admin (`screens/Admin.tsx`), approver-gated governance off the gate.** Three tabs: **Users
      & roles** — an explicit **client-mock** roster (there is no backend user store; `api/auth.py`
      is a header dev-shim) with a role selector and "Act as" wired to `RoleContext.setActor`, plus
@@ -119,8 +148,9 @@ Every finding and verdict is labelled with the gate it came from:
      yet.
    **Honest, labelled frontend deferrals (no fabrication):** the Monitoring **Median-review KPI**
    (no backend field yet — the signature-level `first_seen`/`last_seen`/`trend`/`affected_run_ids`
-   fields below ARE shipped); Provenance artifact links (`RunArtifact` has no `url`); Submit is
-   local-state only (no `POST /api/submissions`, no BaseSpace connector — still wishlist, T-057);
+   fields below ARE shipped); Provenance artifact links (`RunArtifact` has no `url`); Submit now
+   hands off to a real execution boundary (`POST /api/runs`, T-057 — see below) but still has
+   **no BaseSpace connector** and no conversational multi-turn triage chat (both still wishlist);
    Builder Dry-run/Diff/Export/Archivist-modal wiring + saved-profiles (endpoints exist, UI is a
    preview). Of the 10 operator screens: 8 (Runs, Intake, Decision cards, Review queue,
    Provenance, Agent triage, Monitoring, Settings) trace to the pre-refresh [T-022b](../planning/tasks.md)

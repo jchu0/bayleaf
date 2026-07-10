@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-09 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md) |
 
 ## Overview
 
@@ -183,12 +183,14 @@ node-authoring agent).
    *Trace:* [architecture.md](../design/architecture.md), [agents.md](../design/agents.md), ADR-0010.
 3. **REQ-F-042 — Operator screens.** The UI presents **10 operator screens**, rebuilt to the
    refreshed design prototype (`docs/design/frontend/`, 2026-07-09) in a **three-group nav** —
-   **Operate:** submit samplesheet (register a run's SampleSheet/FASTQ locally, compose-only —
-   no backend endpoint yet, REQ-F-045's compose≠execute invariant applies equally here), runs
-   overview (per-verdict counts + needs-attention + a client-side scale kit: search/facet/sort/
-   date-range/paginate), intake/preflight (run-level QC rollup + per-sample admission with
+   **Operate:** submit samplesheet (register a run's SampleSheet/FASTQ and hand off to the
+   `POST /api/runs` execution boundary — REQ-F-067; compose≠execute still holds at the core),
+   runs overview (per-verdict counts + needs-attention + a client-side scale kit: search/facet/
+   sort/date-range/paginate; the top-bar run switcher shares the Runs list's status-derived dot
+   via `RUN_STATUS_META`, fixing a bug where the switcher's dot read `n_attention` instead of the
+   real lifecycle `status`), intake/preflight (run-level QC rollup + per-sample admission with
    manual override), decision cards (verdict + per-gate strip + a QC-readout hero from
-   REQ-F-064 + cited evidence), review queue (tickets w/ role-gated actions, REQ-F-063);
+   REQ-F-064/REQ-F-068 + cited evidence), review queue (tickets w/ role-gated actions, REQ-F-063);
    **Analyze:** provenance (pipeline **compute-DAG** with a per-stage data-I/O drill-in), agent
    triage (advisory note + citations + offline/live), monitoring (windowed aggregate,
    REQ-F-047); **Configure:** pipeline builder (REQ-F-045) and settings (runbook thresholds,
@@ -248,7 +250,13 @@ node-authoring agent).
    from local state and never claims a server round trip). The "Author a tool node" /
    "Pipeline-repair" / "Archivist" modals inside the Builder are **static UI previews**
    labelled `phase-2` in-app — they do not call the live advisory-agent endpoints (those are
-   wired elsewhere: REQ-F-041). *Trace:*
+   wired elsewhere: REQ-F-041). **Editable template fix (2026-07-09, commit `01ba673`,
+   [tasks T-075](../planning/tasks.md)):** "New → From template" previously re-showed the
+   read-only seeded DAG, so the demo's own pipeline couldn't be modified in Edit;
+   `germlineTemplate()` now instantiates the same fastp→…→MultiQC chain as real, editable
+   `UserNode`/`UserEdge`s, and `showSeeded` is gated on `isLinked` so **only** the original
+   linked pipeline still renders read-only — Save now sends the true composed 7-node graph
+   (was empty for the seeded doc). *Trace:*
    [pipeline-builder-brief.md](../design/frontend/pipeline-builder-brief.md),
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
    [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md),
@@ -271,7 +279,11 @@ node-authoring agent).
    `affected_run_ids` (distinct, chronological); the payload stays backward-compatible. A
    Median-review-time KPI stays a documented, not-yet-built seam. `GET /api/runs` accepts
    additive `verdict/q/sort/page/limit` (no params → byte-identical body;
-   count/page/limit on response headers). *Trace:*
+   count/page/limit on response headers). **Signatures-list pagination (2026-07-09, commit
+   `e5d5043`, [tasks T-076](../planning/tasks.md)):** `Monitoring.tsx` now paginates the
+   recurring-signatures grid client-side (25/50/100 + pager), mirroring the Runs-list pattern —
+   distinct from [tasks T-072](../planning/tasks.md), the still-open gap where the *per-run*
+   `rows: list[MonitoringRunRow]` on the same response has no analogous cap. *Trace:*
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
    [architecture.md](../design/architecture.md), [tasks T-048](../planning/tasks.md).
 
@@ -394,6 +406,37 @@ had reserved or listed as *not-yet-built*.
    [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), REQ-F-060,
    [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md) (commit
    `ce396f7`). *(No `tasks.md` row yet at time of writing — flagged for the planning sweep.)*
+8. **REQ-F-067 — Samplesheet submission triggers the real pipeline (execution boundary).**
+   `POST /api/runs` (new `api/routers/intake.py`) registers a submitted samplesheet and
+   **triggers** `scripts/run_giab_pipeline.py` as a background subprocess (an in-process job
+   registry; `require_role(reviewer|approver)`; 409 on a duplicate run id), turning
+   `data/<run_id>/` into a gate-able run; `GET /api/runs/{id}/intake-status` polls
+   `queued|running|complete|failed`. This demo build only has real reads on disk for `HG002` —
+   other submitted samples are **honestly skipped** (registered, reported, never fabricated a
+   run for), and a submission with no processable sample 422s. **Compose ≠ execute still holds
+   at the core:** `src/pipeguard/` never runs a tool — only the API layer triggers the external
+   driver, mirroring the Pipeline Builder's hand-off concept (REQ-F-045) but now wired end to
+   end. Reframes the earlier "Submit never runs anything" framing to "Submit hands off to an
+   execution boundary." *Trace:* [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+   [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md),
+   [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md) (commit
+   `e77c2e6`), [tasks T-057](../planning/tasks.md).
+9. **REQ-F-068 — Honest three-gate decision-card readout.** The QC-readout hero always shows
+   all **three** gates (preflight → qc → variant), never silently dropping one. `GET
+   /api/runbook`'s `RunbookThreshold` carries `pipeline_gate: Gate` (from the metric registry),
+   distinct from the numeric `gate` threshold *value* — the two were previously conflated, so a
+   client-side filter comparing a value to the gate enum silently never matched and the
+   preflight/variant groups vanished. Per gate: a real measured-metric group if the card
+   populated one; else the runbook's thresholds rendered as `not_measured` placeholder rows
+   (REQ-F-064); else an **honest empty-state note** — preflight is rule-based (scored via the
+   gate strip + cited evidence, not a metric table) and variant extracts no gating metrics in
+   this build — never a fabricated row. The gate stays byte-for-byte unchanged; no
+   preflight/variant thresholds were added to the runbook (doing so would spuriously flag every
+   card via `rules.py`'s QC-\*-NA path). *Trace:*
+   [qc_metrics.md](../data/qc_metrics.md) §Verdict policy, REQ-F-064,
+   [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md),
+   [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md) (commit
+   `12ffa30`), [tasks T-073](../planning/tasks.md).
 
 ## Notes / deferred
 

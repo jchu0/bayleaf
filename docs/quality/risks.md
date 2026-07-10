@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-09 (MST) |
 | **Audience** | all |
-| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
+| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md) |
 
 ## Overview
 
@@ -246,6 +246,37 @@ moment 3). Demo content is synthetic/contrived, not PHI.
 
 **Owner / revisit trigger.** Any session that sets `PIPEGUARD_SLACK_LIVE`; demo rehearsal
 against the live workspace; any move toward real (PHI-bearing) data.
+
+### RISK-034 — Submit's execution boundary depends on an external toolchain on PATH
+
+| Field | Value |
+|---|---|
+| **Category** | Demo / Technical |
+| **Likelihood** | Medium |
+| **Impact** | Medium |
+| **Status** | Mitigating |
+| **Added** | 2026-07-09 (MST) |
+
+**Risk.** `POST /api/runs` ([`api/routers/intake.py`](../../api/routers/intake.py), T-057)
+triggers `scripts/run_giab_pipeline.py` as a background subprocess that shells out to
+`fastp`/`bwa-mem2`/`samtools`/`mosdepth`/`bcftools`. If the API process wasn't started with
+`PIPEGUARD_BIOCONDA_BIN` prepended to `PATH` (a plain `uv run uvicorn` doesn't have it), every
+live Submit silently fails at the driver — the job flips to `failed` with a truncated stderr tail,
+but a demo operator who didn't set the env var first would hit this **live**. It also takes
+**~15s** end to end (fastp → bwa-mem2 → markdup → gate), a real timing risk if demoed live vs.
+pre-seeded data. Scope is intentionally narrow: only `HG002` has real panel reads on disk (a
+server-side fixture registry), so any other submitted sample is honestly reported *skipped*, not
+silently dropped or fabricated.
+
+**Mitigation.** `.env.example` documents `PIPEGUARD_BIOCONDA_BIN`; the seeded demo data
+(`scripts/seed_giab_demo.py`, ~24 runs) and the pinned `data/RUN-2026-07-08-GIAB-HG002/` fixture
+(T-063) mean the demo does **not need** a live Submit to show every other screen — Submit can be
+demoed once, pre-verified, or skipped in favor of the pre-seeded runs if the toolchain isn't
+confirmed on the demo machine. `GET /api/runs/{id}/intake-status` surfaces `failed` + an error
+tail rather than hanging silently.
+
+**Owner / revisit trigger.** Demo rehearsal on the actual demo machine with a live Submit;
+confirm `PIPEGUARD_BIOCONDA_BIN` is set in the API's launch env before any live Submit demo.
 
 ---
 

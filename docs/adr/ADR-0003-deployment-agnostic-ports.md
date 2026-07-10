@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Accepted · Realized (event-bus / run-store / notify / artifact-store ports + metric-registry seam built; job-runner + cloud/Slurm compute adapters wishlist) |
-| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) · updated 2026-07-09 (MST) |
 | **Deciders** | James Hu, Claude Code |
 | **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0016](ADR-0016-postgres-port.md), [design/architecture.md](../design/architecture.md) |
 
@@ -69,9 +69,21 @@ Slurm adapters (and Terraform) are future work.
    DNAnexus/Databricks/Snowflake/BigQuery/Redshift) implement this same port but are deferred: each needs
    its own SDK + auth + fixtures, and the warehouses need a query→artifact adapter shape.
 4. **Still wishlist:** the **job runner** and the **cloud/Slurm compute adapters + Terraform**.
-   Nextflow remains the intended compute-portability layer (no pipeline wired yet). The FastAPI
+   Nextflow remains the intended compute-portability layer. The FastAPI
    read-API ([ADR-0014](ADR-0014-productionization-fastapi-react.md)) consumes the core through these
    seams without adding framework imports to `src/pipeguard/`.
+
+## Realized (2026-07-09) — a narrow, demo-scoped job-runner instance
+
+`api/routers/intake.py` (T-057, commit `e77c2e6`, [design/architecture.md](../design/architecture.md))
+adds `POST /api/runs`: an in-process job registry (dict + lock, no queue/retry/durability) that
+triggers `scripts/run_giab_pipeline.py` — a bioconda-toolchain driver, not Nextflow — as a
+background subprocess, then exposes `GET /api/runs/{id}/intake-status` to poll it. This is the
+first time the API layer actually **triggers** an external pipeline run rather than only
+composing config for one; the core invariant is unchanged (`src/pipeguard/` never runs a tool —
+[ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md)). It is **not** the wishlist job-runner
+*port* above (no adapter abstraction, hard-coded to one script, HG002-fixture-scoped) — noted
+here only so "no pipeline wired yet" isn't read as still true.
 
 ## Revisit when
 
