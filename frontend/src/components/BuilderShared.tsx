@@ -101,7 +101,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_bwa', tool: 'bwa-mem2', version: '2.2.1', stageLabel: 'Alignment', pg: 'partial', icon: 'merge',
-    x: 340, y: 180, vstatus: 'ok', inputs: [{ kind: 'fastq' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'bam' }, { kind: 'bai' }],
+    x: 340, y: 180, vstatus: 'ok', inputs: [{ kind: 'fastq' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'bam' }],
     params: [
       { k: 'read_group', v: '@RG\\tID:HG002\\tSM:HG002', help: 'Read-group header' },
       { k: 'sort', v: 'coordinate', help: 'Output sort order' },
@@ -113,7 +113,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_markdup', tool: 'samtools markdup', version: '1.20', stageLabel: 'Duplicate marking', pg: 'full', icon: 'copy',
-    x: 640, y: 180, vstatus: 'ok', inputs: [{ kind: 'bam' }], outputs: [{ kind: 'bam' }, { kind: 'markdup_metrics' }, { kind: 'samtools_stats' }],
+    x: 640, y: 180, vstatus: 'ok', inputs: [{ kind: 'bam' }], outputs: [{ kind: 'bam' }, { kind: 'bai' }, { kind: 'markdup_metrics' }],
     params: [{ k: 'remove_duplicates', v: 'false', help: 'Mark, do not drop' }],
     io: [
       { name: 'HG002.md.bam', sha: 'sha256:7a11…4c2', size: '32 GB', origin: 'real-giab' },
@@ -122,7 +122,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_mosdepth', tool: 'mosdepth', version: '0.3.8', stageLabel: 'Coverage', pg: 'ours', icon: 'bars',
-    x: 940, y: 180, vstatus: 'warn', inputs: [{ kind: 'bam' }, { kind: 'panel_bed', ref: true }], outputs: [{ kind: 'mosdepth_summary' }],
+    x: 940, y: 180, vstatus: 'warn', inputs: [{ kind: 'bam' }, { kind: 'panel_bed', ref: true }], outputs: [{ kind: 'mosdepth_summary' }, { kind: 'mosdepth_thresholds' }],
     params: [
       { k: 'by', v: 'panel.bed', help: 'Regions to summarise' },
       { k: 'thresholds', v: '1,10,20,30', help: 'Breadth thresholds (x)' },
@@ -133,7 +133,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_call', tool: 'bcftools call', version: '1.20', stageLabel: 'Variant calling', pg: 'partial', icon: 'dna',
-    x: 1240, y: 180, vstatus: 'ok', inputs: [{ kind: 'bam' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'vcf' }],
+    x: 1240, y: 180, vstatus: 'ok', inputs: [{ kind: 'bam' }, { kind: 'reference_fasta', ref: true }, { kind: 'panel_bed', ref: true }], outputs: [{ kind: 'vcf' }],
     params: [
       { k: 'min_MQ', v: '20', help: 'mpileup min mapping quality' },
       { k: 'min_BQ', v: '20', help: 'mpileup min base quality' },
@@ -143,40 +143,24 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_norm', tool: 'bcftools norm', version: '1.20', stageLabel: 'Filter / normalize', pg: 'partial', icon: 'funnel',
-    x: 1540, y: 180, vstatus: 'ok', inputs: [{ kind: 'vcf' }, { kind: 'reference_fasta', ref: true }, { kind: 'panel_bed', ref: true }], outputs: [{ kind: 'filtered_vcf' }],
+    x: 1540, y: 180, vstatus: 'ok', inputs: [{ kind: 'vcf' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'filtered_vcf' }],
     params: [
-      { k: 'regions_file', v: 'panel.bed', help: 'Restrict to panel' },
       { k: 'norm', v: '-m -both', help: 'Split multiallelics' },
+      { k: 'fasta_ref', v: 'GRCh38.fa', help: 'Left-align against the reference' },
     ],
     io: [{ name: 'HG002.norm.filtered.vcf.gz', sha: 'sha256:12ab…9f0', size: '44 MB', origin: 'real-giab' }],
   },
   {
     id: 'n_multiqc', tool: 'MultiQC', version: '1.21', stageLabel: 'QC aggregation', pg: 'full', icon: 'layers',
-    x: 1840, y: 180, vstatus: 'ok', inputs: [{ kind: 'fastp_json' }, { kind: 'markdup_metrics' }, { kind: 'samtools_stats' }, { kind: 'mosdepth_summary' }], outputs: [{ kind: 'multiqc_json' }],
+    x: 1840, y: 180, vstatus: 'ok', inputs: [{ kind: 'fastp_json' }, { kind: 'markdup_metrics' }, { kind: 'mosdepth_summary' }], outputs: [{ kind: 'multiqc_json' }],
     params: [{ k: 'force', v: 'true', help: 'Overwrite existing report' }],
     io: [{ name: 'multiqc_data.json', sha: 'sha256:5be3…9c4', size: '2.1 MB', origin: 'real-giab' }],
   },
 ]
 
-// Orthogonal elbow edges over the seeded canvas (kept from the prototype's paths).
-export const EDGES: { d: string; s: string; w: number; dash: string }[] = [
-  { d: 'M248 232 L340 232', s: '#c6ced7', w: 1.5, dash: '' },
-  { d: 'M548 232 L640 232', s: '#c6ced7', w: 1.5, dash: '' },
-  { d: 'M848 232 L940 232', s: '#c6ced7', w: 1.5, dash: '' },
-  { d: 'M1448 232 L1540 232', s: '#c6ced7', w: 1.5, dash: '' },
-  { d: 'M848 250 L878 250 L878 340 L1218 340 L1218 232 L1240 232', s: '#c6ced7', w: 1.5, dash: '' },
-  { d: 'M248 214 L266 214 L266 150 L1822 150 L1822 214 L1840 214', s: '#d3dae1', w: 1.25, dash: '' },
-  { d: 'M848 214 L866 214 L866 158 L1814 158 L1814 222 L1840 222', s: '#d3dae1', w: 1.25, dash: '' },
-  { d: 'M1148 232 L1166 232 L1166 166 L1806 166 L1806 230 L1840 230', s: '#d3dae1', w: 1.25, dash: '' },
-  { d: 'M248 252 L288 252 L288 388 L2082 388 L2082 232 L2100 232', s: '#d3dae1', w: 1.25, dash: '5 4' },
-  { d: 'M1148 252 L1188 252 L1188 380 L2074 380 L2074 232 L2100 232', s: '#d3dae1', w: 1.25, dash: '5 4' },
-  { d: 'M1748 232 L1788 232 L1788 372 L2066 372 L2066 232 L2100 232', s: '#d3dae1', w: 1.25, dash: '5 4' },
-  { d: 'M2260 232 L2300 232', s: '#c6ced7', w: 1.5, dash: '' },
-  { d: 'M410 372 L410 322 L444 322 L444 300', s: '#9aa4b0', w: 1, dash: '4 4' },
-  { d: 'M1010 372 L1010 322 L1044 322 L1044 300', s: '#9aa4b0', w: 1, dash: '4 4' },
-  { d: 'M410 372 L410 352 L1344 352 L1344 300', s: '#9aa4b0', w: 1, dash: '4 4' },
-  { d: 'M1010 372 L1010 344 L1644 344 L1644 300', s: '#9aa4b0', w: 1, dash: '4 4' },
-]
+// (Seeded canvas edges are now COMPUTED from the tool/ref card geometry in BuilderCanvas —
+// SEEDED_WIRES/REF_WIRES — so they stay attached to the ports; the old hardcoded path table was
+// removed with the "broken lines" fix.)
 
 export type Ref = { id: string; label: string; kind: string; file: string; x: number }
 export const REFS: Ref[] = [
@@ -209,12 +193,12 @@ export function gateSegs(): { c: string; w: string }[] {
 // fall back to a merge icon + a single artifact kind (still typed, never invented).
 export const BTOOLSPEC: Record<string, { version: string; icon: IconKey; ins: string[]; outs: string[] }> = {
   'fastp': { version: '0.23.4', icon: 'scissors', ins: ['fastq'], outs: ['fastp_json', 'fastq'] },
-  'bwa-mem2': { version: '2.2.1', icon: 'merge', ins: ['fastq', 'reference_fasta'], outs: ['bam', 'bai'] },
-  'samtools markdup': { version: '1.20', icon: 'copy', ins: ['bam'], outs: ['bam', 'markdup_metrics', 'samtools_stats'] },
-  'mosdepth': { version: '0.3.8', icon: 'bars', ins: ['bam', 'panel_bed'], outs: ['mosdepth_summary'] },
-  'bcftools call': { version: '1.20', icon: 'dna', ins: ['bam', 'reference_fasta'], outs: ['vcf'] },
-  'bcftools norm': { version: '1.20', icon: 'funnel', ins: ['vcf', 'reference_fasta', 'panel_bed'], outs: ['filtered_vcf'] },
-  'MultiQC': { version: '1.21', icon: 'layers', ins: ['fastp_json', 'markdup_metrics', 'samtools_stats', 'mosdepth_summary'], outs: ['multiqc_json'] },
+  'bwa-mem2': { version: '2.2.1', icon: 'merge', ins: ['fastq', 'reference_fasta'], outs: ['bam'] },
+  'samtools markdup': { version: '1.20', icon: 'copy', ins: ['bam'], outs: ['bam', 'bai', 'markdup_metrics'] },
+  'mosdepth': { version: '0.3.8', icon: 'bars', ins: ['bam', 'panel_bed'], outs: ['mosdepth_summary', 'mosdepth_thresholds'] },
+  'bcftools call': { version: '1.20', icon: 'dna', ins: ['bam', 'reference_fasta', 'panel_bed'], outs: ['vcf'] },
+  'bcftools norm': { version: '1.20', icon: 'funnel', ins: ['vcf', 'reference_fasta'], outs: ['filtered_vcf'] },
+  'MultiQC': { version: '1.21', icon: 'layers', ins: ['fastp_json', 'markdup_metrics', 'mosdepth_summary'], outs: ['multiqc_json'] },
   'NGSCheckMate': { version: '1.0.1', icon: 'bars', ins: ['bam'], outs: ['ngscheckmate'] },
 }
 
@@ -260,7 +244,6 @@ export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
     wire('n_call', 'vcf', 'n_norm', 'vcf'),
     wire('n_fastp', 'fastp_json', 'n_multiqc', 'fastp_json'),
     wire('n_markdup', 'markdup_metrics', 'n_multiqc', 'markdup_metrics'),
-    wire('n_markdup', 'samtools_stats', 'n_multiqc', 'samtools_stats'),
     wire('n_mosdepth', 'mosdepth_summary', 'n_multiqc', 'mosdepth_summary'),
   ]
   return { nodes, edges }

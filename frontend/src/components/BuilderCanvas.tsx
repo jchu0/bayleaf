@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Activity, Cable, Lock, Minus, Plus, Wand2 } from 'lucide-react'
 import {
-  EDGES,
   GATE_CHECKPOINTS,
   ICONS,
   PG_BADGE,
@@ -26,6 +25,32 @@ const INNER_H = 460
 const UW = 168 // user-node width — port anchors depend on it
 const UPT = 52 // user-node first-port y-offset from card top
 const UROW = 18 // user-node port-row pitch
+const TW = 208 // seeded ToolCard width (w-52) — output dots sit at its right edge
+const TPT = 56 // seeded ToolCard first-port y-offset from card top (header + grid start)
+const TROW = 18 // seeded ToolCard port-row pitch
+
+// The seeded germline wiring [fromNode, outKind, toNode, inKind], typed so the computed edges
+// attach output→input by KIND (kept in lockstep with the corrected TOOLS ports). Mirrors
+// germlineTemplate's tool→tool chain (fastp → bwa → markdup → {mosdepth, call → norm} + MultiQC fan-in).
+const SEEDED_WIRES: [string, string, string, string][] = [
+  ['n_fastp', 'fastq', 'n_bwa', 'fastq'],
+  ['n_bwa', 'bam', 'n_markdup', 'bam'],
+  ['n_markdup', 'bam', 'n_mosdepth', 'bam'],
+  ['n_markdup', 'bam', 'n_call', 'bam'],
+  ['n_call', 'vcf', 'n_norm', 'vcf'],
+  ['n_fastp', 'fastp_json', 'n_multiqc', 'fastp_json'],
+  ['n_markdup', 'markdup_metrics', 'n_multiqc', 'markdup_metrics'],
+  ['n_mosdepth', 'mosdepth_summary', 'n_multiqc', 'mosdepth_summary'],
+]
+// Reference-card → tool ref-input wiring [refId, toolNode, inKind]: fasta feeds bwa/call/norm, the
+// panel BED feeds mosdepth (--by) + bcftools call (mpileup -R).
+const REF_WIRES: [string, string, string][] = [
+  ['r_fasta', 'n_bwa', 'reference_fasta'],
+  ['r_fasta', 'n_call', 'reference_fasta'],
+  ['r_fasta', 'n_norm', 'reference_fasta'],
+  ['r_bed', 'n_mosdepth', 'panel_bed'],
+  ['r_bed', 'n_call', 'panel_bed'],
+]
 
 type CanvasProps = {
   mode: Mode
@@ -82,6 +107,33 @@ export function BuilderCanvas(props: CanvasProps) {
     })
     .filter((d): d is string => d != null)
 
+  // Seeded-DAG edges, COMPUTED from the tool/ref card geometry + typed ports (not the old hardcoded
+  // SVG paths, which detached from the ports whenever a card's port count changed — the "broken
+  // lines" report). Anchors mirror the user-edge scheme: an output dot sits at the card's right
+  // edge, an input dot at its left, at TPT + idx·TROW down from the card top.
+  const toolAnchor = (id: string, side: 'out' | 'in', kind: string): { x: number; y: number } | null => {
+    const t = TOOLS.find((x) => x.id === id)
+    if (!t) return null
+    const ports = side === 'out' ? t.outputs : t.inputs
+    const idx = Math.max(0, ports.findIndex((p) => p.kind === kind))
+    return { x: t.x + (side === 'out' ? TW : 0), y: t.y + TPT + idx * TROW }
+  }
+  const seededPaths = SEEDED_WIRES.map(([fid, fk, tid, tk]) => {
+    const a = toolAnchor(fid, 'out', fk)
+    const b = toolAnchor(tid, 'in', tk)
+    if (!a || !b) return null
+    const mx = Math.round((a.x + b.x) / 2)
+    return `M${a.x} ${a.y} H${mx} V${b.y} H${b.x}`
+  }).filter((d): d is string => d != null)
+  // Reference cards sit BELOW the spine (y≈372); their edges rise into a tool's ref input.
+  const refPaths = REF_WIRES.map(([rid, tid, tk]) => {
+    const r = REFS.find((x) => x.id === rid)
+    const b = toolAnchor(tid, 'in', tk)
+    if (!r || !b) return null
+    const ax = r.x + 75 // ref card horizontal center (card is 150 wide)
+    return `M${ax} 372 V${Math.round((372 + b.y) / 2)} H${b.x} V${b.y}`
+  }).filter((d): d is string => d != null)
+
   // Minimap scale (168×46 over the 2560×460 inner).
   const msx = 168 / INNER_W
   const msy = 46 / INNER_H
@@ -108,8 +160,12 @@ export function BuilderCanvas(props: CanvasProps) {
         >
           <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={INNER_W} height={INNER_H}>
             {showSeeded &&
-              EDGES.map((e, i) => (
-                <path key={i} d={e.d} fill="none" stroke={e.s} strokeWidth={e.w} strokeDasharray={e.dash} />
+              seededPaths.map((d, i) => (
+                <path key={`s${i}`} d={d} fill="none" stroke="#c6ced7" strokeWidth={1.5} />
+              ))}
+            {showSeeded &&
+              refPaths.map((d, i) => (
+                <path key={`r${i}`} d={d} fill="none" stroke="#d3dae1" strokeWidth={1.25} strokeDasharray="5 4" />
               ))}
             {edgePaths.map((d, i) => (
               <path key={`u${i}`} d={d} fill="none" stroke="var(--color-accent)" strokeWidth={1.8} />

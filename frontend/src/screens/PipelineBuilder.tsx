@@ -322,9 +322,9 @@ export function PipelineBuilder() {
       heading: 'Tool nodes',
       items: [
         { name: 'fastp', sub: 'fastq · fastp_json', icon: 'scissors', onClick: () => addNode('fastp', 'fastq') },
-        { name: 'bwa-mem2', sub: 'bam · bai', icon: 'merge', onClick: () => addNode('bwa-mem2', 'bam') },
-        { name: 'samtools markdup', sub: 'bam · metrics', icon: 'copy', onClick: () => addNode('samtools markdup', 'bam') },
-        { name: 'mosdepth', sub: 'mosdepth_summary', icon: 'bars', onClick: () => addNode('mosdepth', 'mosdepth_summary') },
+        { name: 'bwa-mem2', sub: 'fastq → bam', icon: 'merge', onClick: () => addNode('bwa-mem2', 'bam') },
+        { name: 'samtools markdup', sub: 'bam · bai · metrics', icon: 'copy', onClick: () => addNode('samtools markdup', 'bam') },
+        { name: 'mosdepth', sub: 'summary · thresholds', icon: 'bars', onClick: () => addNode('mosdepth', 'mosdepth_summary') },
         { name: 'bcftools call', sub: 'vcf', icon: 'dna', onClick: () => addNode('bcftools call', 'vcf') },
         { name: 'bcftools norm', sub: 'filtered_vcf', icon: 'funnel', onClick: () => addNode('bcftools norm', 'filtered_vcf') },
         { name: 'MultiQC', sub: 'multiqc_json', icon: 'layers', onClick: () => addNode('MultiQC', 'multiqc_json') },
