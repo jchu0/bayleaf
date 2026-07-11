@@ -1,0 +1,130 @@
+# ADR-0018 — Variant interpretation as advisory cited evidence, not a clinical decision engine
+
+| Field | Value |
+|---|---|
+| **Status** | Proposed |
+| **Date** | 2026-07-10 (MST) |
+| **Deciders** | maintainer (pending sign-off), design pass (4 parallel memos, 2026-07-10) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md) (three-gate model), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md) (GIAB benchmark / no invented pathogenicity), [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) (advisory agent scoping), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md) (self-contained records), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [design/variant-interpretation.md](../design/variant-interpretation.md) |
+
+## Context
+
+The maintainer asked to extend PipeGuard past variant **calling** into the rare-disease downstream chain —
+**variant filtering/prioritization → annotation → interpretation → reporting** — and chose the fullest option
+("full interpretation + report"). That ambition collides head-on with the repo's **life-science guardrails**
+(CLAUDE.md): PipeGuard is a *research/demo QC decision gate with production intent* and must make **no diagnostic,
+therapeutic, or safety claims**; confidence is a heuristic, never calibrated; clinical variant claims stay grounded
+in ClinVar/GIAB truth and **never invent pathogenicity** (ADR-0004). A naive "interpretation engine" that emits a
+Pathogenic/Likely-Pathogenic call would cross directly into being a clinical decision system.
+
+A four-facet design pass (clinical-safety boundary · stage/gate model · annotation grounding · reporting + PHI)
+converged on a way to deliver real rare-disease value **without** crossing that line. This ADR records the boundary
+and the phased approach so implementation can proceed safely; the architecture detail lives in
+[design/variant-interpretation.md](../design/variant-interpretation.md).
+
+The load-bearing insight: PipeGuard's three gates (ADR-0013) answer *"can we trust this run / this call?"* — the
+variant gate is a **call-quality** gate (DP/GQ/AB/caller-filters). Interpretation answers a **different** question:
+*"what does the world already say about a trustworthy call, and in what order should a human review it?"* Those two
+questions must stay separate.
+
+## Decision
+
+1. **The variant gate stays QC.** It remains a call-quality checkpoint (DP/GQ/AB/caller-filters; `variant.dp` is the
+   one wired threshold today). It never becomes a clinical-significance gate. The interpretation layer never sets,
+   overrides, or re-enters it (ADR-0001).
+
+2. **A new, structurally off-gate advisory interpretation layer.** A framework-agnostic core
+   `src/pipeguard/interpretation/` (never imported by `rules.py`/`run_gate`, like `triage/` and `pipeline_repair/`)
+   surfaces, **per candidate variant, as cited evidence**: ClinVar classification **quoted verbatim** with its
+   review-status/star rating + accession + DB version; gnomAD population/popmax allele frequency; a **mechanical**
+   inheritance-fit against an operator-declared mode; and the variant-gate call-quality already computed. Plus a
+   transparent, **config-driven heuristic review-ordering tier** (`REVIEW_FIRST | REVIEW | DEPRIORITIZED |
+   INSUFFICIENT_EVIDENCE`) that always carries its contributing evidence — a *triage ordering*, **not** a
+   pathogenicity call and **not** a probability.
+
+3. **PipeGuard authors no pathogenicity.** Every clinical-significance statement is a **quotation** of ClinVar (with
+   accession + review status), never PipeGuard's own determination. No ACMG-classification engine, no calibrated
+   probability, no diagnosis, no therapeutic/actionability claim. ACMG evidence codes may be *surfaced as cited
+   inputs* but never *emitted* as a final classification — and for the MVP that emission is **deferred entirely**.
+
+4. **Structural clone of the Archivist (ADR-0012), not a new pattern.** The advisory artifact
+   (`api/interpretation_agent.py`, an `InterpretationDigest`) pins `advisory: Literal[True] = True`, has **no
+   verdict/decision/pathogenicity/confidence field to set**, carries a fixed disclaimer + citations, and refines
+   **only** prose via an optional LLM. Stub-first ($0, offline), lazy `anthropic` import, degrade-to-stub on any
+   error/refusal, `PIPEGUARD_INTERPRETATION_AGENT=stub|claude` (cheap tier default). AI is OFF by default (ADR-0006).
+
+5. **A cited, human-signed run report.** `api/report.py` is a pure projection over already-decided `DecisionCard`s
+   (like `card_readout.py`) — it authors no verdict. It renders provenance header + version pins, decision summary,
+   findings-with-evidence (verbatim), the QC readout, an honest "variant gate — not run in this build" empty state
+   until variant rules exist, and generated narration in a **visually separated** block (ADR-0001). It is **DRAFT
+   until an approver signs off**, reusing the shipped draft→submit→approve lifecycle + `*_by` capture (ADR-0017).
+   PipeGuard can never mark a report "final" on its own.
+
+6. **Data sharing is an explicit, review-gated, audited egress action — never automatic.** A Share surface composes
+   one egress with a selectable **scope** (report / tabular export / artifacts), **location** (local staged dir by
+   default; S3 seam off unless armed; Box/GCS/signed-link seams), and **security level** driving a de-identification
+   policy, **defaulting to the most privacy-preserving option**. It always ends in an explicit `ConfirmDialog`,
+   requires `approver` for external egress, and writes an audited `ShareEvent` to the Admin Activity feed. PHI-scrub
+   reuses `api/deid.py` (drop operator PII; gate cohort keys by origin) and documents `DateShift` + free-text
+   18-identifier redaction as **labelled seams** — it is a demo seam, explicitly **NOT** HIPAA de-identification.
+
+7. **Compose ≠ execute (ADR-0003).** PipeGuard **reads** an externally-produced annotated VCF; it never runs
+   VEP/annotators. Reference data (ClinVar, gnomAD, a GIAB truth set) is fetched via accessions + a fetch script,
+   never committed raw, origin-tagged (new git-ignored `real-clinvar`/`real-gnomad` origins).
+
+8. **Honest provenance stages (P4).** The downstream stages appear in the provenance DAG with the same honest
+   "not run in this build" treatment the align/variant stages already use, becoming real only when an annotated VCF
+   is present. (The terminal gate already reads "partial lineage" when upstream stages didn't run — ADR-adjacent
+   fix, commit `91cdd6d`.)
+
+## Assumptions
+
+- Real rare-disease value comes from **surfacing existing evidence + ordering human review**, not from an automated
+  classification the guardrails forbid.
+- ClinVar (public/NIH) and gnomAD (open) are fetch-not-redistribute compatible (needs a verified-license table).
+- GRCh38 is used consistently across GIAB / ClinVar / gnomAD (no liftover), so citations can't silently mis-align.
+- The demo's only real substrate stays GIAB **HG002** — a publicly-consented benchmark, **not a patient**; any
+  "positive" variant is a clearly-contrived spiked fixture (`origin=contrived`), never implying a real individual.
+- A human approver is always in the loop before a report is final or data is shared externally.
+
+## Alternatives considered
+
+| Option | Why not chosen |
+|---|---|
+| A full ACMG-classification / pathogenicity-calling engine | Crosses directly into a clinical decision system; forbidden by the biomedical guardrails; would "invent pathogenicity" (ADR-0004). |
+| Make clinical significance a 4th **gate** that moves the verdict | Collapses interpretation into the QC gate and lets an annotation drive a decision — violates ADR-0001/0013; keeps the variant gate strictly QC instead. |
+| Run the annotator (VEP) inside PipeGuard | Violates compose ≠ execute (ADR-0003); PipeGuard reads an annotated VCF a driver produced. |
+| A calibrated pathogenicity probability | Confidence is a heuristic here (guardrail 2); a probability would misrepresent certainty — omitted, like `DecisionCard.confidence`. |
+| Auto-release / auto-share reports | Removes the human sign-off + explicit-egress guarantees; every report is DRAFT-until-signed and every share is confirm-gated + audited. |
+
+## Consequences
+
+| | |
+|---|---|
+| **Gains** | Delivers rare-disease evidence surfacing + review ordering + a cited, signed report + a safe share seam — all reusing proven patterns (archivist advisory, card_readout projection, draft→approve lifecycle, deid policy, ConfirmDialog). Stays demonstrably *not* a clinical decision system. |
+| **Costs** | Real reference data (ClinVar/gnomAD) + fetch scripts + a new core module + models + report/share endpoints + frontend — a multi-part build. PHI-scrub is only partial (labelled seams); external egress carries real privacy risk mitigated by role-gate + confirm + audit, not by compliance controls. |
+| **Follow-ups** | Docs owed on build (qc_metrics.md Gate 3, metric_registry.md `variant.gnomad_af` + annotation-source registry, a new data/variant_annotation.md, schemas.md, a license table, data/README origins, ToC). The interpretation **agent**, trio/inheritance context, more annotation sources, `DateShift`/free-text redaction, real S3/Box egress, PDF, and a persisted ledger-anchored report are all **deferred seams**. |
+
+## Open questions (need a maintainer decision before/while building)
+
+1. **Report framing/name** — "interpretation report" reads clinical; recommend **"QC Decision & Provenance Report."**
+2. **Does any ClinVar/gnomAD-driven *review-routing* (route-to-human HOLD/ESCALATE) belong on the gate?** Recommend
+   **off the gate for MVP** — annotation stays advisory-only; a route-to-human rule is an operator-owned, off-by-default
+   config seam needing explicit sign-off. This is the single highest clinical-sensitivity call.
+3. **Reference-data licensing** verified table; the gene→inheritance source (open PanelApp vs paywalled OMIM).
+4. **Transcript convention** (recommend MANE Select, surfaced explicitly) + **gnomAD version/slice** (panel-restricted).
+5. **Report grain** — per-run (MVP) vs per-sample vs per-subject/family (trios).
+6. **Egress role bar** (recommend reviewer for internal staged export, approver for external) + which destinations to
+   wire vs leave as seams + the security-level → de-id → destination mapping + raw-artifact egress default (recommend
+   "disallow for guarded origins").
+7. **Dates/free-text** — accept as documented seams for now (only real data is public HG002), or build a minimal regex
+   redactor now? **PDF** — approve a rendering dependency or HTML-only + browser print? **Persist** the report or keep
+   it a live re-render like `/api/export` (recommend live re-render for MVP)?
+
+## Revisit when
+
+- The maintainer signs off on the boundary + the open questions above, or asks to move any deferred seam into scope.
+- Real patient data (not GIAB HG002) is ever ingested — at which point the PHI-scrub seams stop being forward-looking
+  and must be built before any external share.
+- A regulatory/clinical-use requirement appears — this ADR's "not a clinical decision system" boundary would need a
+  formal re-evaluation, not an incremental change.
