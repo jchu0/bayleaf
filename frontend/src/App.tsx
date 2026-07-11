@@ -3,10 +3,12 @@ import type { ReactNode } from 'react'
 import { Layout } from './components/Layout'
 import { ToastProvider } from './components/Toast'
 import { ConfirmProvider } from './components/ConfirmDialog'
+import { InboxProvider } from './context/InboxContext'
 import { PrefsProvider } from './context/PrefsContext'
 import { RoleProvider, useRole } from './context/RoleContext'
 import { Admin } from './screens/Admin'
 import { AgentTriage } from './screens/AgentTriage'
+import { Inbox } from './screens/Inbox'
 import { Intake } from './screens/Intake'
 import { Login } from './screens/Login'
 import { Monitoring } from './screens/Monitoring'
@@ -41,12 +43,15 @@ export default function App() {
             <Route
               element={
                 <RequireAuth>
-                  <Layout />
+                  <InboxProvider>
+                    <Layout />
+                  </InboxProvider>
                 </RequireAuth>
               }
             >
               <Route path="/" element={<RunOverview />} />
               <Route path="/submit" element={<Submit />} />
+              <Route path="/inbox" element={<Inbox />} />
               <Route path="/runs/:runId" element={<RunDetail />} />
               <Route path="/runs/:runId/provenance" element={<Provenance />} />
               <Route path="/runs/:runId/intake" element={<Intake />} />

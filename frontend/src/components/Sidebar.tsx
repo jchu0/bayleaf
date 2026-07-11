@@ -1,5 +1,6 @@
 import {
   Activity,
+  Bell,
   ChevronUp,
   FileCheck2,
   FileUp,
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useInbox } from '../context/InboxContext'
 import { useRole } from '../context/RoleContext'
 import type { RunSummary } from '../types'
 import { UserSettingsDialog } from './UserSettingsDialog'
@@ -32,6 +34,7 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
   const { pathname } = useLocation()
   const { runId } = useParams()
   const { isAdmin } = useRole()
+  const { unreadCount } = useInbox()
   const run = runId ?? defaultRunId
   const runHome = run ? `/runs/${run}` : '/'
   const flagged = runs.find((r) => r.run_id === run)?.n_attention ?? 0
@@ -55,6 +58,8 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
           badge: flagged || undefined,
         },
         { label: 'Review queue', to: '/queue', icon: Inbox, active: pathname.startsWith('/queue') },
+        // The personal notification/triage workspace (GA3), badged with the operator's unread count.
+        { label: 'Inbox', to: '/inbox', icon: Bell, active: pathname.startsWith('/inbox'), badge: unreadCount || undefined },
       ],
     },
     {

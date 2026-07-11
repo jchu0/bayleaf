@@ -1,8 +1,9 @@
-import { ArrowLeft, Bell, ChevronDown, Search } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Search } from 'lucide-react'
 import { useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { RunSummary } from '../types'
 import { RUN_STATUS_META } from '../verdict'
+import { NotificationBell } from './NotificationBell'
 
 // The run switcher shows at most this many rows; search narrows the full set, and a footer links
 // to the full Runs list. A flat dropdown of every run does not scale (the prototype's pattern).
@@ -26,7 +27,7 @@ function useCrumb(): { title: string; run: string | null } {
   return { title: 'Runs', run: null }
 }
 
-export function TopBar({ attention = 0, runs = [] }: { attention?: number; runs?: RunSummary[] }) {
+export function TopBar({ runs = [] }: { runs?: RunSummary[] }) {
   const { title, run } = useCrumb()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -148,14 +149,7 @@ export function TopBar({ attention = 0, runs = [] }: { attention?: number; runs?
           <span className="h-2 w-2 rounded-full bg-proceed" />
           State: Ready
         </span>
-        <button className="relative grid h-8 w-8 place-items-center rounded-lg text-text-2 hover:bg-card-2" aria-label="Notifications">
-          <Bell size={17} strokeWidth={1.8} />
-          {attention > 0 && (
-            <span className="absolute right-0 top-0.5 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-escalate px-0.5 text-[9px] font-semibold text-white">
-              {attention}
-            </span>
-          )}
-        </button>
+        <NotificationBell />
       </div>
     </header>
   )
