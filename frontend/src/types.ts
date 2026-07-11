@@ -145,6 +145,26 @@ export type RunDetail = {
   events: ProvenanceEvent[]
 }
 
+// A de-identified share/report egress (ADR-0018 D3): the scrubbed rows + an honesty/provenance
+// manifest. `policy_id` is a scrub VERSION, never a compliance attestation (see `disclaimer`).
+export type ShareManifest = {
+  run_id: string
+  policy_id: string
+  grain: string
+  n_rows: number
+  origin: string
+  exported_at: string
+  exported_by: string
+  content_hash: string
+  event_id: string
+  safe_harbor_classes: string[]
+  disclaimer: string
+}
+export type ShareBundle = {
+  manifest: ShareManifest
+  rows: Record<string, unknown>[]
+}
+
 export type TriageCitation = {
   source_kind: 'knowledge' | 'finding'
   ref: string

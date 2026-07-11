@@ -7,7 +7,7 @@
 // is 100% read-only: nothing here sets a verdict or confidence — verdicts are quoted verbatim
 // from the events the rule engine authored (ADR-0001).
 
-import { type LucideIcon, CheckCheck, FileText, Flag, Gavel, Play } from 'lucide-react'
+import { type LucideIcon, CheckCheck, FileText, Flag, Gavel, Play, ShieldCheck } from 'lucide-react'
 import type { DecisionCard, Finding, Gate, PipelineStage, ProvenanceEvent, RunArtifact, Severity, Verdict } from './types'
 import { VERDICT_LABEL } from './verdict'
 
@@ -30,6 +30,9 @@ export const EVENT_META: Record<string, { label: string; icon: LucideIcon; chip:
   'finding.emitted': { label: 'Finding', icon: Flag, chip: 'bg-card-2 border-line text-text-2' },
   'verdict.decided': { label: 'Verdict', icon: Gavel, chip: 'bg-card-2 border-line text-text-2' },
   'analysis_run.completed': { label: 'Run completed', icon: CheckCheck, chip: 'bg-card-2 border-line text-text-2' },
+  // A de-identified share/report egress left the boundary (ADR-0018 D3) — an audited data-out,
+  // not a decision; recolored neutral (the shield reads "guarded egress," not "verdict").
+  'data.exported': { label: 'Data shared', icon: ShieldCheck, chip: 'bg-accent-weak border-line text-accent-strong' },
 }
 
 // ── defensive payload readers ────────────────────────────────────────────────
@@ -97,6 +100,13 @@ export function summarizeEvent(e: ProvenanceEvent): string {
       const n = readNum(p, 'n_samples')
       const status = readStr(p, 'status') ?? 'unknown'
       return `Gate run completed · ${n ?? '—'} samples · ${status}`
+    }
+    case 'data.exported': {
+      const n = readNum(p, 'n_rows')
+      const policy = readStr(p, 'policy_id') ?? 'unknown'
+      const origin = readStr(p, 'origin') ?? 'unknown'
+      // Names the scrub as a version, never a compliance claim (the disclaimer rides the payload).
+      return `De-identified share · ${n ?? '—'} rows · ${policy} scrub · origin ${origin}`
     }
     default:
       return e.event_type

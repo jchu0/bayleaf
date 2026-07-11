@@ -1,9 +1,13 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
+import { ShieldCheck } from 'lucide-react'
 import { api } from '../api'
 import { PageHeader } from '../components/PageHeader'
 import { ErrorBox, Loading } from '../components/States'
 import { Tabs } from '../components/Tabs'
+import { useRole } from '../context/RoleContext'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import type { ProvenanceEvent, RunArtifact, RunDetail } from '../types'
 import { fmtTime, groupArtifacts, readGateProvenance, readNum, readStr } from '../provenance'
 import { ProvenanceLineage } from '../components/provenance/Lineage'
@@ -27,6 +31,12 @@ export function Provenance() {
   const [artifacts, setArtifacts] = useState<RunArtifact[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [params, setParams] = useSearchParams()
+
+  // Re-fetch the run detail alone (the events trail) — used after a share records a DATA_EXPORTED
+  // event so it appears immediately, without reloading the artifacts.
+  const refetchDetail = useCallback(() => {
+    api.run(runId).then(setDetail).catch((e) => setError(String(e)))
+  }, [runId])
 
   useEffect(() => {
     setDetail(null)
@@ -61,8 +71,10 @@ export function Provenance() {
   return (
     <div className="mx-auto max-w-[1080px]">
       {/* UIC-1: the run switcher already names which run this is — drop the eyebrow + descriptive
-          subtitle (pure page chrome), keep only the title. */}
-      <PageHeader title="Provenance" />
+          subtitle (pure page chrome), keep only the title. The one action is the de-identified
+          share (approver-gated + confirm-gated; ADR-0018 D3), which records an audited DATA_EXPORTED
+          event that then surfaces in the Event trail below. */}
+      <PageHeader title="Provenance" actions={<ShareAction runId={detail.run_id} onShared={refetchDetail} />} />
 
       <ProvenanceHeader events={detail.events} />
 
@@ -84,6 +96,59 @@ export function Provenance() {
         {view === 'artifacts' && <ProvenanceArtifacts artifacts={artifacts} />}
       </div>
     </div>
+  )
+}
+
+// The de-identified share/report egress (ADR-0018 D3). Approver-only — a non-approver never sees
+// the control (absent, not merely disabled) — and CONFIRM-gated, so no single accidental click
+// egresses data. It applies the conservative Safe-Harbor-STYLE scrub server-side and records an
+// audited DATA_EXPORTED provenance event; on success we refetch so that event shows in the trail.
+// The copy names the scrub as a version, never a compliance attestation (the honesty guardrail).
+function ShareAction({ runId, onShared }: { runId: string; onShared: () => void }) {
+  const { isApprover } = useRole()
+  const { toast } = useToast()
+  const confirm = useConfirm()
+  const [busy, setBusy] = useState(false)
+  if (!isApprover) return null
+
+  const share = async () => {
+    const ok = await confirm({
+      title: 'Share a de-identified report?',
+      body: (
+        <>
+          Applies the conservative HIPAA Safe-Harbor-<em>style</em> scrub to this run's decision
+          report before it leaves the boundary — the strictest scrub we offer, <strong>not</strong> a
+          certified/attested de-identification and <strong>not</strong> a compliance claim. The egress
+          is recorded as an audited <code>DATA_EXPORTED</code> event in this run's provenance trail.
+        </>
+      ),
+      confirmLabel: 'De-identify & share',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      const { manifest } = await api.shareRun(runId)
+      const plural = manifest.n_rows === 1 ? '' : 's'
+      toast(`Shared ${manifest.n_rows} de-identified row${plural} · ${manifest.policy_id} · recorded in the trail`, 'success')
+      onShared()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={share}
+      disabled={busy}
+      title="De-identify this run's decision report and record the egress in the provenance trail"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-accent hover:text-text disabled:opacity-50"
+    >
+      <ShieldCheck size={14} strokeWidth={2.1} />
+      {busy ? 'Sharing…' : 'Share (de-identified)'}
+    </button>
   )
 }
 

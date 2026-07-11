@@ -29,6 +29,7 @@ import type {
   RunStatus,
   RunSummary,
   RunsPage,
+  ShareBundle,
   SubmitRunAck,
   SubmitRunIn,
   ThresholdOverride,
@@ -185,6 +186,10 @@ export const api = {
   // ── export (download link; no fetch needed for the CSV) ──
   exportUrl: (params: Record<string, string> = {}) =>
     `/api/export${Object.keys(params).length ? `?${new URLSearchParams(params).toString()}` : ''}`,
+
+  // ── de-identified share/report egress (ADR-0018 D3; approver-gated + confirm-gated) ──
+  // Records a DATA_EXPORTED provenance event server-side; the caller refetches the run to show it.
+  shareRun: (runId: string) => write<ShareBundle>(`/api/runs/${enc(runId)}/share`, 'POST', {}),
 
   // ── review-queue tickets ──
   createTicket: (body: TicketIn) => write<Ticket>('/api/review/tickets', 'POST', body),
