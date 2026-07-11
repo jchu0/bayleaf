@@ -26,14 +26,18 @@ export function Pager({
   onPerPage,
   perPageOptions = PER_PAGE_25,
   noun = 'items',
+  hidePerPage = false,
 }: {
   total: number
   page: number
   perPage: PerPage
   onPage: (p: number) => void
-  onPerPage: (p: PerPage) => void
+  // Optional so a fixed-page-size caller (e.g. Settings' agent roster) can omit it entirely and pass
+  // hidePerPage; existing callers still pass it, so this widening is backward-compatible.
+  onPerPage?: (p: PerPage) => void
   perPageOptions?: SegmentOption<PerPage>[]
   noun?: string
+  hidePerPage?: boolean
 }) {
   if (total === 0) return null
   const per = Number(perPage)
@@ -47,10 +51,12 @@ export function Pager({
         Showing {from}–{to} of {total} {noun}
       </span>
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11.5px] text-text-3">Per page</span>
-          <SegmentedControl<PerPage> options={perPageOptions} value={perPage} onChange={onPerPage} />
-        </div>
+        {!hidePerPage && onPerPage && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11.5px] text-text-3">Per page</span>
+            <SegmentedControl<PerPage> options={perPageOptions} value={perPage} onChange={onPerPage} />
+          </div>
+        )}
         {pages > 1 && (
           <div className="flex items-center gap-1">
             <button
