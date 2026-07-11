@@ -43,12 +43,21 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
   reset links, TLS). `App.tsx`'s `RequireAuth` guard redirects any unauthenticated route to
   `/login`, preserving the intended destination. This is a **demo-only client-side gate**, not
   production auth (see §8 Invariants + [risks.md RISK-035](../../quality/risks.md)).
-- **Left nav (236px, dark `#141a21`).** Two groups:
+- **Left nav (236px).** Three groups (correcting an earlier 2-group simplification in this doc —
+  the code has always shipped three since T-064):
   - **Operate:** Submit samplesheet · Runs · Intake gate · Decision cards · Review queue ·
-    Provenance · Agent triage · Monitoring
+    **Inbox** (new, Shipped 2026-07-10, T-108, "Wave 7" — see §5.11)
+  - **Analyze:** Provenance · Agent triage · Monitoring
   - **Configure:** Pipeline builder · Settings
   - Plus an **Admin** group (`/admin`, off the operator nav — see §11), gated on the login
     identity's `isAdmin`, not on any wire role.
+  - **Themeable (Shipped 2026-07-10, T-105, commit `52124d3`, "Wave 7," GA2):** the nav used to
+    be dark `#141a21` in both light and dark mode. A new `--color-nav*` var family (`--color-nav`,
+    `-hover`, `-active`, `-active-text`, `-border`, `-text`, `-label`) is now LIGHT in the base
+    `@theme` (white nav, dark text, an accent-tinted active pill) with the original dark-nav
+    values moved into the `:root[data-theme="dark"]` override, so the nav renders light in light
+    mode and the unchanged dark nav in dark mode; `Sidebar.tsx` consumes every var end-to-end (no
+    hardcoded hex left, except a few whites intentionally kept on colored badges).
 - **User panel (nav footer).** Avatar + name → popover: **Role** row (reflects & toggles
   **reviewer/approver** RBAC — the same flag the Review queue and approval flows read),
   **Settings** (opens the Settings dialog), **Sign out**.
@@ -58,12 +67,16 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
   state. The pill's dot and every row's dot read the run's real lifecycle `status`
   (`needs_review`/`running`/`released`) via a shared `RUN_STATUS_META`, never inferred from
   attention count — a running run with 0 flagged samples reads "Sequencing," not a green
-  "all clear."
+  "all clear." A new `NotificationBell` (§5.11) sits beside it, replacing the old dead bell icon.
 - **Content:** light surface — **Shipped 2026-07-10 (T-098, commit `5763be1`)**: softened from
   a cool near-white to a warm japandi sand/greige (`--color-page` `#f5f7f9`→`#f2efe7`,
   `--color-card` `#fff`→`#faf9f4`, insets/lines/text warmed to match, contrast kept AA+);
-  functional verdict colors, the dark nav, and the blue accent are unchanged. Max-width per
-  screen.
+  functional verdict colors, the dark nav, and the blue accent are unchanged. **Reverted
+  2026-07-10 (T-105, commit `52124d3`, "Wave 7," GA1)** — the japandi trial "didn't read
+  clinical/biotech" per the maintainer; light mode is now a **cool clinical** palette
+  (`--color-page #eef1f5`, `--color-card #f9fbfd`, insets/lines/text stepped through cool
+  grays), deliberately kept off the pre-Batch-8 glaring pure-white (`#f9fbfd`, not `#fff`);
+  functional verdict colors and the blue accent are unchanged. Max-width per screen.
 - **Type:** IBM Plex Sans throughout; **IBM Plex Mono** for every id, path, hash, index,
   version, kind, size.
 - **Theme + density (Shipped 2026-07-10, T-091, commit `08a42ad`).** The Settings dialog's
@@ -212,6 +225,12 @@ resolve).
   `ticketAction`/`toggleSuppress` path it always did, so it lands in the Admin Activity audit
   feed exactly as before. The same `ConfirmDialog` primitive is reused by Admin's Act-as (§11)
   and is intended for the Settings/variant authoring surfaces ahead.
+- **Resolve button now neutral (Shipped 2026-07-10, "Wave 7," T-107, commit `478129d`, "RQ1").**
+  The per-ticket and batch "Resolve" buttons were styled with the `proceed-*` (green) token set,
+  which read as "already resolved" rather than an action you could still take. Both are now a
+  neutral outlined button (`border-line-strong bg-card text-text`, accent on hover) — the only
+  primary (blue) action left in the ticket UI is "Acknowledge & review." Styling-only; the
+  confirm gate above and the underlying `ticketAction` write are unchanged.
 
 ### 5.6 Provenance  (`view: 'provenance'`)
 Left→right stage DAG + a per-stage I/O inspector.
@@ -289,6 +308,14 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
   view filter (never a DB purge, never an `api/` write) that moves a signature into a
   collapsible "Cleared · N" section; it stays searchable and escalatable there, and restores in
   one click.
+- **Slanted DD-MM-YY dates + toggleable trend lines (Shipped 2026-07-10, "Wave 7," T-107, commit
+  `478129d`, "M7").** The X-axis dates now slant -35° in **DD-MM-YY** (includes the year; was flat
+  MM-DD, which crowded at density) — chart `height` 200→224 and `XAxis height` 46 to seat the
+  angled ticks. The single always-on "Flagged (trend)" line becomes **five** toggleable trend
+  lines — the four verdicts (proceed/hold/rerun/escalate) plus flagged (the non-proceed total) —
+  each colored to match its stacked-bar segment; the old static swatch legend is now clickable
+  `aria-pressed` toggle chips (default: flagged ON, the four verdict lines OFF, so the chart isn't
+  cluttered on load).
 
 ### 5.9 Pipeline builder  (`view: 'builder'`)  — see §6 for the full model
 Node-graph editor that **emits `run_layout.yaml`**. Defaults to **View**; **Edit** unlocks
@@ -328,6 +355,51 @@ authoring.
 - **Settings dialog** (from the user panel): profile (name / email / role / time zone) +
   preferences (theme, density, email digest, desktop notifications), Cancel / Save.
 
+### 5.11 Inbox  (`view: 'inbox'`) — Shipped 2026-07-10, T-108, commit `d832553`, "Wave 7," GA3
+**Brand new**, not part of the original design pass above — added at the maintainer's request to
+replace the dead top-bar bell and give an operator an intentional way to organize what needs
+doing ("a scrolling list isn't enough, users get lost, changing pages loses their place, no way
+to flag/unflag"). Entirely **off the decision gate**, like the in-app feedback widget: it never
+sets or reads a verdict, finding, or confidence, and it requires **no new backend endpoint** —
+notifications are DERIVED, client-side, from the already-off-gate review queue's
+`api.listTickets({status: 'open'|'in_review'})` (escalate/rerun/hold tickets, §5.5).
+
+- **State (`context/InboxContext.tsx`).** The user's overlay on each item — read/unread, flag,
+  priority, kanban column, due date, a note — plus any self-authored reminders, is stored in
+  `localStorage` **scoped per operator** (keyed by `actor.id`; re-read whenever the acting
+  identity changes, including Admin's "Act as," §11 — so a re-fetch never clobbers triage and a
+  page change never loses it). `unreadCount` excludes the `done` kanban column (the archive) and
+  drives both the Sidebar badge and the top-bar bell badge from the same context, so they can
+  never drift apart.
+- **Four tabs:**
+  1. **Inbox** — a filterable stream (All / Unread / Flagged); each row expands to
+     priority / board-column / due-date / note-to-self / "open in queue."
+  2. **Board** — a 4-column kanban (Inbox / To do / In progress / Done) with native
+     drag-and-drop; moving a card marks it read and drops it from the unread count.
+  3. **Calendar** — a month grid dotting due dates + a day-detail panel + an "add reminder for
+     the selected day" composer.
+  4. **Notes** — a note-to-self composer + inline-editable notes on any item.
+- **Top-bar bell (`components/NotificationBell.tsx`).** A quick-glance dropdown, deliberately
+  distinct from the full workspace: recent items (unread-first), inline flag / mark-read, "Mark
+  all read," "Open inbox →." Reads the same shared context as the workspace, so what you set here
+  waits for you in Inbox.
+- **Shared visual tokens (`inbox.ts`)** — source/priority/column/due-status meta, `timeAgo`,
+  `dueStatus` — kept out of the `.tsx` files so a fast-refresh edit to a component never churns
+  them, and the bell + workspace read identically. `dueStatus`/`todayYmd` deliberately use
+  **local** `yyyy-mm-dd` (not `toISOString()`, which is UTC) so a reminder due "today" never
+  reads as overdue across a UTC-date rollover.
+- **Distinct from the outbound `notify/` port** (ADR-0010, Slack/Teams/Discord, §6 of
+  [architecture.md](../../design/architecture.md)) — that is a server-side push to an *external*
+  channel triggered by `run_gate`; Inbox is a client-only, per-operator organization layer over
+  data already visible in the Review queue, and never leaves the browser.
+- **Honest limitation:** per-browser `localStorage` state, not synced across devices — clearing
+  site data or switching machines loses an operator's triage/board/reminders, the same class of
+  limitation as `PrefsContext` (§4, T-091) and the Monitoring clear/restore-signatures filter
+  (§5.8, T-100).
+- Verified live (light + dark): all four tabs, drag-and-drop moves a card and updates every
+  badge, a calendar reminder lands as "Due today," bell-dropdown triage, no console errors. tsc +
+  oxlint clean.
+
 ---
 
 ## 6. Pipeline builder — full model
@@ -342,12 +414,22 @@ tiles still require Edit.
 
 **Canvas.** Large, pannable in any direction; loads centered on the pipeline. Dot-grid = 20px
 snap grid — **theme-aware since 2026-07-10 (T-098, commit `5763be1`)** via a new `--canvas-dot`
-CSS var (warm+subtle in light, dim `rgba(150,165,185,.08)` in dark, was a hardcoded light hex
-that read as distracting on the dark canvas), and now painted on the scroll surface itself
-(`BuilderCanvas.tsx`) so it spans the **entire** canvas including the margin gutters, not just
-the content plane. Top-right **minimap** (spine + gate + composed nodes — moved from bottom-right
+CSS var (cool+subtle in light — reverted from a warm japandi trial 2026-07-10, T-105, "Wave 7,"
+see §4 — dim `rgba(150,165,185,.08)` in dark, was a hardcoded light hex that read as distracting
+on the dark canvas). **T-098 also briefly moved the grid onto the scroll surface itself so it
+would span the entire canvas including the margin gutters, not just the content plane — this
+caused a visible double-grid regression** (the content plane kept painting its own copy too, so a
+static dot layer visibly slid over a moving one) **and was reverted the same day (2026-07-10,
+T-106, commit `eab5ff2`, "Wave 7," "PB3"): a SINGLE grid now lives on the content plane only,
+so it pans/zooms WITH the pipeline** (the grid still doesn't cover the margin gutters — that
+"spans the entire canvas" framing no longer applies). Top-right **minimap** (spine + gate + composed nodes — moved from bottom-right
 2026-07-10, T-085, commit `14c9f3c`, so it no longer sits under the feedback bubble) — **grown to
-a 210×108 proportional mirror** (was 168×46), 2026-07-10, T-084. Floating zoom + **Tidy**
+a 210×108 proportional mirror** (was 168×46), 2026-07-10, T-084, and (2026-07-10, T-106, commit
+`eab5ff2`, "PB3") now draws a **tracking viewport rectangle** showing where the scroll viewport
+currently sits on the canvas (`updateVp()` maps scroll position → inner canvas coords, the same
+360/480-margin + zoom convention `fitToDag` uses, → minimap pixels; recomputed on scroll/Fit/
+mount/zoom-change, clamped into the minimap box) — previously the minimap mirrored node positions
+with no indicator of where you were looking. Floating zoom + **Tidy**
 (auto-layout) + **Connect** controls, plus (2026-07-10, T-084) a native ctrl-wheel/trackpad-pinch
 zoom on the canvas itself (`{ passive: false }`, since React's `onWheel` can't `preventDefault`;
 plain wheel still pans; clamped 0.6–1.4), and **Fit** now centers/zooms to the pipeline's actual
@@ -532,14 +614,18 @@ in `source/PipeGuard.dc.html` `:root` and the app's theme): verdict 4-shade
 `--bg/--surface/--surface-2/--surface-3/--border/--border-strong/--text/--text-2/--text-3`.
 Shape: chips ~20px radius, buttons/inputs 8px, cards 11–14px; card shadow
 `0 1px 2px rgba(16,24,40,.05)`. **Light neutrals warmed to a japandi sand/greige palette
-(Shipped 2026-07-10, T-098, commit `5763be1`)** — see §4 App shell for the exact hex deltas;
-contrast preserved, verdict/gate/severity/accent families untouched. The app's actual CSS
+(Shipped 2026-07-10, T-098, commit `5763be1`), then REVERTED to a cool clinical palette the same
+day (T-105, commit `52124d3`, "Wave 7," GA1 — the maintainer's call that japandi "didn't read
+clinical/biotech")** — see §4 App shell for the exact hex deltas; contrast preserved,
+verdict/gate/severity/accent families untouched throughout both changes. The app's actual CSS
 variable names are `--color-page`/`--color-card`/`--color-card-2`/`--color-card-3`/
 `--color-line`/`--color-line-strong`/`--color-text`/`--color-text-2`/`--color-text-3` (the
 `--bg`/`--surface`/`--border`/`--text` family above is this design doc's shorthand naming, not
 the app's literal token names — read `frontend/src/index.css` `@theme` for the ground truth). A
-new theme-aware `--canvas-dot` token (warm+subtle in light, dim `rgba(150,165,185,.08)` in dark)
-now drives the Pipeline-Builder canvas dot grid (§6 Canvas).
+new theme-aware `--canvas-dot` token (cool+subtle in light as of the revert, dim
+`rgba(150,165,185,.08)` in dark) now drives the Pipeline-Builder canvas dot grid (§6 Canvas). The
+left **nav** is also now themeable (`--color-nav*`, §4 App shell, T-105) — previously dark in
+both modes.
 
 ## 10. Files
 - `PipeGuard.html` — complete self-contained prototype (open in a browser).
@@ -575,7 +661,10 @@ governance; **not** "any approver," which was the original, now-corrected framin
    **Upgraded 2026-07-10 (T-102, commit `d65c9c1`):** Act-as's confirm now uses the same
    reusable, branded **`ConfirmDialog`** the review queue adopted (§5.5) instead of the earlier
    native `window.confirm` — a UI-consistency change only; the confirmation copy and the
-   admin-panel gating are unchanged.
+   admin-panel gating are unchanged. **Extended reach (2026-07-10, T-108, "Wave 7"):** "Act as"
+   now also swaps which operator's **Inbox** (§5.11) is visible — `InboxContext` re-reads its
+   `localStorage` overlay keyed on `actor.id` whenever the acting identity changes, so impersonating
+   a user shows their real triage/board/reminders, not a shared one.
 2. **Activity log** — a REAL, zero-new-backend audit feed merging `GET /api/settings/thresholds`
    + `GET /api/pipelines` + `GET /api/review/tickets` into one append-only when/actor/kind/target/
    status table, facet-filterable by kind. **Shipped 2026-07-10 (T-093, commit `8a14661`, "A2"):**

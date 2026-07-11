@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [ADRs](../adr/), [functional.md](functional.md), [planning/tasks.md](../planning/tasks.md), [journal 2026-07-08](../journal/2026-07-08-build.md), [journal 2026-07-09 frontend batch-2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 GIAB E2E](../journal/2026-07-09-giab-e2e-pipeline.md), [journal 2026-07-09 frontend batch-3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md) |
+| **Related** | [ADRs](../adr/), [functional.md](functional.md), [planning/tasks.md](../planning/tasks.md), [journal 2026-07-08](../journal/2026-07-08-build.md), [journal 2026-07-09 frontend batch-2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 GIAB E2E](../journal/2026-07-09-giab-e2e-pipeline.md), [journal 2026-07-09 frontend batch-3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md) |
 
 ## Overview
 
@@ -44,19 +44,30 @@ The MVP core is standing; these in-scope pieces are now built and verified (see
    like a mock run (`RUN-2026-07-08-GIAB-HG002`, `origin=real-giab`) — HOLD on the honest
    cluster-PF-missing signal (a run-level SAV metric a fastq→BAM path can't produce). Contamination
    (verifybamid2) still not computed (see [tasks.md](../planning/tasks.md) T-071).
-5. **Dashboard — 9 operator screens, rebuilt to the refreshed design prototype** (T-062,
-   2026-07-09, superseding T-022b's 1:1 migration), **plus an admin panel** (T-066, `/admin`,
-   approver-gated): submit samplesheet, run overview, intake/preflight, decision cards, review
-   queue, provenance (compute-DAG), agent triage, monitoring, settings — in a nav restoring the
-   3-group Operate/Analyze/Configure split (T-064, reversing T-062's 2-group call per maintainer
-   feedback) — **plus the Pipeline Builder** (T-044/#11, with free composition + Connect mode +
-   a "New pipeline" affordance since T-062/T-065); plus the Streamlit offline fallback. The admin
-   panel's Users & roles tab is an explicit **client-mock** (no backend user store — `api/auth.py`
-   stays a header dev-shim, ADR-0017); Activity log + System are real reads. Seeded with volume
-   for UI/UX testing: `scripts/seed_giab_demo.py` (T-064) adds ~24 synthetic (`origin=contrived`)
-   GIAB-named runs, 29 discoverable runs total. Three product writes that 4xx'd against the real
-   API (threshold slug, pipeline submit chain, ticket-resolve RBAC) are now fixed and surfaced via
-   a Toast on failure (T-067) — the first real frontend↔backend write reconciliation pass.
+5. **Dashboard — now 11 operator screens** (was documented as "9," a stale count this edit
+   corrects: 8 trace to T-022b's 1:1 fidelity pass, Pipeline Builder to T-044, Submit was new in
+   the T-062 rebuild, and **Inbox is new as of this batch** — see below), rebuilt to the refreshed
+   design prototype (T-062, 2026-07-09, superseding T-022b's 1:1 migration), **plus an admin
+   panel** (T-066, `/admin`, gated on `isAdmin`, not counted among the 11): submit samplesheet,
+   run overview, intake/preflight, decision cards, review queue, **inbox** (new, see below),
+   provenance (compute-DAG), agent triage, monitoring, pipeline builder, settings — in a nav
+   restoring the 3-group Operate/Analyze/Configure split (T-064, reversing T-062's 2-group call
+   per maintainer feedback) — **plus the Pipeline Builder** (T-044/#11, with free composition +
+   Connect mode + a "New pipeline" affordance since T-062/T-065); plus the Streamlit offline
+   fallback. The admin panel's Users & roles tab is an explicit **client-mock** (no backend user
+   store — `api/auth.py` stays a header dev-shim, ADR-0017); Activity log + System are real reads.
+   Seeded with volume for UI/UX testing: `scripts/seed_giab_demo.py` (T-064) adds ~24 synthetic
+   (`origin=contrived`) GIAB-named runs, 29 discoverable runs total. Three product writes that
+   4xx'd against the real API (threshold slug, pipeline submit chain, ticket-resolve RBAC) are now
+   fixed and surfaced via a Toast on failure (T-067) — the first real frontend↔backend write
+   reconciliation pass. **Inbox (2026-07-10, "Wave 7," T-108, commit `d832553`), a new off-gate
+   surface, not part of the original design pass:** a personal notification/triage workspace
+   (`/inbox`, Operate group) replacing the dead top-bar bell — DERIVED from the already-off-gate
+   review-queue tickets, with a per-operator `localStorage` overlay (read/flag/priority/kanban
+   column/due date/note) plus self-authored reminders; four tabs (Inbox stream, Board kanban,
+   Calendar, Notes). Distinct from the outbound `notify/` port (in-scope 6 above, ADR-0010) — that
+   pushes to an external Slack/Teams/Discord channel server-side; Inbox never leaves the browser
+   and never touches a verdict/confidence. See [functional.md REQ-F-077](functional.md).
 6. **AI seams — the synthesizer (narrator) plus four advisory agents** — QC-triage, off-gate
    feedback-triage, **pipeline-repair (#2, T-058 — now also fed by structured execution-trace
 ingestion, EXEC-001/T-061) and archivist (#3, T-059)** — all present,

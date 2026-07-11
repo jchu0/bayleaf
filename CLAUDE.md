@@ -318,7 +318,10 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    unchanged), and the Pipeline-Builder canvas dot grid is now theme-aware (`--canvas-dot`,
    warm+subtle in light / much dimmer in dark, was a hardcoded light hex that read as
    distracting on the dark canvas) and now spans the whole scroll surface, not just the content
-   plane. **UI feedback pass** (T-099): the Pipeline-Builder advisory-agent palette tiles
+   plane. **Superseded 2026-07-10 (Wave 7, commit `eab5ff2`)** — painting the grid on BOTH the
+   scroll surface and the content plane caused a visible double-grid regression (a static layer
+   sliding over a moving one); the scroll-surface grid was removed the same day, so the dots live
+   on the content plane only again (see the Wave-7 paragraph below). **UI feedback pass** (T-099): the Pipeline-Builder advisory-agent palette tiles
    (QC-triage/Pipeline-repair/Archivist) are now clickable in **View** mode (an `alwaysEnabled`
    `PaletteItem` flag — they're read-only advisory reads, never a mutation, so consulting one no
    longer forces Edit); Provenance relabels the artifact digest "hash" → "**fingerprint**" (more
@@ -396,6 +399,38 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    not wired to `PIPEGUARD_*_MODEL`" gap stays open; this is a presentation rebuild, not a
    persistence fix. ST2 part 1 (runbook thresholds bound to assay × sample type) was verified
    already correct in `SettingsAssayTable.tsx` — no change needed there.
+   **Wave 7 (2026-07-10, commits `52124d3`→`d832553`, T-105–T-108,
+   [journal](journal/2026-07-10-frontend-batch7.md)), a maintainer UI-feedback pass — frontend-only,
+   no verdict/gate/ADR-0001 boundary changed** (`git diff --stat b4c3672 d832553 -- src/ api/
+   tests/` empty; named "Wave 7," not "Batch 7/8," to avoid colliding with those already-used
+   labels above). **Theme reverted + nav themeable** (T-105, `52124d3`): light mode reverts from
+   the Batch-8 warm japandi trial to a **cool clinical** palette (`--color-page #eef1f5`,
+   `--color-card #f9fbfd`, `--canvas-dot #d3dae4`) — the maintainer's call that japandi "didn't
+   read clinical" — while staying off the pre-Batch-8 glaring pure-white; separately, the left nav
+   gained its own `--color-nav*` var family (light nav in light mode, the original dark nav moved
+   into the `:root[data-theme='dark']` override), so `Sidebar.tsx` now themes end-to-end instead
+   of staying dark in both modes. **Builder-canvas fix** (T-106, `eab5ff2`, "PB3"): removes the
+   double dot-grid the T-098 scroll-surface change caused (a static layer visibly sliding over a
+   moving one) — a single grid now lives on the content plane only — and adds a minimap **viewport
+   rectangle** that tracks scroll/zoom in real time (`BuilderCanvas.tsx` `updateVp()`, the same
+   360/480-margin + zoom convention `fitToDag` uses). **Monitoring + Review queue** (T-107,
+   `478129d`, "M7"/"RQ1"): the verdict-over-time chart's X-axis dates slant -35° in DD-MM-YY (was
+   flat MM-DD), and the single always-on "Flagged" trend line becomes five toggleable lines
+   (proceed/hold/rerun/escalate/flagged) via clickable legend chips (flagged on by default); the
+   review-queue Resolve buttons drop their green (proceed-token) styling for a neutral outlined
+   button, so "Acknowledge & review" stays the only primary action. **Inbox** (T-108, `d832553`,
+   "GA3"), a brand-new off-gate surface: a personal notification/triage workspace replacing the
+   dead top-bar bell. `context/InboxContext.tsx` **derives** notifications from the already-off-gate
+   open/in-review review-queue tickets and layers a per-operator, `localStorage`-scoped overlay
+   (read/flag/priority/kanban-column/due-date/note) plus user-authored self-reminders — re-scoped
+   whenever Admin's "Act as" swaps identity, so triage state is per-person, not shared, and never
+   lost across a re-fetch or a page change. `screens/Inbox.tsx` (`/inbox`, new Sidebar nav item
+   under Operate, badged with the unread count) has four tabs — Inbox stream, Board (4-column
+   native drag-and-drop kanban), Calendar (month grid + reminder composer), Notes — and
+   `components/NotificationBell.tsx` is a quick-triage dropdown reading the same shared context, so
+   the bell and the workspace can never drift apart. Never sets or reads a verdict/confidence; no
+   new backend endpoint (`api.listTickets` already existed). Verified live light+dark, tsc+oxlint
+   clean, no console errors.
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
 

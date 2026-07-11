@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md) |
 
 ## Overview
 
@@ -641,7 +641,15 @@ had reserved or listed as *not-yet-built*.
     (a production seam, like the auth session, REQ-F-069) — it never touches a verdict, finding,
     or the provenance ledger. *Trace:* [design/frontend/README.md](../design/frontend/README.md)
     §4, [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md)
-    (commit `08a42ad`), [tasks T-091](../planning/tasks.md).
+    (commit `08a42ad`), [tasks T-091](../planning/tasks.md). **Amended 2026-07-10 ("Wave 7," T-105,
+    commit `52124d3`):** theming now extends to the **left nav**, previously dark in both modes.
+    A new `--color-nav*` var family is LIGHT in the base `@theme` (white nav, dark text,
+    accent-tinted active pill) with the original dark-nav values moved into the
+    `:root[data-theme="dark"]` override; `Sidebar.tsx` consumes every var end-to-end. The same
+    commit also **reverted** the light-mode content palette from T-098's warm japandi trial back
+    to a cool clinical palette (`--color-page #eef1f5`, `--color-card #f9fbfd`) — a maintainer
+    aesthetic call, not a new capability; the theme/density mechanism itself (this requirement) is
+    unchanged.
 15. **REQ-F-074 — Submit: real samplesheet + `sample_metadata.csv` parsing (closes the
     registration-only-mock limitation).** `Submit.tsx`'s Upload panel previously had no `<input
     type=file>` and a hardcoded "Parsed 4 samples" chip; it now parses **for real** on drop or
@@ -711,6 +719,44 @@ had reserved or listed as *not-yet-built*.
     [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md),
     [tasks T-103](../planning/tasks.md),
     [journal 2026-07-10](../journal/2026-07-10-settings-agent-table.md).
+18. **REQ-F-077 — Inbox: a personal, off-gate notification/triage workspace.** A new `/inbox`
+    surface (`frontend/src/screens/Inbox.tsx` + `context/InboxContext.tsx` + a top-bar
+    `NotificationBell.tsx`) replaces the dead top-bar bell with an intentional way for an operator
+    to organize what needs doing, realizing the standing maintainer complaint that "a scrolling
+    list isn't enough, users get lost, changing pages loses their place, no way to flag/unflag."
+    **Entirely off the deterministic gate** (the same posture as the in-app feedback widget,
+    REQ-F on feedback) — it never sets or reads a verdict, finding, or confidence, and requires
+    **no new backend endpoint**: notifications are DERIVED, client-side, from the already-off-gate
+    review-queue's `api.listTickets({status: 'open'|'in_review'})` (escalate/rerun/hold tickets).
+    The operator's overlay on each item — read/unread, flag, priority, kanban column, due date,
+    a note — plus any self-authored reminders are stored in `localStorage`, **scoped per operator**
+    (keyed by `actor.id`, re-read whenever the acting identity changes — including Admin's "Act as,"
+    REQ-F-066 — so a re-fetch never clobbers triage state and a page change never loses it, per the
+    maintainer's ask). Four tabs: **Inbox** (filterable All/Unread/Flagged stream, each row
+    expanding to priority/column/due/note/open-in-queue), **Board** (a 4-column native
+    drag-and-drop kanban — Inbox/To do/In progress/Done; moving a card marks it read), **Calendar**
+    (a month grid dotting due dates + a day-detail panel + a reminder composer), **Notes** (a
+    note-to-self composer + inline-editable notes on any item). The Sidebar gains an "Inbox" nav
+    item (Operate group) and the top-bar bell dropdown (`NotificationBell.tsx`) both read the same
+    shared `unreadCount`, so the badge and the workspace can never drift apart. Shared visual
+    tokens (source/priority/column/due-status meta, `timeAgo`, `dueStatus`) live in `inbox.ts`;
+    `dueStatus`/`todayYmd` deliberately use **local** `yyyy-mm-dd`, not `toISOString()` (UTC), so a
+    reminder due "today" can't read as overdue across a UTC-date rollover. **Distinct from the
+    outbound `notify/` port (ADR-0010, Slack/Teams/Discord)** — that is a server-side push to an
+    *external* channel triggered by `run_gate`; Inbox is a client-only, per-browser personal
+    organization layer over data the operator can already see in the Review queue, and never
+    leaves the browser. **Honest limitation:** this is per-browser `localStorage` state, not
+    synced across devices — clearing site data or switching machines loses an operator's
+    triage/board/reminders (the same class of limitation as `PrefsContext`, REQ-F-073, and the
+    Monitoring clear/restore-signatures view filter). Verified live (light + dark): all four tabs,
+    drag-and-drop updates every badge, a calendar reminder lands as "Due today," the bell dropdown
+    triages inline, no console errors. `git diff --stat b4c3672 d832553 -- src/ api/ tests/` empty
+    (frontend-only). tsc + oxlint clean. *Trace:* REQ-F-042 (review-queue tickets), REQ-F-066
+    (Act-as), REQ-F-073 (the `localStorage`-preference precedent),
+    [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) (the outbound-notify contrast),
+    [architecture.md](../design/architecture.md), [design/frontend/README.md](../design/frontend/README.md)
+    §5.11, [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md) (commit `d832553`),
+    [tasks T-108](../planning/tasks.md).
 
 ## Notes / deferred
 

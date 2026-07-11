@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md) |
 
 ## Overview
 
@@ -290,7 +290,11 @@ Every finding and verdict is labelled with the gate it came from:
      accent are unchanged), and a new theme-aware `--canvas-dot` var (warm+subtle in light, much
      dimmer `rgba(150,165,185,.08)` in dark — was a hardcoded light hex that read as distracting
      on the dark canvas) moves the Pipeline-Builder dot grid onto the scroll surface
-     (`BuilderCanvas.tsx`) so it spans the whole canvas, not just the content plane. **(2) UI
+     (`BuilderCanvas.tsx`) so it spans the whole canvas, not just the content plane. **Superseded
+     2026-07-10 (Wave 7, commit `eab5ff2`) — this caused a visible double-grid regression** (the
+     content plane kept painting its own copy too, so a static layer visibly slid over a moving
+     one); the scroll-surface grid was removed the same day and the dots now live on the content
+     plane only again (see the Wave-7 paragraph below). **(2) UI
      feedback pass** (`3c6dacb`, T-099): the Builder's advisory-agent palette tiles
      (QC-triage/Pipeline-repair/Archivist) gain an `alwaysEnabled` `PaletteItem` flag and are now
      clickable in **View** mode — they only ever open a read-only advisory modal/pill, never
@@ -333,6 +337,51 @@ Every finding and verdict is labelled with the gate it came from:
      `PIPEGUARD_*_MODEL`" gap ([tasks T-045](../planning/tasks.md)), it only re-presents it more
      scalably. ST2 part 1 (runbook thresholds bound to assay × sample type) was verified already
      correct in `SettingsAssayTable.tsx` — no code change needed.
+   - **Frontend fixes — Wave 7 (2026-07-10, commits `52124d3`→`d832553`, T-105–T-108,
+     [journal](../journal/2026-07-10-frontend-batch7.md)), a maintainer UI-feedback pass —
+     frontend-only, no verdict/gate/ADR-0001 boundary changed** (`git diff --stat b4c3672 d832553
+     -- src/ api/ tests/` empty; named "Wave 7" rather than "Batch 7/8" to avoid colliding with
+     those already-used labels above). **(1) Theme reverted + nav themeable** (T-105, `52124d3`):
+     light mode reverts from Batch 8's warm japandi trial to a **cool clinical** palette
+     (`--color-page #eef1f5`, `--color-card #f9fbfd`, `--canvas-dot #d3dae4`) — the maintainer's
+     call that japandi "didn't read clinical/biotech" — while staying off the pre-Batch-8 glaring
+     pure-white; verdict colors and the accent are unchanged. Separately, the left nav gains its
+     own `--color-nav*` var family, LIGHT in the base `@theme` with the original dark-nav values
+     moved into the `:root[data-theme='dark']` override, so `Sidebar.tsx` (refactored to consume
+     every nav var end-to-end) now themes light-in-light/dark-in-dark instead of staying dark in
+     both modes (amends REQ-F-073). **(2) Builder-canvas fix** (T-106, `eab5ff2`, "PB3"): removes
+     the double dot-grid the Wave-1/T-098 scroll-surface change caused (a static layer visibly
+     sliding over a moving one) — a single grid lives on the content plane only again, see the
+     correction above — and adds a minimap **viewport-tracking rectangle** (`updateVp()` maps the
+     scroll viewport → inner canvas coords, the same 360/480-margin + zoom convention `fitToDag`
+     uses, → minimap pixels; recomputed on scroll/Fit/mount/zoom). **(3) Monitoring + Review
+     queue** (T-107, `478129d`, "M7"/"RQ1"): the verdict-over-time chart's X-axis dates now slant
+     -35° in DD-MM-YY (was flat MM-DD); the single always-on "Flagged" trend line becomes five
+     toggleable lines (proceed/hold/rerun/escalate/flagged) via clickable legend chips (flagged on
+     by default); the review-queue Resolve buttons drop their green (proceed-token) styling for a
+     neutral outlined button, so "Acknowledge & review" stays the only primary action. **(4)
+     Inbox** (T-108, `d832553`, "GA3") — a **brand-new off-gate surface**, not a re-presentation:
+     see the dedicated bullet immediately below.
+   - **Inbox — a new personal, off-gate notification/triage workspace** (`context/
+     InboxContext.tsx`, `screens/Inbox.tsx`, `components/NotificationBell.tsx`; T-108, REQ-F-077,
+     commit `d832553`). Replaces the dead top-bar bell. Notifications are **DERIVED** from the
+     already-off-gate review-queue's open/in-review tickets (`api.listTickets`) — **no new backend
+     endpoint**. The operator's overlay (read/flag/priority/kanban column/due date/note) plus
+     self-authored reminders persist to `localStorage`, **scoped per operator** (keyed by
+     `actor.id`, re-read whenever the acting identity changes — including Admin's Act-as, §11 —
+     so triage state is per-person and survives a re-fetch or a page change, the maintainer's
+     specific ask). Four tabs at `/inbox` (new Sidebar item, Operate group, badged with the
+     unread count): Inbox stream, Board (4-column native drag-and-drop kanban), Calendar (month
+     grid + reminder composer), Notes. **This is the same "off-gate product state, client-only"
+     pattern Invariant 6 already covers** (in-app feedback, saved Builder drafts, `PrefsContext`,
+     the Monitoring clear/restore-signatures filter) — extended here to a full personal
+     workspace: it never sets or reads a verdict, finding, or confidence, and unlike the
+     draft→approve stores (Invariant 6/7), it never even reaches `api/` — the overlay stays
+     entirely client-side. Distinct from the outbound `notify/` port (ADR-0010): that pushes to an
+     *external* Slack/Teams/Discord channel server-side from `run_gate`; Inbox is a personal
+     organization layer over data the operator can already see, and never leaves the browser.
+     **Honest limitation:** per-browser `localStorage`, not synced across devices — the same class
+     of limitation as `PrefsContext` (T-091) and the signatures clear/restore filter (T-100).
    **Honest, labelled frontend deferrals (no fabrication):** the Monitoring **Median-review KPI**
    (no backend field yet — the signature-level `first_seen`/`last_seen`/`trend`/`affected_run_ids`
    fields below ARE shipped); Submit now
@@ -346,10 +395,12 @@ Every finding and verdict is labelled with the gate it came from:
    run volume, a real concern once `synthetic/scale.py` (T-050) seeds a much larger window). The
    Builder's Run-hand-off / pipeline-repair / archivist modals + saved-profiles (T-069) and the
    reusable run-selector (T-070) are **both now closed** (batch 7 above) — this paragraph no
-   longer carries them as open gaps. Of the 10 operator screens: 8 (Runs, Intake, Decision cards, Review queue,
+   longer carries them as open gaps. Of the **11** operator screens (was 10; **Inbox is new as of
+   Wave 7**, T-108): 8 (Runs, Intake, Decision cards, Review queue,
    Provenance, Agent triage, Monitoring, Settings) trace to the pre-refresh [T-022b](../planning/tasks.md)
-   1:1 fidelity pass, Pipeline Builder to [T-044](../planning/tasks.md), and Submit was new in the
-   T-062 rebuild; Admin (governance, not counted among the 10) is new in this batch.
+   1:1 fidelity pass, Pipeline Builder to [T-044](../planning/tasks.md), Submit was new in the
+   T-062 rebuild, and Inbox is new in Wave 7 (T-108); Admin (governance, not counted among the 11)
+   is new in the earlier maintainer-feedback batch.
    The `api/` surface (all additive / backward-compatible; the core is untouched — sorting,
    paging, aggregation, product writes, the draft→approve authoring lifecycle, and auth all live
    in `api/`, never `src/pipeguard/`):
