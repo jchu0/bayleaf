@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md) |
+| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md) |
 
 ## Overview
 
@@ -19,7 +19,7 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **406 tests across 26 files** — 403 pass and 3 skip (the Postgres
+The offline suite is **413 tests across 27 files** — 409 pass and 4 skip (the Postgres
 live-integration checks in `test_persistence_postgres_live`, which need a reachable Postgres
 and are off by default). By collected size: `test_api` (42), `test_notify` (36),
 `test_synthetic` (33), `test_fetch_giab` (32), `test_gate` (29), `test_node_author` (19, the
@@ -36,16 +36,18 @@ rule VAR-RTH-001, ADR-0018 D2 — now incl. one committed-fixture, end-to-end-vi
 `test_safe_harbor` (8, the conservative Safe-Harbor-style de-id egress transform, ADR-0018 D3),
 `test_pipelines` (8, the Pipeline Builder save/version store),
 `test_execution_trace` (8, the structured execution-trace feed →
-EXEC-001), `test_artifacts` (7),
-`test_share_egress` (5, the de-identified share/report egress endpoint, ADR-0018 D3, new
-2026-07-11), `test_metrics_mapping` (5), `test_persistence_postgres_live` (3) — all
+EXEC-001), `test_artifacts` (7), `test_share_store` (6, the pluggable jsonl/sqlite/postgres
+share-egress-audit sink, ADR-0016/ADR-0018 D3, new 2026-07-11),
+`test_share_egress` (5, the de-identified share/report egress endpoint, ADR-0018 D3,
+2026-07-11), `test_metrics_mapping` (5), `test_persistence_postgres_live` (4, one added
+2026-07-11 for the share store's live-Postgres round-trip) — all
 runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `test_api` and
 `test_triage` suites need the api/claude extras to import FastAPI, while `test_execution_trace`,
-`test_route_to_human`, `test_safe_harbor`, `test_share_egress`, and the agent suites run
-pure-offline over the core + pydantic, `test_share_egress` via a `TestClient` with the share
-ledger redirected to a tmp path). Census verified via `uv run pytest --collect-only -q` (406
-collected) + `uv run pytest -q` (403 passed, 3 skipped) + `git ls-files 'tests/*.py' | wc -l`
-(26).
+`test_route_to_human`, `test_safe_harbor`, `test_share_egress`, `test_share_store`, and the
+agent suites run pure-offline over the core + pydantic, `test_share_egress` via a `TestClient`
+with the share store redirected to a tmp path). Census verified via
+`uv run pytest --collect-only -q` (413 collected) + `uv run pytest -q` (409 passed, 4 skipped) +
+`git ls-files 'tests/*.py' | wc -l` (27).
 
 ## What "good" means (principles)
 
@@ -419,9 +421,9 @@ not NLP) and will miss a name embedded in prose — documented in the module doc
 
 | Field | Value |
 |---|---|
-| **Target** | `POST /api/runs/{run_id}/share` (`api/main.py`) + `api/share_ledger.py` — the endpoint that wires `api/safe_harbor.py` into a real egress (ADR-0018 D3) |
+| **Target** | `POST /api/runs/{run_id}/share` (`api/main.py`) + `api/share_store.py` — the endpoint that wires `api/safe_harbor.py` into a real egress (ADR-0018 D3), recorded through the pluggable jsonl/sqlite/postgres sink (ADR-0016) |
 | **Type** | Faithfulness |
-| **Automated?** | Yes — `test_share_egress.py` (`test_share_requires_approver`, `test_share_unknown_run_is_404`, `test_share_scrubs_direct_identifiers_and_labels_the_scrub`, `test_share_records_a_data_exported_event_in_the_trail`, `test_share_does_not_perturb_the_gate_decision`) |
+| **Automated?** | Yes — `test_share_egress.py` (`test_share_requires_approver`, `test_share_unknown_run_is_404`, `test_share_scrubs_direct_identifiers_and_labels_the_scrub`, `test_share_records_a_data_exported_event_in_the_trail`, `test_share_does_not_perturb_the_gate_decision`); the sink's own storage-backend parity is separately covered by `test_share_store.py` (jsonl default, sqlite round-trip, sqlite==jsonl parity, degrade-to-jsonl without a DSN, idempotent re-append, tolerant corrupt-line read) and a live-Postgres round-trip in `test_persistence_postgres_live.py` |
 
 **Definition of good.** The endpoint is **approver-only** (a viewer/reviewer is 403'd) — data does
 not leave on a low privilege. Every emitted row has the direct identifiers (`submitted_by`,
@@ -435,7 +437,7 @@ byte-identical before and after (ADR-0001 — a share never reads back into, or 
 
 **Method.** Drive a `TestClient` against the committed `RUN-2026-07-11-CLINVAR-RTH` fixture (it
 carries intake identity via `sample_metadata.csv`, so the scrub is demonstrably removing
-something, not passing an already-clean row through) with the share ledger redirected to a tmp
+something, not passing an already-clean row through) with the share store redirected to a tmp
 path; assert 403 for viewer/reviewer, 404 for an unknown run, dropped identifiers + a labelled
 policy id + all 18 §164.514(b)(2) classes documented, the recorded event's content hash matching
 the manifest, and the cards unchanged by a `GET` before/after the share.

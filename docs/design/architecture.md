@@ -672,8 +672,8 @@ Every finding and verdict is labelled with the gate it came from:
      stays disarmed and the pinned demo scenario is unchanged. **(2) D3's Safe-Harbor-style scrub
      is now wired to a real, narrower-than-designed egress:** `POST /api/runs/{id}/share`
      (`require_role("approver")`) runs a run's decision rows through `api.safe_harbor.redact_record`
-     and records a new `DATA_EXPORTED` `ProvenanceEvent` to a **separate**, gitignored append-only
-     ledger (`api/share_ledger.py`, distinct from the gate's own cacheable `EventLedger` — a share is
+     and records a new `DATA_EXPORTED` `ProvenanceEvent` to a **separate**, pluggable sink
+     (`api/share_store.py`, distinct from the gate's own cacheable `EventLedger` — a share is
      a live side effect, the gate ledger a deterministic re-derivation); `GET /api/runs/{id}` merges
      the two at read time. The Provenance screen gained an approver-ONLY, confirm-gated "Share
      (de-identified)" header action surfacing the new event in its trail. This is **narrower** than
@@ -685,6 +685,15 @@ Every finding and verdict is labelled with the gate it came from:
      only registering a few still-unused reserved kinds stays open
      ([builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)).
      Grounded in [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md).
+   - **Persistence follow-up (2026-07-11, commit `9a4ef5f`).** The D3 share sink from Wave 11 item
+     2 shipped JSONL-only — the one off-gate sink without a DB adapter, unlike
+     feedback/pipeline/review/settings ([ADR-0016](../adr/ADR-0016-postgres-port.md)). `api/share_ledger.py`
+     was renamed and rebuilt as `api/share_store.py` on the canonical store pattern (a `ShareStore`
+     Protocol + Jsonl/Sqlite/Postgres adapters, `get_share_store()` via
+     `PIPEGUARD_SHARE_STORE=jsonl|sqlite|postgres`, degrade-to-JSONL on any DB failure); `api/main.py`'s
+     `get_run`/`share_run` now call it. Verified against a live `postgres:16`; 409 offline passed /
+     4 skipped. Multi-worker concurrency (a file lock / connection pool) stays a documented seam,
+     not built. Grounded in [journal 2026-07-11](../journal/2026-07-11-share-store-persistence.md).
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with

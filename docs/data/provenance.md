@@ -5,7 +5,7 @@
 | **Status** | Active (Phase 1 seam built; DB projection + `rebuild-db` implemented) |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics |
-| **Related** | [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (`data.exported` share egress), [schemas.md](schemas.md), [qc_metrics.md](qc_metrics.md), `src/pipeguard/provenance.py`, `src/pipeguard/engine.py`, `src/pipeguard/rules.py`, `src/pipeguard/persistence/`, `api/share_ledger.py`, `api/main.py` (`share_run`), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md) |
+| **Related** | [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (`data.exported` share egress), [schemas.md](schemas.md), [qc_metrics.md](qc_metrics.md), `src/pipeguard/provenance.py`, `src/pipeguard/engine.py`, `src/pipeguard/rules.py`, `src/pipeguard/persistence/`, `api/share_store.py`, `api/main.py` (`share_run`), [journal 2026-07-11 d2-d3](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 share-store persistence](../journal/2026-07-11-share-store-persistence.md) |
 
 ## Overview
 
@@ -46,15 +46,33 @@ trace on the gate and recording it as provenance metadata here are two different
    content_hash=…)` pinned to a sha256 of the exact emitted bytes, so the trail entry can't
    drift from what actually left. **Not written to the gate's own `EventLedger`** — see below.
 
-## A second, separate ledger for share events (`api/share_ledger.py`)
+## A second, separate sink for share events (`api/share_store.py`)
 
 `data.exported` events do **not** append to the same `EventLedger` the gate produces. The gate's
 ledger is a **deterministic re-derivation** per run (`api.main._evaluate` is `@lru_cache` — the
 same run dir always replays to the same trail) and must stay byte-stable and cacheable. A share is
 the opposite: a **live, actor-driven side effect** that must survive both that cache and a process
-restart, so it can't be folded into a cached re-derivation. `api/share_ledger.py` is therefore a
-standalone, append-only, gitignored JSONL (`PIPEGUARD_SHARE_LEDGER`, default `share.events.jsonl`
-at the repo root; tolerant reads — a missing file is `[]`, a corrupt line is skipped, not fatal).
+restart, so it can't be folded into a cached re-derivation. `api/share_store.py` is therefore a
+**standalone, pluggable sink** — a `ShareStore` Protocol keyed on `ProvenanceEvent`, queried by
+`for_run(run_id)` (oldest-first) — env-selected via `PIPEGUARD_SHARE_STORE=jsonl|sqlite|postgres`
+(default `jsonl`), matching the shape of the other four off-gate sinks
+(feedback/pipeline/review/settings, [ADR-0016](../adr/ADR-0016-postgres-port.md)):
+
+1. **`JsonlShareStore`** (default) — append-only, gitignored JSONL (`PIPEGUARD_SHARE_PATH`,
+   default `share.events.jsonl` at the repo root; tolerant reads — a missing file is `[]`, a
+   corrupt line is skipped, not fatal).
+2. **`SqliteShareStore`** — a `share_events` table (stdlib `sqlite3`, `PIPEGUARD_SHARE_DB`).
+3. **`PostgresShareStore`** — a `share_events` table (`[postgres]` extra, `DATABASE_URL`),
+   verified against a live `postgres:16` (`tests/test_persistence_postgres_live.py`).
+
+Each row carries the indexed columns (`id`/`created_at`/`run_id`/`event_type`/`actor`) plus the
+full event as a JSON/JSONB document, so a read round-trips a `ProvenanceEvent` exactly. **The DB
+adapters degrade to JSONL on any construction failure** (missing extra, no DSN, unreachable
+server), logged by exception *type* only — never the DSN (the same discipline `get_repository()`
+and `get_share_store()`'s siblings use). `get_share_store()` selects the adapter from the
+environment. **Multi-worker safety (a file lock / connection pool) is a documented seam, not
+built** — the same honest single-worker limit `api/feedback_store.py` already carries.
+
 `GET /api/runs/{id}` **merges** the run's recorded share events into the returned `RunDetail.events`
 live, sorted by `created_at`, so a share appears in the trail immediately — without ever mutating
 the cached `RunDetail` the `@lru_cache`'d `_evaluate` returns (the merge happens on a copy, at read

@@ -1045,8 +1045,10 @@ had reserved or listed as *not-yet-built*.
     (policy id, row count, origin, a sha256 content hash of the exact emitted bytes, the event id,
     the 18 identifier classes, and an explicit non-compliance disclaimer). It is an **egress
     transform only** — reads already-computed `DecisionCard`s, never a rule/verdict/gate input
-    (ADR-0001) — and records the egress as a `DATA_EXPORTED` `ProvenanceEvent` (a new, separate
-    append-only ledger, `api/share_ledger.py`, distinct from the gate's own `EventLedger`; see
+    (ADR-0001) — and records the egress as a `DATA_EXPORTED` `ProvenanceEvent` (a new, separate,
+    pluggable sink, `api/share_store.py` — `PIPEGUARD_SHARE_STORE=jsonl|sqlite|postgres`,
+    degrade-to-JSONL, matching the other four off-gate stores, [ADR-0016](../adr/ADR-0016-postgres-port.md)
+    — distinct from the gate's own `EventLedger`; see
     [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md)) that `GET /api/runs/{id}`
     merges live into the run's Event trail. The Provenance screen
     (`frontend/src/screens/Provenance.tsx`) surfaces it as an approver-ONLY (absent, not merely

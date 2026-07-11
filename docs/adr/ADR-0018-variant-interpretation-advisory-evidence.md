@@ -5,7 +5,7 @@
 | **Status** | Accepted (maintainer sign-off 2026-07-10 MST; three open questions decided — see [Maintainer decisions](#maintainer-decisions-2026-07-10-sign-off)); D2 + D3 now built end-to-end against a committed run — see [Realized](#realized-2026-07-11) |
 | **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST) |
 | **Deciders** | maintainer (signed off 2026-07-10), design pass (4 parallel memos, 2026-07-10) |
-| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md) (three-gate model), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md) (GIAB benchmark / no invented pathogenicity), [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) (advisory agent scoping), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md) (self-contained records), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported` event), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [data/provenance.md](../data/provenance.md), [design/variant-interpretation.md](../design/variant-interpretation.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md) (three-gate model), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md) (GIAB benchmark / no invented pathogenicity), [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) (advisory agent scoping), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md) (self-contained records), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported` event), [ADR-0016](ADR-0016-postgres-port.md) (pluggable-store family the share sink now matches), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [data/provenance.md](../data/provenance.md), [design/variant-interpretation.md](../design/variant-interpretation.md), [journal 2026-07-11 d2-d3](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 share-store persistence](../journal/2026-07-11-share-store-persistence.md) |
 
 ## Context
 
@@ -158,7 +158,7 @@ before any external share.
 Two further build increments landed against a **committed run**, closing two gaps the 2026-07-10
 sweep had explicitly left open (see [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md#open-questions--todo): "the rule has never fired end-to-end against a
 committed run" / "not yet wired to any egress endpoint"). Verified by reading `api/main.py`,
-`api/share_ledger.py`, `tests/test_route_to_human.py`, and `tests/test_share_egress.py` directly.
+`api/share_store.py`, `tests/test_route_to_human.py`, and `tests/test_share_egress.py` directly.
 
 1. **D2 fires end-to-end against a committed run (commit `8ecc2a1`).** `api/main._active_runbook
    (run_id)` is the deployment-config seam that arms route-to-human **per run**: it reads an
@@ -182,9 +182,11 @@ committed run" / "not yet wired to any egress endpoint"). Verified by reading `a
    `api.safe_harbor.redact_record`, returns a `ShareBundle` (the scrubbed rows + a `ShareManifest`:
    `policy_id="safe-harbor-style-v1"`, `n_rows`, `origin`, a sha256 `content_hash` of the exact
    emitted bytes, the `event_id`, the 18 §164.514(b)(2) classes, and the disclaimer), and records a
-   `DATA_EXPORTED` `ProvenanceEvent` to a new, separate append-only ledger
-   (`api/share_ledger.py`, kept apart from the gate's own cacheable `EventLedger` — see
-   [data/provenance.md](../data/provenance.md#a-second-separate-ledger-for-share-events-apishare_ledgerpy)).
+   `DATA_EXPORTED` `ProvenanceEvent` to a new, separate, pluggable sink
+   (`api/share_store.py`, kept apart from the gate's own cacheable `EventLedger` — see
+   [data/provenance.md](../data/provenance.md#a-second-separate-sink-for-share-events-apishare_storepy);
+   shipped JSONL-only at first, brought to the pluggable jsonl/sqlite/postgres shape the same
+   day — see item 4 below).
    The Provenance screen (`frontend/src/screens/Provenance.tsx`) surfaces it as an approver-ONLY,
    confirm-gated "Share (de-identified)" header action; on success it toasts the manifest and
    refetches the run so the `DATA_EXPORTED` row appears in the Event trail immediately.
@@ -200,7 +202,26 @@ committed run" / "not yet wired to any egress endpoint"). Verified by reading `a
    404, direct identifiers (`submitted_by`/`subject_id`) dropped from every row, the recorded event
    pinned to the manifest's content hash, and a share leaves the gate's cards byte-identical
    (egress transform only, ADR-0001).
-3. **What is genuinely still unbuilt**, per [design/variant-interpretation.md §0](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off):
+3. **D3's share sink brought to persistence parity (2026-07-11, commit `9a4ef5f`), closing the
+   "JSONL-only" gap.** When it first shipped (item 2 above), the share-egress sink was the one
+   off-gate sink without a DB adapter — feedback/pipeline/review/settings already had the
+   pluggable jsonl/sqlite/postgres shape ([ADR-0016](ADR-0016-postgres-port.md)). `api/share_ledger.py`
+   was renamed and rebuilt as `api/share_store.py`: a `ShareStore` Protocol +
+   `JsonlShareStore`/`SqliteShareStore`/`PostgresShareStore`, `get_share_store()` env-selected via
+   `PIPEGUARD_SHARE_STORE` (default `jsonl`; `PIPEGUARD_SHARE_PATH`/`PIPEGUARD_SHARE_DB`/the shared
+   `DATABASE_URL`). The DB adapters **degrade to JSONL** on any construction failure (missing
+   extra/DSN, unreachable server), logged by exception type only — never the DSN, matching every
+   other guarded seam in the repo. `api/main.py`'s `get_run`/`share_run` now call
+   `get_share_store().for_run(...)`/`.append(...)`. 6 new tests (`tests/test_share_store.py`:
+   jsonl default, sqlite round-trip, sqlite==jsonl parity, degrade-to-jsonl without a DSN,
+   idempotent re-append, tolerant corrupt-line read) plus a live-Postgres round-trip appended to
+   `tests/test_persistence_postgres_live.py` — **verified green against a real `postgres:16`**
+   (all 4 live-Postgres tests pass); 409 offline passed / 4 skipped, ruff+mypy clean. This is
+   parity of the *storage backend* only — the endpoint's behavior (approver-gated, one fixed
+   policy, no scope/location/security-level selection) is unchanged from item 2. **Still an
+   honest, documented seam, not built:** a file lock / connection pool for multi-worker
+   concurrency (the same limit `api/feedback_store.py` already carries).
+4. **What is genuinely still unbuilt**, per [design/variant-interpretation.md §0](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off):
    the interpretation agent, `RunReport`, the full Share window (scope/location/security-level),
    gnomAD AF / inheritance-fit evidence, the review-ordering tier, and the ClinVar/gnomAD fetch
    scripts.

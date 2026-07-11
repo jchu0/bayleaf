@@ -162,11 +162,14 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    *and* PostgresRepository (guarded, off-by-default, ADR-0016); `rebuild-db` targets either (ADR-0003).
    A tenth `EventType`, `DATA_EXPORTED` (`data.exported`, ADR-0018 D3), is emitted by the
    **read-API**, not `run_gate` — recording a de-identified share/report egress (item 4) —
-   and deliberately lands in a **separate** append-only ledger (`api/share_ledger.py`,
-   gitignored JSONL, `PIPEGUARD_SHARE_LEDGER`) rather than the gate's own `EventLedger`, since
-   the gate ledger is a deterministic per-run re-derivation (`@lru_cache`'d `_evaluate`) that
-   must stay cacheable, while a share is a live side effect that must survive a restart;
-   `GET /api/runs/{id}` merges the two at read time.
+   and deliberately lands in a **separate** sink, `api/share_store.py` (a `ShareStore`
+   Protocol; `get_share_store()` env-selected via `PIPEGUARD_SHARE_STORE=jsonl|sqlite|postgres`,
+   default `jsonl`, `PIPEGUARD_SHARE_PATH`/`PIPEGUARD_SHARE_DB`/`DATABASE_URL`, degrade-to-JSONL
+   on any DB failure — the pluggable jsonl/sqlite/postgres shape, matching the other four
+   off-gate stores, ADR-0016) rather than the gate's own `EventLedger`, since the gate ledger is
+   a deterministic per-run re-derivation (`@lru_cache`'d `_evaluate`) that must stay cacheable,
+   while a share is a live side effect that must survive a restart; `GET /api/runs/{id}` merges
+   the two at read time.
 3. **Swappable AI, OFF by default.** Synthesizer via `PIPEGUARD_SYNTHESIZER=stub|claude`;
    advisory QC-triage agent (`triage/`, ADR-0009/0012) via `PIPEGUARD_TRIAGE_AGENT=stub|claude`;
    advisory pipeline-repair agent (`src/pipeguard/pipeline_repair/`, ADR-0009/0012) via
@@ -606,7 +609,7 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    `api.safe_harbor.redact_record`, returns a `ShareBundle` (scrubbed rows + a `ShareManifest`:
    policy id, `n_rows`, origin, a sha256 content hash of the emitted bytes, the 18
    §164.514(b)(2) classes, an honest non-compliance disclaimer), and records a `DATA_EXPORTED`
-   event via the new `api/share_ledger.py` (item 2). The Provenance screen
+   event via the (then-JSONL-only) share ledger (item 2). The Provenance screen
    (`frontend/src/screens/Provenance.tsx`) gained an approver-ONLY, confirm-gated "Share
    (de-identified)" header action that toasts the manifest and refetches so the new trail row
    appears (`frontend/src/provenance.ts` `EVENT_META['data.exported']`). This is narrower than the
@@ -623,6 +626,23 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    `design/data-platform-and-archivist.md`, `requirements/functional.md`,
    `requirements/nonfunctional.md`, `requirements/scope-and-wishlist.md`, `quality/evaluation.md`,
    `tasks.md`, [journal 2026-07-11](docs/journal/2026-07-11-d2-d3-share-egress.md).
+   **Persistence follow-up (2026-07-11, commit `9a4ef5f`).** The D3 share sink was the one
+   off-gate sink still JSONL-only (feedback/pipeline/review/settings already had the
+   jsonl/sqlite/postgres shape, ADR-0016). `api/share_ledger.py` → renamed and rebuilt as
+   `api/share_store.py` (item 2 above): a `ShareStore` Protocol + `JsonlShareStore`/
+   `SqliteShareStore`/`PostgresShareStore`, `get_share_store()` selected by
+   `PIPEGUARD_SHARE_STORE` (default `jsonl`), degrade-to-JSONL on any DB-construction failure,
+   logged by exception type only (never the DSN). `api/main.py`'s `get_run`/`share_run` now call
+   `get_share_store().for_run(...)`/`.append(...)`. 6 new tests (`tests/test_share_store.py`:
+   jsonl default, sqlite round-trip, sqlite==jsonl parity, degrade-to-jsonl without a DSN,
+   idempotent re-append, tolerant corrupt-line read) + a live-Postgres round-trip appended to
+   `tests/test_persistence_postgres_live.py` (verified green against a real `postgres:16`); 409
+   offline passed / 4 skipped, ruff+mypy clean. **Multi-worker safety (a file lock / connection
+   pool) is still a documented seam, not built** — unchanged from the other four stores' own
+   honest limit (ADR-0016 Follow-ups). Docs swept: `ADR-0002`, `ADR-0016`, `ADR-0018`,
+   `data/provenance.md`, `data/schemas.md`, `design/architecture.md`,
+   `design/data-platform-and-archivist.md`, `quality/evaluation.md` (census 413/27, 409
+   pass/4 skip), [journal 2026-07-11](docs/journal/2026-07-11-share-store-persistence.md).
 
 ## Git conventions
 

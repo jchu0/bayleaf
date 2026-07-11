@@ -61,14 +61,21 @@ For now the event bus is **in-process** and the ledger is a local append-only lo
    (`POST /api/runs/{id}/share`) as an auditable event in the same append-only vocabulary as a
    decision — but it is emitted by the read-API, not `run_gate`, and it is an **egress
    transform only** (reads already-decided `DecisionCard`s, never a rule/verdict/gate input;
-   ADR-0001 holds). It is intentionally recorded to a **separate** ledger
-   (`api/share_ledger.py`, its own gitignored JSONL) rather than the gate's `EventLedger`,
-   because the gate ledger is a deterministic per-run re-derivation (`api.main._evaluate` is
-   `@lru_cache`) that must stay byte-stable and cacheable, while a share is a live,
-   actor-driven side effect that must survive both that cache and a process restart. `GET
-   /api/runs/{id}` merges the two ledgers' events at read time (sorted by `created_at`) so a
-   share appears in the same trail the operator already reads. See
-   [data/provenance.md](../data/provenance.md#a-second-separate-ledger-for-share-events-apishare_ledgerpy).
+   ADR-0001 holds). It is intentionally recorded to a **separate** sink,
+   `api/share_store.py` (a `ShareStore` Protocol; `PIPEGUARD_SHARE_STORE=jsonl|sqlite|postgres`,
+   default `jsonl`) rather than the gate's `EventLedger`, because the gate ledger is a
+   deterministic per-run re-derivation (`api.main._evaluate` is `@lru_cache`) that must stay
+   byte-stable and cacheable, while a share is a live, actor-driven side effect that must
+   survive both that cache and a process restart. `GET /api/runs/{id}` merges the two ledgers'
+   events at read time (sorted by `created_at`) so a share appears in the same trail the
+   operator already reads. See
+   [data/provenance.md](../data/provenance.md#a-second-separate-sink-for-share-events-apishare_storepy).
+   **Persistence parity (2026-07-11, later the same day).** The sink shipped JSONL-only at
+   first, the one off-gate sink without a DB adapter (unlike feedback/pipeline/review/settings,
+   ADR-0016) — brought to parity the same day: `api/share_ledger.py` was renamed and rebuilt on
+   the canonical store pattern (`ShareStore` Protocol + Jsonl/Sqlite/Postgres adapters +
+   `get_share_store()`), degrade-to-JSONL on any DB failure, verified against a live
+   `postgres:16`. See [ADR-0016](ADR-0016-postgres-port.md) item 6.
 
 ## Revisit when
 

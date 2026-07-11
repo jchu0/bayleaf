@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043) + pluggable **pipeline-graph store BUILT (T-049)**, all OFF by default; **live-Postgres integration test BUILT + verified green** (`tests/test_persistence_postgres_live.py`, compose-gated + skip-safe); connection pooling + read-from-projection deferred |
-| **Date** | 2026-07-09 (MST) |
+| **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043) + pluggable **pipeline-graph store BUILT (T-049)** + pluggable **share-egress-audit store BUILT (2026-07-11, ADR-0018 D3)**, all OFF by default; **live-Postgres integration test BUILT + verified green** (`tests/test_persistence_postgres_live.py`, compose-gated + skip-safe); connection pooling + read-from-projection deferred |
+| **Date** | 2026-07-09 (MST) · updated 2026-07-11 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [tasks.md](../planning/tasks.md) |
+| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](ADR-0018-variant-interpretation-advisory-evidence.md) (share-egress sink, item 6), [tasks.md](../planning/tasks.md) |
 
 ## Context
 
@@ -62,6 +62,16 @@ So the port must be **real but guarded** — present as a production seam, invis
    `api/routers/pipelines_lifecycle.py` adds `POST /{name}/submit` (draft→pending_review) and
    `POST /{name}/approve` (pending_review→approved, approver-only), each gated by
    `api/auth.require_role` ([ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md)).
+7. **A fourth instance: the `data.exported` share-egress-audit sink (2026-07-11, ADR-0018 D3).**
+   `api/share_store.py` (`ShareStore` Protocol + `JsonlShareStore`/`SqliteShareStore`/
+   `PostgresShareStore`, `PIPEGUARD_SHARE_STORE=jsonl|sqlite|postgres`, degrade-to-JSONL,
+   never-leak-the-DSN) records a `DATA_EXPORTED` `ProvenanceEvent` per de-identified share — audit
+   telemetry, not product state, and deliberately **not** the `Repository` (a share never becomes
+   a run/sample/finding/card, ADR-0001). It shipped JSONL-only at first (with D3's initial
+   egress endpoint), then was brought to the same pluggable jsonl/sqlite/postgres shape as items
+   3/6 the same day, closing the one remaining off-gate sink without a DB adapter. Verified
+   against a live `postgres:16` (`tests/test_persistence_postgres_live.py`). See
+   [data/provenance.md](../data/provenance.md#a-second-separate-sink-for-share-events-apishare_storepy).
 
 ## Assumptions
 
@@ -84,8 +94,8 @@ So the port must be **real but guarded** — present as a production seam, invis
 | | |
 |---|---|
 | **Gains** | The anticipated production DB seam is real + guarded; feedback lands in a queryable DB; a backend swap is one env var; the offline demo/tests are untouched (no new dep, no socket). |
-| **Costs** | A second SQL dialect to keep in parity with `SqliteRepository`; `psycopg` connect logic exists in three off-gate places (repo + feedback + pipeline store); the Postgres SQL is not in the default-green CI path (it needs docker + the extra) — covered by the compose-gated live test + offline dialect review + parity tests. |
-| **Follow-ups** | ~~A live-Postgres integration test~~ **DONE** (`tests/test_persistence_postgres_live.py` — compose-gated, skip-safe; verified green against real Postgres 16: projection byte-parity vs SQLite, idempotent replay, feedback JSONB round-trip; the review's UTC + `seq` fixes hold). Still open: connection pooling; Alembic-style migrations if the layout ever needs a non-disposable change; wiring the read-API to read the projection (today it recomputes). |
+| **Costs** | A second SQL dialect to keep in parity with `SqliteRepository`; `psycopg` connect logic now exists in **six** off-gate places (repo + feedback + pipeline + settings + review + share stores, confirmed via `grep -rln "class Postgres" api/ src/` — was "three" when this row was first written, before the settings/review/share stores existed); the Postgres SQL is not in the default-green CI path (it needs docker + the extra) — covered by the compose-gated live test + offline dialect review + parity tests. |
+| **Follow-ups** | ~~A live-Postgres integration test~~ **DONE** (`tests/test_persistence_postgres_live.py` — compose-gated, skip-safe; verified green against real Postgres 16: projection byte-parity vs SQLite, idempotent replay, feedback JSONB round-trip, and — added 2026-07-11 — share-store round-trip; the review's UTC + `seq` fixes hold). Still open: connection pooling; Alembic-style migrations if the layout ever needs a non-disposable change; wiring the read-API to read the projection (today it recomputes). |
 
 ## Revisit when
 
