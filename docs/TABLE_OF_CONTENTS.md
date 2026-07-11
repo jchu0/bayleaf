@@ -40,12 +40,14 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 | [design/architecture.md](design/architecture.md) | ✅ | System shape: three gates, component map, data flow, invariants, swappable seams, deployment |
 | [design/agents.md](design/agents.md) | ✅ | Agent-layer hub: roster, shared invariants (captured once), intake checklist for new agent ideas |
 | [design/data-platform-and-archivist.md](design/data-platform-and-archivist.md) | ✅ | Data-platform + export + run-browser + Archivist agent design (draft for review; tiered already-built / build-now / target-state) |
-| [design/node-authoring-agent.md](design/node-authoring-agent.md) | ✅ | Roster agent #5 (proposed) — advisory node-authoring agent: dropped tool docs → a typed `ToolNode` card for the Pipeline Builder palette; stub-first (= wishlist #9), Claude only for `ArtifactKind` mapping |
+| [design/node-authoring-agent.md](design/node-authoring-agent.md) | ✅ | Roster agent #5 — **built (T-046), narrower than proposed**: retrieval over an 11-card curated corpus from a natural-language request (not the originally-proposed dropped-doc parser); core-only, no `api/` endpoint or Builder wiring yet |
 | [design/variant-interpretation.md](design/variant-interpretation.md) | 🚧 | Variant interpretation & reporting design (ADR-0018) — advisory ClinVar/gnomAD evidence + review-ordering + a cited `RunReport` + a PHI-scrub Share window; two pieces built (route-to-human `VAR-RTH-001`, a conservative de-id module), the rest (agent, report, Share window) still design-only |
 | [design/frontend/frontend-design-brief.md](design/frontend/frontend-design-brief.md) | ✅ | UI design brief (v1 + v2 additions) — the stable spec |
 | [design/frontend/pipeline-builder-brief.md](design/frontend/pipeline-builder-brief.md) | ✅ | Wishlist #11 flagship — pipeline-builder design handoff (node/agent canvas → run-layout config), paste-and-go for a design tool |
 | [design/frontend/handoffs/](design/frontend/handoffs/) | ✅ | Dated review→design handoff deltas (episodic) |
 | [design/frontend/](design/frontend/) | ✅ | Frontend prototype (`PipeGuard.html`) + design README |
+| [design/ui-conventions.md](design/ui-conventions.md) | ✅ | Durable cross-cutting UI/product convention registry (`UIC-N` ids) — the single place a maintainer rule is recorded once and implemented against |
+| [design/builder-cards/](design/builder-cards/) | ✅ | Pipeline-Builder card-design convention (`README.md`) + 7 per-tool port specs, grounded in real tool I/O — a **design target** the shipped `BuilderCanvas` implements a subset of (see its §5) |
 
 > **Consolidated, not split.** The system-view slices once planned as separate docs
 > (system-context, components, data-flow, interfaces, storage, workflows, deployment,
@@ -108,6 +110,12 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [demo/run-of-show.md](demo/run-of-show.md) | ✅ | Timed live run-of-show (5:00) — script, pre-flight checklist, fallback ladder |
 | [demo/one-pager.md](demo/one-pager.md) | ✅ | Judge-facing one-pager (problem, differentiators, why-it's-real, guardrails) |
 
+## Usage (operator-facing)
+| Doc | Status | Purpose |
+|---|---|---|
+| [usage/README.md](usage/README.md) | ✅ | Operator usage/wiki home — what PipeGuard is, the operator workflow, page index, roles & page access. Per [UIC-1](design/ui-conventions.md#uic-1--no-page-flavor-text-the-nav-names-the-page), explanatory prose that used to live in page chrome lives here instead |
+| [usage/operator-guide.md](usage/operator-guide.md) | 🚧 | Per-page how-to (stub sections, one per operator screen); linked from the README page index |
+
 ## Ops (run it in an environment)
 | Doc | Status | Purpose |
 |---|---|---|
@@ -136,6 +144,8 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | 🟠 | `provenance.py` / `engine.py`, the `EventType` vocabulary, or the JSONL ledger format | `data/provenance.md` (+ `schemas.md` event vocab — **duplicated, update both**; `ADR-0002`). |
 | 🟠 | A new **advisory agent anywhere** (`synthesis/`, `triage/`, or an off-gate one like `api/feedback_agent.py`), a model tier, or a corpus | `design/agents.md` (roster + invariants) + the relevant ADR (`0001/0006/0009/0012`). If hub and ADR disagree, the ADR wins — update the ADR first. |
 | 🟠 | `api/` endpoint or `frontend/` screen — new/changed capability | `design/architecture.md` + `design/data-platform-and-archivist.md` + `requirements/functional.md` (REQ-F). If `/metrics` / `_render_prometheus` gains or renames a series → also re-verify the exposed-series table and the no-PHI claim in `ops/telemetry-connectors.md`. |
+| 🟠 | The maintainer states a new **durable, cross-cutting UI/product rule** (not a one-off screen tweak) | `design/ui-conventions.md` — append a new `UIC-N` row **and** implement against it (don't wait to be told twice). If it changes shipped screen behavior, also `functional.md` (REQ-F) + the map row below. |
+| 🟠 | `BuilderCanvas.tsx` / `BuilderShared.tsx` (`BTOOLSPEC`, port geometry, card size) — a tool node's ports, sizing, or wiring convention | `design/builder-cards/` (the per-tool port spec + its §5 "spec vs shipped" gap) + `design/ui-conventions.md` UIC-16. |
 | ⚪ | You **make** a load-bearing decision (or realize/supersede one) | A **new `adr/ADR-NNNN-*.md`** (one decision/file) or an existing ADR's Decision/Status + a journal Decisions row. **Never bury a decision in a design-doc appendix or a "D1-Dn" list.** *(Confirmed drift: D1-D14 + a 261-line design landed as appendices.)* |
 | ⚪ | Scope / wishlist / "built" changes | `requirements/scope-and-wishlist.md` (+ mirror `functional.md`, `tasks.md`). A new wishlist item is a scope-guardrail checkpoint — push back if scope over-broadens. |
 | ⚪ | Files moved across `src/`/`app/`/`data/`/`docs/`/`tests/`, a module added, **or a trigger in this map rotted** | `CLAUDE.md` "Current code map" + **this map** (the self-referential row: when layout moves, this table's triggers go stale — fix them here). |

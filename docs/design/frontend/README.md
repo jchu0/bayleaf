@@ -419,8 +419,10 @@ authoring.
   change) is now a TABLE of the full advisory-agent roster — **Agent · Purpose · Model · Status ·
   Edit** — capped 10 rows/page + a pager (the scale-kit pagination pattern, [data-platform-and-
   archivist.md §4.10](../data-platform-and-archivist.md)). Rows: card synthesizer, QC-triage,
-  pipeline-repair, archivist, feedback-categorizer, node-author (§6, still design-note-only,
-  T-046), and a **new metrics-expansion agent** row (ST2 — proposes new QC metrics to track +
+  pipeline-repair, archivist, feedback-categorizer, node-author (§6 — **the Python agent core is
+  now built, 2026-07-10, T-046**; this row + §6's static modal preview below predate that build
+  and were not re-verified by it — see [design/node-authoring-agent.md](../node-authoring-agent.md)
+  "What actually shipped"), and a **new metrics-expansion agent** row (ST2 — proposes new QC metrics to track +
   wiring; labelled **phase-2**, no backend agent or `PIPEGUARD_*` env var exists for it yet — this
   is a UI-only placeholder for a proposed idea, **not** a shipped roster addition; see
   [design/agents.md](../agents.md)). Each row shows its real `PIPEGUARD_*_MODEL` env var + model/
@@ -698,12 +700,15 @@ ledger → Decision cards. Primary action hands off to the engine; the UI never 
 button **copies** that YAML (+ fires the compose-only Emit) instead of the earlier fake "Hand
 off to Nextflow" button — no network call, compose ≠ execute unchanged.
 
-**Node-authoring agent** ("Author a tool node"). Drop tool docs (`--help` /
-`nextflow_schema.json`) → an advisory agent proposes a typed `ToolNode`: editable **name**, an
-**icon picker**, and a **scrollable flag checklist** (tickable CLI flags + editable default
-values). Unknown artifact-kinds are **flagged, never invented**; the human reviews and accepts.
-**Still a static `phase-2`-labelled preview** — unlike the two advisory-agent modals below, this
-one is not wired to a backend endpoint (design note only, [tasks T-046](../../planning/tasks.md)).
+**Node-authoring agent** ("Author a tool node"). This section describes the ORIGINAL modal design
+(drop tool docs `--help`/`nextflow_schema.json` → an editable `ToolNode` preview) — **still a
+static preview, unwired to any backend**, exactly as written. What's new (2026-07-10, T-046): the
+agent's Python core is now built (`src/pipeguard/node_author/`), but it is a **different, narrower
+mechanism** than this modal assumes — retrieval over a fixed 11-card curated corpus from a
+natural-language request, not a doc-drop parser — and it is not reachable from this modal (no
+`api/` endpoint calls it yet). This modal's own behavior is unchanged by that build; see
+[design/node-authoring-agent.md](../node-authoring-agent.md) "What actually shipped" for the
+grounded comparison and [tasks T-046](../../planning/tasks.md) for status.
 
 **Advisory agents.** **Pipeline-repair** (proposes fixes for recurring signatures) and
 **Archivist** (proposes cold-storage of released `run/` dirs) — both stub-first, human-approved,

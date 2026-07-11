@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [design/ui-conventions.md](ui-conventions.md), [design/builder-cards/](builder-cards/), [design/node-authoring-agent.md](node-authoring-agent.md) |
 
 ## Overview
 
@@ -72,9 +72,14 @@ Every finding and verdict is labelled with the gate it came from:
    (`src/pipeguard/pipeline_repair/`, ADR-0009/0012) turns a recurring cross-run signature into a
    cited, human-reviewed `RepairProposal` (never edits a pipeline, never sets a verdict); the
    off-gate feedback-triage agent (`api/feedback_agent.py`, ADR-0016) categorizes the in-app
-   feedback corpus; and the off-gate archivist (`api/archivist.py`) rolls up released runs into an
-   advisory `ArchiveDigest` (an organizational index — no verdict/confidence field by construction).
-   All are stub-first ($0), import `anthropic` lazily, and fall back to the stub on any error.
+   feedback corpus; the off-gate archivist (`api/archivist.py`) rolls up released runs into an
+   advisory `ArchiveDigest` (an organizational index — no verdict/confidence field by construction);
+   and the node-authoring agent (`src/pipeguard/node_author/`, T-046, 2026-07-10) retrieves over a
+   curated 11-entry tool-card corpus to propose a typed `NodeProposal` for the Pipeline Builder
+   palette. All are stub-first ($0), import `anthropic` lazily, and fall back to the stub on any
+   error. **Node-authoring is core-only as of this build** — unlike the other four, it has no
+   `api/` endpoint and is invoked only by direct Python import (its 19 offline tests); the
+   Builder's "Author a tool node" modal predates it and stays a static preview.
 4. **Delivery layers (thin, over the core).** `app/` Streamlit (offline demo / fallback);
    `api/` FastAPI — the production read-API seam (ADR-0010/0014/0016); `frontend/` React —
    **rebuilt to the refreshed design prototype** (`docs/design/frontend/`, 2026-07-09, Waves 1–3),
@@ -631,6 +636,33 @@ Every finding and verdict is labelled with the gate it came from:
      `ArchiveDigest` (a per-run or cross-run organizational index). Each formats an advisory
      suggestion over already-decided state — it never sets/overrides a verdict, edits a pipeline, or
      moves an artifact (ADR-0001).
+   - **Wave 10 (2026-07-10, commits `71d4ff9`→`6b571a4`, T-046/T-118).** Two independent pieces,
+     both grounded by reading the diff/code directly. **(1) Node-authoring agent, backend-only**
+     (`src/pipeguard/node_author/`, agent #5 in [agents.md](agents.md) — see the Advisory agents
+     bullet above): mirrors `pipeline_repair/`'s shape (models/agent/retrieval/knowledge corpus),
+     19 offline tests, `.env.example` + `pyproject.toml` updated to ship the corpus JSONL. It is
+     **narrower than the original design note** ([node-authoring-agent.md](node-authoring-agent.md)):
+     retrieval over a fixed, curated 11-card corpus from a natural-language request, not a parser
+     over a tool's own dropped docs — it cannot onboard a genuinely new tool yet. **(2) UIC-1..16 —
+     a UI convention batch** (33 frontend files, 0 files under `src/`/`api/`/`tests/`; built by a
+     structured parallel workflow, 4 shared-primitive agents behind a barrier then 9 per-screen
+     agents on disjoint files; tsc + oxlint clean, verified in-browser). The full per-item spec and
+     shipped status now lives in [design/ui-conventions.md](ui-conventions.md) (the source of
+     truth); the functionally meaningful pieces — not pure re-styling — are: a shared shift-click
+     range-select checkbox model (`hooks/useRangeSelect.ts` + `components/Check.tsx`, UIC-3); 3
+     light + 3 dark themes over the existing `PrefsContext` (UIC-7); Submit's `sample_metadata.csv`
+     going from optional to **required with a human-approved identity join** — corroborated on
+     `Sample_ID` plus a second column, approval bound to a join signature so any edit invalidates it
+     (UIC-11, [functional.md REQ-F-083c](../requirements/functional.md) /
+     [nonfunctional.md REQ-NF-025](../requirements/nonfunctional.md)); Admin's Act-as gaining a
+     re-auth confirm + immutable audit (a labelled demo password, not a production auth mechanism,
+     UIC-13); Review-queue's checkbox hierarchy + reversible clear-from-view (UIC-10); Settings'
+     agent-roster Active-vs-Available split (node-authoring now surfaces as Available, UIC-12); and
+     Inbox's kanban ids/body/comments/@mentions (UIC-14, one cosmetic id-format gap left open, noted
+     at commit time). **Explicitly deferred, not silently dropped**: UIC-16's larger four-side-typed
+     -port Builder cards (only the full-canvas dot grid + current-tools palette expander shipped;
+     see [builder-cards/](builder-cards/) §5 for the spec-vs-shipped gap). Both pieces are grounded
+     in [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md).
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
@@ -663,7 +695,7 @@ config override, notably, records intent without mutating the live runbook.
 ## Invariants
 
 1. **Rules decide; AI is advisory** — never sets/overrides a verdict or confidence (ADR-0001).
-2. **AI is OFF by default** with a deterministic fallback; all five AI seams (synthesizer, triage, feedback-triage, pipeline-repair, archivist) flip via env, $0 by default (ADR-0006).
+2. **AI is OFF by default** with a deterministic fallback; all six AI seams (synthesizer, triage, feedback-triage, pipeline-repair, archivist, node-authoring) flip via env, $0 by default (ADR-0006).
 3. **Event log is authoritative**; the DB is a disposable, rebuildable projection (ADR-0002).
 4. **Core stays framework-agnostic** — no Streamlit/FastAPI/React imports in `src/pipeguard/`; ports & adapters (ADR-0003).
 5. **Findings are immutable + content-hashed**; confidence is omitted until grounded.
@@ -696,6 +728,7 @@ config override, notably, records intent without mutating the live runbook.
 | Feedback-triage agent (off-gate) | `PIPEGUARD_FEEDBACK_AGENT=stub\|claude` (`PIPEGUARD_FEEDBACK_MODEL`); advisory categorization of the in-app feedback corpus (`api/feedback_agent.py`) | stub ($0) |
 | Pipeline-repair agent (advisory) | `PIPEGUARD_PIPELINE_REPAIR_AGENT=stub\|claude` (`PIPEGUARD_PIPELINE_REPAIR_MODEL`, default Opus-high); cross-run remediation proposals over a recurring signature (`src/pipeguard/pipeline_repair/`) | stub ($0) |
 | Archivist agent (off-gate) | `PIPEGUARD_ARCHIVIST_AGENT=stub\|claude` (`PIPEGUARD_ARCHIVIST_MODEL`, default Haiku); organizational digest/index over released runs (`api/archivist.py`) | stub ($0) |
+| Node-authoring agent (advisory, core-only) | `PIPEGUARD_NODE_AUTHOR_AGENT=stub\|claude` (`PIPEGUARD_NODE_AUTHOR_MODEL`, default Sonnet); retrieves a `NodeProposal` over a curated 11-card tool corpus (`src/pipeguard/node_author/`, T-046). **No `api/` endpoint yet** — unlike the other four agent rows, this seam is reachable only by direct Python import (tests) today | stub ($0) |
 | Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack\|teams\|discord`; each adapter armed by its OWN `PIPEGUARD_{SLACK,TEAMS,DISCORD}_LIVE=1` (Teams/Discord also need `PIPEGUARD_{TEAMS,DISCORD}_WEBHOOK_URL`) | stub ($0, no network) |
 | Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — add/remap a source metric without touching rules | canonical decimals; ON the critical path |
 | Repository (persistence) | `Repository` port; SqliteRepository **and** guarded PostgresRepository built (ADR-0016), `get_repository()` selects | SQLite + JSONL (Postgres off by default) |

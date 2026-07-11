@@ -2,14 +2,57 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed — design note for review (Phase 2). Roster agent #5. |
-| **Last updated** | 2026-07-09 (MST) |
+| **Status** | **Built, narrower than proposed (2026-07-10, T-046, commit `71d4ff9`)** — roster agent #5. The core Python agent (`src/pipeguard/node_author/`) is built and tested; the flow this doc originally proposed (drop a tool's docs → parse → propose) was **not** what shipped — see "What actually shipped" below. No `api/` endpoint and no Pipeline-Builder wiring exist yet (the builder's "Author a tool node" modal is still the pre-existing static `phase-2` preview). |
+| **Last updated** | 2026-07-10 (MST) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [design/agents.md](agents.md) (roster #5) · [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) · [design/frontend/README.md](frontend/README.md) (§4 node model) · [design/frontend/handoffs/2026-07-09-review-to-design.md](frontend/handoffs/2026-07-09-review-to-design.md) (§4h, §6) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#9, #11) · [planning/tasks.md](../planning/tasks.md) (T-044, T-046) |
+| **Related** | [design/agents.md](agents.md) (roster #5) · [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) · [design/frontend/README.md](frontend/README.md) (§4 node model) · [design/frontend/handoffs/2026-07-09-review-to-design.md](frontend/handoffs/2026-07-09-review-to-design.md) (§4h, §6) · [design/builder-cards/](builder-cards/) (the tool-card corpus this agent retrieves over) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#9, #11) · [planning/tasks.md](../planning/tasks.md) (T-044, T-046) · [functional.md](../requirements/functional.md) (node-authoring REQ-F) |
 
-> **Proposed for review.** Originated as maintainer review point #11 and was scoped in the
-> review→design brief (§4h). This note graduates it from a brief line to a tracked design item.
-> It is **advisory and off the gate** (ADR-0001); it authors a *card*, never a run.
+> **Built, narrower than proposed.** Originated as maintainer review point #11 and was scoped in the
+> review→design brief (§4h). It is **advisory and off the gate** (ADR-0001); it authors a *proposal*,
+> never a run. **The rest of this doc is the original design note, preserved as-written** — read the
+> box below first for what actually shipped, since it is a different (simpler, narrower) mechanism
+> than "drop a tool's docs."
+
+## What actually shipped (2026-07-10, T-046) — read this first
+
+The built agent (`src/pipeguard/node_author/`, verified by reading `agent.py`/`models.py`/
+`retrieval.py` + `tests/test_node_author.py`, 19 tests) is **retrieval over a small curated
+tool-card corpus**, mirroring the `pipeline_repair/` agent's shape almost exactly — **not** the
+doc-drop pipeline this note originally proposed:
+
+1. **Input is a natural-language request** ("add a tool that trims adapters", or a bare tool name)
+   — not a dropped `nextflow_schema.json` / `--help` dump / module / README. No document parser of
+   any kind exists in the shipped code.
+2. **The corpus is fixed and small: 11 curated cards** (`knowledge/tool_cards.jsonl`) — the
+   pipeline's own 7 germline tools (fastp, bwa-mem2, samtools markdup, mosdepth, bcftools call/norm,
+   MultiQC) plus NGSCheckMate and 3 reference-node cards (FASTA/BED/truth VCF), hand-authored from
+   `docs/design/builder-cards/` + the frontend `BTOOLSPEC`. It can only propose a tool **already
+   known to the corpus** — it does not onboard a genuinely new/arbitrary tool. This is the opposite
+   of "bring your own tools" (#11's original unlock); it is closer to "help an operator rediscover
+   or re-propose one of this pipeline's own tools."
+3. **No `ArtifactKind`-mapping LLM layer exists.** The design's "hard part" (§ below, mapping a
+   tool's raw I/O to `ArtifactKind`s via Claude with a confidence signal) is moot — ports come
+   straight from the curated card, deterministically, on both the stub and Claude paths. Claude
+   phrases only the `summary`/`rationale` prose (mirrors `pipeline_repair`'s split).
+4. **Wishlist #9's deterministic nf-core-schema importer was NOT built as part of this agent** —
+   see the correction in [scope-and-wishlist.md](../requirements/scope-and-wishlist.md) #9. The two
+   were previously described as sharing a stub core; they do not.
+5. **No `api/` route and no frontend wiring.** `grep -rn node_author api/` and
+   `grep -rn "propose_node\|NodeProposal" frontend/src` both return nothing — the builder's
+   "Author a tool node" modal (`AuthorToolNodeModal` in `BuilderModals.tsx`) predates this build and
+   is still a static, hardcoded `phase-2` preview (a mock `STAR --help` parse), unconnected to
+   `propose_node()`. Wiring an endpoint + the modal is the next slice.
+
+What DID carry over faithfully from the design: **advisory-only, off the gate** (`advisory: True`,
+no verdict/confidence field), **never invents a port kind** (`PortSpec.known` computed against the
+real `ARTIFACT_KINDS` vocabulary; an unknown kind is `reserved`, never wired), **stub-first / off by
+default with a deterministic fallback** (`PIPEGUARD_NODE_AUTHOR_AGENT=stub|claude`, degrade-to-stub
+on any error including a safety refusal), and a **conservative "defer to a human" proposal** when no
+request/no match (fabricates no tool or ports). Model tier is **mid (Sonnet)**, not the design's
+"low–mid" framing — moderate composition, matching the QC-triage default, not the cheap
+categorization tier.
+
+---
 
 ## The one job
 
@@ -85,7 +128,17 @@ surfaced inside the builder**.
 
 ## Status / next
 
-Proposed; **roster agent #5** in [agents.md](agents.md). Passes the agent-intake checklist
-(one job; advisory-only; grounded in the tool's own docs; stub-first with a deterministic
-fallback). Tracked as **T-046** (Phase 2). When built, it is covered by the existing agent ADRs
-(0001/0006/0009/0012) — no new ADR unless a load-bearing decision emerges during build.
+**Built (narrower scope), roster agent #5** in [agents.md](agents.md) — see "What actually
+shipped" above for the concrete divergence from this note's original proposal. Passes the
+agent-intake checklist (one job; advisory-only; grounded in a curated corpus; stub-first with a
+deterministic fallback). Tracked as **T-046** (done). Covered by the existing agent ADRs
+(0001/0006/0009/0012) — no new ADR was needed; no load-bearing decision emerged during the build
+that isn't already captured by those.
+
+**Next slices**, in rough order:
+1. An `api/` read-only endpoint (mirrors `GET /api/monitoring/signatures/{signature}/repair`) so
+   `propose_node()` is reachable over the wire.
+2. Wire the Pipeline Builder's `AuthorToolNodeModal` to that endpoint (today it is a static mock).
+3. The doc-drop parsing this note originally proposed (`nextflow_schema.json` / `--help` / README →
+   a proposal for a tool NOT already in the curated corpus) remains unbuilt and is the real "bring
+   your own tools" unlock — a materially bigger scope than what shipped, not a small follow-up.

@@ -161,7 +161,11 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    Opus-high default); advisory feedback-categorization agent (`api/feedback_agent.py`, off-gate)
    via `PIPEGUARD_FEEDBACK_AGENT=stub|claude`; advisory archivist (`api/archivist.py`, off-gate)
    via `PIPEGUARD_ARCHIVIST_AGENT=stub|claude` (released runs → organizational `ArchiveDigest`,
-   Haiku default) — all five stub-first ($0), import `anthropic` lazily, and fall back to the stub
+   Haiku default); advisory node-authoring agent (`src/pipeguard/node_author/`, ADR-0009/0012, T-046,
+   Wave 10 below) via `PIPEGUARD_NODE_AUTHOR_AGENT=stub|claude` (a natural-language request →
+   cited `NodeProposal` retrieved over an 11-card curated tool corpus, Sonnet default;
+   **core-only** — no `api/` endpoint or frontend wiring exist yet, unlike the other four agents) —
+   all six stub-first ($0), import `anthropic` lazily, and fall back to the stub
    on any error (incl. a safety refusal). Models via `PIPEGUARD_*_MODEL`.
 4. **Delivery layers (thin, over the core).** `app/` = Streamlit demo (kept as the
    guaranteed-working fallback); `api/` = FastAPI read-API + **off-gate writes**
@@ -532,6 +536,50 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    parser both screens now use. Operator screen count is now **12** (Accession is new).
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
+   **Wave 10 (2026-07-10, commits `71d4ff9`→`6b571a4`, T-046/T-118) — two independent pieces, both
+   grounded by reading the diff/code directly.** **(1) Node-authoring agent, backend-only**
+   (`src/pipeguard/node_author/`) — the **sixth** stub|claude AI seam (joining the five listed in
+   item 3 above): mirrors `pipeline_repair/`'s shape (models/agent/retrieval/`knowledge/tool_cards.jsonl`),
+   19 tests (397 pass / 3 skip total), `.env.example`+`pyproject.toml` updated. Given a
+   NATURAL-LANGUAGE request or bare tool name, `propose_node()` retrieves over a **fixed, curated
+   11-card corpus** (this pipeline's 7 germline tools + NGSCheckMate + 3 reference nodes) → a cited
+   `NodeProposal` (deterministic ports/version/locators; `advisory: Literal[True]`, no
+   verdict/confidence, ADR-0001; a port kind outside the real `ARTIFACT_KINDS` vocabulary is
+   `reserved`, never wired — `PortSpec.known` is structurally computed, not a convention). Stub
+   default, `PIPEGUARD_NODE_AUTHOR_AGENT=stub|claude` + `_MODEL` (default Sonnet, mid tier). **This
+   is narrower than the roster's original design note** ([design/node-authoring-agent.md](docs/design/node-authoring-agent.md)):
+   there is no doc-drop parser (`nextflow_schema.json`/`--help`/README), so it can propose only a
+   tool already in its fixed corpus, not onboard a genuinely new one. **Confirmed by grep: no
+   `api/` endpoint and no frontend wiring exist** (`grep -rn node_author api/` and
+   `grep -rn propose_node frontend/src` both empty) — the Pipeline Builder's pre-existing
+   `AuthorToolNodeModal` stays a static `phase-2` mock, unconnected to this agent.
+   **(2) UIC-1..16 — a UI convention batch** (33 frontend files, 0 files under `src/`/`api/`/`tests/`;
+   built by a structured parallel workflow — 4 shared-primitive agents behind a barrier, then 9
+   per-screen agents on disjoint files; tsc + oxlint clean, verified in-browser across every
+   screen) realizes [docs/design/ui-conventions.md](docs/design/ui-conventions.md) (now the source
+   of truth for the full per-`UIC-N` spec + status — not duplicated here). The functionally
+   meaningful pieces: a shared shift-click range-select checkbox model
+   (`hooks/useRangeSelect.ts`+`components/Check.tsx`, adopted in Review queue/Submit/Settings agent
+   table); 3 light + 3 dark themes over the existing `PrefsContext`; Submit's `sample_metadata.csv`
+   going from optional to **required with a human-approved samplesheet⋈metadata identity join** —
+   corroborated on `Sample_ID` plus a second column (never single-column), approval bound to a join
+   signature so any later edit invalidates it, every join action audited client-side (the
+   highest-consequence data-safety item in this batch); Admin's Act-as gaining a re-auth confirm +
+   immutable audit (a labelled demo password, explicitly NOT a production auth mechanism) +
+   password-reset/role-allocation moved to a per-user Edit view; Review-queue's run/sample checkbox
+   hierarchy + reversible clear-from-view + role-gated escalation; Settings' agent-roster
+   Active-vs-Available split (node-authoring now surfaces as Available) + checkbox mass-select;
+   Provenance's digest relabelled `fingerprint:` + show-full + copyable event-trail code blocks;
+   Inbox's kanban ids/body/comments/@-mentions/assignee (one cosmetic gap left open: a
+   review-queue-derived ticket shows its raw internal id, not the queue's `T-XXXX` display id); and
+   app-wide flavor-text removal + a Builder full-canvas dot grid + current-tools palette. **Explicitly
+   deferred, not silently dropped**: UIC-16's larger four-side-typed-port Builder cards — a bigger
+   rework tracked in [docs/design/builder-cards/](docs/design/builder-cards/) §5 as the honest gap
+   between that spec and the shipped `BuilderCanvas` (ports stay left/right-only on today's fixed
+   small card). Docs swept: `functional.md` REQ-F-025/REQ-F-083, `nonfunctional.md` REQ-NF-025,
+   `architecture.md`, `design/agents.md`, `design/node-authoring-agent.md`, `scope-and-wishlist.md`
+   (correcting #9's stale claim that it shared a stub core with node-authoring), `tasks.md`
+   (T-046 done, new T-118), [journal 2026-07-10 wave10](docs/journal/2026-07-10-wave10-node-author-uic.md).
 
 ## Git conventions
 

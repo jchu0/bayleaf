@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md) |
 
 ## Overview
 
@@ -123,16 +123,16 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    is the CLI. *Trace:* [architecture.md](../design/architecture.md) §Outbound notify seam,
    [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md).
 
-## Advisory agent roster — pipeline-repair & archivist (ADR-0001/0008/0012)
+## Advisory agent roster — pipeline-repair, archivist & node-authoring (ADR-0001/0008/0012)
 
-Two further advisory agents (roster #2/#3, [agents.md](../design/agents.md) §Roster) join the
+Three further advisory agents (roster #2/#3/#5, [agents.md](../design/agents.md) §Roster) join the
 QC-triage agent (REQ-F-020/021). Each shares the same contract as triage: **advisory, on-demand,
 and OFF the deterministic gate** — like every agent (ADR-0001) it never sets, routes, or overrides
 a verdict or confidence; it is **stub-first ($0, offline)** and env-flippable to live; and its
 output is an immutable, content-hashed record whose organizational/remediation fields and citations
 are **deterministic**, with only the free prose optionally model-authored (the shared invariant now
-holds across **five** agents — triage, feedback, pipeline-repair, archivist, and the designed
-node-authoring agent).
+holds across **six** seams — the synthesizer plus the five advisory agents: triage, feedback,
+pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
 
 1. **REQ-F-023 — Advisory pipeline-repair agent.** On a **recurring issue signature** rolled up
    from the monitoring view (the same `Finding.signature` counter `GET /api/monitoring` uses — now
@@ -168,6 +168,33 @@ node-authoring agent).
    [data-platform-and-archivist.md](../design/data-platform-and-archivist.md) §5,
    [agents.md](../design/agents.md) §Roster #3, `api/archivist.py`,
    [tasks T-059](../planning/tasks.md).
+3. **REQ-F-025 — Advisory node-authoring agent (retrieval over a curated corpus).** Given a
+   natural-language request or bare tool name, the system can produce a cited **NodeProposal** —
+   a proposed tool node (name, pinned version, typed input/output ports, suggested locators,
+   rationale) — for the Pipeline Builder palette. `advisory` is pinned `True`, no verdict/confidence
+   field; the tool, version, ports, and locators are **deterministic** (from the corpus), only the
+   `summary`/`rationale` prose may be model-refined. A port kind outside the real, closed
+   `ARTIFACT_KINDS` vocabulary is surfaced `reserved`, **never fabricated as a live wire**
+   (`PortSpec.known` is computed against that vocabulary — structural, not a convention). A
+   request that matches no curated card (or is blank) returns a conservative "defer to a human"
+   proposal with no invented tool or ports. Env `PIPEGUARD_NODE_AUTHOR_AGENT=stub|claude`
+   (`PIPEGUARD_NODE_AUTHOR_MODEL`, default mid/Sonnet), stub-default, degrade-to-stub on any error
+   (incl. a safety refusal). **Narrower than the roster's original design** (see
+   [node-authoring-agent.md](../design/node-authoring-agent.md) "What actually shipped"): the
+   corpus is a fixed **11 curated cards** (this pipeline's own 7 tools + 3 reference nodes,
+   `src/pipeguard/node_author/knowledge/tool_cards.jsonl`), not a parser over a dropped
+   `nextflow_schema.json`/`--help`/README, so the agent can only propose a tool already known to
+   the corpus — it does not yet onboard a genuinely new/arbitrary tool. **No `api/` endpoint and no
+   Pipeline-Builder wiring exist yet** — verified: `grep -rn node_author api/` and
+   `grep -rn propose_node frontend/src` both return nothing; the Builder's "Author a tool node"
+   modal is still a static, pre-existing `phase-2` preview, unconnected to this agent. 19 tests
+   (`tests/test_node_author.py`), all offline/$0. *Trace:*
+   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+   [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md),
+   [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md),
+   [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md),
+   [agents.md](../design/agents.md) §Roster #5, `src/pipeguard/node_author/`,
+   [tasks T-046](../planning/tasks.md).
 
 ## Provenance & persistence (ADR-0002/0003)
 
@@ -373,10 +400,11 @@ node-authoring agent).
 ## AI configurability (ADR-0006)
 
 1. **REQ-F-050 — Env-flippable AI, off by default.** Every AI seam flips via env, each
-   defaulting to `stub` ($0, offline): the synthesizer (`PIPEGUARD_SYNTHESIZER`) plus the four
+   defaulting to `stub` ($0, offline): the synthesizer (`PIPEGUARD_SYNTHESIZER`) plus five
    advisory agents — QC-triage (`PIPEGUARD_TRIAGE_AGENT`), off-gate feedback
-   (`PIPEGUARD_FEEDBACK_AGENT`), pipeline-repair (`PIPEGUARD_PIPELINE_REPAIR_AGENT`), and archivist
-   (`PIPEGUARD_ARCHIVIST_AGENT`) — all `stub|claude`; model via `PIPEGUARD_*_MODEL`. *Trace:*
+   (`PIPEGUARD_FEEDBACK_AGENT`), pipeline-repair (`PIPEGUARD_PIPELINE_REPAIR_AGENT`), archivist
+   (`PIPEGUARD_ARCHIVIST_AGENT`), and node-authoring (`PIPEGUARD_NODE_AUTHOR_AGENT`, REQ-F-025,
+   2026-07-10) — all `stub|claude`; model via `PIPEGUARD_*_MODEL`. *Trace:*
    [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [architecture.md](../design/architecture.md)
    §Swappable seams, [agents.md](../design/agents.md).
 2. **REQ-F-051 — Deterministic fallback on failure.** If an AI call is disabled,
@@ -939,6 +967,65 @@ had reserved or listed as *not-yet-built*.
     §11, [architecture.md](../design/architecture.md),
     [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md) (commit `66b14e4`),
     [tasks T-117](../planning/tasks.md).
+24. **REQ-F-083 — UI convention batch: shared primitives + per-screen safety/scale features
+    (UIC-1..16).** (2026-07-10, "Wave 10," T-118, commit `6b571a4`, 33 files) implements the
+    convention registry recorded in [design/ui-conventions.md](../design/ui-conventions.md) — that
+    doc is now the source of truth for the full per-`UIC-N` spec + shipped status; this entry
+    records only the functionally meaningful ones (pure re-styling — framed Tabs UIC-2, flavor-text
+    removal UIC-1, nav reorder UIC-15 — is tracked there, not duplicated here). Built by a
+    structured parallel workflow (4 shared-primitive agents behind a barrier, then 9 per-screen
+    agents on disjoint files); tsc + oxlint clean, verified in-browser across every screen;
+    frontend-only (`git diff --stat 71d4ff9 6b571a4 -- src/ api/ tests/` empty). All off the
+    deterministic gate (ADR-0001).
+    a. **UIC-3 — shared range-select checkbox model.** New `hooks/useRangeSelect.ts` (shift-click
+       anchor→target range-select, Finder/Gmail semantics, + `setMany()` for parent→children) +
+       `components/Check.tsx`; adopted in Review queue, Submit, and the Settings agent table
+       (verified: `grep -rl useRangeSelect frontend/src` returns exactly those three screens).
+    b. **UIC-7 — 3 light + 3 dark themes.** `index.css` `data-palette` blocks (Clinical/Sand/Slate
+       light, Midnight/Carbon/Indigo dark) + `PrefsContext` palette state + a picker in
+       `UserSettingsDialog`. Verdict/gate colors are inherited, never re-themed, so a palette
+       choice cannot make a verdict illegible; contrast was hand-checked, not machine-audited.
+    c. **UIC-11 — Submit: `sample_metadata.csv` required + a human-approved identity join.**
+       `sample_metadata` is no longer optional; `Submit.tsx`'s `canSubmit` requires
+       `join.metadataPresent && joinApproved`. `lib/accession.ts`'s `computeIdentityJoin()`
+       corroborates `Sample_ID` **plus** tissue (never a single-column match) and classifies each
+       row matched/weak/conflict/duplicate/unmatched; approval is bound to a join **signature** so
+       any edit (a re-attached sheet, an added/removed row) auto-invalidates a prior approval — a
+       human re-confirms identity after any change. Every join action is appended to a client-side
+       `SubmitAuditEntry` log. Sample-identity mixups are the highest-consequence error this screen
+       guards against. *See* [REQ-NF-025](nonfunctional.md).
+    d. **UIC-13 — Admin: Act-as re-auth + immutable audit.** Impersonating another user now
+       requires a password-confirm modal before it takes effect, and appends to an append-only
+       `localStorage` audit log merged into Admin's Activity feed. **Labelled demo gap**: the
+       re-auth step is a shared demo password, explicitly commented in-code and disclaimed in-UI
+       as a production seam (real re-auth = an IdP step-up or a credential-request tool — a
+       plaintext password field is never the intended production mechanism). Password-reset + role
+       allocation moved into a dedicated per-user Edit view.
+    e. **UIC-9 — Provenance: `fingerprint:` label + copyable event-trail code blocks.**
+       `provenance/Fingerprint.tsx` renders the digest as `fingerprint:` + a show-full toggle (no
+       leading partial, `overflow-x` so it never distorts the card); new `provenance/CodeBlock.tsx`
+       backs `EventTrail.tsx`'s copyable code/error rendering.
+    f. **UIC-10 — Review queue: run/sample checkbox hierarchy + reversible clear-from-view.** The
+       run/flowcell checkbox sits left of a group line enclosing its sample tickets (`setMany`
+       auto-toggles children); a reversible, localStorage-persisted clear/restore mirrors
+       Monitoring's recurring-issue pattern (a "Cleared · N" section, never a DB purge).
+    g. **UIC-12 — Settings: agent roster Active vs Available + mass-edit.** `SettingsModelTier.tsx`
+       splits the roster into Active vs Available (the newly-built node-authoring agent, REQ-F-025,
+       now surfaces as Available) and adds checkbox mass-select + remove + pagination.
+    h. **UIC-14 — Inbox kanban: ids, body, comments, @-mentions, assignee.** Kanban cards gain a
+       visible unique id, a body + comment section with @-mentions resolved to roster display
+       names, and an assignee; the notification list paginates. **Open, noted at commit time**: a
+       ticket derived from the review queue shows its raw internal id rather than the queue's
+       `T-XXXX` display id — a cosmetic follow-up, not silently dropped.
+    i. **UIC-16 — Builder canvas + palette (partial).** The alignment dot grid now spans the full
+       canvas at every zoom level; the tools palette shows the current pipeline's tools with a
+       "≫ ALL" expander. **Explicitly deferred**: the larger four-side-typed-port cards (the bigger
+       rework `docs/design/builder-cards/` specifies) did not ship this batch — ports stay
+       left/right-only on the existing fixed-size cards (see that doc's §5).
+    *Trace:* [design/ui-conventions.md](../design/ui-conventions.md) (the full per-item spec + status),
+    [design/builder-cards/](../design/builder-cards/), REQ-F-025 above,
+    [nonfunctional.md REQ-NF-025](nonfunctional.md), [tasks T-118](../planning/tasks.md),
+    [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md).
 
 ## Notes / deferred
 
@@ -959,6 +1046,16 @@ had reserved or listed as *not-yet-built*.
 6. **Page-access enforcement is client-side only** (REQ-F-082) — a UI view-gate, not a
    server-side authorization boundary; a production build would need to enforce page/read access
    in `api/`, not just hide nav items in `frontend/`.
+7. **Node-authoring agent (REQ-F-025) has no `api/` endpoint and no frontend wiring.** The core
+   Python agent is built + tested, but nothing in `api/` calls `propose_node()` and nothing in
+   `frontend/src` calls it either — the Pipeline Builder's "Author a tool node" modal is still a
+   static, pre-existing `phase-2` preview. It is also **narrower than the roster's original
+   design**: retrieval over a fixed 11-card curated corpus, not a parser over a dropped tool's own
+   docs, so it cannot onboard a genuinely new/arbitrary tool yet (see
+   [node-authoring-agent.md](../design/node-authoring-agent.md) "What actually shipped").
+8. **UIC-16's larger four-side-typed-port Builder cards remain unbuilt** (REQ-F-083i) — only the
+   full-canvas dot grid and the current-tools palette expander shipped; ports stay left/right-only
+   on the existing fixed-size cards, tracked in [builder-cards/](../design/builder-cards/) §5.
 
 ---
 

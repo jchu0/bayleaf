@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md) |
+| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [design/ui-conventions.md](../design/ui-conventions.md) |
 
 ## Overview
 
@@ -109,6 +109,21 @@ links to [evaluation.md](../quality/evaluation.md).
    [design/frontend/README.md](../design/frontend/README.md) §11,
    [functional.md REQ-F-082](functional.md),
    [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md).
+6. **REQ-NF-025 — Sample-identity join requires explicit human approval before submit.** Because a
+   sample identity mixup is the highest-consequence error in the intake path, Submit's
+   `sample_metadata.csv` is **required, not optional** (2026-07-10, "Wave 10," UIC-11, commit
+   `6b571a4`): the samplesheet's identity is corroborated against it on `Sample_ID` **plus at least
+   one more column** (never a single-column match, to resist a 1-index-off mixup — verified in
+   `lib/accession.ts`'s `computeIdentityJoin()`), and `Submit.tsx`'s `canSubmit` is `false` until a
+   human explicitly approves the join. Approval is bound to a **signature** over the join result, so
+   any edit afterward (re-attaching a different metadata sheet, adding/removing a sample row)
+   silently invalidates a prior approval and forces re-confirmation — an operator cannot carry a
+   stale "approved" state across an edited join. Every join action is appended to a client-side
+   audit log (`SubmitAuditEntry`). **Scope**: this is a UI-level data-safety gate over client-parsed
+   files; it does not yet extend server-side (`POST /api/runs` still carries no subject field,
+   REQ-NF-023) and is not a cryptographic/formal identity-matching guarantee. *Trace:*
+   [functional.md REQ-F-083c](functional.md), [design/ui-conventions.md UIC-11](../design/ui-conventions.md#uic-11--submit-samplesheet),
+   [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md).
 
 ## Performance & cost
 
