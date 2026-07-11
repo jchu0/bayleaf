@@ -20,9 +20,10 @@ const WINDOW_OPTIONS: SegmentOption<MonitoringWindow>[] = [
 ]
 const WINDOW_LABEL: Record<string, string> = { '7d': '7 days', '14d': '14 days', '30d': '30 days', all: 'all time' }
 
-// Recurring-signature pagination, mirroring the Runs list (RunOverview) so the two are consistent.
-type SigPerPage = '25' | '50' | '100'
-const SIG_PER_PAGE: SegmentOption<SigPerPage>[] = [
+// Per-page options, shared by both client-side pagers on this screen (signatures + per-run rows),
+// mirroring the Runs list (RunOverview) so all three are consistent.
+type PerPage = '25' | '50' | '100'
+const PER_PAGE_OPTIONS: SegmentOption<PerPage>[] = [
   { value: '25', label: '25' },
   { value: '50', label: '50' },
   { value: '100', label: '100' },
@@ -52,8 +53,10 @@ export function Monitoring() {
   const [dateStart, setDateStart] = useState<string | null>(null)
   const [dateEnd, setDateEnd] = useState<string | null>(null)
   const [openSigs, setOpenSigs] = useState<Set<string>>(new Set())
-  const [sigPerPage, setSigPerPage] = useState<SigPerPage>('25')
+  const [sigPerPage, setSigPerPage] = useState<PerPage>('25')
   const [sigPage, setSigPage] = useState(1)
+  const [runsPerPage, setRunsPerPage] = useState<PerPage>('25')
+  const [runsPage, setRunsPage] = useState(1)
 
   // Single pre-aggregated call (drops the old N+1 runs.map(api.run) reassembly, F21). A request
   // id guards against out-of-order responses on a window switch — only the latest may commit.
@@ -94,6 +97,10 @@ export function Monitoring() {
   useEffect(() => {
     setSigPage(1)
   }, [window, query, sigPerPage])
+  // Reset to page 1 when the window, date range, or per-page changes (mirrors the signatures reset).
+  useEffect(() => {
+    setRunsPage(1)
+  }, [window, dateStart, dateEnd, runsPerPage])
 
   const control = (
     <div className="flex items-center gap-2">
@@ -138,6 +145,16 @@ export function Monitoring() {
       })
     : data.runs
   const maxSamples = Math.max(...chartRuns.map((r) => r.n_samples), 1)
+
+  // Client-side pagination over the per-run rows. data.runs is uncapped server-side (the T-072 gap);
+  // this bounds only what we RENDER — the payload is still uncapped. Mirrors the signatures pager.
+  const runsPer = Number(runsPerPage)
+  const runsTotal = chartRuns.length
+  const runsPages = Math.max(1, Math.ceil(runsTotal / runsPer))
+  const runsCurPage = Math.min(runsPage, runsPages)
+  const runsFrom = runsTotal === 0 ? 0 : (runsCurPage - 1) * runsPer + 1
+  const runsTo = Math.min(runsCurPage * runsPer, runsTotal)
+  const pagedRuns = chartRuns.slice((runsCurPage - 1) * runsPer, runsCurPage * runsPer)
 
   const kpis: { label: string; value: string; hint?: string }[] = [
     { label: `Runs · ${windowShort}`, value: String(o.n_runs) },
@@ -224,7 +241,7 @@ export function Monitoring() {
                       ))}
                     </div>
                     <div className="relative flex h-full items-end gap-[12px]">
-                      {chartRuns.map((r) => (
+                      {pagedRuns.map((r) => (
                         <div
                           key={r.run_id}
                           className="flex h-full w-[28px] shrink-0 flex-col justify-end gap-[2px]"
@@ -247,7 +264,7 @@ export function Monitoring() {
                   </div>
                   {/* Date labels — mirror the bar flex so each sits centered under its column. */}
                   <div className="mt-[7px] flex gap-[12px]">
-                    {chartRuns.map((r) => (
+                    {pagedRuns.map((r) => (
                       <div key={r.run_id} className="w-[28px] shrink-0 text-center">
                         <span className="whitespace-nowrap font-mono text-[9px] text-text-3">
                           {shortDate(r.run_date, r.run_id)}
@@ -267,6 +284,54 @@ export function Monitoring() {
               </span>
             ))}
           </div>
+
+          {runsTotal > 0 && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-[11.5px] text-text-2">
+              <span>
+                Showing {runsFrom}–{runsTo} of {runsTotal} runs
+              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11.5px] text-text-3">Per page</span>
+                  <SegmentedControl<PerPage> options={PER_PAGE_OPTIONS} value={runsPerPage} onChange={setRunsPerPage} />
+                </div>
+                {runsPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setRunsPage(Math.max(1, runsCurPage - 1))}
+                      className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
+                      aria-label="Previous page"
+                    >
+                      ‹
+                    </button>
+                    {Array.from({ length: runsPages }, (_, i) => i + 1).map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setRunsPage(n)}
+                        className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] transition-colors ${
+                          n === runsCurPage
+                            ? 'bg-accent font-semibold text-white'
+                            : 'border border-line bg-card text-text-2 hover:border-line-strong'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setRunsPage(Math.min(runsPages, runsCurPage + 1))}
+                      className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
+                      aria-label="Next page"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="rounded-[14px] border border-line bg-card px-[18px] py-4">
@@ -362,7 +427,7 @@ export function Monitoring() {
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11.5px] text-text-3">Per page</span>
-                <SegmentedControl<SigPerPage> options={SIG_PER_PAGE} value={sigPerPage} onChange={setSigPerPage} />
+                <SegmentedControl<PerPage> options={PER_PAGE_OPTIONS} value={sigPerPage} onChange={setSigPerPage} />
               </div>
               {sigPages > 1 && (
                 <div className="flex items-center gap-1">
