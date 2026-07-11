@@ -550,7 +550,7 @@ export function ReviewQueue() {
                 <button
                   type="button"
                   onClick={() => void batchAct('resolve')}
-                  className="rounded-md border border-proceed-bd bg-proceed-bg px-2.5 py-1 text-[12px] font-semibold text-proceed-fg hover:brightness-95"
+                  className="rounded-md border border-line-strong bg-card px-2.5 py-1 text-[12px] font-semibold text-text hover:border-accent hover:text-accent-strong"
                 >
                   Resolve selected
                 </button>
@@ -943,7 +943,7 @@ function TicketCard({
               <button
                 type="button"
                 onClick={on.resolve}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-proceed-bd bg-proceed-bg px-3 py-1.5 text-[12px] font-medium text-proceed-fg transition-opacity hover:opacity-90"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12px] font-medium text-text transition-colors hover:border-accent hover:text-accent-strong"
               >
                 <Check size={13} />
                 Resolve

@@ -9,7 +9,7 @@ import { SegmentedControl, type SegmentOption } from '../components/SegmentedCon
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { useRefresh } from '../hooks/useRefresh'
 import type { Gate, MonitoringMetrics, MonitoringWindow, Verdict } from '../types'
-import { GATE_DOT, VERDICT_BAR, VERDICT_LABEL } from '../verdict'
+import { GATE_DOT, VERDICT_LABEL } from '../verdict'
 
 // The window control offers the three dated windows README §5.8 mandates; the backend applies one
 // window to the whole payload, so it governs the KPIs, throughput, gate-pass, and signatures
@@ -42,8 +42,6 @@ const V_HEX: Record<Verdict, string> = {
 // distinct from every verdict color.
 const TREND_HEX = '#3b73d6'
 
-// Legend order per the design.
-const LEGEND_ORDER: Verdict[] = ['proceed', 'hold', 'rerun', 'escalate']
 // Gate-pass row labels — the design labels only QC/Variant with "gate".
 const GATE_PASS_LABEL: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', variant: 'Variant gate' }
 
@@ -53,12 +51,25 @@ const COL_W = 42
 const FRAME_W = 588
 const CLEARED_KEY = 'pipeguard.monitoring.cleared'
 
-// Short throughput-bar date derived from the run's [Header] date (YYYY-MM-DD → MM-DD). We never
-// fabricate a date: an undated run (shouldn't appear in a dated window) falls back to its run id.
+// Throughput-bar date in DD-MM-YY (maintainer preference, includes the year) from the run's [Header]
+// ISO date. We never fabricate a date: an undated run (shouldn't appear in a dated window) → run id.
 function shortDate(runDate: string | null, runId: string): string {
-  if (runDate && runDate.length >= 10) return runDate.slice(5, 10)
+  if (runDate && runDate.length >= 10) {
+    const [y, m, d] = runDate.slice(0, 10).split('-')
+    return `${d}-${m}-${y.slice(2)}`
+  }
   return runId.length > 6 ? runId.slice(-6) : runId
 }
+
+// The five toggleable trend lines (M7): the four verdicts + the flagged (non-proceed) total. Each
+// overlays the stacked bars as a monotone line; the legend chips toggle them on/off.
+const TREND_LINES: { key: Verdict | 'flagged'; label: string; color: string }[] = [
+  { key: 'proceed', label: 'Proceed', color: '#1a854e' },
+  { key: 'hold', label: 'Hold', color: '#b07714' },
+  { key: 'rerun', label: 'Rerun', color: '#c1560f' },
+  { key: 'escalate', label: 'Escalate', color: '#cf3238' },
+  { key: 'flagged', label: 'Flagged', color: '#3b73d6' },
+]
 
 type ChartDatum = {
   label: string
@@ -129,6 +140,15 @@ export function Monitoring() {
     }
   })
   const [showCleared, setShowCleared] = useState(false)
+  // Which of the 5 trend lines are drawn (M7). Default: flagged on (the prior behavior), the four
+  // verdict lines off — they overlay the bars, so on-by-default would clutter.
+  const [trendOn, setTrendOn] = useState<Record<string, boolean>>({
+    proceed: false,
+    hold: false,
+    rerun: false,
+    escalate: false,
+    flagged: true,
+  })
   useEffect(() => {
     try {
       localStorage.setItem(CLEARED_KEY, JSON.stringify([...cleared]))
@@ -302,7 +322,7 @@ export function Monitoring() {
             <div className="mt-3 overflow-x-auto">
               <ComposedChart
                 width={chartWidth}
-                height={200}
+                height={224}
                 data={chartData}
                 margin={{ top: 8, right: 12, bottom: 0, left: -6 }}
                 barCategoryGap="24%"
@@ -318,7 +338,9 @@ export function Monitoring() {
                 />
                 <XAxis
                   dataKey="label"
-                  tick={{ fontSize: 9, fill: '#8b95a1' }}
+                  tick={{ fontSize: 9, fill: '#8b95a1', angle: -35, textAnchor: 'end' }}
+                  height={46}
+                  tickMargin={4}
                   axisLine={{ stroke: 'rgba(128,138,152,0.3)' }}
                   tickLine={false}
                   interval={0}
@@ -328,22 +350,44 @@ export function Monitoring() {
                 <Bar dataKey="hold" stackId="v" fill={V_HEX.hold} maxBarSize={26} isAnimationActive={false} />
                 <Bar dataKey="rerun" stackId="v" fill={V_HEX.rerun} maxBarSize={26} isAnimationActive={false} />
                 <Bar dataKey="escalate" stackId="v" fill={V_HEX.escalate} maxBarSize={26} radius={[2, 2, 0, 0]} isAnimationActive={false} />
-                <Line type="monotone" dataKey="flagged" name="Flagged" stroke={TREND_HEX} strokeWidth={2} dot={{ r: 2, fill: TREND_HEX, strokeWidth: 0 }} isAnimationActive={false} />
+                {/* Toggleable trend lines (M7) — the four verdicts + flagged, each an overlay. */}
+                {TREND_LINES.filter((t) => trendOn[t.key]).map((t) => (
+                  <Line
+                    key={t.key}
+                    type="monotone"
+                    dataKey={t.key}
+                    name={t.label}
+                    stroke={t.color}
+                    strokeWidth={2}
+                    dot={{ r: 2, fill: t.color, strokeWidth: 0 }}
+                    isAnimationActive={false}
+                  />
+                ))}
               </ComposedChart>
             </div>
           )}
-          <div className="mt-[14px] flex flex-wrap items-center gap-[14px] border-t border-line pt-3">
-            {LEGEND_ORDER.map((v) => (
-              <span key={v} className="inline-flex items-center gap-[5px] text-[11px] text-text-2">
-                <span className={`inline-block h-[9px] w-[9px] rounded-[2px] ${VERDICT_BAR[v]}`} />
-                {VERDICT_LABEL[v]}
-              </span>
-            ))}
-            {/* Trend-line key (M3) */}
-            <span className="inline-flex items-center gap-[5px] text-[11px] text-text-2">
-              <span className="inline-block h-[2px] w-[14px] rounded-full" style={{ background: TREND_HEX }} />
-              Flagged (trend)
-            </span>
+          {/* Legend doubles as the trend-line toggles (M7): swatch colors match the stacked bars, and
+              each chip toggles its overlay line on/off. Flagged = the non-proceed total. */}
+          <div className="mt-[14px] flex flex-wrap items-center gap-2 border-t border-line pt-3">
+            <span className="mr-1 text-[10.5px] font-medium uppercase tracking-[0.4px] text-text-3">Trend lines</span>
+            {TREND_LINES.map((t) => {
+              const on = trendOn[t.key]
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTrendOn((p) => ({ ...p, [t.key]: !p[t.key] }))}
+                  aria-pressed={on}
+                  title={`${on ? 'Hide' : 'Show'} the ${t.label} trend line`}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-[3px] text-[11px] transition-colors ${
+                    on ? 'border-line-strong bg-card-2 text-text' : 'border-line bg-card text-text-3 hover:border-line-strong'
+                  }`}
+                >
+                  <span className="inline-block h-[3px] w-[13px] rounded-full" style={{ background: t.color, opacity: on ? 1 : 0.45 }} />
+                  {t.label}
+                </button>
+              )
+            })}
           </div>
         </div>
 
