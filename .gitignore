@@ -124,8 +124,11 @@ Thumbs.db
 /briefs/
 /handoffs/
 
-# Real-GIAB end-to-end run output (derived from git-ignored reads; local E2E test)
-data/RUN-*-GIAB-*/
+# Real-GIAB end-to-end run output (derived from git-ignored reads; local E2E test).
+# Ignore the run's contents but COMMIT its NOTE.md — the honesty disclosure (chr20 downsample,
+# arbitrary smoke panel, no clinical claim) should travel with the repo even though the reads never do.
+data/RUN-*-GIAB-*/*
+!data/RUN-*-GIAB-*/NOTE.md
 
 # Submitted-run outputs from POST /api/runs (real-giab-derived, local; regenerate via Submit)
 data/RUN-SUBMIT-*/

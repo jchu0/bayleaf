@@ -659,6 +659,13 @@ export function Submit() {
             </div>
           ) : (
             <>
+              {/* Persistent honesty banner: the connect/import flow is a demo stand-in — any token
+                  "connects" and Import always loads the seeded GIAB set, ignoring the selected run's
+                  advertised count. Labelled so it can never read as a live integration (T-057). */}
+              <div className="flex items-start gap-2 border-b border-line bg-accent-weak px-4 py-2 text-[11px] text-info">
+                <Info size={13} strokeWidth={2} className="mt-px shrink-0" />
+                <span>Demo mock · not a live BaseSpace connection (T-057). Import loads the seeded GIAB set.</span>
+              </div>
               <div className="flex items-center gap-[10px] border-b border-line px-4 py-[13px]">
                 <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-accent-weak">
                   <RefreshCw size={16} strokeWidth={1.8} className="text-accent-strong" />
@@ -1219,6 +1226,8 @@ export function Submit() {
         )}
         <button
           type="button"
+          onClick={() => toast('Save draft is a phase-2 seam — not persisted yet.', 'info')}
+          title="Phase-2 seam — not persisted yet"
           className="rounded-[9px] border border-line-strong bg-card px-4 py-[9px] text-[13px] font-medium text-text-2"
         >
           Save draft

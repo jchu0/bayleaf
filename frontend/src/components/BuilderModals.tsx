@@ -469,7 +469,7 @@ export function PipelineRepairModal({ onClose }: { onClose: () => void }) {
             advisory · roster #5 · <strong className="text-text-2">proposes fixes; a human approves</strong>
           </div>
         </div>
-        <span className="shrink-0 rounded-full border border-[#cfe0fb] bg-accent-weak px-2 py-0.5 text-[10px] font-semibold text-accent-strong">phase-2</span>
+        <span className="shrink-0 whitespace-nowrap rounded-full border border-[#cfe0fb] bg-accent-weak px-2 py-0.5 text-[10px] font-semibold text-accent-strong">advisory · read-only</span>
         <CloseBtn onClose={onClose} />
       </div>
       <div className="max-h-[62vh] overflow-y-auto px-4 py-4">
@@ -566,7 +566,7 @@ export function PipelineRepairModal({ onClose }: { onClose: () => void }) {
           }}
           className="rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
         >
-          Send to review queue
+          Open review queue
         </button>
       </div>
     </ModalShell>
@@ -611,7 +611,7 @@ export function ArchivistModal({ onClose }: { onClose: () => void }) {
             advisory · <strong className="text-text-2">never deletes, never touches an active run</strong>
           </div>
         </div>
-        <span className="shrink-0 rounded-full border border-[#cfe0fb] bg-accent-weak px-2 py-0.5 text-[10px] font-semibold text-accent-strong">phase-2</span>
+        <span className="shrink-0 whitespace-nowrap rounded-full border border-[#cfe0fb] bg-accent-weak px-2 py-0.5 text-[10px] font-semibold text-accent-strong">advisory · read-only</span>
         <CloseBtn onClose={onClose} />
       </div>
       <div className="max-h-[62vh] overflow-y-auto px-4 py-4">
@@ -635,12 +635,12 @@ export function ArchivistModal({ onClose }: { onClose: () => void }) {
         )}
       </div>
       <div className="flex items-center gap-2.5 border-t border-line px-4 py-3">
-        <span className="flex-1 text-[10.5px] leading-snug text-text-3">Advisory — the archive is queued for a human to confirm; nothing is moved automatically.</span>
+        <span className="flex-1 text-[10.5px] leading-snug text-text-3">Advisory — this previews the archival manifest; PipeGuard has no archive-write endpoint, so nothing is queued or moved.</span>
         <button onClick={onClose} className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong">
           Dismiss
         </button>
         <button onClick={onClose} className="rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line">
-          Queue archive
+          Close (preview only)
         </button>
       </div>
     </ModalShell>

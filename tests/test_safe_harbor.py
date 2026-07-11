@@ -100,6 +100,29 @@ def test_redact_record_never_touches_verdict_or_gate() -> None:
     assert out == {"verdict": "escalate", "confidence": None, "gate": "variant"}
 
 
+# ── egress-hardening regressions (audit P2-11 / AS-02, AS-04) ─────────────────────────
+def test_guarded_origin_drops_cohort_key_even_when_none() -> None:
+    # AS-04: a GATE_BY_ORIGIN cohort key (tissue) on a PHI-guarded origin (real-giab) must be
+    # DROPPED even when its value is None — never emitted as {"tissue": null}, which would leak
+    # column PRESENCE for a guarded/real run. (The None short-circuit must not precede the drop.)
+    out = redact_record({"tissue": None, "sample_id": "S1"}, origin="real-giab")
+    assert "tissue" not in out
+    # a present value is likewise withheld for a guarded origin
+    assert "tissue" not in redact_record({"tissue": "blood"}, origin="real-giab")
+
+
+def test_card_narration_freetext_is_scrubbed() -> None:
+    # AS-02: card narration fields (headline/rationale/next_steps) are free-text scrubbed, not
+    # passed through raw — an embedded identifier must not survive an export.
+    out = redact_record(
+        {"headline": "Escalate: contact jane.doe@lab.org", "rationale": "email ops@lab.org re it"},
+        origin="synthetic",
+    )
+    assert "jane.doe@lab.org" not in out["headline"]
+    assert "[REDACTED:EMAIL]" in out["headline"]
+    assert "ops@lab.org" not in out["rationale"]
+
+
 # ── honesty boundary ────────────────────────────────────────────────────────────────
 def test_policy_is_labelled_style_not_certified() -> None:
     # The policy id must say "style" — this is Safe-Harbor-STYLE, never an attested de-id claim.

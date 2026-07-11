@@ -29,6 +29,14 @@ from ..models import DecisionCard, Finding, RunArtifacts
 from .base import Synthesizer, aggregate_verdict
 from .stub import StubSynthesizer
 
+# Intake-identity fields that must NOT ride along in the metadata sent to an external LLM on the
+# live path: `submitted_by` is operator PII the export policy DROPs (`api/deid.py`), `subject_id`
+# is a unique subject key, and `extra` is unmodeled free-form intake data that could carry an
+# identifier. None is a QC signal the narration needs (tissue / library_prep — the QC-relevant prep
+# context — are kept). This mirrors the egress de-id posture: identifiers never leave the machine
+# (ADR-0001 untouched — this only shapes what the live synthesizer is told, never a gate input).
+_METADATA_PII_FIELDS = frozenset({"submitted_by", "subject_id", "extra"})
+
 # JSON schema for the *narration only*. Verdict/confidence/findings are not the
 # model's to decide, so they are deliberately absent here.
 _NARRATION_SCHEMA = {
@@ -94,7 +102,13 @@ class ClaudeSynthesizer:
         return {
             "run_id": artifacts.run_id,
             "sample_id": sample_id,
-            "metadata": meta.model_dump(exclude_none=True) if meta else None,
+            # Drop PII-ish intake identifiers before the payload leaves the machine (see above).
+            # `set(...)` because pydantic's `exclude` wants a mutable set, not a frozenset.
+            "metadata": (
+                meta.model_dump(exclude=set(_METADATA_PII_FIELDS), exclude_none=True)
+                if meta
+                else None
+            ),
             "sample_sheet": sheet.model_dump(exclude_none=True) if sheet else None,
             "demux": demux.model_dump(exclude_none=True) if demux else None,
             "qc": qc.model_dump(exclude_none=True) if qc else None,

@@ -153,7 +153,9 @@ export function SettingsModelTier() {
     for (const k of panelKeys) {
       const cur = rows[k]
       const model = draftModel === 'keep' ? cur.model : draftModel
-      const live = draftLive === 'keep' ? cur.live : draftLive === 'on'
+      // A phase-2 / not-yet-wired agent has no backend seam, so it can never go Live — force Stub
+      // regardless of the draft, so a batch edit or a stale draft can't flip a design-only agent green.
+      const live = !AGENT_BY_KEY[k].wired ? false : draftLive === 'keep' ? cur.live : draftLive === 'on'
       if (live && !cur.live) turningLiveOn = true
       // Purpose is only offered on a single edit; a batch keeps each agent's existing text.
       next[k] = { model, live, desc: panelKeys.length === 1 ? draftDesc : cur.desc }
@@ -171,7 +173,9 @@ export function SettingsModelTier() {
     setRows(next)
     closePanel()
     sel.clear()
-    toast(`Updated ${panelKeys.length} agent${panelKeys.length === 1 ? '' : 's'}`, 'success')
+    // Local demo state only — no backend agent-model endpoint exists (T-045 seam), so this is
+    // 'info' (staged), not 'success' (persisted); the card-level chip says the same.
+    toast(`Staged ${panelKeys.length} agent${panelKeys.length === 1 ? '' : 's'} locally — not persisted`, 'info')
   }
 
   const removeKeys = async (keys: string[]) => {
@@ -215,6 +219,8 @@ export function SettingsModelTier() {
   // block. It reads component state, so the caller only decides WHERE to mount it (single vs. batch).
   const renderEditor = () => {
     const single = singleEditKey ? AGENT_BY_KEY[singleEditKey] : null
+    // A phase-2 / not-yet-wired agent has no backend seam, so Live is not offerable — force Stub.
+    const noBackend = (panelKeys ?? []).some((k) => !AGENT_BY_KEY[k].wired)
     return (
       <div className="space-y-3.5">
         {/* (1) micro-header — the agent name + its env var (single), or the ·-joined labels (multi). */}
@@ -225,7 +231,7 @@ export function SettingsModelTier() {
               <div className="truncate font-mono text-[9.5px] text-text-3">
                 {single.env}
                 {single.where === 'builder' ? ' · in builder' : ''}
-                {single.phase2 ? ' · phase-2' : ''}
+                {single.phase2 ? ' · design-only (no backend)' : ''}
               </div>
             </>
           ) : (
@@ -276,14 +282,22 @@ export function SettingsModelTier() {
         <div>
           <label className="text-[11px] font-bold uppercase tracking-[0.5px] text-text-3">Execution</label>
           <div className="mt-1.5">
-            <SegmentedControl<LiveChoice>
-              options={isMulti ? LIVE_OPTS_MULTI : LIVE_OPTS_SINGLE}
-              value={draftLive}
-              onChange={setDraftLive}
-            />
+            {noBackend ? (
+              <span className="inline-flex items-center gap-1 rounded-lg border border-line bg-card-2 px-3 py-1 text-[13px] text-text-3">
+                Stub · $0 · design-only (no backend)
+              </span>
+            ) : (
+              <SegmentedControl<LiveChoice>
+                options={isMulti ? LIVE_OPTS_MULTI : LIVE_OPTS_SINGLE}
+                value={draftLive}
+                onChange={setDraftLive}
+              />
+            )}
           </div>
           <p className="mt-1.5 text-[11px] leading-[1.5] text-text-3">
-            Live = real billed Claude calls; Stub = deterministic $0. Advisory only — never sets a verdict (ADR-0001).
+            {noBackend
+              ? 'This agent is design-only — no backend seam exists yet, so it stays Stub ($0) and cannot run Live.'
+              : 'Live = real billed Claude calls; Stub = deterministic $0. Advisory only — never sets a verdict (ADR-0001).'}
           </p>
         </div>
 
@@ -330,6 +344,9 @@ export function SettingsModelTier() {
             </span>
             <span className="rounded-full border border-line bg-card-2 px-2 py-0.5 text-[10px] font-medium text-text-3">
               Stub-first · $0
+            </span>
+            <span className="rounded-full border border-line bg-card-2 px-2 py-0.5 text-[10px] font-medium text-text-3">
+              Local demo state · not persisted
             </span>
             <span
               title="Each model is a PIPEGUARD_*_MODEL env var. Live = real, billed Claude calls. Verdicts stay rule-derived (ADR-0001)."
@@ -476,7 +493,7 @@ export function SettingsModelTier() {
                     <div className="truncate font-mono text-[9.5px] text-text-3">
                       {a.env}
                       {a.where === 'builder' ? ' · in builder' : ''}
-                      {a.phase2 ? ' · phase-2' : ''}
+                      {a.phase2 ? ' · design-only (no backend)' : ''}
                     </div>
                   </div>
                   <div className="min-w-0 truncate text-[11.5px] text-text-2">{row.desc}</div>
@@ -533,7 +550,7 @@ export function SettingsModelTier() {
                   <div className="truncate font-mono text-[9.5px] text-text-3">
                     {a.env}
                     {a.where === 'builder' ? ' · in builder' : ''}
-                    {a.phase2 ? ' · phase-2' : ''}
+                    {a.phase2 ? ' · design-only (no backend)' : ''}
                   </div>
                 </div>
                 <button

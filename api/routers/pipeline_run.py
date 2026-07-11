@@ -241,6 +241,13 @@ def run_pipeline(
             status_code=422, detail=f"cannot compile approved pipeline '{body.name}': {exc}"
         ) from exc
 
+    # An empty / no-tool-node graph compiles to an empty topo order (``compile_graph`` does NOT
+    # treat that as an error — only source/reference nodes and no tool to run), but launching the
+    # driver on it fails late and opaquely ("produced no results dir"). Reject it up front with the
+    # same reason ``/api/pipelines/compile`` gives, so an operator gets an immediate cause.
+    if not any(not n.is_source() for n in graph.nodes):
+        raise HTTPException(status_code=422, detail="the graph has no tool nodes to run")
+
     # Validate the operator supplied every input KIND the graph consumes, and resolve each choice to
     # a real server-side path by KEY (never a raw client path — traversal-safe).
     cat = _catalog()

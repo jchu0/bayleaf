@@ -81,8 +81,21 @@ _DATE_FIELDS: frozenset[str] = frozenset(
     {"run_date", "date", "collection_date", "dob", "birth_date"}
 )
 # Free-text fields scrubbed for embedded identifiers rather than dropped (they may carry signal).
+# The card-narration fields (`headline`/`rationale`/`next_steps`) are included: on the LIVE
+# synthesizer path they are model-authored prose that could echo an identifier from the context, so
+# they get the same mechanical scrub as any other free text rather than passing through raw.
 _FREETEXT_FIELDS: frozenset[str] = frozenset(
-    {"note", "notes", "comment", "comments", "narration", "detail"}
+    {
+        "note",
+        "notes",
+        "comment",
+        "comments",
+        "narration",
+        "detail",
+        "headline",
+        "rationale",
+        "next_steps",
+    }
 )
 
 # ── free-text redaction ─────────────────────────────────────────────────────────────────────────
@@ -157,6 +170,15 @@ def redact_record(row: Mapping[str, Any], origin: str) -> dict[str, Any]:
         lkey = key.strip().lower()
         if lkey in _DROP_FIELDS:
             continue  # direct identifier — removed entirely
+        # Resolve the shared structured export policy UP FRONT so a DROP / guarded-origin drop runs
+        # BEFORE the `None` branch — otherwise an absent gated field (e.g. `tissue` on a guarded
+        # `real-giab` run whose sample has no metadata) would emit `null` and leak that the column
+        # exists (mirrors the correct ordering in `api.deid.redact`).
+        action = base.action_for(key)
+        if action is DeidAction.DROP:
+            continue
+        if action is DeidAction.GATE_BY_ORIGIN and guarded:
+            continue  # cohort key withheld for PHI-guarded / real origins, even when None
         if value is None:
             out[key] = None
             continue
@@ -172,12 +194,8 @@ def redact_record(row: Mapping[str, Any], origin: str) -> dict[str, Any]:
         if lkey in _FREETEXT_FIELDS:
             out[key] = redact_free_text(str(value))
             continue
-        # Everything else defers to the shared structured export policy (drop/hash/gate/through).
-        action = base.action_for(key)
-        if action is DeidAction.DROP:
-            continue
-        if action is DeidAction.GATE_BY_ORIGIN and guarded:
-            continue
+        # Everything else defers to the structured export policy resolved above (passthrough/hash,
+        # or a GATE_BY_ORIGIN that survived the origin gate).
         if action is DeidAction.PASSTHROUGH:
             out[key] = value
         else:  # HASH, or a GATE_BY_ORIGIN that survived the origin gate → pseudonymize

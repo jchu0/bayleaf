@@ -4,11 +4,6 @@ import { Link } from 'react-router-dom'
 import type { AgentProposal, MonitoringSignature } from '../types'
 import { GATE_LABEL } from '../verdict'
 
-// types.ts (frozen) doesn't type affected_run_ids on MonitoringSignature, though the aggregate
-// now serves it — read it via a defensive cast so the chips render without touching the frozen
-// type, and degrade to the honest empty-state when an older/partial payload omits it.
-type SignatureWithRuns = MonitoringSignature & { affected_run_ids?: string[] }
-
 // Month-abbreviated ISO date for the first→last-seen range, matching the prototype's "Jun 26 →
 // Jul 8" (PipeGuard.dc.html:1383/2286). Parses the YYYY-MM-DD parts directly — no Date object, so
 // there's no timezone off-by-one — and falls back to the raw string if it isn't a plain date.
@@ -57,7 +52,7 @@ export function MonitoringSignatureRow({
   const [proposal, setProposal] = useState<AgentProposal | null>(null)
   const [escError, setEscError] = useState<string | null>(null)
 
-  const affectedRuns = (sig as SignatureWithRuns).affected_run_ids ?? []
+  const affectedRuns = sig.affected_run_ids
   const recurring = sig.count >= 3
   const autoNote = recurring ? `Auto-escalated · recurred ${sig.count}×` : 'Available for manual escalation'
   const desc = `${sig.title}. Flagged by ${sig.rule_id} on the ${GATE_LABEL[sig.gate]} gate; recorded ${sig.count}× in the last ${windowLabel}.`

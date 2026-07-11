@@ -355,17 +355,20 @@ export type MonitoringRunRow = {
   counts: Record<string, number>
 }
 export type MonitoringGate = { gate: Gate; flagged: number; total: number }
-// first_seen/last_seen/trend are NOT yet served (F2) — kept optional so the row can render
-// the columns honestly (omitted) until the backend aggregate carries them.
+// Additive §7 fidelity, all now served by GET /api/monitoring's MonitoringSignature:
+// first_seen/last_seen are null when only undated runs carry the signature (honest omission, never
+// faked); trend is a coarse up/down/flat display heuristic (backend default 'flat'), NOT a
+// calibrated rate; affected_run_ids are the distinct runs the signature appears in (chronological).
 export type MonitoringSignature = {
   signature: string
   rule_id: string
   title: string
   gate: Gate
   count: number
-  first_seen?: string | null
-  last_seen?: string | null
-  trend?: 'up' | 'down' | 'flat' | null
+  first_seen: string | null
+  last_seen: string | null
+  trend: 'up' | 'down' | 'flat'
+  affected_run_ids: string[]
 }
 export type MonitoringMetrics = {
   window: MonitoringWindow

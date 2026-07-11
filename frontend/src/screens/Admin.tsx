@@ -567,6 +567,8 @@ function ActivityTab() {
         Append-only audit trail of off-gate governance — threshold overrides, pipeline versions,
         and review tickets (backend-persisted), plus page-access changes and act-as impersonations
         (client-side stores, badged as such). Read-only; a rules-decided verdict never appears here.
+        De-identified share/export (<code>DATA_EXPORTED</code>) egress is audited per-run in that
+        run&apos;s Provenance trail, not in this central feed.
       </p>
       <div className="mb-3">
         <Tabs<'all' | FeedKind>
