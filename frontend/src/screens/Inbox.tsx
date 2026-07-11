@@ -442,7 +442,7 @@ function BoardCard({ item, onOpen }: { item: InboxItem; onOpen: () => void }) {
           <span className={`h-2 w-2 shrink-0 rounded-full ${src.dot}`} />
           <span className="shrink-0 text-[10px] font-medium text-text-3">{src.label}</span>
           {/* IB14: a stable, referenceable id — a ticket shows its review-queue id, a self card IB-XXXX. */}
-          <span className="truncate font-mono text-[10px] text-text-3">{shortItemId(item.id, item.isSelf)}</span>
+          <span className="truncate font-mono text-[10px] text-text-3" title={item.id}>{shortItemId(item.id, item.isSelf)}</span>
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
           {item.assignee && <Avatar id={item.assignee} size={17} />}
@@ -647,7 +647,7 @@ function BoardCardDetail({ item, onClose }: { item: InboxItem; onClose: () => vo
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className={`rounded-md border px-1.5 py-px text-[10px] font-medium ${src.badge}`}>{src.label}</span>
-              <span className="font-mono text-[11px] text-text-3">{shortItemId(item.id, item.isSelf)}</span>
+              <span className="font-mono text-[11px] text-text-3" title={item.id}>{shortItemId(item.id, item.isSelf)}</span>
             </div>
             <h2 className="mt-1.5 text-[15px] font-medium leading-snug text-text">{item.title}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-text-3">

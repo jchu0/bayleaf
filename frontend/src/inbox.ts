@@ -37,13 +37,18 @@ export const PRIORITY_META: Record<InboxPriority, { label: string; chip: string;
 }
 export const PRIORITY_ORDER: InboxPriority[] = ['none', 'low', 'med', 'high']
 
-// A short, human-referenceable id for a board card (UIC-14 "visible, referenceable id"). A derived
-// ticket already carries its review-queue id (shared identity, so it reads the same in both places);
-// a self reminder's raw `self:<uuid>` is unfriendly, so it collapses to a stable IB-XXXX tail.
+// A short, human-referenceable id for a board card (UIC-14 "visible, referenceable id"). A self
+// reminder's raw `self:<uuid>` collapses to a stable IB-XXXX tail; a derived ticket that already
+// reads as a short human id (e.g. T-2868) passes through unchanged, while a raw store id (a uuid /
+// content hash) collapses to a stable TK-XXXX handle so the card never shows a giant hex string.
+// The full id is still shown on hover (a `title`) so it stays referenceable.
 export function shortItemId(id: string, isSelf: boolean): string {
-  if (!isSelf) return id
-  const tail = id.replace(/^self:/, '').replace(/-/g, '')
-  return `IB-${tail.slice(0, 4).toUpperCase()}`
+  if (isSelf) {
+    const tail = id.replace(/^self:/, '').replace(/-/g, '')
+    return `IB-${tail.slice(0, 4).toUpperCase()}`
+  }
+  if (id.length <= 12) return id // already a friendly ticket id (T-2868, …)
+  return `TK-${id.replace(/[^a-z0-9]/gi, '').slice(0, 6).toUpperCase()}`
 }
 
 // Two-letter initials for a roster avatar chip (first + last word). Tolerant of a single-word or
