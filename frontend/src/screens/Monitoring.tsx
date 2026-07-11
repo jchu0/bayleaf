@@ -2,6 +2,7 @@ import { EyeOff, RotateCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bar, CartesianGrid, ComposedChart, Line, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api'
+import { MeterBar } from '../components/Bar'
 import { DateRangePicker } from '../components/DateRangePicker'
 import { MonitoringSignatureRow } from '../components/MonitoringSignatureRow'
 import { PageHeader } from '../components/PageHeader'
@@ -405,10 +406,8 @@ export function Monitoring() {
                     </span>
                     <span className="font-mono text-[13px] font-semibold text-text">{passPct}%</span>
                   </div>
-                  {/* Fill uses THAT gate's own accent, not a blanket green. */}
-                  <div className="h-2 overflow-hidden rounded-[5px] bg-card-2">
-                    <div className={`h-full ${GATE_DOT[g.gate]}`} style={{ width: `${passPct}%` }} />
-                  </div>
+                  {/* Fill uses THAT gate's own accent, not a blanket green (canonical MeterBar, G3). */}
+                  <MeterBar value={passPct} fillClassName={GATE_DOT[g.gate]} />
                 </div>
               )
             })}

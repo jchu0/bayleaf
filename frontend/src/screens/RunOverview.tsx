@@ -2,6 +2,7 @@ import { AlertTriangle, ChevronRight, RotateCw, Search, Truck } from 'lucide-rea
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { SegmentBar } from '../components/Bar'
 import { DateRangePicker } from '../components/DateRangePicker'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl } from '../components/SegmentedControl'
@@ -42,22 +43,15 @@ const FACETS: { key: StatusFacet; label: string }[] = [
 // The stacked verdict bar: proceed→hold→rerun→escalate widths by count share. A `running` run
 // has no per-sample verdicts yet, so it reads a single neutral track instead of an empty bar.
 function VerdictBar({ counts, running }: { counts: Record<string, number>; running: boolean }) {
-  const total = VERDICTS.reduce((s, v) => s + (counts[v] ?? 0), 0) || 1
-  // Conservative width (capped, not full-row) + 2px gaps between segments so adjacent verdict tones
-  // (esp. hold amber / rerun orange) read as distinct blocks instead of one bleeding gradient.
-  return (
-    <div className="flex h-2 w-full max-w-[300px] gap-[2px] overflow-hidden rounded-[5px] bg-card-2">
-      {running ? (
-        <div className="w-full bg-card-3" title="sequencing" />
-      ) : (
-        VERDICTS.map((v) => {
-          const n = counts[v] ?? 0
-          return n ? (
-            <div key={v} className={`rounded-[3px] ${VERDICT_BAR[v]}`} style={{ width: `${(n / total) * 100}%` }} title={`${n} ${v}`} />
-          ) : null
-        })
-      )}
-    </div>
+  // Capped width (not full-row) so adjacent verdict tones read as distinct blocks. Uses the shared
+  // canonical SegmentBar (G3) so every distribution bar in the app has one geometry.
+  return running ? (
+    <div className="h-2 w-full max-w-[300px] overflow-hidden rounded-[5px] bg-card-3" title="sequencing" />
+  ) : (
+    <SegmentBar
+      className="w-full max-w-[300px]"
+      segments={VERDICTS.map((v) => ({ key: v, value: counts[v] ?? 0, className: VERDICT_BAR[v], title: `${counts[v] ?? 0} ${v}` }))}
+    />
   )
 }
 

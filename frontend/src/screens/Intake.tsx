@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Check, CheckCircle2, ChevronRight, RefreshCw } from 'lucide-react'
 import { api } from '../api'
+import { MeterBar } from '../components/Bar'
 import { CollapsibleRow } from '../components/CollapsibleRow'
 import { PageHeader } from '../components/PageHeader'
 import { Empty, ErrorBox, Loading } from '../components/States'
@@ -342,7 +343,6 @@ function SampleAdmission({
           // Bar scales against the metric's own 0–100 range (its "full" reference), the honest
           // analogue of the mock's pct/25 — real % reads-identified is already high and
           // consistent, so bars read at comparable lengths with room for status + action.
-          const barW = pct != null ? `${Math.min(100, Math.max(0, pct))}%` : '0%'
           const overrideNote = admitted
             ? 'Admitted below the yield target by manual override — recorded on the run.'
             : 'Below the yield target. Admit only if the low yield is expected for this sample.'
@@ -385,10 +385,9 @@ function SampleAdmission({
                   </span>
                   <span className="font-mono text-[11.5px] text-text-2">{pct != null ? `${pct}%` : '—'}</span>
                 </div>
-                {/* Shrunk bar (IG1) — capped width like the Runs verdict bar, not a full-card sweep. */}
-                <div className="h-2 max-w-[340px] overflow-hidden rounded-[5px] bg-card-3">
-                  <div className={`h-full ${BAR[status]}`} style={{ width: barW }} />
-                </div>
+                {/* Shrunk bar (IG1) — capped width, canonical MeterBar geometry (G3). */}
+                <MeterBar value={pct ?? 0} fillClassName={BAR[status]} trackClassName="bg-card-3" className="max-w-[340px]" />
+
 
                 {sparse && (
                   <div className="mt-[13px] flex flex-wrap items-center gap-3">

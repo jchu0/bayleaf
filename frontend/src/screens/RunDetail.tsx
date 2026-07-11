@@ -9,6 +9,7 @@ import { DecisionLoading, DecisionReleased, DecisionSynthesisError } from '../co
 import { DecisionVerdictBar } from '../components/DecisionVerdictBar'
 import { CitedEvidence } from '../components/EvidenceTable'
 import { Tabs } from '../components/Tabs'
+import { Truncate } from '../components/Truncate'
 import { GateResultStrip } from '../components/GateResultStrip'
 import { QCReadout, emptyGateGroup, notMeasuredGroup, type ReadoutGroup } from '../components/MetricsPanel'
 import { PageHeader } from '../components/PageHeader'
@@ -284,7 +285,7 @@ function CardHead({ card, header }: { card: DecisionCard; header: CardHeader | n
     <div className="flex min-w-0 items-center gap-2.5">
       <VerdictBadge verdict={card.verdict} />
       <span className="shrink-0 font-mono text-[16px] font-semibold text-text">{card.sample_id}</span>
-      <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-text">{card.headline}</span>
+      <Truncate text={card.headline} className="min-w-0 flex-1 text-[13.5px] font-medium text-text" />
       {header?.sample_type && (
         <span className="shrink-0 rounded-full border border-line bg-card-2 px-2.5 py-0.5 text-[11px] text-text-2">
           {header.sample_type}
