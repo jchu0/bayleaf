@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .catalog import REFERENCE_PARAM, ProcessSpec, catalog_entry
+from .catalog import INDEXED_REFERENCE_PARAMS, REFERENCE_PARAM, ProcessSpec, catalog_entry
 
 
 class CompileError(ValueError):
@@ -255,7 +255,13 @@ def _render_main(
     if needs_reads:
         src_lines.append("    ch_reads = Channel.value([file(params.read1), file(params.read2)])")
     for param in sorted(ref_params):
-        src_lines.append(f"    ch_{param} = Channel.value(file(params.{param}))")
+        if param in INDEXED_REFERENCE_PARAMS:
+            # Stage the file + every `<file>.*` sidecar index (a bwa-mem2/samtools-indexed FASTA)
+            # as a tuple so the index lands next to it in the process work dir.
+            idx = f'file("${{params.{param}}}.*")'
+            src_lines.append(f"    ch_{param} = Channel.value([file(params.{param}), {idx}])")
+        else:
+            src_lines.append(f"    ch_{param} = Channel.value(file(params.{param}))")
     for kind in sorted(extra_params):
         src_lines.append(f"    ch_{kind} = Channel.fromPath(params.{kind})")
 

@@ -14,7 +14,7 @@ include { BCFTOOLS_NORM } from './modules/bcftools_norm.nf'
 workflow {
     ch_reads = Channel.value([file(params.read1), file(params.read2)])
     ch_panel_bed = Channel.value(file(params.panel_bed))
-    ch_reference = Channel.value(file(params.reference))
+    ch_reference = Channel.value([file(params.reference), file("${params.reference}.*")])
 
     FASTP(ch_reads)
     BWA_MEM2_MEM(FASTP.out.fastq, ch_reference)

@@ -98,7 +98,7 @@ _SPECS: tuple[ProcessSpec, ...] = (
         label="Alignment",
         inputs=(
             Port("fastq", "tuple path(read1), path(read2)"),
-            Port("reference_fasta", "path reference"),
+            Port("reference_fasta", "tuple path(reference), path(reference_idx)"),
         ),
         outputs=(Port("bam", 'path("*.aligned.bam")', emit="bam"),),
         # bwa-mem2 mem | name-sort → fixmate (-m) → coord-sort (faithful to the driver's align step,
@@ -168,7 +168,7 @@ _SPECS: tuple[ProcessSpec, ...] = (
         label="Variant calling",
         inputs=(
             Port("bam", "path dedup"),
-            Port("reference_fasta", "path reference"),
+            Port("reference_fasta", "tuple path(reference), path(reference_idx)"),
             Port("panel_bed", "path panel"),
         ),
         outputs=(Port("vcf", 'path("*.calls.vcf.gz")', emit="vcf"),),
@@ -187,7 +187,7 @@ _SPECS: tuple[ProcessSpec, ...] = (
         label="Filter / normalize",
         inputs=(
             Port("vcf", "path calls"),
-            Port("reference_fasta", "path reference"),
+            Port("reference_fasta", "tuple path(reference), path(reference_idx)"),
         ),
         outputs=(Port("filtered_vcf", 'path("*.norm.vcf.gz")', emit="filtered_vcf"),),
         script=(
@@ -226,6 +226,12 @@ REFERENCE_PARAM: dict[str, str] = {
     "panel_bed": "panel_bed",
     "truth_vcf": "truth_vcf",
 }
+
+# Reference params whose file carries a SIDECAR INDEX that must be staged alongside it (a FASTA
+# needs its bwa-mem2 `.0123/.bwt.2bit.64/…` + samtools `.fai`). For these the compiler stages the
+# file + every `<file>.*` sibling as a tuple, so bwa-mem2/bcftools find the index next to the FASTA
+# (Nextflow otherwise stages only the single declared file). A BED/VCF needs no sidecar.
+INDEXED_REFERENCE_PARAMS: frozenset[str] = frozenset({"reference"})
 
 
 def catalog_entry(tool: str) -> ProcessSpec | None:

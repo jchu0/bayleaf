@@ -7,7 +7,7 @@ process BCFTOOLS_NORM {
 
     input:
     path calls
-    path reference
+    tuple path(reference), path(reference_idx)
 
     output:
     path("*.norm.vcf.gz"), emit: filtered_vcf

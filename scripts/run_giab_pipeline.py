@@ -1,21 +1,25 @@
-"""Run the REAL GIAB HG002 panel fastqs through the *outlined* germline pipeline, end to end.
+"""Run the REAL GIAB HG002 panel fastqs through the germline pipeline **via Nextflow**, end to end.
 
-Unlike ``gate_giab.py`` (which reads the pre-aligned NIST panel BAM), this actually executes the
-Pipeline-Builder chain from raw reads on real GIAB HG002 panel fastqs:
+This is the app's execution driver (``POST /api/runs`` triggers it). It is **Nextflow-first**: it
+does NOT call fastp/bwa-mem2/samtools/… itself — it hands the whole chain to Nextflow by running the
+generated pipeline at ``pipelines/germline/main.nf`` (the SAME artifact the Pipeline Builder emits
+from its cards, ADR-0003), then parses the pipeline's published QC outputs into the frozen-five CSV
+contract:
 
-    fastp  →  bwa-mem2 mem  →  samtools fixmate/markdup  →  {mosdepth, bcftools call → norm}
+    nextflow run pipelines/germline/main.nf --read1 … --read2 … --reference … --panel_bed …
+      → fastp → bwa-mem2 → samtools markdup → {mosdepth, bcftools call → norm} + MultiQC
+      → parse fastp.json + mosdepth summary/thresholds → data/<run_id>/ (dashboard-discoverable)
 
-then writes a **dashboard-discoverable** run directory (``data/<run_id>/`` with the frozen-five
-CSV contract + a narrated ``pipeline.log`` + an ``origin`` tag) and runs it through the *unchanged*
-``run_gate`` with the default runbook — the same recompute the read-API serves. So the run shows
-up in the operator UI exactly like a mock run, but every number is derived from real reads.
+then runs the run dir through the *unchanged* ``run_gate`` with the default runbook — the same
+recompute the read-API serves. The run shows up in the operator UI like any other, but every number
+is derived from real reads that flowed through a real Nextflow execution.
 
-Compose ≠ execute stays intact: this is a standalone driver of the external toolchain (bioconda),
-not the app running a tool. The app only ingests the ``run/`` outputs it produces.
+Compose ≠ execute stays intact at the CORE: ``src/pipeguard/`` never runs a tool; this standalone
+driver (in ``scripts/``, outside the core) shells out to Nextflow, which orchestrates the toolchain.
 
-Prereqs (bioconda, e.g. the ``hackathon`` conda env on PATH): ``fastp``, ``bwa-mem2``,
-``samtools``, ``mosdepth``, ``bcftools``; the chr20 reference indexed under
-``data/real-giab/ref/chr20.fa`` (see the module for how it was built); the raw panel fastqs under
+Prereqs: ``nextflow`` + a JRE and the bioconda tools (``fastp``, ``bwa-mem2``, ``samtools``,
+``mosdepth``, ``bcftools``, ``multiqc``) on PATH — e.g. the ``hackathon`` conda env; the chr20
+reference indexed under ``data/real-giab/ref/chr20.fa``; the raw panel fastqs under
 ``data/real-giab/fastq/``. Nothing raw is committed — reference + intermediates are git-ignored.
 
     PATH=/path/to/hackathon/bin:$PATH uv run python scripts/run_giab_pipeline.py
@@ -26,7 +30,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
-import re
+import os
 import shutil
 import subprocess
 import sys
@@ -42,7 +46,8 @@ _REF = _GIAB / "ref" / "chr20.fa"
 _RAW_R1 = _GIAB / "fastq" / "HG002.R1.fastq.gz"
 _RAW_R2 = _GIAB / "fastq" / "HG002.R2.fastq.gz"
 _PANEL_BED = _REPO / "scripts" / "panel_regions.example.bed"
-_WORK = _GIAB / "pipeline"  # intermediates (git-ignored)
+_WORK = _GIAB / "pipeline"  # intermediates + the nextflow work/ dir (git-ignored)
+_PIPELINE = _REPO / "pipelines" / "germline" / "main.nf"  # the Builder-generated pipeline, ADR-0003
 
 _SAMPLE = "HG002"
 _RUN_ID = "RUN-2026-07-08-GIAB-HG002"
@@ -66,16 +71,6 @@ class RunConfig:
 _LOG: list[str] = []
 
 
-def _tool(name: str) -> str:
-    p = shutil.which(name)
-    if p is None:
-        sys.exit(
-            f"{name} not found on PATH. Put the bioconda env on PATH, e.g.\n"
-            f"  PATH=/path/to/miniconda3/envs/hackathon/bin:$PATH uv run python {__file__}"
-        )
-    return p
-
-
 def _log(stage: str, msg: str, level: str = "INFO") -> None:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     line = f"{ts} [{level}] {stage}: {msg}"
@@ -83,104 +78,63 @@ def _log(stage: str, msg: str, level: str = "INFO") -> None:
     print(line)
 
 
-def _tool_version(tool: str, name: str) -> str:
-    """Best-effort version string for the pipeline.log provenance."""
-    # Pull the first version-looking token (e.g. 1.3.6 / 2.2.1) from either --version or the
-    # `version` subcommand, whichever the tool supports — robust across fastp/bwa-mem2/samtools/
-    # mosdepth/bcftools without per-tool special-casing.
-    del name  # unused; kept for call-site readability
-    for args in ([tool, "--version"], [tool, "version"]):
-        try:
-            out = subprocess.run(args, capture_output=True, text=True, timeout=20)
-            m = re.search(r"\b\d+\.\d+(?:\.\d+)?\b", f"{out.stdout}\n{out.stderr}")
-            if m:
-                return m.group(0)
-        except Exception:
-            continue
-    return "unknown"
+def _java_home(nextflow: Path) -> str | None:
+    """The conda env's JAVA_HOME for the Nextflow launcher (``<env>/lib/jvm``, sibling of bin)."""
+    candidate = nextflow.resolve().parent.parent / "lib" / "jvm"
+    return str(candidate) if candidate.exists() else None
 
 
-def step_fastp() -> Path:
-    """fastp: adapter/quality trim + read-level QC (Q30, dup, reads-passing-filter)."""
+def run_nextflow() -> Path:
+    """Hand the whole germline chain to Nextflow; return the published-results dir.
+
+    Nextflow-first: the driver runs ``nextflow run pipelines/germline/main.nf`` — it does NOT invoke
+    fastp/bwa-mem2/samtools/… itself. Each process publishes to ``<outdir>/results``. ``nextflow`` +
+    a JRE + the bioconda tools must be on PATH (the intake endpoint injects PIPEGUARD_BIOCONDA_BIN).
+    """
+    nextflow = shutil.which("nextflow")
+    if nextflow is None:
+        sys.exit(
+            "nextflow not found on PATH. Put an env with nextflow + a JRE + the bioconda tools on\n"
+            f"  PATH, e.g. PATH=/path/to/envs/hackathon/bin:$PATH uv run python {__file__}"
+        )
+    if not _PIPELINE.exists():
+        sys.exit(f"generated pipeline missing: {_PIPELINE} — run generate_reference_pipeline.py")
     _WORK.mkdir(parents=True, exist_ok=True)
-    fastp = _tool("fastp")
-    tr1, tr2 = _WORK / "HG002.trim.R1.fastq.gz", _WORK / "HG002.trim.R2.fastq.gz"
-    fastp_json = _WORK / "HG002.fastp.json"
-    _log("fastp", f"trimming raw reads (v{_tool_version(fastp, 'fastp')})")
+    outdir = _WORK / "nf-out"
+    env = os.environ.copy()
+    java_home = _java_home(Path(nextflow))
+    if java_home:
+        env.setdefault("JAVA_HOME", java_home)  # the launcher needs a JVM the env may not export
+    _log("nextflow", f"nextflow run {_PIPELINE.relative_to(_REPO)} — real HG002 panel reads")
     subprocess.run(
-        [fastp, "-i", str(_RAW_R1), "-I", str(_RAW_R2), "-o", str(tr1), "-O", str(tr2),
-         "-j", str(fastp_json), "-h", str(_WORK / "HG002.fastp.html"), "-w", "3"],
-        check=True, capture_output=True,
+        [nextflow, "run", str(_PIPELINE), "-ansi-log", "false", "-work-dir", str(_WORK / "work"),
+         "--sample", _SAMPLE, "--read1", str(_RAW_R1), "--read2", str(_RAW_R2),
+         "--reference", str(_REF), "--panel_bed", str(_PANEL_BED), "--outdir", str(outdir)],
+        check=True, cwd=_WORK, env=env,
     )  # fmt: skip
-    return fastp_json
+    results = outdir / "results"
+    if not results.is_dir():
+        sys.exit(f"nextflow run produced no results dir at {results}")
+    _log("nextflow", "pipeline completed — parsing published QC outputs")
+    return results
 
 
-def step_align_markdup() -> Path:
-    """bwa-mem2 mem → coordinate sort → fixmate → markdup → indexed dedup BAM."""
-    bwa, samtools = _tool("bwa-mem2"), _tool("samtools")
-    tr1, tr2 = _WORK / "HG002.trim.R1.fastq.gz", _WORK / "HG002.trim.R2.fastq.gz"
-    dedup = _WORK / "HG002.dedup.bam"
-    rg = f"@RG\\tID:{_SAMPLE}\\tSM:{_SAMPLE}\\tPL:ILLUMINA\\tLB:{_SAMPLE}-panel"
-    _log("bwa-mem2", f"aligning to chr20 (v{_tool_version(bwa, 'bwa-mem2')})")
-    # bwa-mem2 mem | name-sort → fixmate (-m adds mate score/coord) → coord-sort → markdup.
-    aln = subprocess.Popen(
-        [bwa, "mem", "-t", "4", "-R", rg, str(_REF), str(tr1), str(tr2)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
-    nsort = subprocess.Popen(
-        [samtools, "sort", "-n", "-@", "2", "-O", "bam", "-"],
-        stdin=aln.stdout,
-        stdout=subprocess.PIPE,
-    )
-    fix = subprocess.Popen(
-        [samtools, "fixmate", "-m", "-", "-"],
-        stdin=nsort.stdout,
-        stdout=subprocess.PIPE,
-    )
-    csort = subprocess.Popen(
-        [samtools, "sort", "-@", "2", "-O", "bam", "-"],
-        stdin=fix.stdout,
-        stdout=subprocess.PIPE,
-    )
-    markdup_stats = _WORK / "HG002.markdup.txt"
-    _log("samtools markdup", "flagging optical/PCR duplicates")
-    subprocess.run(
-        [samtools, "markdup", "-f", str(markdup_stats), "-", str(dedup)],
-        stdin=csort.stdout,
-        check=True,
-    )
-    for p in (aln, nsort, fix, csort):
-        p.stdout and p.stdout.close()
-        p.wait()
-    subprocess.run([samtools, "index", str(dedup)], check=True)
-    # Read count actually placed on chr20 (a real "reads through the aligner" number for the log).
-    mapped = subprocess.run(
-        [samtools, "view", "-c", "-F", "0x904", str(dedup)],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-    _log("samtools markdup", f"{mapped} primary mapped reads in the dedup BAM")
-    return dedup
+def _one(results: Path, pattern: str) -> Path:
+    """The single published output matching ``pattern`` (an absent output is a hard error)."""
+    hits = sorted(results.glob(pattern))
+    if not hits:
+        sys.exit(f"expected a pipeline output matching {pattern} under {results}")
+    return hits[0]
 
 
-def step_mosdepth(dedup: Path) -> tuple[float, float, float]:
-    """mosdepth --by <panel>: mean panel coverage + 20x/30x breadth."""
-    mosdepth = _tool("mosdepth")
-    prefix = _WORK / "HG002.panel"
-    _log("mosdepth", f"panel coverage (v{_tool_version(mosdepth, 'mosdepth')})")
-    subprocess.run(
-        [mosdepth, "--by", str(_PANEL_BED), "--no-per-base", "--thresholds", "1,10,20,30",
-         "-t", "2", str(prefix), str(dedup)],
-        check=True, capture_output=True,
-    )  # fmt: skip
+def parse_mosdepth(summary: Path, thresholds: Path) -> tuple[float, float, float]:
+    """Mean panel coverage + 20x/30x breadth from mosdepth's published summary + thresholds."""
     mean = 0.0
-    for line in Path(f"{prefix}.mosdepth.summary.txt").read_text().splitlines():
+    for line in summary.read_text().splitlines():
         if line.startswith("total_region\t"):
             mean = float(line.split("\t")[3])
     total = ge20 = ge30 = 0
-    with gzip.open(f"{prefix}.thresholds.bed.gz", "rt") as fh:
+    with gzip.open(thresholds, "rt") as fh:
         for line in fh:
             if line.startswith("#"):
                 continue
@@ -190,40 +144,16 @@ def step_mosdepth(dedup: Path) -> tuple[float, float, float]:
             ge30 += int(c[7])
     b20 = ge20 / total if total else 0.0
     b30 = ge30 / total if total else 0.0
-    _log("mosdepth", f"mean {mean:.1f}x, breadth {b20 * 100:.1f}% >=20x / {b30 * 100:.1f}% >=30x")
     return mean, b20, b30
 
 
-def step_variants(dedup: Path) -> int:
-    """bcftools mpileup | call -mv → norm: normalized panel variants (count for the log)."""
-    bcftools = _tool("bcftools")
-    calls = _WORK / "HG002.calls.vcf.gz"
-    norm = _WORK / "HG002.norm.vcf.gz"
-    _log("bcftools call", f"variant calling on panel (v{_tool_version(bcftools, 'bcftools')})")
-    mpileup = subprocess.Popen(
-        [bcftools, "mpileup", "-f", str(_REF), "-R", str(_PANEL_BED), "-Ou", str(dedup)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
-    subprocess.run(
-        [bcftools, "call", "-mv", "-Oz", "-o", str(calls)],
-        stdin=mpileup.stdout,
-        check=True,
-        stderr=subprocess.DEVNULL,
-    )
-    mpileup.stdout and mpileup.stdout.close()
-    mpileup.wait()
-    _log("bcftools norm", "left-aligning + normalizing variants")
-    subprocess.run(
-        [bcftools, "norm", "-f", str(_REF), "-Oz", "-o", str(norm), str(calls)],
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run([bcftools, "index", "-f", str(norm)], check=True, capture_output=True)
-    n = subprocess.run(
-        [bcftools, "view", "-H", str(norm)], capture_output=True, text=True, check=True
-    ).stdout.count("\n")
-    _log("bcftools norm", f"{n} normalized variants in the panel")
+def count_variants(norm_vcf: Path) -> int:
+    """Normalized panel-variant count from the published norm VCF (bgzip is gzip-readable)."""
+    n = 0
+    with gzip.open(norm_vcf, "rt") as fh:
+        for line in fh:
+            if not line.startswith("#"):
+                n += 1
     return n
 
 
@@ -309,11 +239,12 @@ def main() -> int:
             sys.exit(f"required input missing: {path} — {hint}")
 
     _log("intake", f"registering run {cfg.run_id} — sample {_SAMPLE} (real GIAB HG002 panel reads)")
-    fastp_json = step_fastp()
-    dedup = step_align_markdup()
-    coverage, b20, b30 = step_mosdepth(dedup)
-    n_variants = step_variants(dedup)
-    q30, reads_pf, dup, total_reads = parse_fastp(fastp_json)
+    results = run_nextflow()
+    q30, reads_pf, dup, total_reads = parse_fastp(_one(results, "*.fastp.json"))
+    coverage, b20, b30 = parse_mosdepth(
+        _one(results, "*.mosdepth.summary.txt"), _one(results, "*.thresholds.bed.gz")
+    )
+    n_variants = count_variants(_one(results, "*.norm.vcf.gz"))
     _log(
         "gate",
         f"handing the run/ outputs to run_gate (Q30 {q30:.1f}%, reads-PF {reads_pf:.1f}%, "
@@ -324,7 +255,7 @@ def main() -> int:
     _, cards = run_gate_from_dir(cfg.run_dir)  # default runbook — the read-API's recompute
     card = cards[0]
 
-    print("\n=== REAL GIAB HG002 panel fastqs → outlined pipeline → gate ===")
+    print("\n=== REAL GIAB HG002 panel fastqs → Nextflow germline pipeline → gate ===")
     print(f"  reads (fastp in)    : {total_reads:,}")
     print(f"  Q30                 : {q30:.1f}%   (fastp)")
     print(f"  reads passing filter: {reads_pf:.1f}%   (fastp)")

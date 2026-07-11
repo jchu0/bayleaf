@@ -7,7 +7,7 @@ process BWA_MEM2_MEM {
 
     input:
     tuple path(read1), path(read2)
-    path reference
+    tuple path(reference), path(reference_idx)
 
     output:
     path("*.aligned.bam"), emit: bam

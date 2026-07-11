@@ -50,9 +50,10 @@ def test_germline_channel_wiring_matches_the_typed_ports() -> None:
         "MULTIQC(FASTP.out.fastp_json, SAMTOOLS_MARKDUP.out.markdup_metrics, "
         "MOSDEPTH.out.mosdepth_summary)" in main
     )
-    # Unwired inputs became pipeline-source channels.
+    # Unwired inputs became pipeline-source channels; the FASTA stages its index sidecars too.
     assert "ch_reads = Channel.value([file(params.read1), file(params.read2)])" in main
-    assert "ch_reference = Channel.value(file(params.reference))" in main
+    ref_ch = 'ch_reference = Channel.value([file(params.reference), file("${params.reference}.*")])'
+    assert ref_ch in main
 
 
 def test_a_process_carries_a_real_command_and_a_stub() -> None:
@@ -165,7 +166,10 @@ def test_generated_germline_stub_runs(tmp_path: Path) -> None:
         p = tmp_path / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
-    for name in ("r1.fastq.gz", "r2.fastq.gz", "ref.fa", "panel.bed"):
+    # A reference + a sidecar index file, so the FASTA index bundle (file("ref.fa.*")) is non-empty.
+    inputs = ["r1.fastq.gz", "r2.fastq.gz", "panel.bed", "ref.fa"]
+    inputs += ["ref.fa.fai", "ref.fa.bwt.2bit.64"]  # bwa-mem2 + samtools sidecars
+    for name in inputs:
         (tmp_path / name).write_text("", encoding="utf-8")
 
     proc = subprocess.run(

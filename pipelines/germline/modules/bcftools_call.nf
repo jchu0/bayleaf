@@ -7,7 +7,7 @@ process BCFTOOLS_CALL {
 
     input:
     path dedup
-    path reference
+    tuple path(reference), path(reference_idx)
     path panel
 
     output:
