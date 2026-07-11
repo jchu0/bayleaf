@@ -11,20 +11,21 @@
      Consumed via the shared PageHeader component (font-serif utility). */
   --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
 
-  /* Light content surface. --color-page is the main content column (design --bg #f5f7f9);
-     --color-card-2 is the one-step-darker inset surface (design --surface-2 #eef1f4) — the
-     two are a deliberate 2-step neutral backdrop, not the same value (F24). */
-  --color-page: #f5f7f9;
-  --color-card: #ffffff;
-  --color-card-2: #eef1f4;
-  --color-card-3: #e6eaef;
-  --color-line: #e4e8ed;
-  --color-line-strong: #d2d9e0;
-  --color-text: #1b232c;
-  --color-text-2: #586472;
-  --color-text-3: #8b95a1;
+  /* Light content surface — softened to a warm japandi palette (sand/greige) at the maintainer's
+     request (2026-07-10): the page is a warm off-white sand rather than a cool near-white, cards
+     are a soft warm white (never glaring #fff), insets step down through warm greige. Contrast on
+     text is preserved (WCAG AA+). --color-page vs --color-card-2 stay a deliberate 2-step backdrop. */
+  --color-page: #f2efe7;
+  --color-card: #faf9f4;
+  --color-card-2: #ebe6da;
+  --color-card-3: #e2dccd;
+  --color-line: #e5dfd1;
+  --color-line-strong: #d1c9b8;
+  --color-text: #2a2620;
+  --color-text-2: #6a6459;
+  --color-text-3: #978f80;
   --color-accent: #1f5fd0;
-  --color-accent-weak: #eaf0fc;
+  --color-accent-weak: #eaeef6;
   --color-accent-strong: #1a4fac;
 
   /* Dark left nav. --color-nav-active is the selected-item background (#22303f); nav-hover
@@ -71,6 +72,8 @@
   color-scheme: light;
   font-family: var(--font-sans);
   font-size: 14px;
+  /* Pipeline-builder canvas dot grid — warm, subtle on the sand surface. */
+  --canvas-dot: #d6cfbe;
 }
 
 /* Dark theme — the content surfaces adopt the app's existing dark-nav aesthetic (the nav itself
@@ -105,6 +108,8 @@
   --color-escalate-fg: #ef858d;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-pop: 0 14px 36px rgba(0, 0, 0, 0.5);
+  /* Canvas dots much dimmer in dark mode — a faint grid, not a distracting field. */
+  --canvas-dot: rgba(150, 165, 185, 0.08);
 }
 
 body {

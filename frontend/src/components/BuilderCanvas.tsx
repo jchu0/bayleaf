@@ -187,6 +187,13 @@ export function BuilderCanvas(props: CanvasProps) {
         ref={scrollRef}
         className="absolute inset-0 overflow-auto bg-card-2"
         onClick={() => props.onSelect(null)}
+        style={{
+          // Dot grid on the scroll surface so it spans the ENTIRE canvas (incl. the margin gutters),
+          // not just the content plane. Theme-aware via --canvas-dot: warm+subtle in light, dim in dark.
+          backgroundImage: 'radial-gradient(var(--canvas-dot) 1px, transparent 1px)',
+          backgroundSize: '20px 20px',
+          backgroundPosition: '12px 12px',
+        }}
       >
         <div
           className="relative"
@@ -195,7 +202,7 @@ export function BuilderCanvas(props: CanvasProps) {
             height: INNER_H,
             margin: '480px 360px',
             zoom,
-            backgroundImage: 'radial-gradient(#dbe1e8 1px, transparent 1px)',
+            backgroundImage: 'radial-gradient(var(--canvas-dot) 1px, transparent 1px)',
             backgroundSize: '20px 20px',
             backgroundPosition: '12px 12px',
           }}
