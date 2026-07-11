@@ -1,22 +1,31 @@
 import {
   CalendarDays,
+  Check,
   CheckCheck,
   ChevronLeft,
   ChevronRight,
+  Circle,
   ExternalLink,
   Flag,
+  Folder,
+  FolderPlus,
   Inbox as InboxIcon,
   LayoutGrid,
+  Mail,
+  Pencil,
   Plus,
   RotateCw,
   StickyNote,
   Trash2,
+  X,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useConfirm } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { Empty, ErrorBox, Loading } from '../components/States'
+import { useToast } from '../components/Toast'
 import { type InboxColumn, type InboxItem, type InboxPriority, useInbox } from '../context/InboxContext'
 import {
   COLUMN_LABEL,
@@ -178,7 +187,7 @@ function InboxRow({ item }: { item: InboxItem }) {
 }
 
 function InboxTab() {
-  const { items, markAllRead } = useInbox()
+  const { items, markAllRead, markAllUnread } = useInbox()
   const [filter, setFilter] = useState<InboxFilter>('all')
   const shown = useMemo(() => {
     // Default view hides the archived (done) column; the board/calendar still show it.
@@ -212,14 +221,25 @@ function InboxTab() {
             </button>
           ))}
         </div>
-        {unread > 0 && (
-          <button
-            onClick={markAllRead}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12px] text-text-2 hover:border-line-strong"
-          >
-            <CheckCheck size={14} /> Mark all read
-          </button>
-        )}
+        {/* IB2: mark everything read OR unread (single-item toggles live on each row's dot). */}
+        <div className="flex items-center gap-1.5">
+          {unread > 0 && (
+            <button
+              onClick={markAllRead}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12px] text-text-2 hover:border-line-strong"
+            >
+              <CheckCheck size={14} /> Mark all read
+            </button>
+          )}
+          {items.some((i) => i.read && i.column !== 'done') && (
+            <button
+              onClick={markAllUnread}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12px] text-text-2 hover:border-line-strong"
+            >
+              <Circle size={14} /> Mark all unread
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex flex-col gap-2">
         {shown.length === 0 ? (
@@ -447,7 +467,14 @@ function CalendarTab() {
           className="rounded-[14px] border border-line bg-card p-4"
         >
           <div className="text-[12.5px] font-semibold text-text">Add a reminder</div>
-          <p className="mb-2 mt-0.5 text-[11px] text-text-3">Scheduled for the selected day.</p>
+          {/* IB3: the date is implied by the selected day (shown here), not repeated on the button. */}
+          <p className="mb-2 mt-0.5 text-[11px] text-text-3">
+            Scheduled for{' '}
+            <span className="font-medium text-text-2">
+              {new Date(`${selected}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+            </span>
+            .
+          </p>
           <input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
@@ -459,7 +486,7 @@ function CalendarTab() {
             disabled={!newTitle.trim()}
             className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-40"
           >
-            <Plus size={14} /> Add for {selected.slice(5)}
+            <Plus size={14} /> Add reminder
           </button>
         </form>
       </div>
@@ -467,83 +494,359 @@ function CalendarTab() {
   )
 }
 
-// ── NOTES tab: self reminders + notes to self ──────────────────────────────────
+// ── NOTES tab: self reminders + notes to self, with edit-gating + folders ───────
+const UNFILED = '__unfiled__'
+
 function NotesTab() {
-  const { items, addSelfItem, setNote, deleteSelfItem } = useInbox()
+  const { items, folders, addSelfItem, updateSelfItem, deleteSelfItem, setFolder, addFolder, deleteFolder } =
+    useInbox()
+  const confirm = useConfirm()
+  const { toast } = useToast()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [composerFolder, setComposerFolder] = useState('')
+  const [newFolder, setNewFolder] = useState('')
+  // IB5: editing is explicit — a note is read-only until you click Edit, gating accidental changes.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editBody, setEditBody] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [folderFilter, setFolderFilter] = useState<string>('all') // 'all' | UNFILED | <folder>
+
   // Everything the operator has authored, plus any ticket they've annotated.
   const noted = useMemo(() => items.filter((i) => i.isSelf || i.note.trim()), [items])
+  const shown = useMemo(() => {
+    if (folderFilter === 'all') return noted
+    if (folderFilter === UNFILED) return noted.filter((i) => !i.folder)
+    return noted.filter((i) => i.folder === folderFilter)
+  }, [noted, folderFilter])
+
+  const startEdit = (i: InboxItem) => {
+    setEditingId(i.id)
+    setEditTitle(i.title)
+    setEditBody(i.note)
+  }
+  const cancelEdit = () => setEditingId(null)
+  const saveEdit = (i: InboxItem) => {
+    // A ticket annotation has no editable title (the title is the ticket's); only its note changes.
+    updateSelfItem(i.id, i.isSelf ? { title: editTitle, note: editBody } : { note: editBody })
+    setEditingId(null)
+  }
+
+  const toggleSel = (id: string) =>
+    setSelected((p) => {
+      const n = new Set(p)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  const selfSelected = [...selected].filter((id) => noted.find((i) => i.id === id)?.isSelf)
+  const deleteSelected = async () => {
+    if (!selfSelected.length) return
+    const ok = await confirm({
+      title: `Delete ${selfSelected.length} note${selfSelected.length === 1 ? '' : 's'}?`,
+      body: "Your own reminders are removed. Ticket annotations aren't deleted here.",
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    })
+    if (!ok) return
+    selfSelected.forEach(deleteSelfItem)
+    setSelected(new Set())
+  }
+
+  const folderOpts = [{ v: '', label: 'Unfiled' }, ...folders.map((f) => ({ v: f, label: f }))]
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          addSelfItem(title, { note: body })
-          setTitle('')
-          setBody('')
-        }}
-        className="h-fit rounded-[14px] border border-line bg-card p-4"
-      >
-        <div className="text-[13px] font-semibold text-text">New note to self</div>
-        <p className="mb-3 mt-0.5 text-[11.5px] text-text-3">
-          A private reminder — lands in your inbox and board, never on the gate.
-        </p>
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Title…"
-          className="w-full rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[13px] text-text placeholder:text-text-3"
-        />
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={4}
-          placeholder="Details (optional)…"
-          className="mt-2 w-full resize-y rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[12.5px] text-text placeholder:text-text-3"
-        />
-        <button
-          type="submit"
-          disabled={!title.trim()}
-          className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12.5px] font-medium text-white disabled:opacity-40"
+      {/* LEFT: composer + folders + calendar connectors */}
+      <div className="flex h-fit flex-col gap-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            addSelfItem(title, { note: body, folder: composerFolder || null })
+            setTitle('')
+            setBody('')
+          }}
+          className="rounded-[14px] border border-line bg-card p-4"
         >
-          <Plus size={15} /> Add note
-        </button>
-      </form>
+          <div className="text-[13px] font-semibold text-text">New note to self</div>
+          <p className="mb-3 mt-0.5 text-[11.5px] text-text-3">
+            A private reminder — lands in your inbox and board, never on the gate.
+          </p>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title…"
+            className="w-full rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[13px] text-text placeholder:text-text-3"
+          />
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={4}
+            placeholder="Details (optional)…"
+            className="mt-2 w-full resize-y rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[12.5px] text-text placeholder:text-text-3"
+          />
+          <div className="mt-2 flex items-center gap-2">
+            <select
+              value={composerFolder}
+              onChange={(e) => setComposerFolder(e.target.value)}
+              className="rounded-md border border-line bg-card-2 px-2 py-1.5 text-[12px] text-text-2"
+              aria-label="File note under folder"
+            >
+              {folderOpts.map((o) => (
+                <option key={o.v} value={o.v}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              disabled={!title.trim()}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12.5px] font-medium text-white disabled:opacity-40"
+            >
+              <Plus size={15} /> Add note
+            </button>
+          </div>
+        </form>
 
-      <div className="flex flex-col gap-2.5">
-        {noted.length === 0 ? (
-          <Empty message="No notes yet. Jot a reminder to yourself on the left." />
-        ) : (
-          noted.map((i) => (
-            <div key={i.id} className="rounded-[11px] border border-line bg-card px-3.5 py-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
-                  <span className={`h-2 w-2 rounded-full ${SOURCE_META[i.source].dot}`} />
-                  <span className="text-[12.5px] font-medium text-text">{i.title}</span>
-                </div>
-                {i.isSelf && (
-                  <button
-                    onClick={() => deleteSelfItem(i.id)}
-                    className="text-text-3 hover:text-escalate"
-                    title="Delete"
-                    aria-label="Delete note"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
+        {/* IB8: folder manager */}
+        <div className="rounded-[14px] border border-line bg-card p-4">
+          <div className="mb-2 text-[12.5px] font-semibold text-text">Folders</div>
+          <div className="flex flex-col gap-1.5">
+            {folders.length === 0 && <p className="text-[11.5px] text-text-3">No folders yet — group your notes.</p>}
+            {folders.map((f) => (
+              <div key={f} className="flex items-center gap-2 rounded-md border border-line bg-card-2 px-2.5 py-1.5">
+                <Folder size={13} className="text-text-3" />
+                <span className="flex-1 truncate text-[12px] text-text-2">{f}</span>
+                <span className="font-mono text-[10.5px] text-text-3">{noted.filter((i) => i.folder === f).length}</span>
+                <button
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: `Delete folder "${f}"?`,
+                      body: 'Notes in it are kept and moved to Unfiled.',
+                      confirmLabel: 'Delete folder',
+                    })
+                    if (ok) deleteFolder(f)
+                  }}
+                  className="text-text-3 hover:text-escalate"
+                  aria-label={`Delete folder ${f}`}
+                >
+                  <X size={13} />
+                </button>
               </div>
-              {i.runId && <div className="mt-0.5 font-mono text-[10.5px] text-text-3">{i.runId}</div>}
-              <textarea
-                value={i.note}
-                onChange={(e) => setNote(i.id, e.target.value)}
-                rows={2}
-                placeholder="Add a note…"
-                className="mt-2 w-full resize-y rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[12px] text-text placeholder:text-text-3"
-              />
-            </div>
-          ))
-        )}
+            ))}
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              addFolder(newFolder)
+              setNewFolder('')
+            }}
+            className="mt-2 flex items-center gap-2"
+          >
+            <input
+              value={newFolder}
+              onChange={(e) => setNewFolder(e.target.value)}
+              placeholder="New folder…"
+              className="min-w-0 flex-1 rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[12px] text-text placeholder:text-text-3"
+            />
+            <button
+              type="submit"
+              disabled={!newFolder.trim()}
+              className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-card px-2.5 py-1.5 text-[12px] text-text-2 hover:border-accent hover:text-accent-strong disabled:opacity-40"
+            >
+              <FolderPlus size={13} /> Add
+            </button>
+          </form>
+        </div>
+
+        {/* IB1: calendar connectors (labelled seams — not yet wired to a real OAuth flow) */}
+        <div className="rounded-[14px] border border-line bg-card p-4">
+          <div className="text-[12.5px] font-semibold text-text">Calendar sync</div>
+          <p className="mb-2.5 mt-0.5 text-[11px] text-text-3">
+            Push reminders to your calendar. Connectors are a production seam — not yet wired.
+          </p>
+          <div className="flex flex-col gap-2">
+            {[
+              { k: 'gmail', label: 'Google Calendar' },
+              { k: 'outlook', label: 'Outlook Calendar' },
+            ].map((c) => (
+              <button
+                key={c.k}
+                onClick={() => toast(`${c.label} connector isn't wired in this build (a labelled seam).`, 'info')}
+                className="flex items-center gap-2 rounded-md border border-line-strong bg-card-2 px-2.5 py-2 text-[12px] text-text-2 hover:border-accent hover:text-accent-strong"
+              >
+                <Mail size={14} />
+                Connect {c.label}
+                <span className="ml-auto rounded-full border border-line bg-card px-1.5 py-px text-[9.5px] text-text-3">
+                  phase-2
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* RIGHT: folder filter + mass-delete + list */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* IB8: filter the list by folder. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[
+              { v: 'all', label: 'All' },
+              { v: UNFILED, label: 'Unfiled' },
+              ...folders.map((f) => ({ v: f, label: f })),
+            ].map((o) => (
+              <button
+                key={o.v}
+                onClick={() => setFolderFilter(o.v)}
+                className={`rounded-full border px-2.5 py-1 text-[11.5px] transition-colors ${
+                  folderFilter === o.v
+                    ? 'border-accent bg-accent-weak text-accent-strong'
+                    : 'border-line bg-card text-text-2 hover:border-line-strong'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1" />
+          {/* IB7: mass delete the checkbox selection (self notes only). */}
+          {selfSelected.length > 0 && (
+            <button
+              onClick={() => void deleteSelected()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-escalate-bd bg-escalate-bg px-2.5 py-1.5 text-[12px] font-medium text-escalate-fg hover:brightness-95"
+            >
+              <Trash2 size={13} /> Delete {selfSelected.length}
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          {shown.length === 0 ? (
+            <Empty message="No notes here. Jot a reminder to yourself on the left." />
+          ) : (
+            shown.map((i) => {
+              const editing = editingId === i.id
+              return (
+                <div key={i.id} className="rounded-[11px] border border-line bg-card px-3.5 py-3">
+                  <div className="flex items-start gap-2.5">
+                    {i.isSelf && (
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-3.5 w-3.5 shrink-0 accent-accent"
+                        aria-label={`Select ${i.title}`}
+                        checked={selected.has(i.id)}
+                        onChange={() => toggleSel(i.id)}
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${SOURCE_META[i.source].dot}`} />
+                        {editing && i.isSelf ? (
+                          <input
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            className="min-w-0 flex-1 rounded border border-line bg-card-2 px-1.5 py-0.5 text-[12.5px] font-medium text-text"
+                          />
+                        ) : (
+                          <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-text">{i.title}</span>
+                        )}
+                        {i.folder && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-line bg-card-2 px-1.5 py-px text-[10px] text-text-3">
+                            <Folder size={9} /> {i.folder}
+                          </span>
+                        )}
+                      </div>
+                      {/* IB6: created + edited timestamps. */}
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-text-3">
+                        {i.runId && <span className="font-mono">{i.runId}</span>}
+                        <span>Created {timeAgo(i.createdAt)}</span>
+                        {i.updatedAt && <span>· edited {timeAgo(i.updatedAt)}</span>}
+                      </div>
+
+                      {editing ? (
+                        <>
+                          <textarea
+                            value={editBody}
+                            onChange={(e) => setEditBody(e.target.value)}
+                            rows={3}
+                            placeholder="Add a note…"
+                            className="mt-2 w-full resize-y rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[12px] text-text placeholder:text-text-3"
+                          />
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <button
+                              onClick={() => saveEdit(i)}
+                              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-white"
+                            >
+                              <Check size={13} /> Save
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              className="rounded-md border border-line px-2.5 py-1 text-[12px] text-text-2 hover:border-line-strong"
+                            >
+                              Cancel
+                            </button>
+                            {/* IB7: delete lives inside edit, gating accidental deletion. */}
+                            {i.isSelf && (
+                              <button
+                                onClick={async () => {
+                                  const ok = await confirm({
+                                    title: 'Delete this note?',
+                                    body: 'Your reminder is removed.',
+                                    confirmLabel: 'Delete',
+                                    tone: 'danger',
+                                  })
+                                  if (ok) {
+                                    deleteSelfItem(i.id)
+                                    setEditingId(null)
+                                  }
+                                }}
+                                className="ml-auto inline-flex items-center gap-1.5 text-[12px] text-text-3 hover:text-escalate"
+                              >
+                                <Trash2 size={13} /> Delete
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {i.note.trim() ? (
+                            <p className="mt-1.5 whitespace-pre-wrap text-[12px] leading-snug text-text-2">{i.note}</p>
+                          ) : (
+                            <p className="mt-1.5 text-[12px] italic text-text-3">No details.</p>
+                          )}
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {/* IB5: edit gate. */}
+                            <button
+                              onClick={() => startEdit(i)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-[12px] text-text-2 hover:border-accent hover:text-accent-strong"
+                            >
+                              <Pencil size={12} /> Edit
+                            </button>
+                            {/* IB8: move to a folder (any item). */}
+                            <select
+                              value={i.folder ?? ''}
+                              onChange={(e) => setFolder(i.id, e.target.value || null)}
+                              className="rounded-md border border-line bg-card-2 px-2 py-1 text-[11.5px] text-text-2"
+                              aria-label="Move to folder"
+                            >
+                              {folderOpts.map((o) => (
+                                <option key={o.v} value={o.v}>
+                                  {o.v === '' ? 'Unfiled' : `📁 ${o.label}`}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
       </div>
     </div>
   )
