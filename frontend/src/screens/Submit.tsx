@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
-  ChevronDown,
   CircleCheck,
   FileCheck,
   Info,
@@ -14,6 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import { api } from '../api'
+import { useConfirm } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { useToast } from '../components/Toast'
@@ -183,6 +183,7 @@ function parseMetadata(text: string): Record<string, SampleMeta> {
 export function Submit() {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const confirm = useConfirm()
   const [submitting, setSubmitting] = useState(false)
   const [method, setMethod] = useState<'upload' | 'basespace'>('upload')
   const [meta, setMeta] = useState<RunMeta>(SEED_META)
@@ -194,6 +195,9 @@ export function Submit() {
   const [metaName, setMetaName] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [page, setPage] = useState(1)
+  // Sample multi-select (S2) keyed by global row index, and the bulk-add count (S3).
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [addCount, setAddCount] = useState('1')
   const sheetInput = useRef<HTMLInputElement>(null)
   const metaInput = useRef<HTMLInputElement>(null)
   const PER = 25 // sample rows per page (scale-aware — a mixed flowcell is routinely 100+ samples)
@@ -220,15 +224,39 @@ export function Submit() {
   function patchSample(i: number, patch: Partial<SampleRow>) {
     setSamples((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
   }
-  function cycleType(i: number) {
-    const idx = SAMPLE_TYPES.indexOf(samples[i].type)
-    patchSample(i, { type: SAMPLE_TYPES[(idx + 1) % SAMPLE_TYPES.length] })
+  // S3: append N blank rows in one action (a 100-sample plate shouldn't be 100 clicks). Bounded so a
+  // fat-fingered count can't lock the tab.
+  function addSamples(n: number) {
+    const k = Math.max(1, Math.min(500, Math.floor(n) || 1))
+    setSamples((rows) => [
+      ...rows,
+      ...Array.from({ length: k }, () => ({ sample: '', type: SAMPLE_TYPES[0], i7: '', i5: '', study: meta.study })),
+    ])
   }
-  function addSample() {
-    setSamples((rows) => [...rows, { sample: '', type: SAMPLE_TYPES[0], i7: '', i5: '', study: meta.study }])
+  // S2: checkbox multi-select + select-all, replacing per-row trashing.
+  function toggleSampleSel(i: number) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i)
+      else next.add(i)
+      return next
+    })
   }
-  function removeSample(i: number) {
-    setSamples((rows) => rows.filter((_, j) => j !== i))
+  function toggleAllSel() {
+    setSelected((prev) => (prev.size === samples.length ? new Set() : new Set(samples.map((_, i) => i))))
+  }
+  async function removeSelected() {
+    const n = selected.size
+    if (n === 0) return
+    const ok = await confirm({
+      title: `Remove ${n} sample${n === 1 ? '' : 's'} from this draft?`,
+      body: 'Removed from this submission draft only — nothing is deleted downstream.',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    })
+    if (!ok) return
+    setSamples((rows) => rows.filter((_, j) => !selected.has(j)))
+    setSelected(new Set())
   }
 
   // Parse a dropped/selected samplesheet for real (replaces the old hardcoded "Parsed 4 samples"
@@ -248,6 +276,7 @@ export function Submit() {
       setMeta((prev) => ({ ...prev, ...parsed.meta }))
       setUploadName(file.name)
       setPage(1)
+      setSelected(new Set())
       toast(`Parsed ${parsed.samples.length} samples from ${file.name}.`, 'success')
     } catch (e) {
       toast(`Couldn't read ${file.name} — ${e instanceof Error ? e.message : String(e)}`, 'error')
@@ -292,6 +321,7 @@ export function Submit() {
     setSamples(SEED_SAMPLES)
     setMeta(SEED_META)
     setImported(true)
+    setSelected(new Set())
   }
 
   // Submit registers the run, then hands off to the execution boundary (POST /api/runs) — the
@@ -680,24 +710,62 @@ export function Submit() {
             </div>
           </div>
           {method === 'upload' && (
-            <button
-              type="button"
-              onClick={addSample}
-              className="inline-flex items-center gap-[6px] rounded-lg border border-line-strong bg-card px-3 py-[7px] text-[12.5px] font-medium text-accent-strong"
-            >
-              <Plus size={14} strokeWidth={2} />
-              Add sample
-            </button>
+            <div className="flex items-center gap-2">
+              {/* S2: bulk-remove the checkbox selection (confirmed), replacing per-row trashing. */}
+              {selected.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void removeSelected()}
+                  className="inline-flex items-center gap-[6px] rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-[7px] text-[12.5px] font-medium text-escalate-fg transition-[filter] hover:brightness-95"
+                >
+                  <Trash2 size={14} strokeWidth={1.9} />
+                  Remove {selected.size}
+                </button>
+              )}
+              {/* S3: add N samples at once. */}
+              <div className="flex items-center gap-1 rounded-lg border border-line-strong bg-card px-1.5 py-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={addCount}
+                  onChange={(e) => setAddCount(e.target.value)}
+                  className="w-11 rounded-[6px] bg-transparent px-1 py-1 text-center font-mono text-[12.5px] text-text outline-none"
+                  aria-label="Number of samples to add"
+                />
+                <button
+                  type="button"
+                  onClick={() => addSamples(Number(addCount))}
+                  className="inline-flex items-center gap-[6px] rounded-[7px] bg-accent-weak px-2.5 py-[6px] text-[12.5px] font-medium text-accent-strong"
+                >
+                  <Plus size={14} strokeWidth={2} />
+                  Add
+                </button>
+              </div>
+            </div>
           )}
         </div>
-        <div className="grid grid-cols-[34px_1.4fr_1.2fr_1fr_1fr_1.1fr_34px] gap-[9px] border-b border-line bg-card-2 px-4 py-[9px] text-[9.5px] font-bold uppercase tracking-[.4px] text-text-3">
+        <div className="grid grid-cols-[26px_30px_1.4fr_1.2fr_1fr_1fr_1.1fr] gap-[9px] border-b border-line bg-card-2 px-4 py-[9px] text-[9.5px] font-bold uppercase tracking-[.4px] text-text-3">
+          <div className="flex items-center">
+            {count > 0 && (
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-accent"
+                aria-label="Select all samples"
+                checked={samples.length > 0 && selected.size === samples.length}
+                ref={(el) => {
+                  if (el) el.indeterminate = selected.size > 0 && selected.size < samples.length
+                }}
+                onChange={toggleAllSel}
+              />
+            )}
+          </div>
           <div>#</div>
           <div>Sample name</div>
           <div>Sample type</div>
           <div>i7 (index)</div>
           <div>i5 (index2)</div>
           <div>Study</div>
-          <div />
         </div>
         {count === 0 ? (
           <div className="px-4 py-[26px] text-center">
@@ -715,8 +783,19 @@ export function Submit() {
             return (
               <div
                 key={i}
-                className="grid grid-cols-[34px_1.4fr_1.2fr_1fr_1fr_1.1fr_34px] items-center gap-[9px] border-b border-line px-4 py-[9px]"
+                className={`grid grid-cols-[26px_30px_1.4fr_1.2fr_1fr_1fr_1.1fr] items-center gap-[9px] border-b border-line px-4 py-[9px] transition-colors ${
+                  selected.has(i) ? 'bg-accent-weak/40' : ''
+                }`}
               >
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 accent-accent"
+                    aria-label={`Select ${s.sample || `sample ${i + 1}`}`}
+                    checked={selected.has(i)}
+                    onChange={() => toggleSampleSel(i)}
+                  />
+                </div>
                 <div className="font-mono text-[11.5px] text-text-3">{i + 1}</div>
                 <div className="min-w-0">
                   <input value={s.sample} onChange={(e) => patchSample(i, { sample: e.target.value })} className={INPUT_CLS} />
@@ -726,25 +805,22 @@ export function Submit() {
                     </div>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => cycleType(i)}
-                  className="flex w-full items-center justify-between gap-1.5 rounded-[7px] border border-line-strong bg-card-2 px-[10px] py-[6px] font-mono text-[11.5px] text-text-2"
+                {/* S1: a real dropdown (was a cycle-on-click button that read as a Next control). The
+                    current value is always an option even if a parsed tissue is outside the vocab. */}
+                <select
+                  value={s.type}
+                  onChange={(e) => patchSample(i, { type: e.target.value })}
+                  className="w-full rounded-[7px] border border-line-strong bg-card-2 px-[9px] py-[7px] font-mono text-[11.5px] text-text-2 outline-none focus:border-accent"
                 >
-                  {s.type}
-                  <ChevronDown size={12} strokeWidth={2} className="text-text-3" />
-                </button>
+                  {[...new Set([...SAMPLE_TYPES, s.type])].filter(Boolean).map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
                 <input value={s.i7} onChange={(e) => patchSample(i, { i7: e.target.value })} className={INPUT_CLS} />
                 <input value={s.i5} onChange={(e) => patchSample(i, { i5: e.target.value })} className={INPUT_CLS} />
                 <input value={s.study} onChange={(e) => patchSample(i, { study: e.target.value })} className={INPUT_CLS} />
-                <button
-                  type="button"
-                  onClick={() => removeSample(i)}
-                  title="Remove sample"
-                  className="flex h-7 w-7 items-center justify-center rounded-[7px] border border-line bg-card text-text-3"
-                >
-                  <Trash2 size={13} strokeWidth={1.9} />
-                </button>
               </div>
             )
           })
