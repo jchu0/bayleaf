@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active (Phase 1 seam built; DB projection + `rebuild-db` implemented) |
-| **Last updated** | 2026-07-09 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics |
-| **Related** | [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [schemas.md](schemas.md), [qc_metrics.md](qc_metrics.md), `src/pipeguard/provenance.py`, `src/pipeguard/engine.py`, `src/pipeguard/rules.py`, `src/pipeguard/persistence/` |
+| **Related** | [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (`data.exported` share egress), [schemas.md](schemas.md), [qc_metrics.md](qc_metrics.md), `src/pipeguard/provenance.py`, `src/pipeguard/engine.py`, `src/pipeguard/rules.py`, `src/pipeguard/persistence/`, `api/share_ledger.py`, `api/main.py` (`share_run`), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md) |
 
 ## Overview
 
@@ -37,6 +37,30 @@ trace on the gate and recording it as provenance metadata here are two different
 2. **Reserved** (emitted as their producers land): `run.registered`,
    `artifact.ingested`, `metric.parsed` (Phase 2 ingest), `ticket.actioned`,
    `resolution.recorded` (ticketing phase).
+3. **Emitted by the read-API, not the gate** — `data.exported` (2026-07-11, ADR-0018 D3):
+   `POST /api/runs/{run_id}/share` (`api/main.py`, approver-gated) applies the conservative
+   Safe-Harbor-**style** scrub (`api/safe_harbor.redact_record`) to a run's already-decided
+   cards and records the egress as a `DATA_EXPORTED` `ProvenanceEvent` — an **egress transform
+   only**; it reads already-computed `DecisionCard`s and never a rule/verdict/gate input
+   (ADR-0001). Its `outputs` carries one `EntityRef(entity_type="share_bundle",
+   content_hash=…)` pinned to a sha256 of the exact emitted bytes, so the trail entry can't
+   drift from what actually left. **Not written to the gate's own `EventLedger`** — see below.
+
+## A second, separate ledger for share events (`api/share_ledger.py`)
+
+`data.exported` events do **not** append to the same `EventLedger` the gate produces. The gate's
+ledger is a **deterministic re-derivation** per run (`api.main._evaluate` is `@lru_cache` — the
+same run dir always replays to the same trail) and must stay byte-stable and cacheable. A share is
+the opposite: a **live, actor-driven side effect** that must survive both that cache and a process
+restart, so it can't be folded into a cached re-derivation. `api/share_ledger.py` is therefore a
+standalone, append-only, gitignored JSONL (`PIPEGUARD_SHARE_LEDGER`, default `share.events.jsonl`
+at the repo root; tolerant reads — a missing file is `[]`, a corrupt line is skipped, not fatal).
+`GET /api/runs/{id}` **merges** the run's recorded share events into the returned `RunDetail.events`
+live, sorted by `created_at`, so a share appears in the trail immediately — without ever mutating
+the cached `RunDetail` the `@lru_cache`'d `_evaluate` returns (the merge happens on a copy, at read
+time). The frontend renders it via `EVENT_META['data.exported']` (`frontend/src/provenance.ts`,
+ShieldCheck icon, "Data shared") and a dedicated `summarizeEvent` case ("De-identified share · N
+rows · \<policy\> scrub · origin \<o\>").
 
 **Note — normalization is already on the gate, the event is not.** The metric registry is
 live on the QC critical path (T-024/T-025): the rule engine builds registry-backed, normalized

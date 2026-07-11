@@ -647,6 +647,18 @@ untouched.
   mode**. **Port-to-port connect:** toggle **Connect**, click an **output** circle, then an
   **input** circle on another card; the elbow edge anchors to those exact ports. Enforce
   **typed-port compatibility** (an output kind connects only to a matching input kind).
+  **Larger cards, four-sided ports (2026-07-11, UIC-16, commit `12a9913`):** cards grew from a
+  fixed 168/208px chip to `NODE_W = 232` and ports now sit on **all four sides**, not just
+  left/right — `BuilderShared.portSide(kind, dir)` places reference/panel inputs on **top** and
+  QC/metric outputs on **bottom** (matching [builder-cards/README.md §2](../builder-cards/README.md#2-port-placement-convention)),
+  while the primary sample-data lane keeps its left-in/right-out flow. Render and wire-endpoint
+  math share one `layoutPorts()` call, so a wire can never detach from its port when a card's port
+  count changes. Only real (wired) ports render — a documented-but-unregistered kind (e.g.
+  `fastp_html`, `samtools_stats`, the mosdepth `*_dist` family) stays reserved and invisible until
+  it gets a kind + a producer; see [builder-cards/README.md §5](../builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
+  for the one remaining gap. `PipelineBuilder.tsx`/`BuilderInspector.tsx` and the on-canvas
+  editing (align/distribute/undo, §"On-canvas editing" above) are untouched — only card geometry
+  and port placement changed, not connection semantics.
 - **Gate** is terminal / singular / non-removable; reads the frozen five `run/` CSVs, not raw
   tool edges. **Agents are port-less** (off the critical path).
 

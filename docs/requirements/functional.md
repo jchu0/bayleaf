@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md) |
 
 ## Overview
 
@@ -97,10 +97,17 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    (REQ-F-013, DP/GQ/AB) is untouched. A qualified human clears the hold via the existing
    RBAC-gated review queue (REQ-F-063, ADR-0017) — no new access pattern. The system **reads** an
    externally-produced annotated variant table (`variants.csv` → `models.VariantCall`, parsed by
-   `parsers.parse_variant_calls`); it never runs an annotator (compose ≠ execute, ADR-0003). *Trace:*
-   [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) decision D2,
+   `parsers.parse_variant_calls`); it never runs an annotator (compose ≠ execute, ADR-0003).
+   **Fires end-to-end against a committed run (2026-07-11):** `api.main._active_runbook(run_id)`
+   is the deployment-config seam that arms the policy **per run** from an optional
+   `route_to_human` marker file in the run dir; `data/RUN-2026-07-11-CLINVAR-RTH/`
+   (`origin=contrived`) is a committed, test-pinned fixture that ESCALATEs HG002 via
+   `VAR-RTH-001` when evaluated through the live API, closing the earlier "never fires
+   end-to-end" gap — every unmarked run stays disarmed. *Trace:*
+   [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) decision D2 +
+   [Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11),
    [qc_metrics.md](../data/qc_metrics.md) §Route-to-human policy, [schemas.md](../data/schemas.md)
-   `VariantCall`, [tasks T-109](../planning/tasks.md).
+   `VariantCall`, [tasks T-109, T-119](../planning/tasks.md).
 
 ## Advisory triage agent (ADR-0009/0012)
 
@@ -1017,15 +1024,44 @@ had reserved or listed as *not-yet-built*.
        names, and an assignee; the notification list paginates. **Open, noted at commit time**: a
        ticket derived from the review queue shows its raw internal id rather than the queue's
        `T-XXXX` display id — a cosmetic follow-up, not silently dropped.
-    i. **UIC-16 — Builder canvas + palette (partial).** The alignment dot grid now spans the full
+    i. **UIC-16 — Builder canvas + palette.** The alignment dot grid now spans the full
        canvas at every zoom level; the tools palette shows the current pipeline's tools with a
-       "≫ ALL" expander. **Explicitly deferred**: the larger four-side-typed-port cards (the bigger
-       rework `docs/design/builder-cards/` specifies) did not ship this batch — ports stay
-       left/right-only on the existing fixed-size cards (see that doc's §5).
+       "≫ ALL" expander. **At the time, explicitly deferred**: the larger four-side-typed-port
+       cards (the bigger rework `docs/design/builder-cards/` specifies) did not ship this batch.
+       **Closed the next day (2026-07-11, commit `12a9913`):** cards grew to `NODE_W = 232` with
+       typed half-circle ports on all four sides (`BuilderShared.portSide()`/`layoutPorts()`, one
+       geometry source for render and wire math) — connection semantics unchanged, only card size
+       and port placement. Only registering a few still-unused reserved kinds stays open
+       ([builder-cards/README.md §5](../design/builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)).
     *Trace:* [design/ui-conventions.md](../design/ui-conventions.md) (the full per-item spec + status),
     [design/builder-cards/](../design/builder-cards/), REQ-F-025 above,
     [nonfunctional.md REQ-NF-025](nonfunctional.md), [tasks T-118](../planning/tasks.md),
     [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md).
+25. **REQ-F-084 — De-identified share/report egress, audited (ADR-0018 D3).** An **approver-only**
+    `POST /api/runs/{run_id}/share` runs a run's already-decided cards (joined with intake identity)
+    through `api.safe_harbor.redact_record` (the conservative Safe-Harbor-**style** scrub — direct
+    identifiers dropped, dates generalized to year, free text mechanically redacted across the 18
+    §164.514(b)(2) classes) and returns a `ShareBundle`: the scrubbed rows + a `ShareManifest`
+    (policy id, row count, origin, a sha256 content hash of the exact emitted bytes, the event id,
+    the 18 identifier classes, and an explicit non-compliance disclaimer). It is an **egress
+    transform only** — reads already-computed `DecisionCard`s, never a rule/verdict/gate input
+    (ADR-0001) — and records the egress as a `DATA_EXPORTED` `ProvenanceEvent` (a new, separate
+    append-only ledger, `api/share_ledger.py`, distinct from the gate's own `EventLedger`; see
+    [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md)) that `GET /api/runs/{id}`
+    merges live into the run's Event trail. The Provenance screen
+    (`frontend/src/screens/Provenance.tsx`) surfaces it as an approver-ONLY (absent, not merely
+    disabled, for anyone else), `ConfirmDialog`-gated "Share (de-identified)" header action that
+    toasts the manifest and refetches so the new trail row appears immediately. **Honest scope
+    note:** this is **narrower** than the full Share window
+    [design/variant-interpretation.md](../design/variant-interpretation.md) §4 describes — one
+    fixed action (no scope/location/security-level selection, always the Safe-Harbor-style scrub,
+    the bundle returned directly to the caller rather than staged anywhere), and the audited event
+    lands in the run's own Provenance trail, not (yet) the Admin Activity feed. *Trace:*
+    [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) decision D3 +
+    [Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11),
+    [data/provenance.md](../data/provenance.md), [quality/evaluation.md](../quality/evaluation.md)
+    EVAL-051, [tasks T-120](../planning/tasks.md),
+    [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md).
 
 ## Notes / deferred
 

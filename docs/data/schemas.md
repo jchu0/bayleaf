@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / route-to-human), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md) |
+| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / route-to-human / `data.exported` share egress), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md) |
 
 ## Overview
 
@@ -238,7 +238,10 @@ Authoritative append-only ledger, projector-compatible from day one:
 `run.registered` · `sample.registered` · `analysis_run.started` · `artifact.ingested` ·
 `metric.parsed` · `finding.emitted` · `verdict.decided` · `analysis_run.completed` ·
 `notification.emitted` *(one per actionable card when a notifier is wired — T-015b)* ·
-`ticket.actioned` · `resolution.recorded`.
+`ticket.actioned` · `resolution.recorded` · `data.exported` *(one per de-identified share/report
+egress — `POST /api/runs/{id}/share`, ADR-0018 D3, 2026-07-11; an egress transform only, never a
+gate input — see [provenance.md](provenance.md#the-ledger) for why it lives in a separate,
+gitignored `share.events.jsonl` rather than the gate's own `EventLedger`)*.
 
 **Separately authoritative (NOT event-sourced / not in decision-replay):**
 1. RunbookProfile / config — JSON/YAML/JSONL source files.

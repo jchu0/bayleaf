@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted (maintainer sign-off 2026-07-10 MST; three open questions decided — see [Maintainer decisions](#maintainer-decisions-2026-07-10-sign-off)) |
-| **Date** | 2026-07-10 (MST) |
+| **Status** | Accepted (maintainer sign-off 2026-07-10 MST; three open questions decided — see [Maintainer decisions](#maintainer-decisions-2026-07-10-sign-off)); D2 + D3 now built end-to-end against a committed run — see [Realized](#realized-2026-07-11) |
+| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST) |
 | **Deciders** | maintainer (signed off 2026-07-10), design pass (4 parallel memos, 2026-07-10) |
-| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md) (three-gate model), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md) (GIAB benchmark / no invented pathogenicity), [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) (advisory agent scoping), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md) (self-contained records), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [design/variant-interpretation.md](../design/variant-interpretation.md) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md) (three-gate model), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md) (GIAB benchmark / no invented pathogenicity), [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) (advisory agent scoping), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md) (self-contained records), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported` event), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [data/provenance.md](../data/provenance.md), [design/variant-interpretation.md](../design/variant-interpretation.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md) |
 
 ## Context
 
@@ -152,6 +152,58 @@ before any external share.
 | **Gains** | Delivers rare-disease evidence surfacing + review ordering + a cited, signed report + a safe share seam — all reusing proven patterns (archivist advisory, card_readout projection, draft→approve lifecycle, deid policy, ConfirmDialog). Stays demonstrably *not* a clinical decision system. |
 | **Costs** | Real reference data (ClinVar/gnomAD) + fetch scripts + a new core module + models + report/share endpoints + frontend — a multi-part build. PHI-scrub is only partial (labelled seams); external egress carries real privacy risk mitigated by role-gate + confirm + audit, not by compliance controls. |
 | **Follow-ups** | Docs owed on build (qc_metrics.md Gate 3, metric_registry.md `variant.gnomad_af` + annotation-source registry, a new data/variant_annotation.md, schemas.md, a license table, data/README origins, ToC). The interpretation **agent**, trio/inheritance context, more annotation sources, `DateShift`/free-text redaction, real S3/Box egress, PDF, and a persisted ledger-anchored report are all **deferred seams**. |
+
+## Realized (2026-07-11)
+
+Two further build increments landed against a **committed run**, closing two gaps the 2026-07-10
+sweep had explicitly left open (see [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md#open-questions--todo): "the rule has never fired end-to-end against a
+committed run" / "not yet wired to any egress endpoint"). Verified by reading `api/main.py`,
+`api/share_ledger.py`, `tests/test_route_to_human.py`, and `tests/test_share_egress.py` directly.
+
+1. **D2 fires end-to-end against a committed run (commit `8ecc2a1`).** `api/main._active_runbook
+   (run_id)` is the deployment-config seam that arms route-to-human **per run**: it reads an
+   optional `route_to_human` marker file (comma-separated ClinVar significances) from the run
+   directory and, if present, arms a copy of `DEFAULT_RUNBOOK`'s `RouteToHumanPolicy` for that run
+   only; absent/empty stays the stock disarmed default. `_evaluate(run_id)` now gates through it.
+   A new fixture, `data/RUN-2026-07-11-CLINVAR-RTH/` (`origin=contrived`), demonstrates it: clean
+   QC, a single verbatim-cited ClinVar **Pathogenic** BRCA1 spike (`VCV000017661`) GIAB HG002 does
+   **not** actually carry, and the arming marker — HG002 now **ESCALATE**s via `VAR-RTH-001` on the
+   variant gate when this run is evaluated through the API. Every other/unmarked run stays disarmed
+   (the core default, and the pinned demo scenario, are untouched — asserted by
+   `test_clinvar_rth_fixture_escalates_via_per_run_arming`). The fixture's `NOTE.md` restates the
+   honesty caveat inline: no real individual (HG002 is a consented benchmark), no PipeGuard-authored
+   pathogenicity (ADR-0004) — the rule quotes ClinVar and routes to a human, it renders no clinical
+   determination.
+2. **D3's Safe-Harbor-style scrub is now wired to a real egress (commits `076ecd4`, `263390a`) —
+   narrower than the full Share window this ADR's Decision 6 and
+   [design/variant-interpretation.md §4](../design/variant-interpretation.md#4-reporting--sharing-p2)
+   describe.** `POST /api/runs/{run_id}/share` (`require_role("approver")`) runs every decision row
+   (`sample_id`/`verdict`/`headline`/`rationale`/`n_findings` joined with intake identity) through
+   `api.safe_harbor.redact_record`, returns a `ShareBundle` (the scrubbed rows + a `ShareManifest`:
+   `policy_id="safe-harbor-style-v1"`, `n_rows`, `origin`, a sha256 `content_hash` of the exact
+   emitted bytes, the `event_id`, the 18 §164.514(b)(2) classes, and the disclaimer), and records a
+   `DATA_EXPORTED` `ProvenanceEvent` to a new, separate append-only ledger
+   (`api/share_ledger.py`, kept apart from the gate's own cacheable `EventLedger` — see
+   [data/provenance.md](../data/provenance.md#a-second-separate-ledger-for-share-events-apishare_ledgerpy)).
+   The Provenance screen (`frontend/src/screens/Provenance.tsx`) surfaces it as an approver-ONLY,
+   confirm-gated "Share (de-identified)" header action; on success it toasts the manifest and
+   refetches the run so the `DATA_EXPORTED` row appears in the Event trail immediately.
+   **What this narrows, honestly:** this is **not** yet the full Share window Decision 6 describes —
+   there is no scope selector (report / tabular export / artifacts; today it is always the
+   `grain="decision"` rows above), no location choice (local staged dir / S3 / Box / signed link;
+   today the bundle is returned directly to the caller, nothing is staged or pushed anywhere), and
+   no security-level tier (L0/L1/L2; today the Safe-Harbor-style scrub is the *only* policy — there
+   is no less-strict opt-down). It also does **not** yet write to the Admin Activity feed the way
+   pipeline/settings/ticket writes do (`frontend/src/screens/Admin.tsx`'s `FeedKind` has no `share`
+   case) — the audit trail for a share lives only in the run's own Provenance › Event trail today.
+   5 new tests (`tests/test_share_egress.py`): approver-gated (viewer/reviewer 403), unknown-run
+   404, direct identifiers (`submitted_by`/`subject_id`) dropped from every row, the recorded event
+   pinned to the manifest's content hash, and a share leaves the gate's cards byte-identical
+   (egress transform only, ADR-0001).
+3. **What is genuinely still unbuilt**, per [design/variant-interpretation.md §0](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off):
+   the interpretation agent, `RunReport`, the full Share window (scope/location/security-level),
+   gnomAD AF / inheritance-fit evidence, the review-ordering tier, and the ClinVar/gnomAD fetch
+   scripts.
 
 ## Open questions
 

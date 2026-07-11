@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [design/ui-conventions.md](../design/ui-conventions.md) |
+| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [design/ui-conventions.md](../design/ui-conventions.md) |
 
 ## Overview
 
@@ -79,10 +79,14 @@ links to [evaluation.md](../quality/evaluation.md).
    capping, mechanical free-text redaction of the §164.514(b)(2) classes; ADR-0018 D3, the
    maintainer's most-conservative choice). Neither makes a certified/attested compliance
    claim — both are explicitly labelled **not** HIPAA-compliant de-identification (no
-   Expert Determination, no audit, no BAA/DUA). `safe_harbor.py` is **built and unit-tested
-   but not yet wired to any egress endpoint** (the report/share surface it is intended for,
-   ADR-0018 §5–6, is not yet built) — this requirement is only *partially* satisfied until
-   that wiring lands. **A third, frontend-only instance of the same pattern landed 2026-07-10
+   Expert Determination, no audit, no BAA/DUA). **`safe_harbor.py` is now wired to a real egress
+   (2026-07-11):** an approver-gated `POST /api/runs/{id}/share` (ADR-0018
+   [Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11))
+   runs it as the default (and only) policy and records the egress as an audited `DATA_EXPORTED`
+   provenance event. This is **narrower** than the full report/share surface ADR-0018 §5–6
+   describes — one fixed action, no scope/location/security-level selection — so this requirement
+   is satisfied for that one narrower egress path, while the fuller Share window remains
+   unbuilt. **A third, frontend-only instance of the same pattern landed 2026-07-10
    (Wave 9, T-117, REQ-F-082):** the new Sample-accessioning screen (`/accession`) composes
    subject id / tissue / collection metadata entirely **client-side** — no `api` call exists in
    `screens/Accession.tsx` or `lib/accession.ts`, and `POST /api/runs`'s `SubmitRunIn`/`SampleIn`

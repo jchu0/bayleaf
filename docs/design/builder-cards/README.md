@@ -2,16 +2,18 @@
 
 | Field | Value |
 |---|---|
-| **Status** | draft |
-| **Date** | 2026-07-10 (MST) |
+| **Status** | draft (§§1–3 now mostly REALIZED — see §5) |
+| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST) |
 | **Audience** | frontend / design / bioinformatics |
-| **Related** | [frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model) (Pipeline Builder — full node model) · [data/nf-core-conventions.md](../../data/nf-core-conventions.md) (tool I/O → `ArtifactRef` / `MetricValue`) · [data/qc_metrics-sources.md](../../data/qc_metrics-sources.md) (metric provenance) · [frontend `BuilderShared.tsx`](../../../frontend/src/components/BuilderShared.tsx) (`BTOOLSPEC` · `TOOLS` · `GIAB_LOC` · `germlineTemplate()`) · [frontend `BuilderCanvas.tsx`](../../../frontend/src/components/BuilderCanvas.tsx) (current render + wiring) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) (the real germline commands the cards abstract) |
+| **Related** | [frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model) (Pipeline Builder — full node model) · [design/ui-conventions.md UIC-16](../ui-conventions.md) · [data/nf-core-conventions.md](../../data/nf-core-conventions.md) (tool I/O → `ArtifactRef` / `MetricValue`) · [data/qc_metrics-sources.md](../../data/qc_metrics-sources.md) (metric provenance) · [frontend `BuilderShared.tsx`](../../../frontend/src/components/BuilderShared.tsx) (`BTOOLSPEC` · `TOOLS` · `GIAB_LOC` · `germlineTemplate()` · `portSide()` · `layoutPorts()` · `cardHeight()`) · [frontend `BuilderCanvas.tsx`](../../../frontend/src/components/BuilderCanvas.tsx) (current render + wiring) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) (the real germline commands the cards abstract) |
 
 This is the **general** card-design convention for the Pipeline Builder, plus the index of the
 per-tool card specs. Each per-tool doc grounds one node's ports in that tool's **real** CLI I/O and
 the exact germline command it wraps; this doc holds the shared rules those specs assume. The
-convention is a **design target** — the current [`BuilderCanvas`](../../../frontend/src/components/BuilderCanvas.tsx)
-implements a subset (see §5).
+convention was a **design target** — as of 2026-07-11 (commit `12a9913`) the current
+[`BuilderCanvas`](../../../frontend/src/components/BuilderCanvas.tsx) implements **most** of it
+(larger cards, four-sided typed half-circle ports); one item (§5.4, registering the remaining
+reserved kinds) stays open — see §5.
 
 ## 1. Philosophy — Databricks-style process cards
 
@@ -82,26 +84,35 @@ Germline-chain order (fastp → bwa-mem2 → samtools-markdup → {mosdepth, bcf
 | [bcftools-norm.md](bcftools-norm.md) | `bcftools norm` 1.20 | Left-align / normalize — terminal variant-branch node; emits the gate-ready `filtered_vcf` → variant gate. |
 | [multiqc.md](multiqc.md) | `MultiQC` 1.21 | QC aggregation — terminal fan-in of the QC ports; emits `multiqc_json` → ingest → the gate. |
 
-## 5. Open / TODO — this is a spec the frontend does not yet fully implement
+## 5. Open / TODO — spec-vs-shipped, updated 2026-07-11
 
-Labelled seam. The convention above is the **design target**; the shipped
-[`BuilderCanvas`](../../../frontend/src/components/BuilderCanvas.tsx) implements a subset:
+Items 1–3 below (ports, card size, half-circle visual) **shipped 2026-07-11** (commit `12a9913`,
+[UIC-16](../ui-conventions.md)); item 4 (registering the remaining reserved kinds) is still open.
+Verified by reading `frontend/src/components/BuilderShared.tsx` / `BuilderCanvas.tsx` directly:
 
-1. **Ports are left/right-only today.** The current canvas anchors every **output** dot to the
-   card's **right** edge and every **input** dot to the **left** edge (`BuilderCanvas.tsx`, edge
-   geometry: "out = right edge, in = left edge"), stacked at `TPT + idx·TROW`. The §2 **top**
-   (references) and **bottom** (QC) edges are **not yet** used as port sides — this doc's four-sided
-   placement is aspirational.
-2. **Cards are still the small fixed size.** Nodes render at the fixed `UW = 168` (user) / `TW = 208`
-   (seeded ToolCard) widths; the §3 enlarged, port-count-driven card is not yet built.
-3. **Half-circle typed ports are not yet the visual.** Ports render as small edge dots, not the
-   Databricks-style typed half-circles on the perimeter; typing is enforced in wiring
-   (`reconcileEdges`, kind-matched) but not yet expressed as four-sided half-circle geometry.
-4. **Reserved kinds need registering.** Several documented ports (`fastp_html`, `adapter_fasta`,
-   `samtools_stats`, the mosdepth `*_dist`/`per_base` family, `vcf_index`, `multiqc_html`, MultiQC's
-   discovered-log bay) are real tool I/O with **no kind in `ARTIFACT_KINDS`** yet; they stay reserved
-   until a kind + producer card is added — never auto-wired.
+1. **Ports are four-sided — CLOSED.** `BuilderShared.portSide(kind, dir)` is the single geometry
+   source of truth: reference/panel **input** kinds (`reference_fasta`/`panel_bed`/`truth_vcf`/
+   `adapter_fasta`) place on **top**, QC/metric **output** kinds place on **bottom**, and everything
+   else follows the primary **left**(in)→**right**(out) data lane — matching this doc's §2
+   convention exactly. `layoutPorts()` evenly spaces each side and returns the exact edge anchor;
+   render and wire-endpoint math call the **same** function, so a wire can never detach from its
+   port when a card's port count changes (the old hardcoded-SVG-path failure mode this doc used to
+   warn about is gone).
+2. **Cards are larger — CLOSED.** `NODE_W = 232` (was the fixed `168`/`208` this section used to
+   cite), `cardHeight()` grows with the max of the left-in/right-out port count — the §3 enlarged,
+   port-count-driven card is now real.
+3. **Half-circle typed ports are the visual — CLOSED.** `PORT_R` (half-circle radius) + `overflow
+   visible` on each card body render true half-circle nubs poking past the card edge on all four
+   sides, becoming full circles in Connect mode (unchanged prior behavior); typing is still enforced
+   in wiring (`reconcileEdges`, kind-matched).
+4. **Reserved kinds still need registering — STILL OPEN.** Several documented ports (`fastp_html`,
+   `adapter_fasta`, `samtools_stats`, the mosdepth `*_dist`/`per_base` family, `vcf_index`,
+   `multiqc_html`, MultiQC's discovered-log bay) are real tool I/O that `portSide()`'s placement
+   sets (`REF_IN_KINDS`/`METRIC_OUT_KINDS`) already anticipate the correct *side* for, but they are
+   still **absent from any `BTOOLSPEC` tool's actual `ins`/`outs`** and so from `ARTIFACT_KINDS`
+   (verified: `grep -n 'fastp_html\|samtools_stats' BuilderShared.tsx` finds them only in the
+   placement sets, not in any tool's `ins`/`outs` list) — a card renders only its real, wired ports;
+   these stay reserved, unrendered, never fabricated, until each gets a kind + a producer.
 
-Adopting these per-tool specs is therefore a **frontend follow-up** (a `BuilderCanvas` port-model
-rework), not a claim about current behavior. Until then, treat each per-tool doc as the authority on
-*what ports a node should host*, and this section as the honest gap between spec and code.
+Only item 4 remains a **frontend follow-up** now. Each per-tool doc stays the authority on *what
+ports a node should host*; this section is the (now much smaller) honest gap between spec and code.

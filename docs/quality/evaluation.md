@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md) |
+| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md) |
 
 ## Overview
 
@@ -19,27 +19,33 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **381 tests across 24 files** — 378 pass and 3 skip (the Postgres
+The offline suite is **406 tests across 26 files** — 403 pass and 3 skip (the Postgres
 live-integration checks in `test_persistence_postgres_live`, which need a reachable Postgres
 and are off by default). By collected size: `test_api` (42), `test_notify` (36),
-`test_synthetic` (33), `test_fetch_giab` (32), `test_gate` (29), `test_persistence` (17),
-`test_archivist` (17, the advisory archivist/librarian agent), `test_metrics` (17),
+`test_synthetic` (33), `test_fetch_giab` (32), `test_gate` (29), `test_node_author` (19, the
+advisory node-authoring agent, T-046), `test_persistence` (17), `test_metrics` (17),
+`test_archivist` (17, the advisory archivist/librarian agent),
 `test_triage` (16), `test_pipeline_repair` (16, the advisory pipeline-repair agent),
 `test_settings` (13, config-override authoring), `test_review_queue` (13, the ticket domain),
 `test_card_readout` (13, the QC-readout projection incl. the gate-dependency `blocked_by`
 case, T-087), `test_pipeline_lifecycle` (11,
-submit/approve/dry-run/diff), `test_auth` (10, the RBAC dev shim),
-`test_route_to_human` (9, the off-by-default route-to-human gate rule VAR-RTH-001, ADR-0018 D2),
+submit/approve/dry-run/diff), `test_route_to_human` (10, the off-by-default route-to-human gate
+rule VAR-RTH-001, ADR-0018 D2 — now incl. one committed-fixture, end-to-end-via-the-API case,
+2026-07-11), `test_auth` (10, the RBAC dev shim),
 `test_gate_notify` (9), `test_artifacts_s3` (9),
 `test_safe_harbor` (8, the conservative Safe-Harbor-style de-id egress transform, ADR-0018 D3),
+`test_pipelines` (8, the Pipeline Builder save/version store),
 `test_execution_trace` (8, the structured execution-trace feed →
-EXEC-001), `test_pipelines` (8, the Pipeline Builder save/version store),
-`test_artifacts` (7), `test_metrics_mapping` (5), `test_persistence_postgres_live` (3) — all
+EXEC-001), `test_artifacts` (7),
+`test_share_egress` (5, the de-identified share/report egress endpoint, ADR-0018 D3, new
+2026-07-11), `test_metrics_mapping` (5), `test_persistence_postgres_live` (3) — all
 runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `test_api` and
 `test_triage` suites need the api/claude extras to import FastAPI, while `test_execution_trace`,
-`test_route_to_human`, `test_safe_harbor`, and the two agent suites run pure-offline over the
-core + pydantic). Census verified via `uv run pytest --collect-only -q` (381 collected) +
-`uv run pytest -q` (378 passed, 3 skipped) + `git ls-files 'tests/*.py' | wc -l` (24).
+`test_route_to_human`, `test_safe_harbor`, `test_share_egress`, and the agent suites run
+pure-offline over the core + pydantic, `test_share_egress` via a `TestClient` with the share
+ledger redirected to a tmp path). Census verified via `uv run pytest --collect-only -q` (406
+collected) + `uv run pytest -q` (403 passed, 3 skipped) + `git ls-files 'tests/*.py' | wc -l`
+(26).
 
 ## What "good" means (principles)
 
@@ -223,7 +229,7 @@ EVAL-001/EVAL-010.
 |---|---|
 | **Target** | Route-to-human gate rule (`rules._check_route_to_human`, **VAR-RTH-001**) — `runbook.RouteToHumanPolicy` + `models.VariantCall` + `parsers.parse_variant_calls` end-to-end through the gate |
 | **Type** | Failure-mode |
-| **Automated?** | Yes — `test_route_to_human.py` (`test_parse_variant_calls_reads_verbatim`, `test_parse_variant_calls_is_tolerant`, `test_route_to_human_is_off_by_default`, `test_armed_pathogenic_routes_to_human`, `test_armed_benign_does_not_route`, `test_significance_match_is_separator_insensitive`, `test_review_status_floor_gates_routing`, `test_end_to_end_armed_run_escalates_the_card`, `test_disarmed_run_matches_stock_evaluation`) |
+| **Automated?** | Yes — `test_route_to_human.py` (`test_parse_variant_calls_reads_verbatim`, `test_parse_variant_calls_is_tolerant`, `test_route_to_human_is_off_by_default`, `test_armed_pathogenic_routes_to_human`, `test_armed_benign_does_not_route`, `test_significance_match_is_separator_insensitive`, `test_review_status_floor_gates_routing`, `test_end_to_end_armed_run_escalates_the_card`, `test_disarmed_run_matches_stock_evaluation`, `test_clinvar_rth_fixture_escalates_via_per_run_arming` — 2026-07-11, the committed-fixture end-to-end case, see Method below) |
 
 **Definition of good.** With the policy **disarmed** (the shipped default — empty
 `significances`), a run carrying even a Pathogenic candidate produces **no** routing finding and
@@ -242,7 +248,13 @@ contrived`, never implying a real individual — the only real substrate is GIAB
 rule is a no-op on the disarmed `DEFAULT_RUNBOOK`; arm a copy of the runbook and assert the finding
 fires only for the matching significance, cites the accession/version, and quotes CLNSIG verbatim;
 assert the review-status floor gates a single-submitter call; run the gate end-to-end on an armed
-vs. disarmed runbook and assert ESCALATE only when armed.
+vs. disarmed runbook and assert ESCALATE only when armed. **2026-07-11 addition:** exercise the
+same rule against a **committed run**, not just an in-memory fixture — `api.main._active_runbook`
+reads the `route_to_human` marker in `data/RUN-2026-07-11-CLINVAR-RTH/` (a real HG002 run,
+`origin=contrived`, carrying a verbatim-cited ClinVar Pathogenic BRCA1 spike HG002 does not
+actually carry) and asserts the card ESCALATEs via `VAR-RTH-001` with the verbatim `CLNSIG`
+evidence, while an unmarked committed run (`RUN-2026-07-04-GIAB-A`) stays disarmed — closing the
+"never fires end-to-end against a committed run" gap the 2026-07-10 sweep had left open.
 
 **Known failure modes.** A rule that fired on a disarmed default would move the pinned demo
 verdicts — prevented structurally (empty tuple ⇒ `.armed is False`) and pinned by
@@ -396,11 +408,46 @@ inspect the policy id string and the class table.
 violate the egress-transform-only boundary (ADR-0001) — pinned by
 `test_redact_record_never_touches_verdict_or_gate`. Free-text redaction is **mechanical** (regex,
 not NLP) and will miss a name embedded in prose — documented in the module docstring and
-`HIPAA_SAFE_HARBOR_CLASSES`, not silently assumed complete. **Not yet exercised end-to-end**: the
-module is not wired into any egress endpoint today (`GET /api/export` still uses the separate,
-less-strict `api/deid.py` pseudonymization policy) — grepped `api/` + `src/` for `safe_harbor`:
-only the module itself and its test import it, confirming this is a standalone, tested-but-unwired
-seam (see [scope-and-wishlist.md](../requirements/scope-and-wishlist.md) #14).
+`HIPAA_SAFE_HARBOR_CLASSES`, not silently assumed complete. **Now exercised end-to-end
+(2026-07-11)**: the module is wired into a real egress endpoint,
+`POST /api/runs/{run_id}/share` — see **EVAL-051** below for the endpoint-level case. `GET
+/api/export` still uses the separate, less-strict `api/deid.py` pseudonymization policy
+(unchanged) — the two egress paths intentionally run different policies (see
+[scope-and-wishlist.md](../requirements/scope-and-wishlist.md) #14).
+
+### EVAL-051 — De-identified share egress: approver-gated, scrubbed, and audited in the trail
+
+| Field | Value |
+|---|---|
+| **Target** | `POST /api/runs/{run_id}/share` (`api/main.py`) + `api/share_ledger.py` — the endpoint that wires `api/safe_harbor.py` into a real egress (ADR-0018 D3) |
+| **Type** | Faithfulness |
+| **Automated?** | Yes — `test_share_egress.py` (`test_share_requires_approver`, `test_share_unknown_run_is_404`, `test_share_scrubs_direct_identifiers_and_labels_the_scrub`, `test_share_records_a_data_exported_event_in_the_trail`, `test_share_does_not_perturb_the_gate_decision`) |
+
+**Definition of good.** The endpoint is **approver-only** (a viewer/reviewer is 403'd) — data does
+not leave on a low privilege. Every emitted row has the direct identifiers (`submitted_by`,
+`subject_id`) dropped, and the returned `ShareManifest` labels the scrub as a **version**
+(`policy_id="safe-harbor-style-v1"`), never a compliance claim (the disclaimer text contains
+"NOT"/"compliance"). The egress is recorded as a `DATA_EXPORTED` `ProvenanceEvent` that surfaces
+in the run's own trail (`GET /api/runs/{id}`), **pinned to the exact emitted bytes** by a sha256
+content hash so the trail entry can never drift from what actually left, and the actor who shared
+is recorded (`human:<id>`). A share is an **egress transform only**: the run's decision cards are
+byte-identical before and after (ADR-0001 — a share never reads back into, or perturbs, the gate).
+
+**Method.** Drive a `TestClient` against the committed `RUN-2026-07-11-CLINVAR-RTH` fixture (it
+carries intake identity via `sample_metadata.csv`, so the scrub is demonstrably removing
+something, not passing an already-clean row through) with the share ledger redirected to a tmp
+path; assert 403 for viewer/reviewer, 404 for an unknown run, dropped identifiers + a labelled
+policy id + all 18 §164.514(b)(2) classes documented, the recorded event's content hash matching
+the manifest, and the cards unchanged by a `GET` before/after the share.
+
+**Known failure modes.** An endpoint reachable without `require_role("approver")` would let a
+low-privilege actor egress data — pinned by `test_share_requires_approver`. A scrub applied
+in-place to the cached `_evaluate()` result (rather than to a fresh copy of the rows) would risk
+mutating the gate's own state — pinned by `test_share_does_not_perturb_the_gate_decision`. **Scope
+note, not a failure mode**: this endpoint is one fixed action (always `grain="decision"`, always
+the Safe-Harbor-style policy) — it does not yet cover the broader Share window (scope / location /
+security-level selection) [design/variant-interpretation.md §4](../design/variant-interpretation.md#4-reporting--sharing-p2)
+describes.
 
 ## Real-data evaluation (Phase 2 — planned)
 

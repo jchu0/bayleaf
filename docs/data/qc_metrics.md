@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, D2), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) (no invented pathogenicity), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC review queue), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization + wiring status), [schemas.md](schemas.md) (§6 units contract, `VariantCall`), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md) |
+| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, D2), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) (no invented pathogenicity), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC review queue), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization + wiring status), [schemas.md](schemas.md) (§6 units contract, `VariantCall`), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md) |
 
 ## Overview
 
@@ -141,10 +141,14 @@ D2) — the highest clinical-sensitivity call in the system, so its scope is dra
    `variants.csv` is unaffected (belt-and-suspenders: `evaluate_sample` on a run with variant calls
    but a disarmed policy yields the exact finding set it would without any variant data).
 
-**Status.** Built and unit/end-to-end tested (`tests/test_route_to_human.py`, 9 cases), **off by
-default in every shipped fixture** — no committed run carries an armed `route_to_human` policy or a
-`variants.csv`, so this row does not yet appear in the demo. See [schemas.md](schemas.md) for the
-`VariantCall`/`RouteToHumanPolicy` field contracts.
+**Status.** Built and unit/end-to-end tested (`tests/test_route_to_human.py`, 10 cases). **Off by
+default for every run except one deliberately-armed demo fixture (2026-07-11):**
+`data/RUN-2026-07-11-CLINVAR-RTH/` (`origin=contrived`) carries a `route_to_human` marker + a
+`variants.csv` spiking a verbatim-cited ClinVar Pathogenic BRCA1 candidate HG002 does not actually
+carry, and is the one committed run that ESCALATEs via `VAR-RTH-001` when evaluated through the API
+(`api.main._active_runbook` arms the policy **per run**, see [ADR-0018 Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11)).
+Every other committed run (incl. the pinned demo scenario) still carries no marker and stays
+disarmed. See [schemas.md](schemas.md) for the `VariantCall`/`RouteToHumanPolicy` field contracts.
 
 ## CNV & mosaicism
 
@@ -193,7 +197,8 @@ skipped, never NA-flagged — so a lean real run stays clean while a rich contri
 
 **2026-07-10 addition (ADR-0018 D2):** the **route-to-human policy (VAR-RTH-001)**, above, is a
 fifth Gate-3 rule — not a `QCThreshold`/metric-registry gate like 1–4, but a policy-driven `Finding`
-read from `RunArtifacts.variant_calls`. **Off by default**; no committed fixture arms it.
+read from `RunArtifacts.variant_calls`. **Off by default**; one committed fixture arms it
+(`data/RUN-2026-07-11-CLINVAR-RTH/`, 2026-07-11 — see the Status note above).
 
 **Ungated observations** (registered + wired, no threshold, never NA-flagged, never a finding):
 % PhiX aligned (`preflight.phix_aligned`), Genotype quality (`variant.gq`), Ti/Tv (`variant.titv`)

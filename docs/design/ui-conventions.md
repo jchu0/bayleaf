@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active — the durable convention registry (so a rule is stated once, not per session) |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / design / reviewers |
 | **Related** | [design/frontend/README.md](frontend/README.md) (tokens + per-screen spec), [design/builder-cards/README.md](builder-cards/README.md) (pipeline-card design), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [functional.md](../requirements/functional.md), [scale-aware memory], [explicit-edit+audit memory] |
 
@@ -17,10 +17,18 @@ it here (with a stable `UIC-N` id) **and** implement against it — do not wait 
 
 **Implementation (2026-07-10, commit `6b571a4`, "Wave 10").** UIC-1..15 shipped in one parallel
 batch (4 shared-primitive agents behind a barrier, then 9 per-screen agents on disjoint files);
-statuses below are updated to match, each grounded in the diff/code path noted. UIC-16 stays
-partial — only its canvas/palette half shipped; the larger-card + four-side-port rework is a
-labelled, deferred follow-up (see [builder-cards/](builder-cards/) §5 for the same gap from the
-design side). tsc + oxlint clean; verified in-browser across every touched screen.
+statuses below are updated to match, each grounded in the diff/code path noted. UIC-16 stayed
+partial at the time — only its canvas/palette half had shipped. tsc + oxlint clean; verified
+in-browser across every touched screen.
+
+**UIC-16 closed (2026-07-11, commit `12a9913`).** The deferred larger-card + four-side-typed-port
+rework shipped: `frontend/src/components/BuilderShared.tsx` gained one geometry source of truth
+(`portSide()`/`layoutPorts()`/`cardHeight()`, `NODE_W = 232`) that both `BuilderCanvas.tsx`'s
+render and its wire-endpoint math call, so a wire can never detach from its port. Only item 4 of
+[builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
+(registering a handful of still-unregistered reserved kinds, e.g. `fastp_html`/`samtools_stats`)
+remains open — see that doc for the grounded detail; UIC-16 below is marked ✅ on the strength of
+the larger-card + four-sided-port ask, which is what this row exists to track.
 
 ---
 
@@ -208,16 +216,20 @@ cards** with **Runs at the BOTTOM** of the group (Runs is a list/index, not a st
 Inbox · Review queue · Sample accessioning · Submit · Intake gate · Decision cards · Runs.
 **Shipped**: `Sidebar.tsx`'s `useNav` reorders Operate so Runs sits last.
 
-### UIC-16 — Pipeline builder · 🟡 — see [builder-cards/](builder-cards/)
+### UIC-16 — Pipeline builder · ✅ — see [builder-cards/](builder-cards/)
 Canvas + card conventions are documented in [docs/design/builder-cards/](builder-cards/): the dot
 grid spans the **entire** working canvas; the tools palette shows the **current** pipeline's tools
 with a `>` expander to all available; **larger** cards with typed half-circle ports on **all four
 sides**; edges are typed data-flow between ports; per-tool port maps grounded in each tool's real
-I/O; Databricks-inspired aesthetic. **Shipped**: the alignment dot grid now spans the full canvas at
-every zoom level, and the palette shows the current pipeline's tools with a "≫ ALL" expander.
-**Deferred (explicitly, not silently)**: the larger four-side-port cards are a bigger rework, tracked
-by [builder-cards/README.md](builder-cards/README.md) §5 as the honest gap between that spec and the
-shipped `BuilderCanvas` (ports are still left/right-only, fixed small card size).
+I/O; Databricks-inspired aesthetic. **Shipped**: the alignment dot grid spans the full canvas at
+every zoom level; the palette shows the current pipeline's tools with a "≫ ALL" expander; and
+(2026-07-11, commit `12a9913`) cards grew to `NODE_W = 232` with typed half-circle ports on all
+four sides, driven by one geometry source of truth (`BuilderShared.portSide()`/`layoutPorts()`)
+shared by render and wire math. **One item stays open, not silently dropped**: a handful of
+documented tool ports (`fastp_html`, `samtools_stats`, the mosdepth `*_dist`/`per_base` family,
+`vcf_index`, `multiqc_html`) have no kind registered in `ARTIFACT_KINDS` yet and so stay reserved,
+unrendered — [builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
+item 4.
 
 ---
 

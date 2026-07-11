@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Accepted · Realized (EventLedger + JSONL + DB projection built; byte-identical replay is Phase 2) |
-| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) · updated 2026-07-11 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0015](ADR-0015-layered-data-contract.md), [data/provenance.md](../data/provenance.md), [data/schemas.md](../data/schemas.md) |
+| **Related** | [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0015](ADR-0015-layered-data-contract.md), [ADR-0018](ADR-0018-variant-interpretation-advisory-evidence.md) (`data.exported` share egress), [data/provenance.md](../data/provenance.md), [data/schemas.md](../data/schemas.md) |
 
 ## Context
 
@@ -56,6 +56,19 @@ For now the event bus is **in-process** and the ledger is a local append-only lo
    into a `SqliteRepository` reached only via the `Repository` port
    ([ADR-0003](ADR-0003-deployment-agnostic-ports.md)). Byte-identical strict-replay
    determinism is the remaining Phase-2 hardening; a cloud broker remains a later adapter.
+3. **A tenth `EventType` added, deliberately outside the gate's own ledger (2026-07-11,
+   ADR-0018 D3).** `data.exported` records a de-identified share/report egress
+   (`POST /api/runs/{id}/share`) as an auditable event in the same append-only vocabulary as a
+   decision — but it is emitted by the read-API, not `run_gate`, and it is an **egress
+   transform only** (reads already-decided `DecisionCard`s, never a rule/verdict/gate input;
+   ADR-0001 holds). It is intentionally recorded to a **separate** ledger
+   (`api/share_ledger.py`, its own gitignored JSONL) rather than the gate's `EventLedger`,
+   because the gate ledger is a deterministic per-run re-derivation (`api.main._evaluate` is
+   `@lru_cache`) that must stay byte-stable and cacheable, while a share is a live,
+   actor-driven side effect that must survive both that cache and a process restart. `GET
+   /api/runs/{id}` merges the two ledgers' events at read time (sorted by `created_at`) so a
+   share appears in the same trail the operator already reads. See
+   [data/provenance.md](../data/provenance.md#a-second-separate-ledger-for-share-events-apishare_ledgerpy).
 
 ## Revisit when
 

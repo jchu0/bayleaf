@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | all (contributors and Claude Code) |
 
 **Start here.** This index is the map of what exists — and its
@@ -41,7 +41,7 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 | [design/agents.md](design/agents.md) | ✅ | Agent-layer hub: roster, shared invariants (captured once), intake checklist for new agent ideas |
 | [design/data-platform-and-archivist.md](design/data-platform-and-archivist.md) | ✅ | Data-platform + export + run-browser + Archivist agent design (draft for review; tiered already-built / build-now / target-state) |
 | [design/node-authoring-agent.md](design/node-authoring-agent.md) | ✅ | Roster agent #5 — **built (T-046), narrower than proposed**: retrieval over an 11-card curated corpus from a natural-language request (not the originally-proposed dropped-doc parser); core-only, no `api/` endpoint or Builder wiring yet |
-| [design/variant-interpretation.md](design/variant-interpretation.md) | 🚧 | Variant interpretation & reporting design (ADR-0018) — advisory ClinVar/gnomAD evidence + review-ordering + a cited `RunReport` + a PHI-scrub Share window; two pieces built (route-to-human `VAR-RTH-001`, a conservative de-id module), the rest (agent, report, Share window) still design-only |
+| [design/variant-interpretation.md](design/variant-interpretation.md) | 🚧 | Variant interpretation & reporting design (ADR-0018) — advisory ClinVar/gnomAD evidence + review-ordering + a cited `RunReport` + a PHI-scrub Share window; two pieces built and (2026-07-11) demonstrated end-to-end (route-to-human `VAR-RTH-001` fires against a committed run; the conservative de-id module is wired to a narrower-than-designed `POST /api/runs/{id}/share` egress), the rest (agent, report, the full Share window) still design-only |
 | [design/frontend/frontend-design-brief.md](design/frontend/frontend-design-brief.md) | ✅ | UI design brief (v1 + v2 additions) — the stable spec |
 | [design/frontend/pipeline-builder-brief.md](design/frontend/pipeline-builder-brief.md) | ✅ | Wishlist #11 flagship — pipeline-builder design handoff (node/agent canvas → run-layout config), paste-and-go for a design tool |
 | [design/frontend/handoffs/](design/frontend/handoffs/) | ✅ | Dated review→design handoff deltas (episodic) |

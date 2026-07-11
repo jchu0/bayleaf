@@ -136,7 +136,7 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 5. **Deployment-agnostic ports & adapters**; Nextflow carries compute portability (ADR-0003).
 6. **Config layer + profiles** serve research (lean) and biotech (granular) from one codebase (ADR-0005).
 
-## Current code map (evolving; updated 2026-07-10)
+## Current code map (evolving; updated 2026-07-11)
 
 1. **Core (`src/pipeguard/`), framework-agnostic.** `rules` emits cited, immutable
    `Finding`s (each derives its gate + a rule-version-independent signature +
@@ -147,13 +147,26 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    (13 metrics: the frozen five + 8 more registered preflight/qc/variant metrics) can gate
    5 additional **optional** thresholds (score a present value, never NA-flag an absent
    one) without penalizing a lean real run; the metric catalog is 10 gated / 10 ungated
-   of 20 registered `our_key`s (`data/metric_registry.md`).
+   of 20 registered `our_key`s (`data/metric_registry.md`). `runbook.RouteToHumanPolicy` +
+   `rules._check_route_to_human` (**VAR-RTH-001**, ADR-0018 D2) is a distinct, off-by-default
+   variant-gate rule: it never gates call quality — it routes a sample to mandatory human
+   review when an operator-armed ClinVar significance is present on an externally-annotated
+   `VariantCall` (read from `variants.csv`, never authored — the finding quotes ClinVar
+   verbatim, ADR-0004). Empty `significances` ⇒ disarmed (the shipped default); the API layer
+   arms it *per run* (see item 4).
 2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only
    event trail (analysis_run.started → per-sample findings/verdict → completed) into an
    `EventLedger` (in-memory + JSONL); the event log is authoritative, the DB a
    rebuildable projection via `persistence/` selected by `get_repository()`
    (`PIPEGUARD_REPOSITORY=sqlite|postgres`, default SQLite, degrade-to-SQLite) — SqliteRepository
    *and* PostgresRepository (guarded, off-by-default, ADR-0016); `rebuild-db` targets either (ADR-0003).
+   A tenth `EventType`, `DATA_EXPORTED` (`data.exported`, ADR-0018 D3), is emitted by the
+   **read-API**, not `run_gate` — recording a de-identified share/report egress (item 4) —
+   and deliberately lands in a **separate** append-only ledger (`api/share_ledger.py`,
+   gitignored JSONL, `PIPEGUARD_SHARE_LEDGER`) rather than the gate's own `EventLedger`, since
+   the gate ledger is a deterministic per-run re-derivation (`@lru_cache`'d `_evaluate`) that
+   must stay cacheable, while a share is a live side effect that must survive a restart;
+   `GET /api/runs/{id}` merges the two at read time.
 3. **Swappable AI, OFF by default.** Synthesizer via `PIPEGUARD_SYNTHESIZER=stub|claude`;
    advisory QC-triage agent (`triage/`, ADR-0009/0012) via `PIPEGUARD_TRIAGE_AGENT=stub|claude`;
    advisory pipeline-repair agent (`src/pipeguard/pipeline_repair/`, ADR-0009/0012) via
@@ -572,14 +585,44 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    Provenance's digest relabelled `fingerprint:` + show-full + copyable event-trail code blocks;
    Inbox's kanban ids/body/comments/@-mentions/assignee (one cosmetic gap left open: a
    review-queue-derived ticket shows its raw internal id, not the queue's `T-XXXX` display id); and
-   app-wide flavor-text removal + a Builder full-canvas dot grid + current-tools palette. **Explicitly
-   deferred, not silently dropped**: UIC-16's larger four-side-typed-port Builder cards — a bigger
-   rework tracked in [docs/design/builder-cards/](docs/design/builder-cards/) §5 as the honest gap
-   between that spec and the shipped `BuilderCanvas` (ports stay left/right-only on today's fixed
-   small card). Docs swept: `functional.md` REQ-F-025/REQ-F-083, `nonfunctional.md` REQ-NF-025,
-   `architecture.md`, `design/agents.md`, `design/node-authoring-agent.md`, `scope-and-wishlist.md`
-   (correcting #9's stale claim that it shared a stub core with node-authoring), `tasks.md`
-   (T-046 done, new T-118), [journal 2026-07-10 wave10](docs/journal/2026-07-10-wave10-node-author-uic.md).
+   app-wide flavor-text removal + a Builder full-canvas dot grid + current-tools palette. **At the
+   time, explicitly deferred, not silently dropped**: UIC-16's larger four-side-typed-port Builder
+   cards — closed the next day, see Wave 11 below. Docs swept: `functional.md` REQ-F-025/REQ-F-083,
+   `nonfunctional.md` REQ-NF-025, `architecture.md`, `design/agents.md`, `design/node-authoring-agent.md`,
+   `scope-and-wishlist.md` (correcting #9's stale claim that it shared a stub core with
+   node-authoring), `tasks.md` (T-046 done, new T-118),
+   [journal 2026-07-10 wave10](docs/journal/2026-07-10-wave10-node-author-uic.md).
+   **Wave 11 (2026-07-11, commits `8ecc2a1`, `076ecd4`→`263390a`, `12a9913`) — three independent
+   pieces, each verified by reading the diff/code directly.** **(1) D2 fires end-to-end against a
+   committed run.** `api/main._active_runbook(run_id)` is the deployment-config seam that arms
+   route-to-human **per run**, from an optional `route_to_human` marker file (comma-separated
+   ClinVar significances) in the run dir — absent/empty stays the stock disarmed
+   `DEFAULT_RUNBOOK`. A new fixture, `data/RUN-2026-07-11-CLINVAR-RTH/` (`origin=contrived`: clean
+   QC, a verbatim-cited ClinVar Pathogenic BRCA1 spike HG002 does not actually carry, the arming
+   marker, a `NOTE.md` stating the honesty caveat), makes HG002 **ESCALATE** via `VAR-RTH-001` when
+   evaluated through the API — the core default and pinned demo scenario are untouched. **(2) D3's
+   Safe-Harbor-style scrub is wired to a real, narrower-than-designed egress.**
+   `POST /api/runs/{run_id}/share` (`require_role("approver")`) runs a run's decision rows through
+   `api.safe_harbor.redact_record`, returns a `ShareBundle` (scrubbed rows + a `ShareManifest`:
+   policy id, `n_rows`, origin, a sha256 content hash of the emitted bytes, the 18
+   §164.514(b)(2) classes, an honest non-compliance disclaimer), and records a `DATA_EXPORTED`
+   event via the new `api/share_ledger.py` (item 2). The Provenance screen
+   (`frontend/src/screens/Provenance.tsx`) gained an approver-ONLY, confirm-gated "Share
+   (de-identified)" header action that toasts the manifest and refetches so the new trail row
+   appears (`frontend/src/provenance.ts` `EVENT_META['data.exported']`). This is narrower than the
+   full Share window [design/variant-interpretation.md](docs/design/variant-interpretation.md) §4
+   describes: no scope/location/security-level selection, and the audit lands in the run's own
+   Provenance trail, not (yet) the Admin Activity feed. **(3) UIC-16 closed** — Builder tool cards
+   are now larger (`NODE_W = 232`) with typed half-circle ports on all four sides
+   (`BuilderShared.portSide()`/`layoutPorts()`, one geometry source for both render and wire math);
+   only registering a handful of still-unused reserved kinds (`fastp_html`, `samtools_stats`, …)
+   stays open, [docs/design/builder-cards/README.md §5](docs/design/builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11).
+   Docs swept: `ADR-0002`, `ADR-0018`, `data/schemas.md`, `data/provenance.md`,
+   `design/variant-interpretation.md`, `design/builder-cards/README.md`, `design/frontend/README.md`
+   §6, `design/ui-conventions.md` UIC-16, `design/architecture.md`,
+   `design/data-platform-and-archivist.md`, `requirements/functional.md`,
+   `requirements/nonfunctional.md`, `requirements/scope-and-wishlist.md`, `quality/evaluation.md`,
+   `tasks.md`, [journal 2026-07-11](docs/journal/2026-07-11-d2-d3-share-egress.md).
 
 ## Git conventions
 

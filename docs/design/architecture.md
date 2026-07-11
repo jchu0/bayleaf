@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [design/ui-conventions.md](ui-conventions.md), [design/builder-cards/](builder-cards/), [design/node-authoring-agent.md](node-authoring-agent.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [design/ui-conventions.md](ui-conventions.md), [design/builder-cards/](builder-cards/), [design/node-authoring-agent.md](node-authoring-agent.md), [design/variant-interpretation.md](variant-interpretation.md) |
 
 ## Overview
 
@@ -659,10 +659,32 @@ Every finding and verdict is labelled with the gate it came from:
      UIC-13); Review-queue's checkbox hierarchy + reversible clear-from-view (UIC-10); Settings'
      agent-roster Active-vs-Available split (node-authoring now surfaces as Available, UIC-12); and
      Inbox's kanban ids/body/comments/@mentions (UIC-14, one cosmetic id-format gap left open, noted
-     at commit time). **Explicitly deferred, not silently dropped**: UIC-16's larger four-side-typed
-     -port Builder cards (only the full-canvas dot grid + current-tools palette expander shipped;
-     see [builder-cards/](builder-cards/) §5 for the spec-vs-shipped gap). Both pieces are grounded
-     in [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md).
+     at commit time). **At the time, explicitly deferred, not silently dropped**: UIC-16's larger
+     four-side-typed-port Builder cards (only the full-canvas dot grid + current-tools palette
+     expander had shipped) — **closed the next day**, see the Wave 11 bullet below. Both pieces are
+     grounded in [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md).
+   - **Wave 11 (2026-07-11, commits `8ecc2a1`, `076ecd4`→`263390a`, `12a9913`).** Three independent
+     pieces. **(1) D2 (route-to-human) now fires end-to-end against a committed run:**
+     `api.main._active_runbook(run_id)` arms `RouteToHumanPolicy` **per run** from an optional
+     `route_to_human` marker in the run dir; the new `data/RUN-2026-07-11-CLINVAR-RTH/` fixture
+     (`origin=contrived`, a verbatim-cited ClinVar Pathogenic BRCA1 spike HG002 does not actually
+     carry) makes HG002 ESCALATE via `VAR-RTH-001` through the live API, while every unmarked run
+     stays disarmed and the pinned demo scenario is unchanged. **(2) D3's Safe-Harbor-style scrub
+     is now wired to a real, narrower-than-designed egress:** `POST /api/runs/{id}/share`
+     (`require_role("approver")`) runs a run's decision rows through `api.safe_harbor.redact_record`
+     and records a new `DATA_EXPORTED` `ProvenanceEvent` to a **separate**, gitignored append-only
+     ledger (`api/share_ledger.py`, distinct from the gate's own cacheable `EventLedger` — a share is
+     a live side effect, the gate ledger a deterministic re-derivation); `GET /api/runs/{id}` merges
+     the two at read time. The Provenance screen gained an approver-ONLY, confirm-gated "Share
+     (de-identified)" header action surfacing the new event in its trail. This is **narrower** than
+     the full Share window [design/variant-interpretation.md](variant-interpretation.md) §4
+     describes — no scope/location/security-level selection, and the audit lands in the run's own
+     Provenance trail, not (yet) the Admin Activity feed. **(3) UIC-16 closed:** Builder tool cards
+     grew to `NODE_W = 232` with typed half-circle ports on all four sides
+     (`BuilderShared.portSide()`/`layoutPorts()`, one geometry source for render and wire math);
+     only registering a few still-unused reserved kinds stays open
+     ([builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)).
+     Grounded in [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md).
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
