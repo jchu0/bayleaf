@@ -20,6 +20,7 @@ from .compiler import (
     NfGraph,
     NfNode,
     compile_graph,
+    required_inputs,
 )
 from .germline import germline_graph
 
@@ -34,4 +35,5 @@ __all__ = [
     "catalog_entry",
     "compile_graph",
     "germline_graph",
+    "required_inputs",
 ]

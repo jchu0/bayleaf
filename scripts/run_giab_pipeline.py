@@ -47,6 +47,7 @@ _RAW_R1 = _GIAB / "fastq" / "HG002.R1.fastq.gz"
 _RAW_R2 = _GIAB / "fastq" / "HG002.R2.fastq.gz"
 _PANEL_BED = _REPO / "scripts" / "panel_regions.example.bed"
 _WORK = _GIAB / "pipeline"  # intermediates + the nextflow work/ dir (git-ignored)
+_NF_RUNS = _REPO / ".nf-runs"  # per-run Nextflow scratch (work/ + nf-out/), git-ignored
 _PIPELINE = _REPO / "pipelines" / "germline" / "main.nf"  # the Builder-generated pipeline, ADR-0003
 
 _SAMPLE = "HG002"
@@ -58,14 +59,22 @@ _RUN_DATE = "2026-07-08"
 
 @dataclass(frozen=True)
 class RunConfig:
-    """Per-run identifiers — overridable via CLI so the API intake endpoint can drive a fresh run.
-    The processed reads stay the HG002 panel fixtures; only the run's identity varies."""
+    """Per-run identity + the pipeline and inputs to run — all overridable via CLI so the API can
+    drive a fresh run (the intake endpoint keeps the HG002 defaults; the Builder-run endpoint passes
+    a compiled pipeline + operator-chosen inputs). Only the identity/pipeline/inputs vary."""
 
     run_id: str
     run_dir: Path
     platform: str
     run_date: str
     submitted_by: str
+    sample: str = _SAMPLE
+    pipeline: Path = _PIPELINE
+    read1: Path = _RAW_R1
+    read2: Path = _RAW_R2
+    reference: Path = _REF
+    panel_bed: Path = _PANEL_BED
+    origin: str = "real-giab"  # provenance tag for the run dir; operator inputs may set another
 
 
 _LOG: list[str] = []
@@ -84,12 +93,14 @@ def _java_home(nextflow: Path) -> str | None:
     return str(candidate) if candidate.exists() else None
 
 
-def run_nextflow() -> Path:
-    """Hand the whole germline chain to Nextflow; return the published-results dir.
+def run_nextflow(cfg: RunConfig) -> Path:
+    """Hand the whole chain to Nextflow; return the published-results dir.
 
-    Nextflow-first: the driver runs ``nextflow run pipelines/germline/main.nf`` — it does NOT invoke
+    Nextflow-first: the driver runs ``nextflow run <cfg.pipeline>`` (the germline reference by
+    default, or a Builder-compiled pipeline) against ``cfg``'s inputs — it does NOT invoke
     fastp/bwa-mem2/samtools/… itself. Each process publishes to ``<outdir>/results``. ``nextflow`` +
     a JRE + the bioconda tools must be on PATH (the intake endpoint injects PIPEGUARD_BIOCONDA_BIN).
+    Work + outputs land in a per-run gitignored scratch dir so concurrent runs never collide.
     """
     nextflow = shutil.which("nextflow")
     if nextflow is None:
@@ -97,20 +108,26 @@ def run_nextflow() -> Path:
             "nextflow not found on PATH. Put an env with nextflow + a JRE + the bioconda tools on\n"
             f"  PATH, e.g. PATH=/path/to/envs/hackathon/bin:$PATH uv run python {__file__}"
         )
-    if not _PIPELINE.exists():
-        sys.exit(f"generated pipeline missing: {_PIPELINE} — run generate_reference_pipeline.py")
-    _WORK.mkdir(parents=True, exist_ok=True)
-    outdir = _WORK / "nf-out"
+    if not cfg.pipeline.exists():
+        sys.exit(f"pipeline missing: {cfg.pipeline} — compile a graph or generate the reference")
+    scratch = _NF_RUNS / cfg.run_id
+    scratch.mkdir(parents=True, exist_ok=True)
+    outdir = scratch / "nf-out"
     env = os.environ.copy()
     java_home = _java_home(Path(nextflow))
     if java_home:
         env.setdefault("JAVA_HOME", java_home)  # the launcher needs a JVM the env may not export
-    _log("nextflow", f"nextflow run {_PIPELINE.relative_to(_REPO)} — real HG002 panel reads")
+    _log("nextflow", f"nextflow run {cfg.pipeline.name} — sample {cfg.sample}")
+    cmd = [
+        nextflow, "run", str(cfg.pipeline), "-ansi-log", "false",
+        "-work-dir", str(scratch / "work"), "--sample", cfg.sample,
+        "--read1", str(cfg.read1), "--read2", str(cfg.read2),
+        "--reference", str(cfg.reference), "--panel_bed", str(cfg.panel_bed),
+        "--outdir", str(outdir),
+    ]  # fmt: skip
     subprocess.run(
-        [nextflow, "run", str(_PIPELINE), "-ansi-log", "false", "-work-dir", str(_WORK / "work"),
-         "--sample", _SAMPLE, "--read1", str(_RAW_R1), "--read2", str(_RAW_R2),
-         "--reference", str(_REF), "--panel_bed", str(_PANEL_BED), "--outdir", str(outdir)],
-        check=True, cwd=_WORK, env=env,
+        cmd,
+        check=True, cwd=scratch, env=env,
     )  # fmt: skip
     results = outdir / "results"
     if not results.is_dir():
@@ -195,32 +212,39 @@ def write_run_dir(
         f"InstrumentPlatform,{cfg.platform}\nDate,{cfg.run_date}\n\n"
         "[Reads]\nRead1Cycles,250\nRead2Cycles,250\n\n"
         "[BCLConvert_Data]\nSample_ID,index,index2\n"
-        f"{_SAMPLE},NA,NA\n",
+        f"{cfg.sample},NA,NA\n",
     )
     w(
         "sample_metadata.csv",
         "sample_id,subject_id,tissue,library_prep,submitted_by\n"
-        f"{_SAMPLE},{_SAMPLE},blood,PCR-free,{cfg.submitted_by}\n",
+        f"{cfg.sample},{cfg.sample},blood,PCR-free,{cfg.submitted_by}\n",
     )
     # Real read count from fastp; single sample so 100% of reads are this sample.
-    w("demux_stats.csv", f"SampleID,Index,# Reads,% Reads\n{_SAMPLE},NA,{total_reads},100.0\n")
+    w("demux_stats.csv", f"SampleID,Index,# Reads,% Reads\n{cfg.sample},NA,{total_reads},100.0\n")
     # cluster_pf is a run-level SAV/InterOp metric not derivable from reads → left blank (honest).
     w(
         "qc_metrics.csv",
         "sample_id,q30,pct_reads_identified,mean_coverage,dup_rate,cluster_pf,"
         "breadth_20x,breadth_30x\n"
-        f"{_SAMPLE},{q30:.2f},{reads_pf:.2f},{coverage:.1f},{dup:.4f},,{b20:.4f},{b30:.4f}\n",
+        f"{cfg.sample},{q30:.2f},{reads_pf:.2f},{coverage:.1f},{dup:.4f},,{b20:.4f},{b30:.4f}\n",
     )
     w("pipeline.log", "\n".join(_LOG) + "\n")
-    w("origin", "real-giab\n")
+    w("origin", f"{cfg.origin}\n")
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Run the GIAB panel pipeline into data/<run_id>/.")
+    ap = argparse.ArgumentParser(description="Run a Nextflow pipeline into data/<run_id>/.")
     ap.add_argument("--run-id", default=_RUN_ID, help="run id / data dir name (slug)")
     ap.add_argument("--run-date", default=_RUN_DATE, help="ISO date for the [Header]")
     ap.add_argument("--platform", default=_PLATFORM, help="Illumina InstrumentPlatform")
     ap.add_argument("--submitted-by", default="giab", help="operator id for sample_metadata")
+    ap.add_argument("--sample", default=_SAMPLE, help="sample id")
+    ap.add_argument("--pipeline", type=Path, default=_PIPELINE, help="Nextflow main.nf to run")
+    ap.add_argument("--read1", type=Path, default=_RAW_R1, help="R1 fastq(.gz)")
+    ap.add_argument("--read2", type=Path, default=_RAW_R2, help="R2 fastq(.gz)")
+    ap.add_argument("--reference", type=Path, default=_REF, help="indexed reference FASTA")
+    ap.add_argument("--panel-bed", type=Path, default=_PANEL_BED, help="panel BED")
+    ap.add_argument("--origin", default="real-giab", help="provenance origin tag for the run dir")
     args = ap.parse_args()
     cfg = RunConfig(
         run_id=args.run_id,
@@ -228,18 +252,26 @@ def main() -> int:
         platform=args.platform,
         run_date=args.run_date,
         submitted_by=args.submitted_by,
+        sample=args.sample,
+        pipeline=args.pipeline,
+        read1=args.read1,
+        read2=args.read2,
+        reference=args.reference,
+        panel_bed=args.panel_bed,
+        origin=args.origin,
     )
 
     for path, hint in (
-        (_REF, "build the chr20 reference index first"),
-        (_RAW_R1, "fetch the panel fastqs"),
-        (_PANEL_BED, "missing panel BED"),
+        (cfg.reference, "indexed reference FASTA missing"),
+        (cfg.read1, "R1 fastq missing"),
+        (cfg.read2, "R2 fastq missing"),
+        (cfg.panel_bed, "panel BED missing"),
     ):
         if not path.exists():
             sys.exit(f"required input missing: {path} — {hint}")
 
-    _log("intake", f"registering run {cfg.run_id} — sample {_SAMPLE} (real GIAB HG002 panel reads)")
-    results = run_nextflow()
+    _log("intake", f"registering run {cfg.run_id} — sample {cfg.sample}")
+    results = run_nextflow(cfg)
     q30, reads_pf, dup, total_reads = parse_fastp(_one(results, "*.fastp.json"))
     coverage, b20, b30 = parse_mosdepth(
         _one(results, "*.mosdepth.summary.txt"), _one(results, "*.thresholds.bed.gz")

@@ -71,6 +71,24 @@ class NextflowBundle:
         return self.files["main.nf"]
 
 
+def required_inputs(graph: NfGraph) -> set[str]:
+    """The artifact-kinds a compiled pipeline needs as EXTERNAL inputs — every tool input port that
+    is unwired or fed by a reference source node (i.e. becomes a ``params`` channel, not an upstream
+    process output). A runner uses this to require exactly the operator inputs the graph consumes
+    (e.g. ``{"fastq", "reference_fasta", "panel_bed"}`` for the germline chain)."""
+    nodes = {n.id: n for n in graph.nodes}
+    incoming = {(e.to_node, e.to_idx): (e.from_node, e.from_idx) for e in graph.edges}
+    kinds: set[str] = set()
+    for n in graph.nodes:
+        if n.is_source():
+            continue
+        for i, kind in enumerate(n.ins):
+            src = incoming.get((n.id, i))
+            if src is None or nodes[src[0]].is_source():
+                kinds.add(kind)
+    return kinds
+
+
 # ── name helpers ──────────────────────────────────────────────────────────────────────────────
 def _proc_name(tool: str) -> str:
     """UPPER_SNAKE Nextflow process name for a tool card (catalogued or not)."""

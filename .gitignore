@@ -83,6 +83,7 @@ settings_overrides.sqlite
 .nextflow.log*
 work/
 pipelines/**/results/
+.nf-runs/
 
 # De-identified share/report egress events (ADR-0018 D3) — the pluggable DATA_EXPORTED audit sink
 # (api/share_store.py; jsonl/sqlite/postgres). Carries run ids + who exported, so local-only, never
