@@ -20,6 +20,7 @@ import type {
   MonitoringMetrics,
   MonitoringWindow,
   NextflowGraphBody,
+  NodeProposal,
   PipelineGraph,
   PipelineRunStatus,
   PipelineGraphAck,
@@ -227,6 +228,11 @@ export const api = {
   archiveDigest: (runId: string) =>
     get<ArchiveDigest>(`/api/runs/${enc(runId)}/archive-digest`),
   archiveIndex: () => get<ArchiveDigest>('/api/archive/index'),
+  // Node-authoring agent #6 (W2): a natural-language request → an advisory NodeProposal (typed
+  // ports, pinned version, locators, citations). Read-only + off-gate; the modal renders it for a
+  // human — it never auto-adds a card or authors a runnable command.
+  nodeProposal: (request: string) =>
+    get<NodeProposal>(`/api/builder/node-proposal?${new URLSearchParams({ request }).toString()}`),
 
   // ── export (download link; no fetch needed for the CSV) ──
   exportUrl: (params: Record<string, string> = {}) =>

@@ -52,6 +52,7 @@ from .pipeline import PipelineGraph, PipelineGraphAck, PipelineGraphIn
 from .pipeline_store import get_pipeline_store
 from .routers.intake import router as intake_router
 from .routers.nextflow import router as nextflow_router
+from .routers.node_author import router as node_author_router
 from .routers.pipeline_run import router as pipeline_run_router
 from .routers.pipelines_lifecycle import router as pipelines_lifecycle_router
 from .routers.review_queue import router as review_router
@@ -96,6 +97,7 @@ app.include_router(card_readout_router)
 app.include_router(intake_router)
 app.include_router(nextflow_router)
 app.include_router(pipeline_run_router)
+app.include_router(node_author_router)
 
 
 class RunSummary(BaseModel):

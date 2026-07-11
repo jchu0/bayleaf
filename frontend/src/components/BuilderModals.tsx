@@ -9,27 +9,21 @@ import {
   Loader2,
   Play,
   TriangleAlert,
-  Upload,
   Wrench,
   X,
 } from 'lucide-react'
 import { api } from '../api'
 import { FALLBACK_SUMMARY } from './ReviewRepairCard'
 import { useToast } from './Toast'
-import {
-  AUTHOR_FLAGS,
-  ICONS,
-  ICON_CHOICES,
-  RUN_STEPS,
-  STAR_HELP,
-  type IconKey,
-} from './BuilderShared'
+import { RUN_STEPS } from './BuilderShared'
 import type {
   AgentProposal,
   ArchiveDigest,
   CompiledNextflow,
   MonitoringSignature,
   NextflowGraphBody,
+  NodePortSpec,
+  NodeProposal,
   RunInputsCatalog,
 } from '../types'
 
@@ -182,20 +176,73 @@ export function RunHandoffModal({
   )
 }
 
-// ── Author a tool node (advisory · roster #5) ────────────────────────────────
+// ── Author a tool node (advisory · agent #6) ─────────────────────────────────
+// Wired to the REAL node-authoring agent (GET /api/builder/node-proposal). A natural-language
+// request → an advisory NodeProposal the operator reviews. It renders the proposal VERBATIM — typed
+// ports (live vs reserved), pinned version, suggested locators, cited rationale, and the four
+// version coordinates. It never auto-adds a card, wires an edge, or touches a verdict (ADR-0001);
+// the runnable script:/stub: body is authored by a human in the ProcessSpec catalog, never here
+// (compose ≠ execute). Accepting a proposal into the palette is a labelled next slice.
+const NODE_SEED_REQUEST = 'add a tool that trims adapters and does read QC'
+
 export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
-  const [name, setName] = useState('STAR')
-  const [icon, setIcon] = useState<IconKey>('merge')
-  const [flags, setFlags] = useState(() => AUTHOR_FLAGS.map((f) => ({ ...f })))
+  const { toast } = useToast()
+  const [draft, setDraft] = useState(NODE_SEED_REQUEST) // the text box (editable)
+  const [request, setRequest] = useState(NODE_SEED_REQUEST) // the submitted request we fetch for
+  const [proposal, setProposal] = useState<NodeProposal | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false) // true → honest "agent unavailable"
 
-  const toggle = (flag: string) => setFlags((fs) => fs.map((f) => (f.flag === flag ? { ...f, on: !f.on } : f)))
-  const setVal = (flag: string, value: string) => setFlags((fs) => fs.map((f) => (f.flag === flag ? { ...f, value } : f)))
+  // Fetch the advisory proposal whenever the SUBMITTED request changes (Propose / Enter). On any
+  // failure we show an honest "agent unavailable" — the gate, the runs, and the canvas are unaffected.
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    setError(false)
+    setProposal(null)
+    api
+      .nodeProposal(request)
+      .then((p) => {
+        if (!alive) return
+        setProposal(p)
+        setLoading(false)
+      })
+      .catch(() => {
+        if (!alive) return
+        setError(true)
+        setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [request])
 
-  const inChip = 'inline-flex items-center gap-1.5 rounded-md border border-proceed-bd bg-proceed-bg px-2 py-0.5 font-mono text-[10.5px] text-proceed-fg'
-  const unknownChip = 'inline-flex items-center gap-1.5 rounded-md border border-hold-bd bg-hold-bg px-2 py-0.5 font-mono text-[10.5px] text-hold-fg'
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setRequest(draft.trim())
+  }
+  const copyProposal = () => {
+    if (!proposal) return
+    navigator.clipboard?.writeText(JSON.stringify(proposal, null, 2)).catch(() => {})
+    toast('Copied the proposal JSON. Adding it to the palette is a confirm-gated next slice — the agent never auto-adds.', 'info')
+  }
+
+  const liveChip = 'inline-flex items-center gap-1 rounded-md border border-proceed-bd bg-proceed-bg px-2 py-0.5 font-mono text-[10.5px] text-proceed-fg'
+  const reservedChip = 'inline-flex items-center gap-1 rounded-md border border-hold-bd bg-hold-bg px-2 py-0.5 font-mono text-[10.5px] text-hold-fg'
+  const portRow = (ports: NodePortSpec[]) =>
+    ports.length === 0 ? (
+      <span className="text-[10.5px] text-text-3">none</span>
+    ) : (
+      ports.map((p, i) => (
+        <span key={`${p.kind}-${i}`} className={p.known ? liveChip : reservedChip} title={p.note ?? undefined}>
+          {p.known ? <Check size={11} /> : <TriangleAlert size={10} />} {p.kind}
+          {!p.required && <span className="opacity-60">?</span>}
+        </span>
+      ))
+    )
 
   return (
-    <ModalShell width={840} onClose={onClose}>
+    <ModalShell width={640} onClose={onClose}>
       <div className="flex items-center gap-2.5 border-b border-line px-4 py-3.5">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-weak text-accent-strong">
           <SparkleGlyph />
@@ -208,137 +255,146 @@ export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
         <span className="shrink-0 whitespace-nowrap rounded-full border border-[#cfe0fb] bg-accent-weak px-2 py-0.5 text-[10px] font-semibold text-accent-strong">
-          roster #5 · phase-2
+          roster #6 · advisory
         </span>
         <CloseBtn onClose={onClose} />
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        {/* left — tool docs */}
-        <div className="flex w-[45%] flex-col gap-2.5 overflow-y-auto border-r border-line p-4">
-          <div className="text-[10px] font-bold uppercase tracking-[0.5px] text-text-3">Tool docs · input</div>
-          <div className="rounded-xl border border-dashed border-line-strong bg-card-2 p-4 text-center">
-            <Upload size={20} className="mx-auto text-text-3" />
-            <div className="mt-1.5 text-[12px] text-text-2">
-              Drop a Nextflow module, <span className="font-mono">--help</span>, or <span className="font-mono">nextflow_schema.json</span>
-            </div>
-          </div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">Parsed · STAR --help</div>
-          <pre className="m-0 whitespace-pre-wrap rounded-[9px] border border-line bg-card-2 p-3 font-mono text-[10px] leading-relaxed text-text-2">
-            {STAR_HELP}
-          </pre>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-card-2 p-4">
+        {/* Request — a natural-language ask or a bare tool name. The agent retrieves over a curated
+            corpus; it cannot onboard a genuinely new tool (a labelled limit — no doc-drop parser). */}
+        <form onSubmit={submit} className="flex items-center gap-2">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Describe a tool by name or function — e.g. 'mosdepth' or 'call variants'"
+            aria-label="Tool request"
+            className="min-w-0 flex-1 rounded-lg border border-line-strong bg-card px-3 py-2 text-[12.5px] text-text outline-none focus:border-accent"
+          />
+          <button
+            type="submit"
+            className="shrink-0 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white shadow-card hover:opacity-90"
+          >
+            Propose
+          </button>
+        </form>
+        <div className="mt-1.5 text-[10px] text-text-3">
+          Retrieves a match from an 11-card curated corpus (this pipeline's tools + reference nodes). Stub-first ($0); flip to Claude to rephrase the prose only.
         </div>
 
-        {/* right — proposed node */}
-        <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto bg-card-2 p-4">
-          <div className="text-[10px] font-bold uppercase tracking-[0.5px] text-text-3">Proposed ToolNode · review</div>
-          <div className="overflow-hidden rounded-xl border border-line bg-card">
-            <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-card-2 text-text-2">{ICON_GLYPH(icon)}</span>
-              <div className="min-w-0 flex-1">
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Tool node name"
-                  className="w-full rounded-md border border-line-strong bg-card px-2 py-1 text-[13px] font-semibold text-text outline-none focus:border-accent"
-                />
-                <div className="mt-1 font-mono text-[10px] text-text-3">2.7.11b · align · suggested</div>
-              </div>
-              <span className="rounded bg-[#fceee2] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.3px] text-[#c1560f]">substitute</span>
+        <div className="mt-3.5">
+          {loading ? (
+            <p className="inline-flex items-center gap-1.5 text-[12.5px] text-text-3">
+              <Loader2 size={13} className="animate-spin" /> Asking the node-authoring agent…
+            </p>
+          ) : error ? (
+            <div className="flex items-start gap-2 rounded-[9px] border border-hold-bd bg-hold-bg px-3 py-2.5 text-[11.5px] text-hold-fg">
+              <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+              <span>The node-authoring agent is unavailable, so no proposal can be shown. Nothing about the runs, the canvas, or the gate is affected.</span>
             </div>
-            <div className="flex flex-col gap-2.5 px-3 py-2.5">
-              {/* icon picker */}
-              <div>
-                <div className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.3px] text-text-3">Icon</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {ICON_CHOICES.map((k) => (
-                    <button
-                      key={k}
-                      onClick={() => setIcon(k)}
-                      className={`grid h-7 w-7 place-items-center rounded-lg border ${
-                        icon === k ? 'border-accent bg-accent-weak text-accent-strong' : 'border-line bg-card text-text-2 hover:border-line-strong'
-                      }`}
-                    >
-                      {ICON_GLYPH(k)}
-                    </button>
+          ) : proposal && !proposal.matched ? (
+            // No corpus match → the conservative defer-to-human proposal (fabricates no tool/ports).
+            <div className="rounded-xl border border-line bg-card px-3.5 py-3">
+              <div className="text-[12.5px] font-semibold text-text">No tool-card matched</div>
+              <p className="mt-1 text-[12px] leading-relaxed text-text-2">{proposal.summary}</p>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-text-3">{proposal.rationale}</p>
+            </div>
+          ) : proposal ? (
+            <div className="flex flex-col gap-2.5">
+              <div className="text-[10px] font-bold uppercase tracking-[0.5px] text-text-3">Proposed ToolNode · review</div>
+              {/* The proposed node card — tool/version/stage + typed ports, all from the corpus. */}
+              <div className="overflow-hidden rounded-xl border border-line bg-card">
+                <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-semibold text-text">{proposal.tool}</div>
+                    <div className="mt-0.5 font-mono text-[10px] text-text-3">
+                      {proposal.version} · {proposal.stage ?? 'stage —'} · suggested
+                    </div>
+                  </div>
+                  <span className="shrink-0 rounded bg-card-2 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.3px] text-text-3">advisory</span>
+                </div>
+                <div className="flex flex-col gap-2.5 px-3 py-2.5">
+                  <div>
+                    <div className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.3px] text-text-3">Input ports</div>
+                    <div className="flex flex-wrap gap-1.5">{portRow(proposal.inputs)}</div>
+                  </div>
+                  <div>
+                    <div className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.3px] text-text-3">Output ports</div>
+                    <div className="flex flex-wrap gap-1.5">{portRow(proposal.outputs)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {proposal.reserved_kinds.length > 0 && (
+                <div className="flex items-start gap-2 rounded-[9px] border border-hold-bd bg-hold-bg px-3 py-2.5 text-[11px] text-hold-fg">
+                  <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+                  <span>
+                    <strong>{proposal.reserved_kinds.length} reserved kind{proposal.reserved_kinds.length === 1 ? '' : 's'}</strong> (
+                    <span className="font-mono">{proposal.reserved_kinds.join(', ')}</span>) — a real-but-unregistered I/O, surfaced{' '}
+                    <strong>never invented</strong> and never wired. Registering one is a governed change to the{' '}
+                    <span className="font-mono">ArtifactKind</span> vocabulary, not a fabrication.
+                  </span>
+                </div>
+              )}
+
+              {/* Summary + rationale (the model's only prose on the live path; corpus-grounded on the stub). */}
+              <div className="rounded-xl border border-line bg-card px-3.5 py-2.5">
+                <div className="text-[12.5px] leading-relaxed text-text-2">{proposal.summary}</div>
+                <div className="mt-1.5 text-[11px] leading-relaxed text-text-3">{proposal.rationale}</div>
+              </div>
+
+              {proposal.locators.length > 0 && (
+                <div>
+                  <div className="mb-1 text-[9.5px] font-semibold uppercase tracking-[0.3px] text-text-3">Suggested locators</div>
+                  <div className="flex flex-col gap-1">
+                    {proposal.locators.map((l, i) => (
+                      <div key={`${l.kind}-${i}`} className="flex items-center gap-2 font-mono text-[10px] text-text-3">
+                        <span className="rounded border border-line bg-card-2 px-1.5 py-0.5 text-text-2">{l.kind}</span>
+                        <span className="min-w-0 truncate">{l.field}: {l.loc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {proposal.citations.length > 0 && (
+                <div className="flex flex-col gap-1 border-t border-line pt-2">
+                  {proposal.citations.map((c, i) => (
+                    <div key={`${c.ref}-${i}`} className="font-mono text-[10px] text-text-3">
+                      {c.source_kind} · {c.ref}
+                      {c.title ? ` — ${c.title}` : ''}
+                      {c.score != null ? ` · ${(c.score * 100).toFixed(0)}% (heuristic)` : ''}
+                    </div>
                   ))}
                 </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-text-3">
+                <span className="rounded border border-line bg-card-2 px-1.5 py-0.5 font-mono">{proposal.mode === 'claude' ? `claude · ${proposal.model}` : 'stub · $0'}</span>
+                <span className="rounded border border-line bg-card-2 px-1.5 py-0.5 font-mono">
+                  corpus {proposal.corpus_version} · schema v{proposal.schema_version} · platform {proposal.platform_version}
+                </span>
               </div>
-              <div>
-                <div className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.3px] text-text-3">Input ports</div>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className={inChip}>
-                    <Check size={11} /> fastq
-                  </span>
-                  <span className={inChip}>
-                    <Check size={11} /> reference_fasta
-                  </span>
-                </div>
-              </div>
-              <div>
-                <div className="mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.3px] text-text-3">Output ports</div>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className={inChip}>
-                    <Check size={11} /> bam
-                  </span>
-                  <span className={unknownChip}>SJ.out.tab → unknown ⚠</span>
-                  <span className={unknownChip}>ReadsPerGene → salmon_quant? ⚠</span>
-                </div>
-              </div>
+
+              <div className="text-[10px] leading-snug text-text-3">{proposal.disclaimer}</div>
             </div>
-          </div>
-
-          <div className="flex items-start gap-2 rounded-[9px] border border-hold-bd bg-hold-bg px-3 py-2.5 text-[11px] text-hold-fg">
-            <TriangleAlert size={14} className="mt-0.5 shrink-0" />
-            <span>
-              <strong>2 kinds need your review.</strong> Unknown artifact-kinds are flagged, <strong>never invented</strong> — assign a kind from the{' '}
-              <span className="font-mono">ArtifactKind</span> vocab or add a new one. A wrong kind is caught by typed wiring at compose time.
-            </span>
-          </div>
-
-          <div className="text-[10px] font-bold uppercase tracking-[0.5px] text-text-3">Flags &amp; parameters · parsed from --help</div>
-          <div className="-mt-1 text-[10.5px] leading-relaxed text-text-3">Tick the CLI flags this node should expose; set default values from the tool docs.</div>
-          <div className="flex max-h-[158px] flex-col gap-1.5 overflow-y-auto pr-1">
-            {flags.map((f) => (
-              <div
-                key={f.flag}
-                className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 ${
-                  f.on ? 'border-[#cfe0fb] bg-accent-weak' : 'border-line bg-card-2'
-                }`}
-              >
-                <button
-                  onClick={() => toggle(f.flag)}
-                  className={`grid h-4 w-4 shrink-0 place-items-center rounded ${f.on ? 'bg-accent' : 'border border-line-strong bg-card'}`}
-                >
-                  {f.on && <Check size={11} className="text-white" strokeWidth={3.2} />}
-                </button>
-                <div className="min-w-0 flex-1">
-                  <div className="font-mono text-[11.5px] text-text">{f.flag}</div>
-                  <div className="text-[9.5px] text-text-3">{f.help}</div>
-                </div>
-                <input
-                  value={f.value}
-                  onChange={(e) => setVal(f.flag, e.target.value)}
-                  className={`w-[150px] rounded-md border border-line px-2 py-1 font-mono text-[11px] outline-none ${
-                    f.on ? 'bg-card text-text' : 'bg-card-2 text-text-3'
-                  }`}
-                />
-              </div>
-            ))}
-          </div>
+          ) : null}
         </div>
       </div>
 
       <div className="flex items-center gap-2.5 border-t border-line px-4 py-3">
         <span className="flex-1 text-[10.5px] leading-snug text-text-3">
-          Stub-first ($0), opt-in Claude for the kind mapping only. The agent proposes a card — it never draws an edge, places a node on the gate, or
-          auto-adds.
+          Advisory · stub-first ($0). The agent proposes a card — it never draws an edge, places a node on the gate, or auto-adds.
         </span>
         <button onClick={onClose} className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong">
           Discard
         </button>
-        <button onClick={onClose} className="rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow-card hover:opacity-90">
-          Review kinds &amp; add to palette
+        <button
+          onClick={copyProposal}
+          disabled={!proposal || !proposal.matched}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow-card hover:opacity-90 disabled:opacity-50"
+        >
+          <Copy size={14} /> Copy proposal
         </button>
       </div>
     </ModalShell>
@@ -668,12 +724,6 @@ function ArchiveIndexBody({ d }: { d: ArchiveDigest }) {
       <div className="text-[10px] leading-snug text-text-3">{d.disclaimer}</div>
     </div>
   )
-}
-
-// The proposed-node header + icon-picker use the shared icon vocabulary.
-function ICON_GLYPH(key: IconKey) {
-  const Icon = ICONS[key]
-  return <Icon size={15} />
 }
 
 function SparkleGlyph() {

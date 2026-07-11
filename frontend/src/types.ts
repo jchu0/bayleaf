@@ -610,6 +610,66 @@ export type AgentProposal = {
   model?: string | null
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Advisory node-authoring read (agent #6; GET /api/builder/node-proposal). Mirrors the backend
+// NodeProposal (node_author/models.py). Advisory ONLY: `advisory` is pinned true and there is
+// deliberately NO verdict/confidence field — the agent PROPOSES a typed builder node for human
+// review; it never wires an edge, adds a card, runs a tool, or authors a runnable script:/stub:
+// body (those live solely in the hand-curated ProcessSpec catalog). See agent-authoring-contract.md.
+// ─────────────────────────────────────────────────────────────────────────────
+export type NodePortSpec = {
+  kind: string
+  required: boolean
+  role: 'data' | 'reference' | 'qc'
+  note?: string | null
+  // Computed server-side: true iff `kind` is a real ArtifactKind. A false port is RESERVED —
+  // surfaced as an honest, labelled slot, never wired.
+  known: boolean
+}
+export type NodeLocatorSuggestion = {
+  kind: string
+  field: 'path' | 'glob'
+  loc: string
+  parser: string
+  required: boolean
+  role: 'output' | 'reference'
+  on_multiple: 'first' | 'all' | 'error'
+}
+export type NodeAuthorCitation = {
+  source_kind: 'knowledge' | 'card_doc' | 'tool'
+  ref: string
+  title?: string | null
+  // Heuristic keyword-overlap for knowledge hits — NOT a calibrated probability. Null for card_doc/tool refs.
+  score?: number | null
+}
+export type NodeProposal = {
+  id: string
+  advisory: true
+  agent: string
+  request: string
+  matched: boolean
+  tool?: string | null
+  version?: string | null
+  stage?: string | null
+  inputs: NodePortSpec[]
+  outputs: NodePortSpec[]
+  locators: NodeLocatorSuggestion[]
+  reserved_kinds: string[]
+  summary: string
+  rationale: string
+  citations: NodeAuthorCitation[]
+  generated_by: 'stub' | 'claude'
+  model?: string | null
+  disclaimer: string
+  // Four version coordinates a proposal pins: the corpus it read, the record schema, and the
+  // platform build that produced it (W2). The tool version is `version` above.
+  corpus_version: string
+  schema_version: number
+  platform_version: string
+  created_at: string
+  mode: 'stub' | 'claude'
+}
+
 // Advisory archivist digest (GET /api/archive/index cross-run | GET /api/runs/:id/archive-digest
 // per-run). Organizational ONLY: there is deliberately NO verdict/decision/confidence field —
 // the librarian indexes, the rules decide (ADR-0001). `manifest` is populated only for scope

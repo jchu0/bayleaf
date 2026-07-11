@@ -17,11 +17,34 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from typing import Any
 
 # Bump only on a breaking change to any persisted record shape; every record
 # stores it so a reader can migrate old ledger/corpus entries.
 SCHEMA_VERSION = 1
+
+
+def _platform_version() -> str:
+    """The single platform-version string — read from the installed package metadata.
+
+    `pyproject.toml`'s ``version`` is the one source of truth (uv), so the platform version a record
+    pins tracks the shipped build without a second hand-maintained constant. Read once at import via
+    ``importlib.metadata`` (the editable install exposes it); if the metadata is somehow absent
+    (e.g. a bare source checkout with no dist-info), fall back to the pinned literal rather than
+    raising at import time — a version stamp must never be able to break the record layer.
+    """
+    try:
+        return _pkg_version("pipeguard")
+    except PackageNotFoundError:  # pragma: no cover - defensive; the editable install provides it
+        return "0.1.0"
+
+
+# The platform/build version stamped onto advisory records that must pin *what produced them* (e.g.
+# an authoring agent's NodeProposal — W2). Distinct from SCHEMA_VERSION (the record-shape contract)
+# and from a corpus version (the knowledge the agent read): this is the running platform build.
+PLATFORM_VERSION = _platform_version()
 
 
 def _uuid7() -> uuid.UUID:

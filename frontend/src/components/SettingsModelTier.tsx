@@ -50,7 +50,7 @@ const AGENTS: Agent[] = [
   { key: 'pipeline_repair', label: 'Pipeline-repair agent', desc: 'Proposes fixes for recurring signatures', def: 'opus', env: 'PIPEGUARD_PIPELINE_REPAIR_AGENT', wired: true },
   { key: 'archivist', label: 'Archivist agent', desc: 'Organizes released runs for archival', def: 'haiku', env: 'PIPEGUARD_ARCHIVIST_AGENT', wired: true },
   { key: 'feedback', label: 'Feedback categorizer', desc: 'Categorizes reviewer overrides', def: 'haiku', env: 'PIPEGUARD_FEEDBACK_AGENT', wired: true },
-  { key: 'node_author', label: 'Node-author agent', desc: 'Proposes a typed tool node from docs', def: 'sonnet', env: 'PIPEGUARD_NODE_AUTHOR', wired: false, where: 'builder', phase2: true },
+  { key: 'node_author', label: 'Node-author agent', desc: 'Proposes a typed tool node for the Builder palette', def: 'sonnet', env: 'PIPEGUARD_NODE_AUTHOR_AGENT', wired: true, where: 'builder' },
   { key: 'metrics_expand', label: 'Metrics-expansion agent', desc: 'Proposes new QC metrics to track + wiring', def: 'sonnet', env: 'PIPEGUARD_METRICS_AGENT', wired: false, phase2: true },
 ]
 const AGENT_BY_KEY: Record<string, Agent> = Object.fromEntries(AGENTS.map((a) => [a.key, a]))

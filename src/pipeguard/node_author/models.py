@@ -32,7 +32,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from ..identifiers import SCHEMA_VERSION, new_id, utc_now
+from ..identifiers import PLATFORM_VERSION, SCHEMA_VERSION, new_id, utc_now
 from ..identifiers import content_hash as _content_hash
 
 # Version of the curated tool-card corpus + proposal templating; bump when either the corpus
@@ -232,6 +232,11 @@ class NodeProposal(BaseModel):
     )
     corpus_version: str = NODE_AUTHOR_CORPUS_VERSION
     schema_version: int = SCHEMA_VERSION
+    # The platform build that produced this proposal (W2 "versioned to the platform version"). A
+    # proposal now pins all four coordinates — tool version + corpus + schema + platform — so a
+    # scoped, human-approved library entry stays traceable to exactly what generated it. Sourced
+    # from pyproject.toml via identifiers.PLATFORM_VERSION (the one source of truth).
+    platform_version: str = PLATFORM_VERSION
     created_at: datetime = Field(default_factory=utc_now)
 
     @computed_field  # type: ignore[prop-decorator]
@@ -267,5 +272,6 @@ class NodeProposal(BaseModel):
                 "generated_by": self.generated_by,
                 "model": self.model,
                 "corpus_version": self.corpus_version,
+                "platform_version": self.platform_version,
             }
         )
