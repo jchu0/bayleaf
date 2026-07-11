@@ -2,16 +2,27 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Activity, Cable, Lock, Minus, Plus, Redo2, Undo2, Wand2, X } from 'lucide-react'
 import { SelectionActionBar, type AlignKind, type DistributeAxis } from './SelectionActionBar'
 import {
+  CARD_FOOTER_H,
+  CARD_HEADER_H,
   GATE_CHECKPOINTS,
   ICONS,
+  NODE_W,
   PG_BADGE,
+  PORT_R,
   REFS,
   TOOLS,
   V_COLOR,
+  cardHeight,
   gateSegs,
+  isRefKind,
+  layoutPorts,
   nodeBBox,
+  nodeHeight,
+  portAnchorLocal,
+  portSide,
+  type LaidPort,
   type Mode,
-  type Port,
+  type PortSide,
   type Tool,
   type UserEdge,
   type UserNode,
@@ -44,12 +55,42 @@ const MM_VPAD = (MM_H - INNER_H * MM_SCALE) / 2 // vertically center the canvas 
 const ZMIN = 0.6
 const ZMAX = 1.4
 const clampZoom = (z: number): number => Math.min(ZMAX, Math.max(ZMIN, +z.toFixed(2)))
-const UW = 192 // user-node width (enlarged toward the Databricks card, builder-cards §3) — port anchors depend on it; MUST equal BuilderShared.NODE_W
-const UPT = 52 // user-node first-port y-offset from card top
-const UROW = 18 // user-node port-row pitch
-const TW = 224 // seeded ToolCard width (w-56, enlarged from w-52) — output dots sit at its right edge
-const TPT = 56 // seeded ToolCard first-port y-offset from card top (header + grid start)
-const TROW = 18 // seeded ToolCard port-row pitch
+const UW = NODE_W // user-node width — MUST equal BuilderShared.NODE_W (port anchors sit at n.x + UW)
+const TW = NODE_W // seeded ToolCard width — same footprint as the composed cards (builder-cards §3)
+
+// A port's outward normal (which way its half-circle faces) — used to give each wire endpoint a
+// short stub in the port's facing direction so a four-sided wire leaves/enters the port cleanly.
+function sideVec(s: PortSide): [number, number] {
+  return s === 'left' ? [-1, 0] : s === 'right' ? [1, 0] : s === 'top' ? [0, -1] : [0, 1]
+}
+// Orthogonal wire route between two typed ports, honouring each port's side: a stub out of the
+// source, a stub into the target, joined by an elbow. Reduces to the classic right→left elbow for
+// the common primary-flow wire, and stays attached for bottom→left (QC) / top (reference) ports.
+function routeEdge(
+  a: { x: number; y: number; side: PortSide },
+  b: { x: number; y: number; side: PortSide },
+): { d: string; mid: { x: number; y: number } } {
+  const stub = 16
+  const [avx, avy] = sideVec(a.side)
+  const [bvx, bvy] = sideVec(b.side)
+  const ax2 = a.x + avx * stub
+  const ay2 = a.y + avy * stub
+  const bx2 = b.x + bvx * stub
+  const by2 = b.y + bvy * stub
+  const mx = Math.round((ax2 + bx2) / 2)
+  const d = `M${a.x} ${a.y} L${ax2} ${ay2} H${mx} V${by2} H${bx2} L${b.x} ${b.y}`
+  return { d, mid: { x: mx, y: Math.round((ay2 + by2) / 2) } }
+}
+// Absolute-position + half-circle shape for a laid port: the flat side sits ON the card edge at
+// (lx, ly) — the wire anchor — and the round bulge pokes OUTWARD (cards render overflow-visible).
+function portBoxStyle(p: LaidPort): React.CSSProperties {
+  const R = PORT_R
+  const base: React.CSSProperties = { position: 'absolute', boxSizing: 'border-box' }
+  if (p.side === 'left') return { ...base, left: p.lx - R, top: p.ly - R, width: R, height: 2 * R, borderRadius: '999px 0 0 999px' }
+  if (p.side === 'right') return { ...base, left: p.lx, top: p.ly - R, width: R, height: 2 * R, borderRadius: '0 999px 999px 0' }
+  if (p.side === 'top') return { ...base, left: p.lx - R, top: p.ly - R, width: 2 * R, height: R, borderRadius: '999px 999px 0 0' }
+  return { ...base, left: p.lx - R, top: p.ly, width: 2 * R, height: R, borderRadius: '0 0 999px 999px' }
+}
 
 // The seeded germline wiring [fromNode, outKind, toNode, inKind], typed so the computed edges
 // attach output→input by KIND (kept in lockstep with the corrected TOOLS ports). Mirrors
@@ -231,49 +272,60 @@ export function BuilderCanvas(props: CanvasProps) {
 
   const segs = gateSegs()
 
-  // User-edge geometry: anchor to the exact port dots (out = right edge, in = left edge).
-  const anchor = (id: string, side: 'out' | 'in', idx: number): { x: number; y: number } | null => {
+  // User-edge geometry: anchor a wire to the EXACT half-circle port on its real side, computed from
+  // the same layoutPorts() the card renders with — so an endpoint and its port are one point at any
+  // zoom. Returns the port's content-space (x, y) + which edge it faces (drives the elbow routing).
+  const anchorFull = (id: string, dir: 'out' | 'in', idx: number): { x: number; y: number; side: PortSide } | null => {
     const n = userNodes.find((u) => u.id === id)
     if (!n) return null
-    return { x: n.x + (side === 'out' ? UW : 0), y: n.y + UPT + idx * UROW }
+    const kind = (dir === 'out' ? n.outs : n.ins)[idx]
+    if (kind == null) return null
+    const local = portAnchorLocal(n.ins, n.outs, UW, nodeHeight(n), dir, idx)
+    if (!local) return null
+    return { x: n.x + local.x, y: n.y + local.y, side: portSide(kind, dir) }
   }
   // Keep the ORIGINAL userEdges index on each drawn edge so selection/delete address the right wire
   // (a filtered array would renumber and mis-target).
   const edgePaths = userEdges
     .map((ed, i) => {
-      const a = anchor(ed.from.node, 'out', ed.from.idx)
-      const b = anchor(ed.to.node, 'in', ed.to.idx)
+      const a = anchorFull(ed.from.node, 'out', ed.from.idx)
+      const b = anchorFull(ed.to.node, 'in', ed.to.idx)
       if (!a || !b) return null
-      const mx = Math.round((a.x + b.x) / 2)
-      return { i, d: `M${a.x} ${a.y} H${mx} V${b.y} H${b.x}`, mid: { x: mx, y: Math.round((a.y + b.y) / 2) } }
+      const { d, mid } = routeEdge(a, b)
+      return { i, d, mid }
     })
     .filter((e): e is { i: number; d: string; mid: { x: number; y: number } } => e != null)
 
-  // Seeded-DAG edges, COMPUTED from the tool/ref card geometry + typed ports (not the old hardcoded
-  // SVG paths, which detached from the ports whenever a card's port count changed — the "broken
-  // lines" report). Anchors mirror the user-edge scheme: an output dot sits at the card's right
-  // edge, an input dot at its left, at TPT + idx·TROW down from the card top.
-  const toolAnchor = (id: string, side: 'out' | 'in', kind: string): { x: number; y: number } | null => {
+  // Seeded-DAG edges, COMPUTED from the tool card geometry + typed four-sided ports via the shared
+  // layoutPorts (not hardcoded SVG paths, which detached whenever a card's port count changed — the
+  // "broken lines" report). The output port sits on its real side (right/bottom), the input on its
+  // real side (left/top), so a wire attaches to the exact half-circle it names.
+  const toolAnchorFull = (id: string, dir: 'out' | 'in', kind: string): { x: number; y: number; side: PortSide } | null => {
     const t = TOOLS.find((x) => x.id === id)
     if (!t) return null
-    const ports = side === 'out' ? t.outputs : t.inputs
-    const idx = Math.max(0, ports.findIndex((p) => p.kind === kind))
-    return { x: t.x + (side === 'out' ? TW : 0), y: t.y + TPT + idx * TROW }
+    const ins = t.inputs.map((p) => p.kind)
+    const outs = t.outputs.map((p) => p.kind)
+    const idx = (dir === 'out' ? outs : ins).findIndex((k) => k === kind)
+    if (idx < 0) return null
+    const local = portAnchorLocal(ins, outs, TW, cardHeight(ins, outs), dir, idx)
+    if (!local) return null
+    return { x: t.x + local.x, y: t.y + local.y, side: portSide(kind, dir) }
   }
   const seededPaths = SEEDED_WIRES.map(([fid, fk, tid, tk]) => {
-    const a = toolAnchor(fid, 'out', fk)
-    const b = toolAnchor(tid, 'in', tk)
+    const a = toolAnchorFull(fid, 'out', fk)
+    const b = toolAnchorFull(tid, 'in', tk)
     if (!a || !b) return null
-    const mx = Math.round((a.x + b.x) / 2)
-    return `M${a.x} ${a.y} H${mx} V${b.y} H${b.x}`
+    return routeEdge(a, b).d
   }).filter((d): d is string => d != null)
-  // Reference cards sit BELOW the spine (y≈372); their edges rise into a tool's ref input.
+  // Reference cards sit BELOW the spine (y≈372); their edges RISE over a rail into a tool's TOP
+  // reference port (references enter from the top, builder-cards §2) — approaching from above.
   const refPaths = REF_WIRES.map(([rid, tid, tk]) => {
     const r = REFS.find((x) => x.id === rid)
-    const b = toolAnchor(tid, 'in', tk)
+    const b = toolAnchorFull(tid, 'in', tk)
     if (!r || !b) return null
     const ax = r.x + 75 // ref card horizontal center (card is 150 wide)
-    return `M${ax} 372 V${Math.round((372 + b.y) / 2)} H${b.x} V${b.y}`
+    const railY = 150 // rail just above the tool spine (tools at y≈180), so the wire drops into the top port
+    return `M${ax} 372 V${railY} H${b.x} V${b.y}`
   }).filter((d): d is string => d != null)
 
   // Convert a viewport point to CONTENT coords: subtract the inner plane's on-screen origin and
@@ -449,7 +501,7 @@ export function BuilderCanvas(props: CanvasProps) {
             {/* Drag-to-connect rubber band. */}
             {wireDrag &&
               (() => {
-                const a = anchor(wireDrag.fromNode, 'out', wireDrag.fromIdx)
+                const a = anchorFull(wireDrag.fromNode, 'out', wireDrag.fromIdx)
                 if (!a) return null
                 return <path d={`M${a.x} ${a.y} L${wireDrag.cx} ${wireDrag.cy}`} fill="none" stroke="var(--color-accent)" strokeWidth={1.8} strokeDasharray="5 4" />
               })()}
@@ -589,7 +641,12 @@ export function BuilderCanvas(props: CanvasProps) {
             <span
               key={t.id}
               className="absolute rounded-[1px] bg-line-strong"
-              style={{ left: t.x * MM_SCALE, top: MM_VPAD + t.y * MM_SCALE, width: TW * MM_SCALE, height: 62 * MM_SCALE }}
+              style={{
+                left: t.x * MM_SCALE,
+                top: MM_VPAD + t.y * MM_SCALE,
+                width: TW * MM_SCALE,
+                height: cardHeight(t.inputs.map((p) => p.kind), t.outputs.map((p) => p.kind)) * MM_SCALE,
+              }}
             />
           ))}
         {showSeeded &&
@@ -609,7 +666,7 @@ export function BuilderCanvas(props: CanvasProps) {
           <span
             key={n.id}
             className={`absolute rounded-[1px] ${selNodes.has(n.id) ? 'bg-accent-strong' : 'bg-accent'}`}
-            style={{ left: n.x * MM_SCALE, top: MM_VPAD + n.y * MM_SCALE, width: UW * MM_SCALE, height: 46 * MM_SCALE }}
+            style={{ left: n.x * MM_SCALE, top: MM_VPAD + n.y * MM_SCALE, width: UW * MM_SCALE, height: nodeHeight(n) * MM_SCALE }}
           />
         ))}
         {/* Viewport rectangle — where the scroll viewport currently sits, so the minimap tracks the
@@ -662,17 +719,29 @@ export function BuilderCanvas(props: CanvasProps) {
   )
 }
 
-function PortRow({ port, dir, isView }: { port: Port; dir: 'in' | 'out'; isView: boolean }) {
-  const dot = port.ref ? (
-    <span className="h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-text-3 bg-transparent" />
-  ) : (
-    <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-text-3" />
-  )
+// A typed half-circle port on a card edge. `interactive`=false for the read-only seeded cards; the
+// composed UserCard adds the data-* + handlers itself. The flat side sits on the edge = the wire
+// anchor; ref-kind ports render outlined (top references), data/metric ports filled.
+function PortHalf({ p, fill, border, className }: { p: LaidPort; fill: string; border: string; className?: string }) {
   return (
-    <div className={`flex items-center gap-1.5 ${dir === 'out' ? '-mr-3 flex-row-reverse' : '-ml-3'}`}>
-      {dot}
-      <span className={`truncate font-mono text-[10px] ${isView ? 'text-text-2' : 'text-text-3'}`}>{port.kind}</span>
-    </div>
+    <span
+      title={`${p.kind} · ${p.dir}`}
+      className={className}
+      style={{ ...portBoxStyle(p), border: `1.5px solid ${border}`, background: isRefKind(p.kind) ? 'var(--color-card)' : fill, zIndex: 4 }}
+    />
+  )
+}
+// Small kind label for a LEFT/RIGHT port, hugging the card edge inside the body (top/bottom ports
+// stay label-free — the half-circle + hover title carry them, keeping the header/footer clear).
+function PortLabel({ p, w, className }: { p: LaidPort; w: number; className: string }) {
+  if (p.side !== 'left' && p.side !== 'right') return null
+  return (
+    <span
+      className={`pointer-events-none absolute truncate font-mono text-[9px] ${className}`}
+      style={{ top: p.ly - 7, maxWidth: w / 2 - 10, ...(p.side === 'left' ? { left: PORT_R + 5 } : { right: PORT_R + 5, textAlign: 'right' as const }) }}
+    >
+      {p.kind}
+    </span>
   )
 }
 
@@ -686,18 +755,26 @@ function ToolCard({ t, isView, selected, onSelect }: { t: Tool; isView: boolean;
     : isView
       ? '1px solid var(--color-line)'
       : '1px dashed var(--color-line-strong)'
-  const rows = Math.max(t.inputs.length, t.outputs.length)
   const Icon = ICONS[t.icon]
+  const ins = t.inputs.map((p) => p.kind)
+  const outs = t.outputs.map((p) => p.kind)
+  const H = cardHeight(ins, outs)
+  const laid = layoutPorts(ins, outs, TW, H)
+  const portFill = isView ? 'var(--color-text-3)' : 'var(--color-line-strong)'
   return (
     <button
       onClick={(e) => {
         e.stopPropagation()
         onSelect(t.id)
       }}
-      className="absolute w-56 overflow-hidden rounded-xl text-left"
+      // overflow VISIBLE so the four-sided half-circle ports can poke past the card edge.
+      className="absolute rounded-xl text-left"
       style={{
         left: t.x,
         top: t.y,
+        width: TW,
+        height: H,
+        overflow: 'visible',
         background: isView ? 'var(--color-card)' : 'var(--color-card-3)',
         borderTop: cardBorder,
         borderRight: cardBorder,
@@ -706,7 +783,7 @@ function ToolCard({ t, isView, selected, onSelect }: { t: Tool; isView: boolean;
         boxShadow: selected ? '0 0 0 2px var(--color-accent-weak), 0 6px 18px rgba(16,24,40,.13)' : '0 1px 2px rgba(16,24,40,.05)',
       }}
     >
-      <div className="flex items-center gap-2 px-3 pt-2.5">
+      <div className="flex items-center gap-2 px-3" style={{ height: CARD_HEADER_H }}>
         <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${isView ? 'bg-card-2 text-text' : 'bg-card-3 text-text-3'}`}>
           <Icon size={15} />
         </span>
@@ -718,11 +795,13 @@ function ToolCard({ t, isView, selected, onSelect }: { t: Tool; isView: boolean;
           {badge.label}
         </span>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 px-3">
-        <div className="space-y-1">{t.inputs.map((p, i) => <PortRow key={i} port={p} dir="in" isView={isView} />)}</div>
-        <div className="space-y-1">{t.outputs.map((p, i) => <PortRow key={i} port={p} dir="out" isView={isView} />)}</div>
-      </div>
-      <div className="mt-2 flex items-center gap-1.5 px-3 pb-2.5" style={{ minHeight: 4 + rows * 2 }}>
+      {laid.map((p) => (
+        <PortHalf key={`p${p.dir}${p.idx}`} p={p} fill={portFill} border={portFill} className="pointer-events-none" />
+      ))}
+      {laid.map((p) => (
+        <PortLabel key={`l${p.dir}${p.idx}`} p={p} w={TW} className={isView ? 'text-text-2' : 'text-text-3'} />
+      ))}
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 px-3" style={{ height: CARD_FOOTER_H }}>
         <span className="h-1.5 w-1.5 rounded-full" style={{ background: isView ? V_COLOR[t.vstatus] : '#8b95a1' }} />
         <span className="text-[9.5px] font-bold uppercase tracking-[0.4px]" style={{ color: isView ? V_COLOR[t.vstatus] : 'var(--color-text-3)' }}>
           {isView ? t.vstatus : 'draft'}
@@ -911,20 +990,11 @@ function UserCard({
 }) {
   // Armed = this node is the connect-mode source; highlight = armed OR multi-selected (both read as an
   // accent ring, one visual language for "acted-on").
-  const armed = connectFrom != null && connectFrom.split('|')[0] === n.id
-  const highlight = armed || selected
+  const armedNode = connectFrom != null && connectFrom.split('|')[0] === n.id
+  const highlight = armedNode || selected
   const Icon = ICONS[n.icon]
-  const dotStyle = (isArmed: boolean): React.CSSProperties => ({
-    width: 12,
-    height: 12,
-    borderRadius: '50%',
-    boxSizing: 'border-box',
-    border: '2px solid var(--color-accent)',
-    background: isArmed ? 'var(--color-accent)' : 'var(--color-card)',
-    flexShrink: 0,
-    cursor: connectMode ? 'pointer' : 'default',
-    zIndex: 7,
-  })
+  const H = nodeHeight(n)
+  const laid = layoutPorts(n.ins, n.outs, UW, H)
   return (
     <div
       onMouseDown={(e) => onDown(n.id, e)}
@@ -934,17 +1004,19 @@ function UserCard({
         left: n.x,
         top: n.y,
         width: UW,
+        height: H,
         background: 'var(--color-card)',
         border: `1px solid ${highlight ? 'var(--color-accent)' : 'var(--color-line-strong)'}`,
         borderLeft: `3px solid ${highlight ? 'var(--color-accent)' : '#c6ced7'}`,
         borderRadius: 11,
         boxShadow: highlight ? '0 0 0 3px var(--color-accent-weak)' : '0 2px 8px rgba(16,24,40,.1)',
         cursor: connectMode ? 'default' : 'grab',
-        overflow: connectMode || renaming ? 'visible' : 'hidden',
+        // overflow VISIBLE so the four-sided half-circle ports poke past the card edge.
+        overflow: 'visible',
         zIndex: selected ? 6 : 5,
       }}
     >
-      <div className="flex items-center gap-1.5 px-2.5 pb-1.5 pt-2">
+      <div className="flex items-center gap-1.5 px-2.5" style={{ height: CARD_HEADER_H }}>
         <span className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-md bg-card-2 text-text-2">
           <Icon size={13} />
         </span>
@@ -996,49 +1068,39 @@ function UserCard({
           </button>
         )}
       </div>
-      <div className="flex gap-1.5 px-2.5 pb-2 pt-0.5">
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          {n.ins.map((k, idx) => (
-            <div key={idx} className="-ml-4 flex items-center gap-1.5">
-              <span
-                data-port="1"
-                data-node={n.id}
-                data-side="in"
-                data-idx={idx}
-                data-kind={k}
-                style={dotStyle(connectFrom === `${n.id}|in|${idx}`)}
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onPortTap(n.id, 'in', idx)
-                }}
-              />
-              <span className="truncate font-mono text-[9.5px] text-text-2">{k}</span>
-            </div>
-          ))}
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col items-end gap-1.5">
-          {n.outs.map((k, idx) => (
-            <div key={idx} className="-mr-4 flex max-w-full items-center gap-1.5">
-              <span className="truncate font-mono text-[9.5px] text-text-2">{k}</span>
-              <span
-                data-port="1"
-                data-node={n.id}
-                data-side="out"
-                data-idx={idx}
-                data-kind={k}
-                style={dotStyle(connectFrom === `${n.id}|out|${idx}`)}
-                onMouseDown={(e) => onStartWireDrag(n.id, idx, e)}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onPortTap(n.id, 'out', idx)
-                }}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="px-2.5 pb-2">
+      {/* Typed half-circle ports on all four sides — carry data-* so drag-to-connect resolves a drop
+          via elementFromPoint; the flat side is the wire anchor. Out ports start a wire on mousedown;
+          in/out both arm click-to-connect. Interactive (no pointer-events-none). */}
+      {laid.map((p) => (
+        <span
+          key={`p${p.dir}${p.idx}`}
+          data-port="1"
+          data-node={n.id}
+          data-side={p.dir}
+          data-idx={p.idx}
+          data-kind={p.kind}
+          title={`${p.kind} · ${p.dir}`}
+          onMouseDown={(e) => {
+            if (p.dir === 'out') onStartWireDrag(n.id, p.idx, e)
+            else e.stopPropagation()
+          }}
+          onClick={(e) => {
+            e.stopPropagation()
+            onPortTap(n.id, p.dir, p.idx)
+          }}
+          style={{
+            ...portBoxStyle(p),
+            border: '2px solid var(--color-accent)',
+            background: connectFrom === `${n.id}|${p.dir}|${p.idx}` ? 'var(--color-accent)' : 'var(--color-card)',
+            cursor: connectMode ? 'pointer' : p.dir === 'out' ? 'crosshair' : 'default',
+            zIndex: 7,
+          }}
+        />
+      ))}
+      {laid.map((p) => (
+        <PortLabel key={`l${p.dir}${p.idx}`} p={p} w={UW} className="text-text-2" />
+      ))}
+      <div className="absolute inset-x-0 bottom-0 flex items-center px-2.5" style={{ height: CARD_FOOTER_H }}>
         <span className="inline-flex items-center gap-1.5 text-[8.5px] font-bold uppercase tracking-[0.4px] text-accent-strong">
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />
           draft

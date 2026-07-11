@@ -219,15 +219,88 @@ export function makeUserNode(name: string, kind: string, index: number): UserNod
 // Pure array rewrites + geometry, framework-thin so the screen owns the history/state and these
 // stay unit-testable. Every mutation is over the local draft (compose ≠ execute).
 
-// User-node width mirrors BuilderCanvas UW (the card is a fixed 192px — enlarged toward the
-// Databricks process-card footprint, docs/design/builder-cards §3); height is derived from the
-// port-row count so marquee-intersection and alignment-guide hit-testing track the rendered card.
-// MUST stay in lockstep with BuilderCanvas.UW (out-port anchors sit at n.x + UW).
-export const NODE_W = 192
+// ── Card geometry (builder-cards §3) ─────────────────────────────────────────
+// Larger Databricks-style process cards with typed half-circle ports on all FOUR sides. These
+// constants + functions are the SINGLE source of truth for BOTH the render (BuilderCanvas cards)
+// AND the wire/anchor math — a wire endpoint is computed from the exact same layoutPorts() that
+// positions the port, so an edge can never detach from its port when a card's size/port-count
+// changes. MUST stay in lockstep with BuilderCanvas.UW/TW (out-port anchors sit at n.x + width).
+export const NODE_W = 232 // card width (enlarged from 192; the port-count-driven card, §3)
+export const CARD_HEADER_H = 44 // header band (icon · name · version · badge)
+export const CARD_FOOTER_H = 22 // draft / verdict status strip
+export const PORT_R = 7 // half-circle port radius (its flat side sits on the card edge = the anchor point)
+const PORT_PITCH = 26 // vertical pitch between stacked left/right ports
+const CARD_MIN_BODY = 42 // min body height so a 1-port card isn't cramped
+
+export type PortSide = 'left' | 'right' | 'top' | 'bottom'
+
+// Reference/panel INPUT kinds enter from the TOP; QC/metric OUTPUT kinds exit the BOTTOM; everything
+// else follows the primary left(in)→right(out) data lane (builder-cards §2 + each per-tool card doc).
+// A kind's side depends on its DIRECTION: fastp_json is a BOTTOM output on fastp but a LEFT input on
+// MultiQC; mosdepth_summary stays on the RIGHT (a consumed/gated output, not a bottom QC byproduct).
+const REF_IN_KINDS = new Set(['reference_fasta', 'panel_bed', 'truth_vcf', 'adapter_fasta'])
+const METRIC_OUT_KINDS = new Set([
+  'fastp_json', 'fastp_html', 'markdup_metrics', 'samtools_stats', 'multiqc_html',
+  'mosdepth_regions', 'mosdepth_global_dist', 'mosdepth_region_dist', 'per_base', 'vcf_index',
+])
+export function portSide(kind: string, dir: 'in' | 'out'): PortSide {
+  if (dir === 'in') return REF_IN_KINDS.has(kind) ? 'top' : 'left'
+  return METRIC_OUT_KINDS.has(kind) ? 'bottom' : 'right'
+}
+// Reference-tone INPUT ports (top) render outlined rather than filled.
+export function isRefKind(kind: string): boolean {
+  return REF_IN_KINDS.has(kind)
+}
+
+export type LaidPort = { kind: string; dir: 'in' | 'out'; idx: number; side: PortSide; lx: number; ly: number }
+
+// Card height grows with the max of the LEFT-in / RIGHT-out counts (the two sides that stack
+// vertically); top/bottom ports spread across the width and don't drive height.
+export function cardHeight(ins: string[], outs: string[]): number {
+  const leftN = ins.filter((k) => portSide(k, 'in') === 'left').length
+  const rightN = outs.filter((k) => portSide(k, 'out') === 'right').length
+  const rows = Math.max(leftN, rightN, 1)
+  return CARD_HEADER_H + CARD_FOOTER_H + Math.max(rows * PORT_PITCH, CARD_MIN_BODY)
+}
+
+// Lay every port onto its edge, evenly spaced, in LOCAL coords (relative to the card's top-left).
+// left/right ports sit in the body band (below the header, above the footer); top/bottom ports
+// spread along the edge line. (lx, ly) is the EXACT point a wire attaches to — the flat side of the
+// half-circle, centered on the edge — so render + wiring share one formula.
+export function layoutPorts(ins: string[], outs: string[], w: number, h: number): LaidPort[] {
+  const items: { kind: string; dir: 'in' | 'out'; idx: number; side: PortSide }[] = [
+    ...ins.map((kind, idx) => ({ kind, dir: 'in' as const, idx, side: portSide(kind, 'in') })),
+    ...outs.map((kind, idx) => ({ kind, dir: 'out' as const, idx, side: portSide(kind, 'out') })),
+  ]
+  const bodyTop = CARD_HEADER_H
+  const bodyH = Math.max(0, h - CARD_HEADER_H - CARD_FOOTER_H)
+  const laid: LaidPort[] = []
+  for (const side of ['left', 'right', 'top', 'bottom'] as PortSide[]) {
+    const arr = items.filter((it) => it.side === side)
+    arr.forEach((it, i) => {
+      const frac = (i + 1) / (arr.length + 1)
+      let lx = 0
+      let ly = 0
+      if (side === 'left') { lx = 0; ly = bodyTop + bodyH * frac }
+      else if (side === 'right') { lx = w; ly = bodyTop + bodyH * frac }
+      else if (side === 'top') { lx = w * frac; ly = 0 }
+      else { lx = w * frac; ly = h }
+      laid.push({ ...it, lx, ly })
+    })
+  }
+  return laid
+}
+
+// The local (x, y) of ONE port by direction + index — the wire-anchor lookup. Mirrors layoutPorts.
+export function portAnchorLocal(
+  ins: string[], outs: string[], w: number, h: number, dir: 'in' | 'out', idx: number,
+): { x: number; y: number } | null {
+  const p = layoutPorts(ins, outs, w, h).find((q) => q.dir === dir && q.idx === idx)
+  return p ? { x: p.lx, y: p.ly } : null
+}
+
 export function nodeHeight(n: UserNode): number {
-  // header (icon + name + ×) ≈ 42, per-port row ≈ 18, draft footer ≈ 26 — close enough for hit-testing.
-  const rows = Math.max(n.ins.length, n.outs.length, 1)
-  return 42 + rows * 18 + 26
+  return cardHeight(n.ins, n.outs)
 }
 export function nodeBBox(n: UserNode): { x1: number; y1: number; x2: number; y2: number } {
   return { x1: n.x, y1: n.y, x2: n.x + NODE_W, y2: n.y + nodeHeight(n) }
