@@ -6,7 +6,7 @@ export type ReviewStatusSegment = { verdict: Verdict; label: string; count: numb
 
 // The Review-queue status-summary bar (dc.html §5.5): a proportional, verdict-coloured strip
 // over the *whole* queue (independent of the status filter) plus a dotted legend. It answers
-// "how bad is the backlog" at a glance, complementing the status FacetChips below it. Segments
+// "how bad is the backlog" at a glance, complementing the status tabs below it. Segments
 // with a zero count drop out of both the bar and the legend so the strip never lies about mix.
 export function ReviewStatusBar({ segments }: { segments: ReviewStatusSegment[] }) {
   const shown = segments.filter((s) => s.count > 0)

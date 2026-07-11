@@ -8,7 +8,7 @@ import { DecisionFeedback } from '../components/DecisionFeedback'
 import { DecisionLoading, DecisionReleased, DecisionSynthesisError } from '../components/DecisionStates'
 import { DecisionVerdictBar } from '../components/DecisionVerdictBar'
 import { CitedEvidence } from '../components/EvidenceTable'
-import { FacetChip } from '../components/FacetChip'
+import { Tabs } from '../components/Tabs'
 import { GateResultStrip } from '../components/GateResultStrip'
 import { QCReadout, emptyGateGroup, notMeasuredGroup, type ReadoutGroup } from '../components/MetricsPanel'
 import { PageHeader } from '../components/PageHeader'
@@ -205,16 +205,13 @@ export function RunDetail() {
         )}
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {chips.map((c) => (
-            <FacetChip
-              key={c.key}
-              label={c.label}
-              count={c.count}
-              active={filter === c.key}
-              onClick={() => setFilter(c.key)}
+          <div className="min-w-0 flex-1">
+            <Tabs<CardFilter>
+              items={chips.map((c) => ({ value: c.key, label: c.label, count: c.count }))}
+              value={filter}
+              onChange={setFilter}
             />
-          ))}
-          <div className="min-w-3 flex-1" />
+          </div>
           <button
             onClick={() => {
               setAllState('all')

@@ -40,8 +40,16 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
   const flagged = runs.find((r) => r.run_id === run)?.n_attention ?? 0
   return [
     {
+      // Ordered Notification → Action → Steps (G4): the operator starts at what needs their
+      // attention (Inbox), then what needs resolving (Review queue), then walks the process steps
+      // (submit → runs → intake → decide). Work/issue-tracking pages sit above the process flow.
       heading: 'Operate',
       items: [
+        // Notification: the personal triage workspace (GA3), badged with the operator's unread count.
+        { label: 'Inbox', to: '/inbox', icon: Bell, active: pathname.startsWith('/inbox'), badge: unreadCount || undefined },
+        // Action: issues waiting on a human.
+        { label: 'Review queue', to: '/queue', icon: Inbox, active: pathname.startsWith('/queue') },
+        // Steps: the process flow.
         { label: 'Submit samplesheet', to: '/submit', icon: FileUp, active: pathname.startsWith('/submit') },
         { label: 'Runs', to: '/', icon: Rows3, active: pathname === '/' },
         {
@@ -57,9 +65,6 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
           active: /^\/runs\/[^/]+$/.test(pathname),
           badge: flagged || undefined,
         },
-        { label: 'Review queue', to: '/queue', icon: Inbox, active: pathname.startsWith('/queue') },
-        // The personal notification/triage workspace (GA3), badged with the operator's unread count.
-        { label: 'Inbox', to: '/inbox', icon: Bell, active: pathname.startsWith('/inbox'), badge: unreadCount || undefined },
       ],
     },
     {

@@ -1,7 +1,7 @@
 import { Activity, BarChart3, CheckCircle2, ChevronRight, Database, ExternalLink, LineChart, ShieldCheck, UserCog } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
-import { FacetChip } from '../components/FacetChip'
+import { Tabs } from '../components/Tabs'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { useToast } from '../components/Toast'
@@ -289,11 +289,17 @@ function ActivityTab() {
         Append-only audit trail of off-gate governance — threshold overrides, pipeline versions,
         and review tickets. Read-only; a rules-decided verdict never appears here.
       </p>
-      <div className="mb-3 flex flex-wrap gap-2">
-        <FacetChip label="All" count={rows.length} active={filter === 'all'} onClick={() => setFilter('all')} />
-        <FacetChip label="Thresholds" count={counts.threshold} active={filter === 'threshold'} onClick={() => setFilter('threshold')} />
-        <FacetChip label="Pipelines" count={counts.pipeline} active={filter === 'pipeline'} onClick={() => setFilter('pipeline')} />
-        <FacetChip label="Tickets" count={counts.ticket} active={filter === 'ticket'} onClick={() => setFilter('ticket')} />
+      <div className="mb-3">
+        <Tabs<'all' | FeedKind>
+          items={[
+            { value: 'all', label: 'All', count: rows.length },
+            { value: 'threshold', label: 'Thresholds', count: counts.threshold },
+            { value: 'pipeline', label: 'Pipelines', count: counts.pipeline },
+            { value: 'ticket', label: 'Tickets', count: counts.ticket },
+          ]}
+          value={filter}
+          onChange={setFilter}
+        />
       </div>
       {shown.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line-strong bg-card p-10 text-center text-[13px] text-text-2">

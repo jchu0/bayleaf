@@ -13,11 +13,11 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { api } from '../api'
-import { FacetChip } from '../components/FacetChip'
 import { PageHeader } from '../components/PageHeader'
 import { ReviewRepairCard, type RepairApproval } from '../components/ReviewRepairCard'
 import { ReviewStatusBar, type ReviewStatusSegment } from '../components/ReviewStatusBar'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
+import { Tabs } from '../components/Tabs'
 import { ErrorBox, Loading } from '../components/States'
 import { useToast } from '../components/Toast'
 import { useConfirm, type ConfirmOpts } from '../components/ConfirmDialog'
@@ -445,6 +445,21 @@ export function ReviewQueue() {
   const toIdx = Math.min(curPage * per, total)
   const pagedTickets = shown.slice((curPage - 1) * per, curPage * per)
 
+  // Global select-all / clear-all (RQ2) over the clearable tickets currently on the page — scoped to
+  // the page (not the whole filtered set) so it never silently selects tickets you can't see, which
+  // would make the batch confirm's count surprising.
+  const pageClearable = pagedTickets.filter(clearable)
+  const allShownSelected = pageClearable.length > 0 && pageClearable.every((t) => selected.has(keyOf(t)))
+  const selectAllShown = () =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const t of pageClearable) {
+        if (allShownSelected) next.delete(keyOf(t))
+        else next.add(keyOf(t))
+      }
+      return next
+    })
+
   // Group the PAGINATED slice by run so tickets read under their run. The slice is already
   // verdict-sorted (see the `tickets` memo), so Map insertion order preserves both the group order
   // and per-group ordering; we re-sort each group defensively to keep the verdict sort explicit.
@@ -497,16 +512,38 @@ export function ReviewQueue() {
 
       {tickets.length > 0 && <ReviewStatusBar segments={segments} />}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {STATUS_FILTERS.map((f) => (
-          <FacetChip
-            key={f.key}
-            label={f.label}
-            count={counts[f.key]}
-            active={filter === f.key}
-            onClick={() => setFilter(f.key)}
-          />
-        ))}
+      {/* Status views as tabs (G5) — reads as a view selector, not highlighted values. */}
+      <div className="mt-4">
+        <Tabs<'all' | TicketStatus>
+          items={STATUS_FILTERS.map((f) => ({ value: f.key, label: f.label, count: counts[f.key] }))}
+          value={filter}
+          onChange={setFilter}
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {/* Global select-all / clear-all for the selection checkboxes (RQ2), reviewers only. */}
+        {isReviewer && pageClearable.length > 0 && (
+          <button
+            type="button"
+            onClick={selectAllShown}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-[11px] py-1.5 text-[12px] text-text-2 transition-colors hover:border-accent hover:text-accent-strong"
+          >
+            <span className={`grid h-3.5 w-3.5 place-items-center rounded-[3px] border ${allShownSelected ? 'border-accent bg-accent text-white' : 'border-line-strong bg-card'}`}>
+              {allShownSelected && <Check size={11} strokeWidth={3} />}
+            </span>
+            {allShownSelected ? 'Clear all' : 'Select all'}
+          </button>
+        )}
+        {isReviewer && selectedTickets.length > 0 && (
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="rounded-lg px-2 py-1.5 text-[12px] text-text-3 transition-colors hover:text-text-2"
+          >
+            Clear selection ({selectedTickets.length})
+          </button>
+        )}
         <div className="min-w-3 flex-1" />
         <button
           type="button"
@@ -576,20 +613,29 @@ export function ReviewQueue() {
           <div className="mt-4 flex flex-col gap-5">
             {groups.map(([runId, groupTickets]) => {
               const groupDate = formatDate(groupTickets[0].runDate)
+              // RQ3: a left rail binds each run's tickets into a visible group, and the checkboxes
+              // sit in a fixed gutter just inside it (subheader select-all + per-ticket align on one
+              // column) — a designed placement, not a floating afterthought. The rail lights accent
+              // when the group has a selection.
+              const groupClearable = groupTickets.filter(clearable)
+              const groupHasSelection = groupTickets.some((t) => selected.has(keyOf(t)))
+              const allSel = groupClearable.length > 0 && groupClearable.every((t) => selected.has(keyOf(t)))
               return (
-                <div key={runId} className="flex flex-col gap-[13px]">
-                  {/* Sticky run subheader — the mono run-id + date idiom from the ticket header. A
-                      select-all toggle (reviewer+) lets the whole run's open tickets be cleared at once. */}
+                <div
+                  key={runId}
+                  className={`flex flex-col gap-[13px] border-l-2 pl-3 transition-colors ${
+                    groupHasSelection ? 'border-accent' : 'border-line-strong'
+                  }`}
+                >
+                  {/* Sticky run subheader — the mono run-id + date idiom. Its select-all toggle sits
+                      in the same gutter the per-ticket checkboxes use, so they align on the rail. */}
                   <div className="sticky top-0 z-10 flex items-center gap-2 bg-page py-2">
-                    {isReviewer &&
-                      (() => {
-                        const groupClearable = groupTickets.filter(clearable)
-                        if (groupClearable.length === 0) return null
-                        const allSel = groupClearable.every((t) => selected.has(keyOf(t)))
-                        return (
+                    {isReviewer && (
+                      <span className="flex w-4 shrink-0 justify-center">
+                        {groupClearable.length > 0 && (
                           <input
                             type="checkbox"
-                            className="h-3.5 w-3.5 shrink-0 accent-accent"
+                            className="h-3.5 w-3.5 accent-accent"
                             aria-label={`Select all open tickets in ${runId}`}
                             checked={allSel}
                             onChange={() =>
@@ -603,8 +649,9 @@ export function ReviewQueue() {
                               })
                             }
                           />
-                        )
-                      })()}
+                        )}
+                      </span>
+                    )}
                     <span className="font-mono text-[12px] font-semibold text-text-2">{runId}</span>
                     {groupDate && <span className="text-[11.5px] text-text-3">· {groupDate}</span>}
                     <span className="text-[11px] text-text-3">
@@ -613,6 +660,7 @@ export function ReviewQueue() {
                   </div>
                   {groupTickets.map((t) => {
                     const key = keyOf(t)
+                    const selectable = isReviewer && clearable(t)
                     const card = (
                       <TicketCard
                         t={t}
@@ -632,18 +680,23 @@ export function ReviewQueue() {
                         }}
                       />
                     )
-                    // Reviewers get a select checkbox alongside each still-open ticket; viewers and
-                    // already-cleared tickets render the card alone (no dead checkbox).
-                    if (!isReviewer || !clearable(t)) return <div key={key}>{card}</div>
                     return (
-                      <div key={key} className="flex items-start gap-2.5">
-                        <input
-                          type="checkbox"
-                          className="mt-[15px] h-3.5 w-3.5 shrink-0 accent-accent"
-                          aria-label={`Select ${t.card.sample_id}`}
-                          checked={selected.has(key)}
-                          onChange={() => toggleSelect(key)}
-                        />
+                      <div key={key} className="flex items-start gap-2">
+                        {isReviewer && (
+                          // Fixed gutter so every checkbox aligns on the rail; cleared/viewer rows
+                          // reserve it (empty) instead of shifting the card left.
+                          <span className="flex w-4 shrink-0 justify-center pt-[15px]">
+                            {selectable && (
+                              <input
+                                type="checkbox"
+                                className="h-3.5 w-3.5 accent-accent"
+                                aria-label={`Select ${t.card.sample_id}`}
+                                checked={selected.has(key)}
+                                onChange={() => toggleSelect(key)}
+                              />
+                            )}
+                          </span>
+                        )}
                         <div className="min-w-0 flex-1">{card}</div>
                       </div>
                     )

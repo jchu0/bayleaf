@@ -3,9 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { DateRangePicker } from '../components/DateRangePicker'
-import { FacetChip } from '../components/FacetChip'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl } from '../components/SegmentedControl'
+import { Tabs } from '../components/Tabs'
 import type { RunStatus, RunSummary } from '../types'
 import { RUN_STATUS_META as STATUS_META, VERDICT_BAR, VERDICT_LABEL } from '../verdict'
 
@@ -333,17 +333,13 @@ export function RunOverview() {
             <DateRangePicker start={dateStart} end={dateEnd} onChange={onDate} />
           </div>
 
-          {/* toolbar row 2 — status facets w/ counts */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {FACETS.map((f) => (
-              <FacetChip
-                key={f.key}
-                label={f.label}
-                count={facetCount(f.key)}
-                active={statusFilter === f.key}
-                onClick={() => onStatus(f.key)}
-              />
-            ))}
+          {/* toolbar row 2 — status views as tabs w/ counts (G5: reads as a view selector) */}
+          <div className="mt-3">
+            <Tabs<StatusFacet>
+              items={FACETS.map((f) => ({ value: f.key, label: f.label, count: facetCount(f.key) }))}
+              value={statusFilter}
+              onChange={onStatus}
+            />
           </div>
 
           {total === 0 ? (
