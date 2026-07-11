@@ -310,10 +310,42 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    open read-only; re-saving mints a new draft; a foreign envelope with no restorable topology
    loads empty with a labelled toast, never fabricated nodes). Frontend-only for all three
    commits (`git diff --stat a728cb7..adfd7aa -- src/ api/ tests/` empty).
+   **Batch 8 (2026-07-10, commits `5763be1`→`f8a6f35`, T-098–T-100), a maintainer UI-feedback
+   pass — all frontend-only, no verdict/gate/ADR-0001 boundary changed** (`git diff --stat
+   1169e37 f8a6f35 -- src/ api/ tests/` empty). **Theme** (T-098): light mode is now a warm
+   japandi sand/greige palette (`index.css` `@theme` neutrals — page/card/insets/lines/text all
+   warmed, contrast kept AA+; functional verdict colors + the dark nav + the blue accent
+   unchanged), and the Pipeline-Builder canvas dot grid is now theme-aware (`--canvas-dot`,
+   warm+subtle in light / much dimmer in dark, was a hardcoded light hex that read as
+   distracting on the dark canvas) and now spans the whole scroll surface, not just the content
+   plane. **UI feedback pass** (T-099): the Pipeline-Builder advisory-agent palette tiles
+   (QC-triage/Pipeline-repair/Archivist) are now clickable in **View** mode (an `alwaysEnabled`
+   `PaletteItem` flag — they're read-only advisory reads, never a mutation, so consulting one no
+   longer forces Edit); Provenance relabels the artifact digest "hash" → "**fingerprint**" (more
+   accurate — a content digest, not a process id) with a full-value hover; the Runs verdict bar
+   is now capped `max-w-[300px]` with 2px inter-segment gaps so adjacent tones don't bleed
+   together; Agent-triage's flagged-samples table now paginates at 10 rows/page. **Monitoring
+   rework** (T-100, "Wave 2"): adds **recharts 3.9.2 (MIT)** — the first real charting
+   dependency in the frontend, justified per the Dependencies guardrail (the hand-rolled SVG bar
+   chart couldn't give hover tooltips + a trend line + a stable frame without reinventing a
+   chart library; React-19-compatible, added at the maintainer's request). The "Verdicts over
+   time" chart is now a Recharts `ComposedChart` (stacked per-verdict bars + a "Flagged (trend)"
+   line + a grounded per-run hover tooltip + dashed gridlines), FROZEN to a ~14-day column frame
+   that scrolls sideways beyond it instead of resizing the card on a 7d/14d/30d toggle. **This
+   REVERSES, not just narrows, T-072's earlier frontend mitigation**: batch 7's per-run pager
+   (`34bca5d`) is removed — the chart now renders every fetched run as a scrolling bar, not a
+   paginated table — because a pager made no sense once the chart scrolls. Recurring signatures
+   gain a unique stable id (`SIG-<first 8 chars of the signature hash>`) and a REVERSIBLE,
+   `localStorage`-persisted clear-from-view/restore (never a DB purge — cleared signatures stay
+   searchable in a collapsible "Cleared · N" section).
    Honest deferrals: Median-review KPI (no backend field), Submit now hands off to the real
    `POST /api/runs` execution boundary but still has no BaseSpace connector (T-057), and
-   `GET /api/monitoring`'s per-run `rows[]` stays uncapped server-side — T-072's backend half,
-   the one Builder/Monitoring frontend gap still open after this batch.
+   `GET /api/monitoring`'s per-run `rows[]` stays uncapped server-side — T-072's backend half is
+   the one open item, and as of batch 8 there is no longer a frontend render-cap either (the
+   maintainer's own call; the scrolling chart degrades more gracefully than an uncapped table
+   would at today's volume, but the underlying payload-size risk T-072 tracks is unmitigated in
+   either direction until the backend gains `page`/`limit` on `runs[]`, mirroring `GET
+   /api/runs`).
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
 

@@ -59,7 +59,11 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
   (`needs_review`/`running`/`released`) via a shared `RUN_STATUS_META`, never inferred from
   attention count — a running run with 0 flagged samples reads "Sequencing," not a green
   "all clear."
-- **Content:** light surface (`--bg #f5f7f9`, cards `--surface #fff`), max-width per screen.
+- **Content:** light surface — **Shipped 2026-07-10 (T-098, commit `5763be1`)**: softened from
+  a cool near-white to a warm japandi sand/greige (`--color-page` `#f5f7f9`→`#f2efe7`,
+  `--color-card` `#fff`→`#faf9f4`, insets/lines/text warmed to match, contrast kept AA+);
+  functional verdict colors, the dark nav, and the blue accent are unchanged. Max-width per
+  screen.
 - **Type:** IBM Plex Sans throughout; **IBM Plex Mono** for every id, path, hash, index,
   version, kind, size.
 - **Theme + density (Shipped 2026-07-10, T-091, commit `08a42ad`).** The Settings dialog's
@@ -106,6 +110,9 @@ Scale-kit list surface:
   pill, attention chip, and a verdict bar with an **inline count legend**
   (e.g. "19 Proceed · 5 Hold · 2 Rerun · 2 Escalate"); hover lift. Running/released rows omit
   the legend. Seeded with 28 runs incl. a 28-sample `RUN-2026-07-08-WES28`.
+- **Shipped 2026-07-10 (T-099, commit `3c6dacb`):** the verdict bar is now capped
+  `max-w-[300px]` (was full-row-width) with 2px gaps between segments so adjacent verdict tones
+  (hold amber / rerun orange) read as distinct blocks instead of one bleeding gradient.
 
 ### 5.3 Intake gate  (`view: 'intake'`)
 Preflight sample-admission review. **Collapsible admission rows** (consistent bar lengths,
@@ -177,6 +184,11 @@ Left→right stage DAG + a per-stage I/O inspector.
   unchanged). P2: an explanatory hover on `sample_metadata.csv` ("Intake · LIMS/subject metadata
   sheet") vs `SampleSheet.csv` ("Demux · Illumina barcode/index manifest") surfaces the
   intake-vs-demux distinction that previously lived only in the stage grouping.
+- **Shipped 2026-07-10 (T-099, commit `3c6dacb`):** the digest label reads "**fingerprint**"
+  instead of "hash" (continuing T-080's defense-in-depth framing — a content digest is not a
+  process/task/ledger id, those are `arun_…`/`evt_…`; the wire field is still `sha256` and its
+  value is unchanged) and now shows the full value on hover of the label, in addition to the
+  existing "show full" toggle and copy button.
 
 ### 5.7 Agent triage  (`view: 'agent'`)
 Advisory triage assistant. **Chat composer**: multi-line text window, **Enter** sends,
@@ -185,6 +197,9 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
 - **Shipped 2026-07-09 (T-078, commit `e3e1995`):** the case selector is now a
   Sample·Verdict·Gate·Headline·Findings table (was a non-scalable pill row), verdict-ranked,
   with the active row highlighted.
+- **Shipped 2026-07-10 (T-099, commit `3c6dacb`):** the flagged-samples table now caps at 10
+  rows/page + a numbered pager ("Showing X–Y of N flagged") — a large mixed flowcell can flag
+  dozens of samples; the active-sample selection persists across pages.
 
 ### 5.8 Monitoring  (`view: 'monitoring'`)
 - **Recurring issue signatures**: **searchable**, **collapsible rows** on a fixed 5-column
@@ -199,13 +214,33 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
 - **Shipped 2026-07-10 (T-080, commit `eb7d016`):** the throughput bars are now a **constant
   width** (28px) inside a scrollable viewport, so they no longer stretch/squish as the run
   count or date range grows.
-- **Shipped 2026-07-10 (T-072 frontend half, commit `34bca5d`):** the throughput card's per-run
-  columns now paginate client-side too (25/50/100 + numbered pager, "Showing X–Y of N runs"),
-  ported from the recurring-signatures pager pattern with independent state (its own per-page +
-  page, reset on window/date-range/per-page change); `maxSamples` stays computed over the full
-  filtered set so the y-axis doesn't jump between pages. **Frontend-only** — `GET
-  /api/monitoring`'s `runs[]` payload itself stays uncapped server-side ([tasks
-  T-072](../../planning/tasks.md) is still open for the backend half).
+- **Shipped 2026-07-10 (T-072 frontend half, commit `34bca5d`) — since SUPERSEDED, see below:**
+  the throughput card's per-run columns briefly paginated client-side too (25/50/100 + numbered
+  pager, "Showing X–Y of N runs"), ported from the recurring-signatures pager pattern. This
+  pager was **removed the same day** by the Recharts rework immediately below — kept here only
+  as a historical note; do not implement a per-run pager on this chart.
+- **Shipped 2026-07-10 (T-100 "Wave 2", commit `f8a6f35`) — Recharts rework, replaces the
+  hand-rolled bar chart above.** Adds **recharts 3.9.2 (MIT)** as a new `frontend` dependency —
+  the frontend's first real charting library, justified because a hover tooltip + a trend line +
+  a stable frozen frame aren't practical to hand-roll without reinventing one (React-19-compatible,
+  added at the maintainer's explicit request). The "Verdicts over time" card is now a Recharts
+  `ComposedChart`: stacked per-verdict bars + a monotone "Flagged (trend)" line (hold+rerun+
+  escalate) + a grounded hover tooltip (the run's real per-verdict counts, never synthesized) +
+  dashed gridlines. It is **FROZEN to a ~14-day column frame** (constant per-column slot,
+  `maxBarSize`-capped) and **scrolls sideways** beyond it — toggling 7d/14d/30d no longer resizes
+  the card (height stays constant; only the plot width + scroll extent grow). **The per-run pager
+  above is REMOVED, not narrowed** — per the maintainer, "it scrolls now, so paging the
+  throughput columns made no sense"; the recurring-signatures pager is unaffected. Net effect on
+  [tasks T-072](../../planning/tasks.md): the chart now renders **every** fetched run as a bar
+  with no cap in either direction (no backend `page`/`limit` on `runs[]`, and no frontend
+  render-cap either, now that pagination is gone) — an honest, maintainer-directed tradeoff, not
+  a regression, but T-072 stays the accurate tracker of the still-open backend-cap gap.
+  **Recurring signatures also gain (same commit):** a unique, stable display id per row
+  (`SIG-<first 8 chars of the signature hash>`, disambiguating e.g. two PIPE-001 patterns) and a
+  **clear-from-view / restore** control — a REVERSIBLE, `localStorage`-persisted, client-only
+  view filter (never a DB purge, never an `api/` write) that moves a signature into a
+  collapsible "Cleared · N" section; it stays searchable and escalatable there, and restores in
+  one click.
 
 ### 5.9 Pipeline builder  (`view: 'builder'`)  — see §6 for the full model
 Node-graph editor that **emits `run_layout.yaml`**. Defaults to **View**; **Edit** unlocks
@@ -231,10 +266,19 @@ authoring.
 ## 6. Pipeline builder — full model
 
 **Modes.** Defaults to **View** (read-only: palette tiles disabled, add guarded, "Author a
-tool node" replaced by a read-only note). **Edit** enables all authoring.
+tool node" replaced by a read-only note). **Edit** enables all authoring. **Exception (Shipped
+2026-07-10, T-099, commit `3c6dacb`):** the three advisory-agent palette tiles
+(QC-triage/Pipeline-repair/Archivist) are `alwaysEnabled` — clickable in **View** too, since
+each only opens a read-only advisory modal/pill and never mutates the graph, letting an operator
+consult an agent without switching the whole canvas into Edit. Node-adding (tool/reference)
+tiles still require Edit.
 
 **Canvas.** Large, pannable in any direction; loads centered on the pipeline. Dot-grid = 20px
-snap grid. Top-right **minimap** (spine + gate + composed nodes — moved from bottom-right
+snap grid — **theme-aware since 2026-07-10 (T-098, commit `5763be1`)** via a new `--canvas-dot`
+CSS var (warm+subtle in light, dim `rgba(150,165,185,.08)` in dark, was a hardcoded light hex
+that read as distracting on the dark canvas), and now painted on the scroll surface itself
+(`BuilderCanvas.tsx`) so it spans the **entire** canvas including the margin gutters, not just
+the content plane. Top-right **minimap** (spine + gate + composed nodes — moved from bottom-right
 2026-07-10, T-085, commit `14c9f3c`, so it no longer sits under the feedback bubble) — **grown to
 a 210×108 proportional mirror** (was 168×46), 2026-07-10, T-084. Floating zoom + **Tidy**
 (auto-layout) + **Connect** controls, plus (2026-07-10, T-084) a native ctrl-wheel/trackpad-pinch
@@ -420,7 +464,15 @@ in `source/PipeGuard.dc.html` `:root` and the app's theme): verdict 4-shade
 `#1f5fd0` · variant `#0e8f7e`**; severity (critical/warn/info); accent `#1f5fd0`; neutrals
 `--bg/--surface/--surface-2/--surface-3/--border/--border-strong/--text/--text-2/--text-3`.
 Shape: chips ~20px radius, buttons/inputs 8px, cards 11–14px; card shadow
-`0 1px 2px rgba(16,24,40,.05)`.
+`0 1px 2px rgba(16,24,40,.05)`. **Light neutrals warmed to a japandi sand/greige palette
+(Shipped 2026-07-10, T-098, commit `5763be1`)** — see §4 App shell for the exact hex deltas;
+contrast preserved, verdict/gate/severity/accent families untouched. The app's actual CSS
+variable names are `--color-page`/`--color-card`/`--color-card-2`/`--color-card-3`/
+`--color-line`/`--color-line-strong`/`--color-text`/`--color-text-2`/`--color-text-3` (the
+`--bg`/`--surface`/`--border`/`--text` family above is this design doc's shorthand naming, not
+the app's literal token names — read `frontend/src/index.css` `@theme` for the ground truth). A
+new theme-aware `--canvas-dot` token (warm+subtle in light, dim `rgba(150,165,185,.08)` in dark)
+now drives the Pipeline-Builder canvas dot grid (§6 Canvas).
 
 ## 10. Files
 - `PipeGuard.html` — complete self-contained prototype (open in a browser).

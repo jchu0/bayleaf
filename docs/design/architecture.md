@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md) |
 
 ## Overview
 
@@ -275,13 +275,54 @@ Every finding and verdict is labelled with the gate it came from:
      read-only (re-saving mints a new draft) and a foreign/topology-less envelope loading empty
      with a labelled toast rather than fabricated nodes. All three commits verified frontend-only
      (`git diff --stat a728cb7..adfd7aa -- src/ api/ tests/` empty).
+   - **Frontend fixes batch 8 (2026-07-10, commits `5763be1`→`f8a6f35`, T-098–T-100,
+     [journal](../journal/2026-07-10-batch8-theme-monitoring-recharts.md)), a maintainer
+     UI-feedback pass — also re-presentation/UX-only, no verdict/gate/ADR-0001 boundary changed**
+     (`git diff --stat 1169e37 f8a6f35 -- src/ api/ tests/` empty). **(1) Theme** (`5763be1`,
+     T-098): light mode softened to a warm japandi sand/greige palette (`frontend/src/index.css`
+     `@theme` neutrals — page `#f5f7f9`→`#f2efe7`, cards `#fff`→`#faf9f4`, insets/lines/text
+     warmed to greige, contrast kept AA+; functional verdict colors, the dark nav, and the blue
+     accent are unchanged), and a new theme-aware `--canvas-dot` var (warm+subtle in light, much
+     dimmer `rgba(150,165,185,.08)` in dark — was a hardcoded light hex that read as distracting
+     on the dark canvas) moves the Pipeline-Builder dot grid onto the scroll surface
+     (`BuilderCanvas.tsx`) so it spans the whole canvas, not just the content plane. **(2) UI
+     feedback pass** (`3c6dacb`, T-099): the Builder's advisory-agent palette tiles
+     (QC-triage/Pipeline-repair/Archivist) gain an `alwaysEnabled` `PaletteItem` flag and are now
+     clickable in **View** mode — they only ever open a read-only advisory modal/pill, never
+     mutate the graph, so an operator can consult one without switching the whole canvas into
+     Edit (node-adding tiles still require Edit); Provenance relabels the artifact digest "hash"
+     → "**fingerprint**" (`Provenance.tsx`, continuing T-080's defense-in-depth framing — a
+     content digest, not a process/run id) with the full value now shown on hover; the Runs
+     verdict bar is capped `max-w-[300px]` with 2px inter-segment gaps so adjacent tones (hold
+     amber / rerun orange) read as distinct blocks (`RunOverview.tsx`); Agent-triage's
+     flagged-samples table caps at 10 rows/page + a numbered pager (`AgentTriage.tsx`). **(3)
+     Monitoring rework** (`f8a6f35`, T-100, "Wave 2"): adds **recharts 3.9.2 (MIT)** — the
+     frontend's first real charting dependency, justified per the repo's Dependencies guardrail
+     (a hand-rolled SVG bar chart couldn't give hover tooltips + a trend line + a stable frozen
+     frame without reinventing a chart library; React-19-compatible, added at the maintainer's
+     request). The "Verdicts over time" chart is now a Recharts `ComposedChart` (stacked
+     per-verdict bars + a monotone "Flagged (trend)" line + a grounded per-run hover tooltip +
+     dashed gridlines), FROZEN to a ~14-day column frame that scrolls sideways beyond it instead
+     of resizing the card on a 7d/14d/30d toggle. **This REVERSES, not just narrows, batch 7's
+     per-run pager** (`34bca5d`, [tasks T-072](../planning/tasks.md)) — the chart now renders
+     every fetched run as a scrolling bar rather than a paginated table, because (per the
+     maintainer) "it scrolls now, so paging the throughput columns made no sense"; the
+     signatures pager is unaffected. Recurring signatures gain a unique, stable display id
+     (`SIG-<first 8 chars of the signature hash>`, disambiguating e.g. two PIPE-001 patterns) and
+     a REVERSIBLE, `localStorage`-persisted clear-from-view/restore (never a DB purge, never
+     touches `api/`) — a cleared signature moves into a collapsible "Cleared · N" section, stays
+     searchable, and restores in one click.
    **Honest, labelled frontend deferrals (no fabrication):** the Monitoring **Median-review KPI**
    (no backend field yet — the signature-level `first_seen`/`last_seen`/`trend`/`affected_run_ids`
    fields below ARE shipped); Submit now
    hands off to a real execution boundary (`POST /api/runs`, T-057 — see below) but still has
    **no BaseSpace connector** and no conversational multi-turn triage chat (both still wishlist);
    and `GET /api/monitoring`'s per-run `rows[]` stays uncapped server-side ([tasks
-   T-072](../planning/tasks.md)'s backend half — the frontend now pages it, batch 7 above). The
+   T-072](../planning/tasks.md)'s backend half — as of batch 8 there is no longer a frontend
+   render-cap either, since the throughput chart now scrolls instead of paginating; the
+   underlying payload-size risk T-072 tracks is unmitigated in either direction until the
+   backend gains `page`/`limit` on `runs[]`, mirroring `GET /api/runs` — fine at today's ~29–30
+   run volume, a real concern once `synthetic/scale.py` (T-050) seeds a much larger window). The
    Builder's Run-hand-off / pipeline-repair / archivist modals + saved-profiles (T-069) and the
    reusable run-selector (T-070) are **both now closed** (batch 7 above) — this paragraph no
    longer carries them as open gaps. Of the 10 operator screens: 8 (Runs, Intake, Decision cards, Review queue,

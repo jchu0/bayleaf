@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md) |
 
 ## Overview
 
@@ -323,9 +323,24 @@ node-authoring agent).
    same way (25/50/100 + pager, "Showing X–Y of N runs," independent state, reset on
    window/date-range/per-page change) — **this closes only the frontend half**; the `rows[]`
    payload itself is still returned uncapped by `get_monitoring`, so T-072 stays open for the
-   backend cap. *Trace:*
+   backend cap. **Superseded the same day (commit `f8a6f35`, [tasks T-100](../planning/tasks.md)):**
+   the throughput card is now a Recharts `ComposedChart` (`recharts@3.9.2`, MIT — the frontend's
+   first real charting dependency) FROZEN to a ~14-day column frame that scrolls sideways beyond
+   it, and **the per-run pager above was removed**, not narrowed — a pager made no sense once
+   the chart scrolls instead of paginating (the signatures pager is unaffected). The chart now
+   renders every fetched run as a bar with no client-side cap either, so `GET /api/monitoring`'s
+   `runs[]` remains uncapped in **both** directions until the backend gains `page`/`limit`
+   (mirroring `GET /api/runs`); [tasks T-072](../planning/tasks.md) stays `todo` and is the
+   single accurate tracker of this gap — read it, not this now-superseded pagination note, for
+   current status. The same commit adds a **grounded hover tooltip** (real per-run verdict
+   counts, no synthesis) and a "Flagged (trend)" line (hold+rerun+escalate), and gives each
+   ranked signature a unique, stable, client-rendered display id (`SIG-<first 8 chars of the
+   signature hash>`) plus a REVERSIBLE, `localStorage`-persisted clear-from-view/restore — a
+   pure client-side view filter (never a DB purge, never an `api/` write) that hides a signature
+   from the default list into a collapsible "Cleared · N" section without dropping it from
+   search or escalation; neither addition changes the wire contract. *Trace:*
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
-   [architecture.md](../design/architecture.md), [tasks T-048/T-072](../planning/tasks.md).
+   [architecture.md](../design/architecture.md), [tasks T-048/T-072/T-100](../planning/tasks.md).
 
 ## AI configurability (ADR-0006)
 
