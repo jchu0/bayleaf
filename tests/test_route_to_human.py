@@ -147,3 +147,24 @@ def parse_variant_calls_from(tmp_path: Path, body: str) -> list:
     p = tmp_path / "variants.csv"
     p.write_text(body)
     return parse_variant_calls(p)
+
+
+# ── committed demo fixture: route-to-human fires end-to-end via the API's per-run arming ─────────
+def test_clinvar_rth_fixture_escalates_via_per_run_arming() -> None:
+    """The committed contrived fixture + its `route_to_human` marker make VAR-RTH-001 fire against a
+    real committed run (closing the "never fires end-to-end" gap), while every unmarked run stays
+    disarmed — the arming is scoped per run by `api.main._active_runbook`."""
+    from api.main import _active_runbook
+    from pipeguard.engine import run_gate_from_dir
+
+    rb = _active_runbook("RUN-2026-07-11-CLINVAR-RTH")
+    assert rb.route_to_human.armed  # the marker armed it for THIS run
+    _, cards = run_gate_from_dir("data/RUN-2026-07-11-CLINVAR-RTH", runbook=rb)
+    card = next(c for c in cards if c.sample_id == "HG002")
+    assert card.verdict is Verdict.ESCALATE
+    rth = next(f for f in card.findings if f.rule_id == "VAR-RTH-001")
+    assert rth.gate.value == "variant"
+    # Verbatim ClinVar quote, no PipeGuard-authored pathogenicity.
+    assert any(e.source_field == "CLNSIG" and e.value == "Pathogenic" for e in rth.evidence)
+    # A stock committed run carries no marker → route-to-human stays OFF.
+    assert not _active_runbook("RUN-2026-07-04-GIAB-A").route_to_human.armed

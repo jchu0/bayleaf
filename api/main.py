@@ -39,6 +39,7 @@ from pipeguard.metrics import default_registry
 from pipeguard.models import DecisionCard, Gate, Sample, Verdict
 from pipeguard.pipeline_repair import RepairProposal, propose_repair, recurring_signature
 from pipeguard.provenance import EventType, ProvenanceEvent
+from pipeguard.runbook import RouteToHumanPolicy, Runbook
 from pipeguard.triage import TriageNote
 
 from .archivist import ArchiveDigest, ArtifactRef, RunArchiveInput, _classify_kind, archive_digest
@@ -215,12 +216,30 @@ def _run_status(*, completed: bool, n_attention: int) -> str:
     return "needs_review" if n_attention > 0 else "released"
 
 
+def _active_runbook(run_id: str) -> Runbook:
+    """The runbook the gate uses for THIS run — the stock DEFAULT_RUNBOOK unless the run dir carries
+    a `route_to_human` marker (comma-separated ClinVar significances) that arms VAR-RTH-001 for it.
+
+    Route-to-human is off by default in the core (ADR-0018 D2); this is the deployment-config seam
+    that arms it, scoped PER RUN via a marker so a single contrived fixture can demonstrate the
+    human-review escalation while every real/other run stays disarmed. Empty/absent → disarmed.
+    """
+    marker = _run_dir(run_id) / "route_to_human"
+    if not marker.exists():
+        return DEFAULT_RUNBOOK
+    sigs = tuple(s.strip() for s in marker.read_text(encoding="utf-8").split(",") if s.strip())
+    if not sigs:
+        return DEFAULT_RUNBOOK
+    policy = RouteToHumanPolicy(significances=sigs)
+    return DEFAULT_RUNBOOK.model_copy(update={"route_to_human": policy})
+
+
 @lru_cache(maxsize=32)
 def _evaluate(run_id: str) -> RunDetail:
     """Run the gate once per run (cached); captures cards + the event trail."""
     ledger = EventLedger()
     artifacts = load_run(_run_dir(run_id))
-    cards = run_gate(artifacts, ledger=ledger)
+    cards = run_gate(artifacts, runbook=_active_runbook(run_id), ledger=ledger)
     counts = Counter(c.verdict.value for c in cards)
     n_attention = sum(1 for c in cards if c.is_actionable)
     # Honest lifecycle state from the authoritative event trail (ADR-0002): a run counts as

@@ -1,0 +1,2 @@
+sample_id,gene,hgvs,clinvar_significance,clinvar_review_status,clinvar_accession,clinvar_version
+HG002,BRCA1,NM_007294.4:c.68_69del,Pathogenic,criteria_provided_multiple_submitters,VCV000017661,2026-01

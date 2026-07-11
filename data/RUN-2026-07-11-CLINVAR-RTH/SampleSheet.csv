@@ -1,0 +1,15 @@
+[Header]
+FileFormatVersion,2
+RunName,RUN-2026-07-11-CLINVAR-RTH
+InstrumentPlatform,NovaSeq X
+Date,2026-07-11
+
+[Reads]
+Read1Cycles,151
+Read2Cycles,151
+Index1Cycles,8
+Index2Cycles,8
+
+[BCLConvert_Data]
+Sample_ID,index,index2
+HG002,AGGCGAAG,CTGATCGT
