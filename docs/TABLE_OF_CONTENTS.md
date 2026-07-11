@@ -48,6 +48,7 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 | [design/frontend/](design/frontend/) | ✅ | Frontend prototype (`PipeGuard.html`) + design README |
 | [design/ui-conventions.md](design/ui-conventions.md) | ✅ | Durable cross-cutting UI/product convention registry (`UIC-N` ids) — the single place a maintainer rule is recorded once and implemented against |
 | [design/builder-cards/](design/builder-cards/) | ✅ | Pipeline-Builder card-design convention (`README.md`) + 7 per-tool port specs, grounded in real tool I/O — a **design target** the shipped `BuilderCanvas` implements a subset of (see its §5) |
+| [design/nextflow-codegen.md](design/nextflow-codegen.md) | ✅ | Card-graph → Nextflow (DSL2) compiler (`src/pipeguard/nextflow/`): the tool catalog, wiring rules, the reference-index staging, the `pipelines/germline/` drift-guarded reference pipeline, the `POST /api/pipelines/compile` + Builder "Export to Nextflow" UI, and the now-Nextflow-first intake driver — realizes [ADR-0003](adr/ADR-0003-deployment-agnostic-ports.md) |
 
 > **Consolidated, not split.** The system-view slices once planned as separate docs
 > (system-context, components, data-flow, interfaces, storage, workflows, deployment,

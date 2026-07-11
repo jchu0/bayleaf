@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
 
 ## Overview
 
@@ -576,10 +576,18 @@ had reserved or listed as *not-yet-built*.
    at the core:** `src/pipeguard/` never runs a tool — only the API layer triggers the external
    driver, mirroring the Pipeline Builder's hand-off concept (REQ-F-045) but now wired end to
    end. Reframes the earlier "Submit never runs anything" framing to "Submit hands off to an
-   execution boundary." *Trace:* [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+   execution boundary." **Update (2026-07-11, T-123):** the triggered driver is now
+   **Nextflow-first** — it no longer calls fastp/bwa-mem2/samtools/… itself; it runs `nextflow run
+   pipelines/germline/main.nf` (the committed reference pipeline — see REQ-F-085) via
+   `subprocess.run` and parses the published QC outputs. This endpoint's own contract (job
+   registry, RBAC, polling, HG002-fixture scope) is unchanged — only what the subprocess does
+   internally changed. Verified live on real GIAB HG002 reads (`completed=7 failed=0`, matching
+   the pre-Nextflow QC numbers). *Trace:* [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
    [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md),
+   [design/nextflow-codegen.md](../design/nextflow-codegen.md),
    [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md) (commit
-   `e77c2e6`), [tasks T-057](../planning/tasks.md).
+   `e77c2e6`), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md),
+   [tasks T-057, T-123](../planning/tasks.md).
 9. **REQ-F-068 — Honest three-gate decision-card readout.** The QC-readout hero always shows
    all **three** gates (preflight → qc → variant), never silently dropping one. `GET
    /api/runbook`'s `RunbookThreshold` carries `pipeline_gate: Gate` (from the metric registry),
@@ -1064,6 +1072,30 @@ had reserved or listed as *not-yet-built*.
     [data/provenance.md](../data/provenance.md), [quality/evaluation.md](../quality/evaluation.md)
     EVAL-051, [tasks T-120](../planning/tasks.md),
     [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md).
+26. **REQ-F-085 — Pipeline codegen: compile a card graph → a runnable Nextflow pipeline
+    (ADR-0003, realized).** A pure-text compiler (`src/pipeguard/nextflow/`) turns a Pipeline-
+    Builder graph (`{nodes, edges}`, the Builder's exact save shape) into a runnable nf-core-style
+    Nextflow DSL2 bundle (`main.nf`+`modules/*.nf`+`nextflow.config`+`README.md`) — it never
+    invokes `nextflow` or any tool (compose ≠ execute, ADR-0001/0003). A curated `catalog.py`
+    backs the 7 germline-chain tools with a real `script:` AND a `stub:` (bioconda +
+    biocontainer packaging, typed ports keyed to the Builder's own artifact-kind vocabulary); an
+    uncatalogued tool still compiles — wired for real — but as a labelled placeholder whose
+    command fails loudly, **never a fabricated command**. The seeded germline chain compiles to
+    the **committed reference pipeline** `pipelines/germline/`, pinned byte-for-byte by a drift
+    test so "what the Builder emits" and "the canonical repo pipeline" are the same artifact.
+    Exposed via **`POST /api/pipelines/compile`** (`api/routers/nextflow.py`, stateless, off-gate;
+    `format=json` preview or `format=zip` download; a cycle/bad/empty graph → 422 with the
+    compiler's reason) and the Builder's **"Export to Nextflow"** toolbar action
+    (`NextflowExportModal`) — a capability addition alongside the pre-existing `run_layout.yaml`
+    `Emit` (REQ-F-045): where Emit names which files feed which stage, this produces an
+    actually-executable pipeline for the same graph. 14 new tests (`test_nextflow_compile.py`, 10,
+    incl. a machine-gated live `nextflow run -stub-run` check that skips absent `nextflow`, never
+    fails; `test_nextflow_api.py`, 4). *Trace:*
+    [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+    [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Realized 2026-07-11),
+    [design/nextflow-codegen.md](../design/nextflow-codegen.md), REQ-F-045, REQ-F-067,
+    [tasks T-123](../planning/tasks.md),
+    [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md).
 
 ## Notes / deferred
 
@@ -1094,6 +1126,14 @@ had reserved or listed as *not-yet-built*.
 8. **UIC-16's larger four-side-typed-port Builder cards remain unbuilt** (REQ-F-083i) — only the
    full-canvas dot grid and the current-tools palette expander shipped; ports stay left/right-only
    on the existing fixed-size cards, tracked in [builder-cards/](../design/builder-cards/) §5.
+9. **The Nextflow compiler's catalog (REQ-F-085) is curated, not general** — only the 7
+   germline-chain tools have a real `script:`; any other tool (incl. a future node-authoring-agent
+   proposal) compiles to a labelled, loudly-failing placeholder until a `ProcessSpec` is added for
+   it. **Local execution only** — the generated `nextflow.config` declares `conda`/`docker`/
+   `singularity`/`stub` profiles, no Slurm/AWS-Batch/HealthOmics executor config; that remains the
+   open half of [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)'s compute-portability
+   decision. Container images are named per the nf-core biocontainer convention but only the
+   `conda` profile has been live-verified.
 
 ---
 

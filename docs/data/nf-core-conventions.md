@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [schemas.md](schemas.md) (the records we derive), [metric_registry.md](metric_registry.md) (the registry §4 argues for), [qc_metrics.md](qc_metrics.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) |
+| **Related** | [schemas.md](schemas.md) (the records we derive), [metric_registry.md](metric_registry.md) (the registry §4 argues for), [qc_metrics.md](qc_metrics.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) (this vocabulary now feeds a real DSL2 generator, not only this doc's mapping notes) |
 
 ## Framing
 
@@ -13,6 +13,13 @@ nf-core schemas validate a pipeline's **inputs** ("will it run?"); a decision-ga
 validates a pipeline's **outputs** ("should we trust the result?"). We **adopt the
 vocabulary** for interoperability and **diverge on semantics** (thresholds, verdicts,
 integrity). Reference pipeline: nf-core/sarek (germline DNA panel).
+
+**Update (2026-07-11):** this doc's package/module conventions (bioconda + biocontainer dual
+packaging, `process`/`conda`/`container` directives, `emit:` channel names) are no longer only
+notes on someone else's convention — `src/pipeguard/nextflow/catalog.py` follows them directly to
+generate a REAL, runnable DSL2 pipeline from a Builder card graph, and
+`scripts/run_giab_pipeline.py` now runs that generated pipeline via `nextflow run` for the intake
+driver. See [design/nextflow-codegen.md](../design/nextflow-codegen.md).
 
 ## 1. Sample sheet → `Sample`
 

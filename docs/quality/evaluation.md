@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md) |
+| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md) |
 
 ## Overview
 
@@ -19,16 +19,22 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **413 tests across 27 files** — 409 pass and 4 skip (the Postgres
-live-integration checks in `test_persistence_postgres_live`, which need a reachable Postgres
-and are off by default). By collected size: `test_api` (42), `test_notify` (36),
-`test_synthetic` (33), `test_fetch_giab` (32), `test_gate` (29), `test_node_author` (19, the
-advisory node-authoring agent, T-046), `test_persistence` (17), `test_metrics` (17),
-`test_archivist` (17, the advisory archivist/librarian agent),
-`test_triage` (16), `test_pipeline_repair` (16, the advisory pipeline-repair agent),
-`test_settings` (13, config-override authoring), `test_review_queue` (13, the ticket domain),
-`test_card_readout` (13, the QC-readout projection incl. the gate-dependency `blocked_by`
-case, T-087), `test_pipeline_lifecycle` (11,
+The offline suite is **427 tests across 29 files** — collection verified via
+`uv run pytest --collect-only -q` (427 collected) + `git ls-files 'tests/*.py' | wc -l` (29).
+Pass/skip count depends on whether `nextflow` is on `PATH` (the new
+`test_generated_germline_stub_runs` machine-gated live check, EVAL-006, joins the existing
+Postgres live-integration pattern): **423 pass / 4 skip** when `nextflow` is present (verified by
+the maintainer on a local `hackathon` conda env with Nextflow 26.04 + a JRE), **422 pass / 5
+skip** when it is not (this repo's default sandboxed dev/CI environment — verified here via
+`uv run pytest -q`). Either way every non-live test runs unconditionally. By collected size:
+`test_api` (42), `test_notify` (36), `test_synthetic` (33), `test_fetch_giab` (32), `test_gate`
+(29), `test_node_author` (19, the advisory node-authoring agent, T-046), `test_persistence` (17),
+`test_metrics` (17), `test_archivist` (17, the advisory archivist/librarian agent), `test_triage`
+(16), `test_pipeline_repair` (16, the advisory pipeline-repair agent), `test_nextflow_compile`
+(10, the card-graph→Nextflow compiler, incl. the drift guard + the one machine-gated live
+`-stub-run` check, EVAL-006, new 2026-07-11), `test_settings` (13, config-override authoring),
+`test_review_queue` (13, the ticket domain), `test_card_readout` (13, the QC-readout projection
+incl. the gate-dependency `blocked_by` case, T-087), `test_pipeline_lifecycle` (11,
 submit/approve/dry-run/diff), `test_route_to_human` (10, the off-by-default route-to-human gate
 rule VAR-RTH-001, ADR-0018 D2 — now incl. one committed-fixture, end-to-end-via-the-API case,
 2026-07-11), `test_auth` (10, the RBAC dev shim),
@@ -39,15 +45,15 @@ rule VAR-RTH-001, ADR-0018 D2 — now incl. one committed-fixture, end-to-end-vi
 EXEC-001), `test_artifacts` (7), `test_share_store` (6, the pluggable jsonl/sqlite/postgres
 share-egress-audit sink, ADR-0016/ADR-0018 D3, new 2026-07-11),
 `test_share_egress` (5, the de-identified share/report egress endpoint, ADR-0018 D3,
-2026-07-11), `test_metrics_mapping` (5), `test_persistence_postgres_live` (4, one added
+2026-07-11), `test_metrics_mapping` (5),
+`test_nextflow_api` (4, the `POST /api/pipelines/compile` endpoint, new 2026-07-11),
+`test_persistence_postgres_live` (4, one added
 2026-07-11 for the share store's live-Postgres round-trip) — all
 runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `test_api` and
 `test_triage` suites need the api/claude extras to import FastAPI, while `test_execution_trace`,
-`test_route_to_human`, `test_safe_harbor`, `test_share_egress`, `test_share_store`, and the
-agent suites run pure-offline over the core + pydantic, `test_share_egress` via a `TestClient`
-with the share store redirected to a tmp path). Census verified via
-`uv run pytest --collect-only -q` (413 collected) + `uv run pytest -q` (409 passed, 4 skipped) +
-`git ls-files 'tests/*.py' | wc -l` (27).
+`test_route_to_human`, `test_safe_harbor`, `test_share_egress`, `test_share_store`,
+`test_nextflow_compile`, and the agent suites run pure-offline over the core + pydantic,
+`test_share_egress`/`test_nextflow_api` via a `TestClient`).
 
 ## What "good" means (principles)
 
@@ -169,6 +175,43 @@ registered metric.
 **Known failure modes.** A new `QCMetrics` field added without a registry entry would be
 silently dropped — surfaced the moment a threshold keys on it
 (`test_runbook_thresholds_key_on_registered_metrics`).
+
+### EVAL-006 — Nextflow codegen: deterministic wiring, a drift-pinned reference pipeline, and an honest placeholder for the uncatalogued
+
+| Field | Value |
+|---|---|
+| **Target** | `pipeguard.nextflow.compile_graph` (card graph → DSL2 Nextflow bundle) + `POST /api/pipelines/compile` |
+| **Type** | Deterministic (+ one machine-gated live check) |
+| **Automated?** | Yes — `test_nextflow_compile.py` (9 offline + 1 machine-gated) and `test_nextflow_api.py` (4) |
+
+**Definition of good.** The compiler is a pure function: the same graph always yields the same
+bundle (no fabricated command, no silently-dropped edge). Concretely: every typed edge in the
+graph appears as the matching `UPSTREAM.out.<kind>` channel argument; an unwired input becomes
+the correct pipeline-source channel (reads, or a reference `params.*`); a reference FASTA stages
+its sidecar-index glob as a tuple; a cycle or an edge to a missing node/port raises
+`CompileError` rather than compiling something wrong; a tool outside the curated catalog still
+wires correctly but renders as a labelled placeholder process that fails loudly on a real run
+(never invents a command); and the seeded germline chain's compiled output is **byte-for-byte
+identical** to the committed `pipelines/germline/` reference pipeline (the drift guard) — so
+"what the Builder would export" and "the pipeline the demo actually runs" can never silently
+diverge. `POST /api/pipelines/compile` mirrors the same guarantees over HTTP plus a 422 with the
+compiler's own reason on a cycle/bad/empty graph.
+
+**Method.** Unit-test each wiring rule directly against small hand-built graphs (cycle, bad edge,
+uncatalogued tool, repeated tool, reference-as-source-node); assert-equal the full committed
+`pipelines/germline/` tree against a fresh `compile_graph(germline_graph())` call; hit the API
+endpoint via `TestClient` for the JSON/zip/422 paths. A **machine-gated, skip-safe** test (mirrors
+the Postgres live-integration pattern) additionally runs the generated germline pipeline under
+real `nextflow run -stub-run` when `nextflow` is on `PATH` — every process' `stub:` touches its
+declared outputs, so a pass means the whole DAG's channel wiring is genuinely valid Nextflow, not
+just internally self-consistent Python. Absent `nextflow` → skip, never fail.
+
+**Known failure modes.** A hand-edit to `pipelines/germline/` without re-running
+`scripts/generate_reference_pipeline.py` is caught immediately by the drift test. The catalog
+itself is intentionally narrow (7 germline-chain tools) — this is a documented scope boundary
+(§Limitations, [design/nextflow-codegen.md](../design/nextflow-codegen.md)), not a gap this case
+claims to cover: "any Builder card compiles to something runnable" is explicitly **not** the
+claim.
 
 ## Failure-mode cases (synthetic)
 

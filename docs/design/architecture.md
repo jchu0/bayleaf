@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [design/ui-conventions.md](ui-conventions.md), [design/builder-cards/](builder-cards/), [design/node-authoring-agent.md](node-authoring-agent.md), [design/variant-interpretation.md](variant-interpretation.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [design/ui-conventions.md](ui-conventions.md), [design/builder-cards/](builder-cards/), [design/node-authoring-agent.md](node-authoring-agent.md), [design/variant-interpretation.md](variant-interpretation.md), [design/nextflow-codegen.md](nextflow-codegen.md) |
 
 ## Overview
 
@@ -62,6 +62,11 @@ Every finding and verdict is labelled with the gate it came from:
    - `runbook` — operator-configurable QC thresholds (keyed on `our_key`, canonical decimals) + gate policy.
    - `synthesis` — verdict aggregation (deterministic) + narration (stub or Claude).
    - `identifiers` — UUIDv7 ids, content hashing, UTC time.
+   - `nextflow` (2026-07-11, T-123) — a pure-text **card-graph → Nextflow (DSL2) compiler**
+     (`catalog.py`/`compiler.py`/`germline.py`): compiles a Builder graph into a runnable
+     `main.nf`+`modules/*.nf`+`nextflow.config` bundle, never invoking a tool. Realizes
+     [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)'s "Nextflow carries compute
+     portability" decision; see [design/nextflow-codegen.md](nextflow-codegen.md).
 2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only
    event trail into an `EventLedger` (in-memory + JSONL), anchored to one `AnalysisRun`.
    The event log is authoritative; the relational DB is a rebuildable projection via the
@@ -694,6 +699,26 @@ Every finding and verdict is labelled with the gate it came from:
      `get_run`/`share_run` now call it. Verified against a live `postgres:16`; 409 offline passed /
      4 skipped. Multi-worker concurrency (a file lock / connection pool) stays a documented seam,
      not built. Grounded in [journal 2026-07-11](../journal/2026-07-11-share-store-persistence.md).
+   - **Nextflow becomes executable (2026-07-11, T-123, commits `10f1816`→`e4ba174`) — realizes
+     [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)'s Nextflow decision, closes the
+     "not Nextflow" gap the T-057 boundary above carried.** `POST /api/pipelines/compile`
+     (`api/routers/nextflow.py`, stateless/off-gate) exposes the new `pipeguard.nextflow` compiler
+     (item 1) over the wire — JSON preview or a `.zip` — and a Builder "Nextflow" toolbar button
+     (`NextflowExportModal`) compiles the live canvas graph, previews `main.nf`, and offers
+     Copy/Download; a cycle/bad/empty graph 422s with the compiler's reason. Separately, **the
+     `scripts/run_giab_pipeline.py` intake driver is now Nextflow-first**: it no longer calls
+     fastp/bwa-mem2/samtools/… directly — it runs `nextflow run pipelines/germline/main.nf` (the
+     committed reference pipeline, exactly what the compiler emits for the seeded graph) via
+     `subprocess.run`, then parses the published QC outputs into the frozen-five run dir; `POST
+     /api/runs`'s API-boundary behavior (T-057, above) is unchanged, only what the triggered
+     subprocess does internally changed. Verified live on real GIAB HG002 reads (`completed=7
+     failed=0`, Q30 88.2%, 54.2× coverage, 553 variants, gate → HOLD on the honest
+     cluster_pf-missing signal — matching the pre-Nextflow numbers, confirming the re-plumbing
+     changed *how* the tools run, not *what* they compute). Full design, wiring rules, the
+     drift-guarded reference pipeline, and the honesty framing (a curated catalog; an
+     uncatalogued tool compiles to a labelled placeholder, never a fabricated command) in
+     [design/nextflow-codegen.md](nextflow-codegen.md). Grounded in
+     [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md).
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
@@ -769,7 +794,9 @@ config override, notably, records intent without mutating the live runbook.
 | Settings-override store (off-gate authoring) | `PIPEGUARD_SETTINGS_STORE=jsonl\|sqlite\|postgres` (`api/settings_store.py`); config-threshold override ledger — degrade-to-JSONL, DSN never logged. Records intent; **never mutates the live runbook** (ADR-0001/0016) | JSONL |
 | Review-queue store (off-gate product) | `PIPEGUARD_REVIEW_STORE=jsonl\|sqlite\|postgres` (`api/review_store.py`); ticket lifecycle over already-decided samples — degrade-to-JSONL, DSN never logged (ADR-0010/0016) | JSONL |
 | Auth / identity (off-gate) | `api/auth.py` `current_actor()` header-shim (`X-PipeGuard-Actor`/`-Role`) → swap for a verified IdP (OIDC / signed JWT) returning the same `Actor`; one chokepoint, downstream `require_role(...)` unchanged (ADR-0010/0017) | permissive dev shim (`id=dev`, `role=approver`) |
-| Deployment | ports & adapters; Nextflow compute portability (ADR-0003) | local |
+| Pipeline codegen (compose, never execute) | `pipeguard.nextflow.compile_graph()` — a card graph → Nextflow bundle; `POST /api/pipelines/compile` (JSON/`.zip`); curated catalog, uncatalogued tool → a labelled placeholder ([design/nextflow-codegen.md](nextflow-codegen.md), T-123) | pure text codegen, no execution |
+| Intake execution driver | `scripts/run_giab_pipeline.py`, triggered by `POST /api/runs`; **Nextflow-first as of 2026-07-11** — runs `pipelines/germline/main.nf` via `nextflow run` (was: called fastp/bwa-mem2/samtools/… directly) | local `-profile conda`, HG002-fixture-scoped |
+| Deployment | ports & adapters; Nextflow now **executable** for local compute (codegen + the intake driver, above); Slurm/AWS-Batch/HealthOmics executor config stays wishlist (ADR-0003) | local |
 
 Unlike the AI/notify seams (off by default, adapter-swapped at the edge), the **metric registry
 is on the critical path** — its "flex" is that new tool keys or unit changes are absorbed by the
@@ -778,8 +805,13 @@ versioned YAML/mapping, not by editing `rules`, keeping verdicts byte-identical 
 ## Deployment
 
 Local today: Streamlit (offline) + FastAPI (`uvicorn`) + React (Vite). The ports-&-adapters
-boundary and Nextflow (compute) carry portability to Slurm / AWS later (ADR-0003, wishlist) —
-though **storage** portability is already a realized seam, not only a future note: the **S3
+boundary carries portability; **Nextflow (compute) is now a realized seam for local execution, not
+only a future note** — `pipeguard.nextflow` compiles a card graph into a runnable pipeline and the
+intake driver runs it for real via `nextflow run -profile conda`
+([design/nextflow-codegen.md](nextflow-codegen.md), ADR-0003). Slurm / AWS Batch / HealthOmics
+**executor config** for that same generated pipeline remains wishlist — the compute-portability
+gap that's left is "point Nextflow at a cluster," not "get Nextflow running at all." Similarly,
+**storage** portability is already a realized seam, not only a future note: the **S3
 artifact-store adapter is built + tested** (`src/pipeguard/artifacts/`, `PIPEGUARD_ARTIFACT_STORE=s3`,
 off by default; lazy `boto3`, degrade-to-local; `tests/test_artifacts_s3.py`), so pointing
 staging at S3 is an adapter flip.

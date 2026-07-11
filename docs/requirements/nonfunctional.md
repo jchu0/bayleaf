@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [design/ui-conventions.md](../design/ui-conventions.md) |
+| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
 
 ## Overview
 
@@ -172,8 +172,16 @@ links to [evaluation.md](../quality/evaluation.md).
 
 1. **REQ-NF-060 — Deployment-agnostic seams.** Persistence (Repository port),
    synthesis, and triage are swappable; SQLite→Postgres and local→Slurm/cloud paths
-   are open via ports & adapters and Nextflow for compute. *Trace:* [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md),
-   [architecture.md](../design/architecture.md) §Deployment. Cloud/IaC is *wishlist*.
+   are open via ports & adapters and Nextflow for compute. **Update (2026-07-11):** the Nextflow
+   half of this is no longer only "open via" — it is **built and live-verified**: a card-graph →
+   Nextflow compiler (`src/pipeguard/nextflow/`) plus a Nextflow-first intake driver
+   (`scripts/run_giab_pipeline.py`) run the real germline chain locally via `nextflow run
+   -profile conda` end to end. What remains open is narrower: Slurm/AWS-Batch/HealthOmics
+   **executor config** for that same generated pipeline — not "does Nextflow run at all." *Trace:*
+   [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Realized 2026-07-11),
+   [design/nextflow-codegen.md](../design/nextflow-codegen.md),
+   [architecture.md](../design/architecture.md) §Deployment. Cloud/IaC executor config is still
+   *wishlist*.
 
 ---
 
