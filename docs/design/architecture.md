@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md) |
 
 ## Overview
 
@@ -382,6 +382,48 @@ Every finding and verdict is labelled with the gate it came from:
      organization layer over data the operator can already see, and never leaves the browser.
      **Honest limitation:** per-browser `localStorage`, not synced across devices — the same class
      of limitation as `PrefsContext` (T-091) and the signatures clear/restore filter (T-100).
+   - **Frontend fixes — Wave 8 (2026-07-10, commits `1bc0072`→`109557e`, T-110–T-115,
+     [journal](../journal/2026-07-10-frontend-wave8.md)), a maintainer UI-feedback pass —
+     frontend-only, no verdict/gate/ADR-0001 boundary changed** (`git diff --stat 04adeac
+     109557e -- src/ api/ tests/` empty). **(1) Tabs + nav reorg + Review-queue selection**
+     (T-110, `1bc0072`, G4/G5/RQ2/RQ3): a new canonical underline `components/Tabs.tsx` replaces
+     the rounded-full `FacetChip` pills (**`FacetChip.tsx` deleted**) as the one "which view am I
+     in" idiom across Runs/Review-queue/Admin/RunDetail's status/kind/verdict selectors;
+     `SegmentedControl` stays reserved for compact toggle *settings* (window/theme/density) — a
+     documented, non-overlapping split. The left nav reorders Operate to Notification (Inbox) →
+     Action (Review queue) → Steps (Submit→Runs→Intake→Decision cards). Review queue gains a
+     page-scoped select-all/clear-all (RQ2) and a `border-l-2` accent rail per run group with a
+     fixed checkbox gutter (RQ3), replacing the earlier floating checkboxes. **(2) Submit
+     bulk-edit** (T-111, `24fe2e3`, S1-S3): the sample-type cycle-button becomes a real `<select>`
+     (S1); per-row trash icons become checkbox multi-select + a confirmed "Remove N" (S2,
+     draft-only); "Add sample" becomes a bounded (1–500) bulk-add-N (S3). **(3) Intake preflight
+     metadata** (T-112, `1052e15`, IG1): the yield bar caps at `max-w-[340px]`; each expanded
+     admission row gains a lazy-loaded (open-rows-only, never N+1 on a 100-sample run)
+     Sample-type/Library-prep/Origin grid from the card header plus run-level Platform/Run-date/
+     Verdict, an honest "not captured" for a null field. **(4) Inbox refinements** (T-113,
+     `2865dac`, IB1-3,5-8): mark-all-unread; notes gated read-only until Edit; created/edited
+     timestamps; delete-in-edit-mode + a confirmed mass-delete; a folder system
+     (add/delete/move/filter, never orphaning a filed note); Google/Outlook calendar connectors
+     as labelled phase-2 seams. **IB4 (per-reminder external notification + cadence) stays
+     explicitly DEFERRED.** **(5) Provenance rewrite** (T-114, `0e64fad`, PV1): `Provenance.tsx`
+     becomes a thin container over a version-pins band + a `Tabs` switch of **Lineage** (the
+     original stage DAG, preserved as default), **Event trail** (new — a filterable/paginated
+     timeline of the REAL `RunDetail.events` append-only ledger the old screen discarded, with
+     finding/verdict trace-back), and **Artifacts** (new — a grouped, filterable artifact index).
+     Needed **zero backend change** — `RunDetail.events` already shipped to the client. Also
+     lands the shared `components/Pager.tsx`, deduplicating the "Showing X–Y of Z" idiom out of
+     Runs/Monitoring/Admin/AgentTriage, and fixes a stale-error bug on run switching. **(6)
+     Pipeline-Builder on-canvas editing** (T-115, `109557e`, PB2, P1–P7): node selection +
+     inspector + inline rename, wire deletion, undo/redo (`hooks/useTopologyHistory.ts`, a
+     bounded 50-entry ring — **topology only, `locEdits`/`refLoc` NOT yet covered**, per its own
+     code comment) + keyboard shortcuts, marquee multi-select + `SelectionActionBar.tsx`, node/
+     edge/canvas context menus (`BuilderContextMenu.tsx`), live alignment guides + snap, and
+     drag-to-connect. Anti-cascade: any delete severing ≥1 edge, or any multi-node delete, routes
+     through `useConfirm` (stricter than the design spec's "≥2 edges" threshold, which was not
+     shipped); every delete emits an undo-hint toast. Fixed a temporal-dead-zone crash
+     (`BuilderShared`'s `ARTIFACT_KINDS` read `GIAB_LOC` before its declaration). A new
+     `components/Truncate.tsx` full-text-on-hover primitive ("G2") **shipped with no call sites
+     yet** anywhere in `frontend/src` — an open item, not silently dropped.
    **Honest, labelled frontend deferrals (no fabrication):** the Monitoring **Median-review KPI**
    (no backend field yet — the signature-level `first_seen`/`last_seen`/`trend`/`affected_run_ids`
    fields below ARE shipped); Submit now

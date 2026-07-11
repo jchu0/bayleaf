@@ -431,6 +431,60 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    the bell and the workspace can never drift apart. Never sets or reads a verdict/confidence; no
    new backend endpoint (`api.listTickets` already existed). Verified live light+dark, tsc+oxlint
    clean, no console errors.
+   **Wave 8 (2026-07-10, commits `1bc0072`→`109557e`, T-110–T-115,
+   [journal](docs/journal/2026-07-10-frontend-wave8.md)), a maintainer UI-feedback pass —
+   frontend-only, no verdict/gate/ADR-0001 boundary changed** (`git diff --stat 04adeac 109557e
+   -- src/ api/ tests/` empty). **Tabs + nav reorg + Review-queue selection** (T-110, `1bc0072`,
+   G4/G5/RQ2/RQ3): a new canonical underline `components/Tabs.tsx` ("which view am I in") replaces
+   the rounded-full `FacetChip` pills (`FacetChip.tsx` **deleted**) in Runs/Review-queue/Admin/
+   RunDetail's view selectors; `SegmentedControl` stays for compact toggle *settings*
+   (7d/14d/30d, theme, density) — the two are now a deliberate, documented split. The left nav
+   reorders Operate to Notification→Action→Steps (Inbox moves to the top, above Review queue,
+   above the Submit→Runs→Intake→Decision-cards process flow). Review queue gains a page-scoped
+   global select-all/clear-all (RQ2, never silently selects an off-page ticket) and each run
+   group is now bound by a `border-l-2` rail (accent-lit when the group has a selection) with the
+   subheader select-all and every ticket checkbox aligned in one fixed gutter (RQ3, was a floating
+   afterthought). **Submit bulk-edit** (T-111, `24fe2e3`, S1-S3): the sample-type cycle-button
+   becomes a real `<select>` (S1); per-row trash icons become checkbox multi-select + an
+   indeterminate header select-all + a confirmed "Remove N" (S2, draft-only, nothing deleted
+   downstream); "Add sample" becomes a bounded (1–500) bulk-add-N (S3) so a 100-sample plate isn't
+   100 clicks. **Intake preflight metadata** (T-112, `1052e15`, IG1): the yield bar shrinks to
+   `max-w-[340px]` (was full-width) and each expanded admission row gains a lazy-loaded (open-rows
+   -only, scale-aware — never N+1 on a 100-sample run) Sample-type/Library-prep/Origin grid from
+   the card header, plus run-level Platform/Run-date/Verdict; a null field honestly reads "not
+   captured," never fabricated. **Inbox refinements** (T-113, `2865dac`, IB1-3,5-8): mark-all-
+   unread; a calendar composer that drops the redundant date suffix; notes gated read-only until
+   Edit (was a live always-editable textarea); created/edited timestamps (`InboxContext` tracks
+   `updatedAt` on an explicit save); delete moved inside edit mode + a confirmed checkbox
+   mass-delete; a folder system (add/delete/move/filter, renaming/deleting re-points filed items
+   so nothing orphans); Google/Outlook calendar connectors as labelled phase-2 seams (toast, no
+   real OAuth). **IB4 (per-reminder Slack/Discord/Teams/email notification + cadence) stays
+   explicitly DEFERRED** — the commit body's own words, "the largest, next." **Provenance rewrite**
+   (T-114, `0e64fad`, PV1): `Provenance.tsx` becomes a thin container over a persistent version-
+   pins band + a `Tabs` switch of three views — **Lineage** (the original stage DAG, preserved
+   verbatim as default), **Event trail** (new centerpiece — a filterable/paginated timeline of the
+   REAL `RunDetail.events` append-only ledger the old screen discarded; expanding a row traces
+   `finding.emitted`→its cited evidence or `verdict.decided`→the decision card; the five event
+   types `run_gate` actually emits are honored, anything else — e.g. `notification.emitted` —
+   renders generically only if present), and **Artifacts** (new — a grouped-by-name index,
+   filterable by stage/origin/role). Needed **zero backend change**: `RunDetail.events` already
+   shipped to the client. Also lands the shared `components/Pager.tsx` (the "Showing X–Y of Z"
+   idiom, extracted from Runs/Monitoring/Admin/AgentTriage duplication) and fixes a stale-error
+   bug (the fetch effect now clears `error` on a runId switch). **Pipeline-Builder on-canvas
+   editing** (T-115, `109557e`, PB2, P1–P7): node selection (ring + `UserNodeInspector` +
+   double-click inline rename), wire deletion (hit-path select + midpoint ×), undo/redo
+   (`hooks/useTopologyHistory.ts`, a bounded 50-entry ring — **topology only, `locEdits`/`refLoc`
+   are NOT yet covered**, its own comment says so) + toolbar/keyboard (⌘Z/⌘⇧Z/⌘A/⌘D/Delete/Esc/
+   arrows/c/f), shift/⌘-click + marquee multi-select + `SelectionActionBar.tsx`
+   (align/distribute/duplicate/delete), `BuilderContextMenu.tsx` (node/edge/canvas), live
+   alignment guides + snap, and drag-to-connect from output ports. Anti-cascade: any delete
+   severing ≥1 edge, or any multi-node delete, routes through `useConfirm` (danger tone, names the
+   wire count — **stricter** than the spec's "≥2 edges" threshold, which was not shipped); every
+   delete emits a "⌘Z to undo" toast. Fixed a temporal-dead-zone crash (`BuilderShared`'s
+   `ARTIFACT_KINDS` read `GIAB_LOC` before its declaration — `tsc` didn't flag it, but it blanked
+   the app at runtime). `components/Truncate.tsx` (a full-text-on-hover primitive, "G2") was added
+   but has **no call sites yet anywhere in `frontend/src`** — shipped, not yet applied; an open
+   item, not silently dropped.
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
 

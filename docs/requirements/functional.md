@@ -197,31 +197,38 @@ node-authoring agent).
    pipeline-repair (REQ-F-023) and archivist (REQ-F-024) calls, each invoking an advisory agent
    **without re-entering the verdict path** — all read-only over already-decided artifacts.
    *Trace:* [architecture.md](../design/architecture.md), [agents.md](../design/agents.md), ADR-0010.
-3. **REQ-F-042 — Operator screens.** The UI presents **10 operator screens**, rebuilt to the
-   refreshed design prototype (`docs/design/frontend/`, 2026-07-09) in a **three-group nav** —
-   **Operate:** submit samplesheet (register a run's SampleSheet/FASTQ and hand off to the
-   `POST /api/runs` execution boundary — REQ-F-067; compose≠execute still holds at the core),
-   runs overview (per-verdict counts + needs-attention + a client-side scale kit: search/facet/
-   sort/date-range/paginate; the top-bar run switcher shares the Runs list's status-derived dot
-   via `RUN_STATUS_META`, fixing a bug where the switcher's dot read `n_attention` instead of the
-   real lifecycle `status`), intake/preflight (run-level QC rollup + per-sample admission with
-   manual override), decision cards (verdict + per-gate strip + a QC-readout hero from
-   REQ-F-064/REQ-F-068 + cited evidence), review queue (tickets w/ role-gated actions, REQ-F-063);
-   **Analyze:** provenance (pipeline **compute-DAG** with a per-stage data-I/O drill-in), agent
-   triage (advisory note + citations + offline/live), monitoring (windowed aggregate,
-   REQ-F-047); **Configure:** pipeline builder (REQ-F-045) and settings (runbook thresholds,
-   labelled illustrative). A separate, **approver-gated Admin** governance screen sits outside
-   this operator nav (REQ-F-066) — off the deterministic gate, it is not counted among the 10.
-   A shared `RoleContext` (reviewer|approver) drives every RBAC-gated control, and now exposes a
+3. **REQ-F-042 — Operator screens.** The UI presents **11 operator screens** (was 10 when this
+   entry was first written; Inbox — REQ-F-077 — is new as of Wave 7, T-108; this count corrects a
+   stale drift caught during the Wave 8 sweep), rebuilt to the refreshed design prototype
+   (`docs/design/frontend/`, 2026-07-09) in a **three-group nav** — **Operate** (reordered
+   2026-07-10, Wave 8, T-110, G4, to Notification→Action→Steps): Inbox (REQ-F-077), review queue
+   (tickets w/ role-gated actions, REQ-F-063), submit samplesheet (register a run's
+   SampleSheet/FASTQ and hand off to the `POST /api/runs` execution boundary — REQ-F-067;
+   compose≠execute still holds at the core), runs overview (per-verdict counts + needs-attention +
+   a client-side scale kit: search/facet/sort/date-range/paginate; the top-bar run switcher shares
+   the Runs list's status-derived dot via `RUN_STATUS_META`, fixing a bug where the switcher's dot
+   read `n_attention` instead of the real lifecycle `status`), intake/preflight (run-level QC
+   rollup + per-sample admission with manual override, plus lazy-loaded preflight metadata —
+   REQ-F-080), decision cards (verdict + per-gate strip + a QC-readout hero from
+   REQ-F-064/REQ-F-068 + cited evidence); **Analyze:** provenance (Lineage / Event trail /
+   Artifacts — REQ-F-078), agent triage (advisory note + citations + offline/live), monitoring
+   (windowed aggregate, REQ-F-047); **Configure:** pipeline builder (REQ-F-045, on-canvas editing
+   REQ-F-079) and settings (runbook thresholds, labelled illustrative). A separate Admin
+   governance screen sits outside this operator nav, gated on the login identity's **`isAdmin`**
+   (a frontend-only governance capability layered over the wire roles, **not** "any approver" —
+   REQ-F-066/REQ-F-069) — off the deterministic gate, it is not counted among the 11. A shared
+   `RoleContext` (reviewer|approver) drives every RBAC-gated control, and now exposes a
    full `setActor(actor)` (id+role together) consumed by Admin's "Act as" (REQ-F-066). Screens
    state their data boundary rather than fabricate instrument/compute artifacts the FASTQ-first
-   build doesn't capture; one now-honest gap is explicitly rendered empty rather than invented:
+   build doesn't capture; one honest gap is explicitly rendered empty rather than invented:
    Monitoring's Median-review KPI (no backend field — its signature-level `first_seen`/
-   `last_seen`/`trend`/`affected_run_ids` fields ARE shipped, REQ-F-047) and Provenance artifact
-   links (`RunArtifact` has no `url`). *Trace:* [demo_plan.md](../demo/demo_plan.md),
+   `last_seen`/`trend`/`affected_run_ids` fields ARE shipped, REQ-F-047). (Provenance artifact
+   links, once a similar honest gap, are now real — `RunArtifact.url` is populated, REQ-F-070.)
+   *Trace:* [demo_plan.md](../demo/demo_plan.md),
    [architecture.md](../design/architecture.md),
-   [tasks T-022/T-022b/T-037/T-044/T-062](../planning/tasks.md),
-   [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md).
+   [tasks T-022/T-022b/T-037/T-044/T-062/T-108/T-110](../planning/tasks.md),
+   [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md),
+   [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md).
 4. **REQ-F-044 — In-app feedback (off-gate telemetry).** The app captures product feedback
    via the app's first write endpoint (now one of several off-gate product-domain writes),
    `POST /api/feedback` — a per-decision agree/disagree signal
@@ -441,11 +448,18 @@ had reserved or listed as *not-yet-built*.
    backend gate), a ticket `status`
    ∈ **open | in_review | resolved**, and recorded review-action timestamps. It is **off-gate** —
    a ticket, suppression, or resolution never changes a verdict or a finding (ADR-0001,
-   consistent with REQ-F-004). *Trace:*
+   consistent with REQ-F-004). **Selection UX redesign (2026-07-10, Wave 8, T-110, commit
+   `1bc0072`, RQ2/RQ3) — frontend-only, no wire/write-path change:** the status filter is now the
+   canonical `Tabs` selector (G5, REQ-F-042); a page-scoped Select-all/Clear-all sits above the
+   list (RQ2 — scoped to the visible page, not the whole filtered set, so a batch-confirm count is
+   never surprising); each run group is bound by an accent-lit `border-l-2` rail with the
+   subheader select-all and every ticket checkbox aligned in one fixed gutter (RQ3, replacing an
+   earlier floating-checkbox layout). *Trace:*
    [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md),
    [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md),
    [ADR-0016](../adr/ADR-0016-postgres-port.md),
-   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), REQ-F-042.
+   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), REQ-F-042,
+   [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md).
 5. **REQ-F-064 — Decision-card QC readout (pure projection).** `api/card_readout.py` exposes
    `GET /api/runs/{id}/cards/{sid}/qc-readout` → an **API-layer projection** that joins the
    card's `metric_values` with the runbook `QCThreshold`s into a **gate-grouped
@@ -689,9 +703,16 @@ had reserved or listed as *not-yet-built*.
     **unchanged** — only the input to that boundary is now real. Verified live with a generated
     100-sample mixed DNA/RNA sheet + a 100-row metadata sheet (parse, auto-detect, subject/tissue
     merge, 4-page pager) and an honest 422 (shown with the backend's real message) for a
-    no-fixture sample. *Trace:* REQ-F-067, [architecture.md](../design/architecture.md) §4,
+    no-fixture sample. **Bulk-edit rework (2026-07-10, Wave 8, T-111, commit `24fe2e3`, S1-S3) —
+    frontend-only, no wire change:** the sample-type cell is now a real `<select>` (S1, was a
+    click-to-cycle button); per-row trash icons are replaced by checkbox multi-select + an
+    indeterminate header select-all + a confirmed, draft-only "Remove N" (S2); "Add sample"
+    becomes a bounded (1–500) bulk-add-N (S3), so a 100-sample plate isn't 100 clicks. *Trace:*
+    REQ-F-067, [architecture.md](../design/architecture.md) §4,
     [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md)
-    (commits `f8d9ea0`, `1bb79b8`), [tasks T-101](../planning/tasks.md).
+    (commits `f8d9ea0`, `1bb79b8`),
+    [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md) (commit `24fe2e3`),
+    [tasks T-101/T-111](../planning/tasks.md).
 16. **REQ-F-075 — Explicit-confirm gate on stakes-y off-gate writes.** A reusable
     `ConfirmDialog`/`useConfirm()` primitive (`frontend/src/components/ConfirmDialog.tsx`; a
     `ConfirmProvider` mounted at the app root, `App.tsx`) requires a named, explicit
@@ -767,12 +788,90 @@ had reserved or listed as *not-yet-built*.
     Monitoring clear/restore-signatures view filter). Verified live (light + dark): all four tabs,
     drag-and-drop updates every badge, a calendar reminder lands as "Due today," the bell dropdown
     triages inline, no console errors. `git diff --stat b4c3672 d832553 -- src/ api/ tests/` empty
-    (frontend-only). tsc + oxlint clean. *Trace:* REQ-F-042 (review-queue tickets), REQ-F-066
+    (frontend-only). tsc + oxlint clean. **Amended 2026-07-10 (Wave 8, T-113, commit `2865dac`,
+    IB1-3,5-8) — frontend-only, no wire change:** mark-all-unread (IB2); the calendar composer
+    drops its redundant date suffix (IB3); notes are gated read-only until Edit is clicked (IB5,
+    was a live always-editable textarea); each note shows created/edited timestamps
+    (`InboxContext` tracks `updatedAt` on an explicit save, IB6); delete moves inside edit mode +
+    a confirmed checkbox mass-delete (IB7); a folder system — add/delete/move/filter, deleting a
+    folder re-points its notes to Unfiled so nothing orphans (IB8); Google/Outlook calendar
+    connectors render as labelled phase-2 seams, no real OAuth (IB1). **IB4 (per-reminder
+    Slack/Discord/Teams/email notification + cadence) stays explicitly DEFERRED** — the
+    commit body's own words, "the largest, next"; no notification-channel code exists yet. *Trace:*
+    REQ-F-042 (review-queue tickets), REQ-F-066
     (Act-as), REQ-F-073 (the `localStorage`-preference precedent),
     [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) (the outbound-notify contrast),
     [architecture.md](../design/architecture.md), [design/frontend/README.md](../design/frontend/README.md)
     §5.11, [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md) (commit `d832553`),
-    [tasks T-108](../planning/tasks.md).
+    [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md) (commit `2865dac`),
+    [tasks T-108/T-113](../planning/tasks.md).
+19. **REQ-F-078 — Provenance: Lineage / Event trail / Artifacts (PV1).** `Provenance.tsx`
+    (2026-07-10, Wave 8, T-114, commit `0e64fad`) becomes a thin container over a persistent
+    version-pins band + a `Tabs` switch of three views. **Lineage** — the original left→right
+    stage DAG + per-stage I/O drill-in, preserved as the default. **Event trail** (new
+    centerpiece, `components/provenance/EventTrail.tsx`) — a filterable (type/sample/actor +
+    search + oldest/newest order), paginated timeline of the REAL events `run_gate` emits
+    (verified: `src/provenance.ts` derives its vocabulary "ONLY from what the ledger actually
+    emits," five types — `analysis_run.started`/`sample.registered`/`finding.emitted`/
+    `verdict.decided`/`analysis_run.completed` — cross-checked against
+    `src/pipeguard/provenance.py`'s six-member `EventType` enum, whose sixth member
+    `NOTIFICATION_EMITTED` `run_gate` itself never emits, only the separate notify port does, so
+    the frontend's "five emitted, everything else generic" framing holds); expanding a row is a
+    trace-back — `finding.emitted` → its cited evidence in place, `verdict.decided` → the decision
+    card + a deep link. **Artifacts** (new, `components/provenance/Artifacts.tsx`) — a
+    grouped-by-name artifact index, filterable by stage/origin/role. **Needed zero backend
+    change** — `RunDetail.events` (`types.ts:145`) already shipped to the client and the
+    pre-rewrite screen simply discarded it; no new endpoint, no wire-contract change. 100%
+    read-only: no verdict/confidence set, every finding/verdict shown is quoted verbatim from the
+    event the rule engine authored (ADR-0001). Scale-aware: present-only filter options + 25/page
+    pagination for a ~500-event run. Also lands the shared `components/Pager.tsx` (the "Showing
+    X–Y of Z" idiom, deduplicated out of Runs/Monitoring/Admin/AgentTriage) and fixes a stale-error
+    bug (the fetch effect now clears `error` on a runId switch). *Trace:* REQ-F-042, REQ-F-070
+    (the artifact-download seam this view's Artifacts tab reuses),
+    [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+    [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md),
+    [provenance.md](../data/provenance.md), [architecture.md](../design/architecture.md),
+    [design/frontend/README.md](../design/frontend/README.md) §5.6,
+    [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md) (commit `0e64fad`),
+    [tasks T-114](../planning/tasks.md).
+20. **REQ-F-079 — Pipeline Builder: on-canvas editing (PB2).** `PipelineBuilder.tsx` +
+    `BuilderCanvas.tsx` (2026-07-10, Wave 8, T-115, commit `109557e`) gain node selection (ring +
+    a `UserNodeInspector` + double-click inline rename), wire deletion (hit-path select or
+    midpoint ×), undo/redo (`hooks/useTopologyHistory.ts`, a bounded 50-entry ring snapshotting
+    `{nodes, edges}` — **scope is topology only; `locEdits`/`refLoc` locator/reference authoring
+    is NOT yet covered**, per the hook's own code comment) + toolbar/keyboard shortcuts, marquee
+    multi-select + a `SelectionActionBar.tsx` (align/distribute/duplicate/delete), node/edge/
+    canvas context menus (`BuilderContextMenu.tsx`), live alignment guides + snap, and
+    drag-to-connect from output ports (the same typed/dedup validation as click-arm-click Connect
+    mode). All work is over the local `userNodes`/`userEdges`/`locEdits` draft — **compose ≠
+    execute still holds**; dry-run/diff (REQ-F-045) and the gate are untouched. **Anti-cascade:**
+    any delete severing ≥1 edge, or any multi-node delete, routes through the existing
+    `useConfirm` (REQ-F-075) naming the wire count — **stricter** than the design spec's "≥2
+    edges" threshold, which was not shipped; every delete emits a "⌘Z to undo" toast, so all
+    deletes are reversible. A module-init temporal-dead-zone crash (`BuilderShared`'s
+    `ARTIFACT_KINDS` read `GIAB_LOC` before its declaration, blanking the app at runtime though
+    `tsc` didn't flag it) was fixed by reordering the declarations. **Open item:** a new
+    `components/Truncate.tsx` full-text-on-hover primitive shipped this commit has **no call
+    sites yet** anywhere in `frontend/src` besides its own definition — added, not yet applied.
+    *Trace:* REQ-F-045, REQ-F-075, [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)
+    (compose≠execute), [architecture.md](../design/architecture.md),
+    [design/frontend/README.md](../design/frontend/README.md) §6,
+    [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md) (commit `109557e`),
+    [tasks T-115](../planning/tasks.md).
+21. **REQ-F-080 — Intake gate: preflight sample-metadata grid (IG1).** The expanded sample-
+    admission card in `Intake.tsx` (2026-07-10, Wave 8, T-112, commit `1052e15`) gains a metadata
+    grid — Sample type / Library prep / Origin, **lazy-loaded** from the per-sample
+    `CardReadout` header (`api.qcReadout`) **only when a row is expanded** (verified against the
+    guard condition — `isOpen` is gated on the row's open/sparse/flagged state — scale-aware,
+    never N+1 for a 100-sample run), plus run-level Platform / Run date and the sample's Verdict
+    (already on hand, no extra fetch). A pending field shows a skeleton; a loaded-but-null field
+    reads "not captured" — never a fabricated value. The yield bar is capped `max-w-[340px]`
+    (mirroring the Runs verdict-bar convention), not a full-card sweep. Real, preflight-
+    appropriate fields only — no analyzed/downstream data. *Trace:* REQ-F-042, REQ-F-064 (the
+    `CardReadout` projection this reuses), [architecture.md](../design/architecture.md),
+    [design/frontend/README.md](../design/frontend/README.md) §5.3,
+    [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md) (commit `1052e15`),
+    [tasks T-112](../planning/tasks.md).
 
 ## Notes / deferred
 
@@ -781,6 +880,10 @@ had reserved or listed as *not-yet-built*.
    stub-default). Only the **Jira** ticket-create adapter and wiring notify into the
    read-API/ticketing flow remain *(wishlist)*.
 2. **Variant gate** (REQ-F-013) is Phase 2 and depends on real variant-level data.
+3. **IB4 — Inbox per-reminder external notification + cadence** (Slack/Discord/Teams/email,
+   REQ-F-077) remains deferred as of Wave 8 (T-113) — the largest remaining Inbox item.
+4. **`components/Truncate.tsx`** (a full-text-on-hover primitive, Wave 8/T-115) shipped with no
+   call sites yet anywhere in `frontend/src` — added, not yet applied.
 
 ---
 

@@ -45,10 +45,19 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
   production auth (see §8 Invariants + [risks.md RISK-035](../../quality/risks.md)).
 - **Left nav (236px).** Three groups (correcting an earlier 2-group simplification in this doc —
   the code has always shipped three since T-064):
-  - **Operate:** Submit samplesheet · Runs · Intake gate · Decision cards · Review queue ·
-    **Inbox** (new, Shipped 2026-07-10, T-108, "Wave 7" — see §5.11)
+  - **Operate (reordered 2026-07-10, T-110, "Wave 8," G4):** **Inbox** → **Review queue** →
+    Submit samplesheet → Runs → Intake gate → Decision cards — Notification (Inbox) → Action
+    (Review queue) → Steps (the process flow), work/issue-tracking pages now sit above the
+    process flow (was Submit → Runs → Intake → Decision cards → Review queue → Inbox).
   - **Analyze:** Provenance · Agent triage · Monitoring
   - **Configure:** Pipeline builder · Settings
+  - **View selectors are `Tabs`, not `FacetChip` (2026-07-10, T-110, "Wave 8," G5).** A new
+    canonical underline `components/Tabs.tsx` (`role="tablist"`) is the one "which view am I in"
+    idiom, replacing the rounded-full `FacetChip` pills — which read as *highlighted values*, not
+    a control — in Runs (status), Review queue (status), Admin (activity-log kind), and RunDetail
+    (sample verdict). **`FacetChip.tsx` is deleted**, fully replaced. `SegmentedControl` stays for
+    compact toggle *settings* (7d/14d/30d window, theme, density) — the two are now a deliberate,
+    documented split, not two components doing the same job.
   - Plus an **Admin** group (`/admin`, off the operator nav — see §11), gated on the login
     identity's `isAdmin`, not on any wire role.
   - **Themeable (Shipped 2026-07-10, T-105, commit `52124d3`, "Wave 7," GA2):** the nav used to
@@ -144,11 +153,23 @@ The pipeline's front door — registers a run + its samples **before processing*
   mapped" with tissue merged, a 4-page pager, and a no-fixture-sample submission honestly 422s
   with the backend's real message (surfaced by the same commit's `api.ts` `httpError()` fix,
   §4).
+- **Bulk-edit rework (Shipped 2026-07-10, "Wave 8," T-111, commit `24fe2e3`, S1-S3).**
+  **S1** — the sample-type cell was a click-to-cycle button (read as a "next" control); it's now
+  a real `<select>` dropdown. The current value is always an option even when a parsed tissue
+  falls outside the controlled `SAMPLE_TYPES` vocabulary (union of the fixed set + the row's own
+  value, so an unrecognized tissue from a parsed sheet never silently vanishes). **S2** — per-row
+  trash icons are replaced by checkbox multi-select: a leading checkbox column, a header
+  select-all with a real `indeterminate` state, selected-row highlight, and a single "Remove N"
+  action gated behind a `useConfirm` (danger tone, states "nothing is deleted downstream" —
+  draft-only). Selection clears whenever the sample set is replaced (parse or BaseSpace import).
+  **S3** — "Add sample" becomes a bounded bulk add: a count input (clamped 1–500) + Add appends N
+  blank rows at once, so a 100-sample plate isn't 100 clicks.
 
 ### 5.2 Runs  (`view: 'overview'`)
 Scale-kit list surface:
-- **Search** (run id / platform), **status facet chips w/ counts** (All · Needs review ·
-  Sequencing · Released), **sort** (Recent · Urgent), and a **date-range** control
+- **Search** (run id / platform), **status view `Tabs` w/ counts** (All · Needs review ·
+  Sequencing · Released — a canonical `Tabs` selector since 2026-07-10, "Wave 8," T-110, G5; was
+  `FacetChip` pills), **sort** (Recent · Urgent), and a **date-range** control
   (calendar with From/To fields + presets; fixed-width trigger so digit-count changes don't
   reflow the row).
 - **Per-page 25 / 50 / 100** (default 25), scrollable.
@@ -163,10 +184,19 @@ Scale-kit list surface:
 ### 5.3 Intake gate  (`view: 'intake'`)
 Preflight sample-admission review. **Collapsible admission rows** (consistent bar lengths,
 room for status + action). Header carries a **Refresh** control + "Updated {time}".
+- **Shrunk yield bar + preflight metadata grid (Shipped 2026-07-10, "Wave 8," T-112, commit
+  `1052e15`, IG1).** The expanded admission card was sparse (a full-width yield bar + override
+  only). (1) The yield bar is capped `max-w-[340px]` (mirroring the Runs verdict-bar convention),
+  not a full-card sweep. (2) A preflight metadata grid — **Sample type / Library prep / Origin**
+  (lazy-loaded from the per-sample `CardReadout` header **only when a row is expanded** — scale-
+  aware, never N+1 for a 100-sample run), plus run-level **Platform / Run date** and the sample's
+  **Verdict**. Real fields only, no analyzed/downstream data (preflight-appropriate); a null
+  field reads "not captured" (honest, never fabricated), and a pending field shows a skeleton.
 
 ### 5.4 Decision cards  (`view: 'decision'`)
 Per-sample verdict cards for a run.
-- **First card open, rest collapsed**; **Expand all / Collapse all**; verdict **filter chips**.
+- **First card open, rest collapsed**; **Expand all / Collapse all**; verdict view `Tabs`
+  (2026-07-10, "Wave 8," T-110, G5; was verdict filter chips).
 - **QC metric readout** (the hero): a Metric · Observed · Threshold · Status table populated
   from `DecisionCard.metric_values` (flagged-first, gate-grouped) — recreate with the app's
   `MetricsPanel`. Plus a context rail and clear loading / empty / released / synthesis-error
@@ -231,12 +261,47 @@ resolve).
   neutral outlined button (`border-line-strong bg-card text-text`, accent on hover) — the only
   primary (blue) action left in the ticket UI is "Acknowledge & review." Styling-only; the
   confirm gate above and the underlying `ticketAction` write are unchanged.
+- **Tabs + selection redesign (Shipped 2026-07-10, "Wave 8," T-110, commit `1bc0072`,
+  G5/RQ2/RQ3).** The status filter chips (All / Open / Resolved / …) are now the canonical
+  `Tabs` component (§4), reading as a view selector rather than highlighted values. **RQ2:** a
+  page-scoped global Select all / Clear all sits above the ticket list — scoped to the
+  **currently visible page**, not the whole filtered set, so the batch-confirm count is never
+  surprising. **RQ3:** the per-ticket selection checkboxes were a floating afterthought; each run
+  group is now bound by a `border-l-2` left rail (lights accent when the group has a selection)
+  with the subheader select-all and every ticket's checkbox aligned in one fixed gutter on the
+  rail — a designed grouping, not a convenience placement.
 
 ### 5.6 Provenance  (`view: 'provenance'`)
-Left→right stage DAG + a per-stage I/O inspector.
-- Every artifact is a **link** — open in store, copy digest, download.
-- Nodes **color by stage status only** (pass/warn); the origin / sample-type chips and the
-  header legend were removed (sample type comes from the sample sheet).
+**Rewritten 2026-07-10 ("Wave 8," T-114, commit `0e64fad`, PV1)** from a single left→right stage
+DAG into a thin container over a persistent version-pins band + a `Tabs` (§4) switch of three
+views — the maintainer's ask to make provenance ("an important aspect of the project") a
+first-class investigative surface. **Needed zero backend change**: `RunDetail.events` (the real
+append-only ledger) already shipped to the client and the pre-rewrite screen simply discarded it.
+1. **Lineage** — the original left→right stage DAG + per-stage I/O drill-in below, preserved
+   verbatim as the default view. Every artifact is a **link** — open in store, copy digest,
+   download. Nodes **color by stage status only** (pass/warn); the origin / sample-type chips and
+   the header legend were removed (sample type comes from the sample sheet).
+2. **Event trail** (new centerpiece, `components/provenance/EventTrail.tsx`) — a filterable
+   (type / sample / actor + free-text search + oldest/newest order), paginated timeline of the
+   REAL events emitted by `run_gate`. Expanding a row is the trace-back: `finding.emitted` → its
+   cited evidence in place, `verdict.decided` → the decision card + a deep link, else the raw
+   payload. The five event types `run_gate` actually emits are honored
+   (`analysis_run.started`/`sample.registered`/`finding.emitted`/`verdict.decided`/
+   `analysis_run.completed`); anything else the `EventType` enum could carry (e.g. the separate
+   notify port's `notification.emitted`) renders generically, only if present — never faked into
+   a promised row. 100% read-only: no verdict/confidence set; a finding/verdict shown is quoted
+   verbatim from the event the rule engine authored (ADR-0001). Scale-aware: present-only filter
+   options + 25/page pagination for a ~500-event run.
+3. **Artifacts** (new, `components/provenance/Artifacts.tsx`) — a grouped-by-name artifact index
+   (stage·role edge chips, origin, size, fingerprint, download), filterable by stage/origin/role
+   — the same "every artifact is a link" affordances from Lineage, indexed instead of DAG-plotted.
+
+Also lands the shared `components/Pager.tsx` (the "Showing X–Y of Z + per-page + prev/next"
+idiom, previously duplicated across Runs/Monitoring/Admin/AgentTriage) — the event trail and
+artifacts views consume it. A fetch-effect fix: `error` now clears on a runId switch, so jumping
+runs via the top switcher never leaves a stale "unknown run" message on screen.
+
+**Pre-rewrite history (still applies within Lineage/Artifacts):**
 - **Shipped 2026-07-09 (T-077, commit `71a06d6`):** download/open-in-store are now real —
   `GET /api/runs/{id}/artifacts/{name}` (traversal-hardened) backs both anchors. A "show full"
   toggle reveals all 64 hex chars of the digest. The QC node now shows a real input edge:
@@ -365,20 +430,34 @@ notifications are DERIVED, client-side, from the already-off-gate review queue's
 `api.listTickets({status: 'open'|'in_review'})` (escalate/rerun/hold tickets, §5.5).
 
 - **State (`context/InboxContext.tsx`).** The user's overlay on each item — read/unread, flag,
-  priority, kanban column, due date, a note — plus any self-authored reminders, is stored in
-  `localStorage` **scoped per operator** (keyed by `actor.id`; re-read whenever the acting
-  identity changes, including Admin's "Act as," §11 — so a re-fetch never clobbers triage and a
-  page change never loses it). `unreadCount` excludes the `done` kanban column (the archive) and
-  drives both the Sidebar badge and the top-bar bell badge from the same context, so they can
-  never drift apart.
+  priority, kanban column, due date, a note, **and (added 2026-07-10, "Wave 8," T-113) a folder**
+  — plus any self-authored reminders, is stored in `localStorage` **scoped per operator** (keyed
+  by `actor.id`; re-read whenever the acting identity changes, including Admin's "Act as," §11 —
+  so a re-fetch never clobbers triage and a page change never loses it). `unreadCount` excludes
+  the `done` kanban column (the archive) and drives both the Sidebar badge and the top-bar bell
+  badge from the same context, so they can never drift apart.
 - **Four tabs:**
   1. **Inbox** — a filterable stream (All / Unread / Flagged); each row expands to
-     priority / board-column / due-date / note-to-self / "open in queue."
+     priority / board-column / due-date / note-to-self / "open in queue." **Mark all unread**
+     (2026-07-10, T-113, IB2) sits alongside the existing "Mark all read."
   2. **Board** — a 4-column kanban (Inbox / To do / In progress / Done) with native
      drag-and-drop; moving a card marks it read and drops it from the unread count.
-  3. **Calendar** — a month grid dotting due dates + a day-detail panel + an "add reminder for
-     the selected day" composer.
-  4. **Notes** — a note-to-self composer + inline-editable notes on any item.
+  3. **Calendar** — a month grid dotting due dates + a day-detail panel + an "add reminder"
+     composer. **(2026-07-10, T-113, IB3)** the composer button drops the redundant date suffix
+     ("Add for 07-10" → "Add reminder"); the selected day is implied by the composer subtitle (a
+     friendly Weekday, Mon D). **Google/Outlook Calendar connectors are labelled phase-2 seams**
+     (2026-07-10, T-113, IB1) — clicking one toasts the honest "not connected" status; there is
+     no real OAuth flow.
+  4. **Notes** — a note-to-self composer + inline-editable notes on any item. **Reworked
+     2026-07-10 (T-113, IB5-8):** notes are now **read-only until Edit is clicked** (was a live
+     always-editable textarea, gating accidental edits/deletes); each note shows "Created {ago}"
+     and, once modified, "· edited {ago}" (IB6, `updatedAt` set on an explicit save); delete
+     moves inside edit mode (confirmed) plus a checkbox multi-select + a confirmed "Delete N"
+     mass delete (self notes only — ticket annotations aren't deletable here, IB7); and a
+     **folder system** (IB8) — an add/delete folder manager (deleting a folder keeps its notes,
+     moving them to Unfiled, never orphaning one), a folder select on the composer + a per-note
+     "move to folder," and a folder filter over the list; renaming/deleting a folder re-points
+     every filed item.
 - **Top-bar bell (`components/NotificationBell.tsx`).** A quick-glance dropdown, deliberately
   distinct from the full workspace: recent items (unread-first), inline flag / mark-read, "Mark
   all read," "Open inbox →." Reads the same shared context as the workspace, so what you set here
@@ -388,6 +467,10 @@ notifications are DERIVED, client-side, from the already-off-gate review queue's
   them, and the bell + workspace read identically. `dueStatus`/`todayYmd` deliberately use
   **local** `yyyy-mm-dd` (not `toISOString()`, which is UTC) so a reminder due "today" never
   reads as overdue across a UTC-date rollover.
+- **Deferred: IB4** (per-reminder Slack/Discord/Teams/email notification + cadence, ≤3
+  instances) — the largest remaining Inbox item, explicitly not part of the 2026-07-10 ("Wave
+  8," T-113) pass. No notification-channel code exists yet; tracked in
+  [tasks.md T-113](../../planning/tasks.md).
 - **Distinct from the outbound `notify/` port** (ADR-0010, Slack/Teams/Discord, §6 of
   [architecture.md](../../design/architecture.md)) — that is a server-side push to an *external*
   channel triggered by `run_gate`; Inbox is a client-only, per-operator organization layer over
@@ -439,6 +522,36 @@ T-085): each node lands in the column of its longest-path depth from a source
 every card into one row and losing the connection structure. A **Cancel** button (shown only
 while composing a draft) discards the in-progress build and returns to the linked pipeline in
 View.
+
+**On-canvas editing (Shipped 2026-07-10, "Wave 8," T-115, commit `109557e`, PB2, P1-P7).** Raises
+the builder from "works" to "fluid to edit on the canvas." All work is over the local
+`userNodes`/`userEdges`/`locEdits` draft — compose ≠ execute holds, dry-run/diff and the gate are
+untouched.
+- **P1 — selection + inspector + rename.** Click a node for a selection ring + a
+  `UserNodeInspector` (name/icon/typed-port/locator/delete); double-click for inline rename.
+- **P2 — wire deletion.** Click a wire (hit-path select) or its midpoint × to delete it.
+- **P3 — undo/redo** (`hooks/useTopologyHistory.ts`, a bounded 50-entry ring) + toolbar buttons +
+  keyboard (Delete/Esc/⌘Z/⌘⇧Z/⌘A/⌘D/arrows/c/f, guarded off inputs and off View mode). **Scope:
+  topology only** — `locEdits`/`refLoc` (locator/reference authoring) are **not yet undoable**, a
+  labelled limitation, not a bug (extending it needs a state-consolidation refactor).
+- **P4 — marquee + group actions.** Shift/⌘-click or drag a marquee for multi-select, group move,
+  and a `SelectionActionBar` (align/distribute/duplicate/delete).
+- **P5 — context menus** (`BuilderContextMenu.tsx`) on a node, an edge, or the empty canvas.
+- **P6 — live alignment guides + snap** while dragging.
+- **P7 — drag-to-connect** from an output port directly to an input port (same typed/dedup
+  validation as click-arm-click Connect mode).
+- **Anti-cascade** (the maintainer's standing "no accidental single-click cascade" rule): any
+  delete that severs ≥1 edge, or any multi-node delete, routes through `useConfirm` (danger tone,
+  names the wire count) — an isolated node with no wires stays one-click. Every delete emits a
+  "⌘Z to undo" toast, so all deletes are reversible. (The design spec's looser "≥2 edges"
+  threshold was **not** shipped — the actual behavior is stricter/safer than spec.)
+- **Fix:** a module-init temporal-dead-zone crash — `BuilderShared`'s `ARTIFACT_KINDS` read
+  `GIAB_LOC` before its declaration, which `tsc` didn't flag but blanked the app at runtime — was
+  resolved by reordering the two declarations.
+- **`components/Truncate.tsx`** (a full-text-on-hover primitive, "G2") **was added this batch but
+  has no call sites yet anywhere in `frontend/src`** besides its own definition — shipped, not
+  yet applied to any overflow-prone label (run ids, sample names, artifact paths). Open item, not
+  silently dropped; see [tasks.md T-115](../../planning/tasks.md).
 
 **Nodes.** Three kinds — `tool`, `agent`, `gate`:
 - **Seeded germline chain** (fastp → bwa-mem2 → samtools markdup → {mosdepth, bcftools call →
@@ -667,7 +780,8 @@ governance; **not** "any approver," which was the original, now-corrected framin
    a user shows their real triage/board/reminders, not a shared one.
 2. **Activity log** — a REAL, zero-new-backend audit feed merging `GET /api/settings/thresholds`
    + `GET /api/pipelines` + `GET /api/review/tickets` into one append-only when/actor/kind/target/
-   status table, facet-filterable by kind. **Shipped 2026-07-10 (T-093, commit `8a14661`, "A2"):**
+   status table, filterable by kind via a **`Tabs`** view selector (2026-07-10, "Wave 8," T-110,
+   G5; was `FacetChip` pills). **Shipped 2026-07-10 (T-093, commit `8a14661`, "A2"):**
    the feed now paginates (25/50/100 + a numbered pager, "Showing X–Y of Z," resets on filter
    change — was a flat, uncapped list that got messy as it grew) and each row is a compact
    summary that expands on click to a labelled Detail/Target/Actor/When panel (one open at a
