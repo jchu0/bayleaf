@@ -229,8 +229,14 @@ assertion that `confidence` stays `None` on every card.
   been exercised with one sample.
 - Cluster-verifying the `slurm` executor profile against a real Slurm allocation (currently
   config-verified only).
-- P2/P3 audit findings (`audit/SYNTHESIS.md`) — 12 P2s (labelling/hiding fixes) and 14 P3s
-  (post-hackathon backlog) remain open by design, not silently dropped.
+- P2/P3 audit findings (`audit/SYNTHESIS.md`) — the **12 P2s** (truthfulness relabels + egress
+  hardening) were addressed in a follow-on batch (commit `5afaed9`, three parallel Fable-5 agents
+  on disjoint files, each re-verifying currency vs post-W1-W4 code): Archivist/repair CTA + badge
+  honesty, Submit Save-draft + BaseSpace-mock labels, SettingsModelTier persistence + metrics-agent
+  Live-guard, Admin share-audit note, MonitoringSignature `types.ts` drift, safe_harbor AS-01/02/04
+  egress fixes (+2 tests), the empty-graph run guard, and the real-GIAB `NOTE.md`. P2-1 was already
+  resolved by W2; the audit's P2-7 env-var claim was itself stale (no change). The **14 P3s** remain
+  open post-hackathon backlog by design, not silently dropped.
 - Median-review-time KPI, a BaseSpace connector, and IB4 (Inbox external-notification cadence)
   remain the long-standing deferred items unrelated to this session's scope.
 
