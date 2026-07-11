@@ -4,6 +4,7 @@ import { AlertTriangle } from 'lucide-react'
 import { api } from '../api'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { PageHeader } from '../components/PageHeader'
+import { Truncate } from '../components/Truncate'
 import { AgentComposer } from '../components/AgentComposer'
 import { AgentSourceToggle } from '../components/AgentSourceToggle'
 import { AgentSubjectCard } from '../components/AgentSubjectCard'
@@ -177,7 +178,7 @@ export function AgentTriage() {
                         <span className="text-text-3">—</span>
                       )}
                     </div>
-                    <div className="min-w-0 truncate px-[10px] py-[10px] text-[12.5px] text-text">{c.headline}</div>
+                    <Truncate text={c.headline} className="min-w-0 px-[10px] py-[10px] text-[12.5px] text-text" />
                     <div className="px-[10px] py-[10px] text-center font-mono text-[12px] font-semibold text-text-2">
                       {c.findings.length}
                     </div>

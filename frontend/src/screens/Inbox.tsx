@@ -24,6 +24,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useConfirm } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
+import { Truncate } from '../components/Truncate'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { useToast } from '../components/Toast'
@@ -849,7 +850,7 @@ function NotesTab() {
                             className="min-w-0 flex-1 rounded border border-line bg-card-2 px-1.5 py-0.5 text-[12.5px] font-medium text-text"
                           />
                         ) : (
-                          <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-text">{i.title}</span>
+                          <Truncate text={i.title} className="min-w-0 flex-1 text-[12.5px] font-medium text-text" />
                         )}
                         {i.folder && (
                           <span className="inline-flex items-center gap-1 rounded-full border border-line bg-card-2 px-1.5 py-px text-[10px] text-text-3">
