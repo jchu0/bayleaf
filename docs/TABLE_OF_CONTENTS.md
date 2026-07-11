@@ -80,7 +80,7 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [ADR-0013](adr/ADR-0013-gate-architecture-verdict-policy.md) | Gate architecture (preflight/QC/variant) + surface-and-decide verdict policy |
 | [ADR-0014](adr/ADR-0014-productionization-fastapi-react.md) | Productionize with FastAPI + React; Streamlit as the demo fallback |
 | [ADR-0015](adr/ADR-0015-layered-data-contract.md) | Layered, immutable data contract across the gate (the data-structure decisions + why) |
-| [ADR-0016](adr/ADR-0016-postgres-port.md) | Postgres port (guarded, off-by-default): the `Repository` Postgres adapter + a pluggable feedback store |
+| [ADR-0016](adr/ADR-0016-postgres-port.md) | Postgres port (guarded, off-by-default): the `Repository` Postgres adapter + five pluggable off-gate stores (feedback/pipeline/review/settings/share) |
 | [ADR-0017](adr/ADR-0017-identity-rbac-authoring-lifecycle.md) | Identity + RBAC (dev shim) + the draft→approve authoring lifecycle across pipeline/settings/review stores |
 | [ADR-0018](adr/ADR-0018-variant-interpretation-advisory-evidence.md) | Variant interpretation as advisory cited evidence + heuristic review-ordering (NOT a clinical decision engine); the report + PHI-scrub share seam ([design](design/variant-interpretation.md)) |
 
