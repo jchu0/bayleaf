@@ -1,9 +1,39 @@
 import { ArrowLeft, ChevronDown, Search } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { api } from '../api'
 import type { RunSummary } from '../types'
 import { RUN_STATUS_META } from '../verdict'
 import { NotificationBell } from './NotificationBell'
+
+// Real system state: poll the read-API's health so the top-bar pill reflects actual reachability
+// instead of a hardcoded "Ready" (honest status, not a mock). Ready = API answered; Offline = it
+// didn't (the frontend can't reach the backend). Checked on mount + every 20s.
+type Health = 'checking' | 'ready' | 'offline'
+function useApiHealth(): Health {
+  const [state, setState] = useState<Health>('checking')
+  useEffect(() => {
+    let live = true
+    const check = () =>
+      api
+        .health()
+        .then((h) => live && setState(h.status === 'ok' ? 'ready' : 'offline'))
+        .catch(() => live && setState('offline'))
+    check()
+    const t = window.setInterval(check, 20_000)
+    return () => {
+      live = false
+      window.clearInterval(t)
+    }
+  }, [])
+  return state
+}
+
+const HEALTH_META: Record<Health, { label: string; dot: string; tip: string }> = {
+  checking: { label: 'Checking…', dot: 'bg-line-strong', tip: 'Checking the read-API…' },
+  ready: { label: 'Ready', dot: 'bg-proceed', tip: 'The read-API is reachable.' },
+  offline: { label: 'Offline', dot: 'bg-escalate', tip: 'The read-API is not reachable.' },
+}
 
 // The run switcher shows at most this many rows; search narrows the full set, and a footer links
 // to the full Runs list. A flat dropdown of every run does not scale (the prototype's pattern).
@@ -33,6 +63,7 @@ export function TopBar({ runs = [] }: { runs?: RunSummary[] }) {
   const { pathname } = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const health = useApiHealth()
 
   // Switch the run in context while keeping the same view (e.g. decision cards → decision
   // cards, provenance → provenance) by swapping the run id in the current path.
@@ -140,14 +171,9 @@ export function TopBar({ runs = [] }: { runs?: RunSummary[] }) {
       )}
 
       <div className="ml-auto flex items-center gap-2.5">
-        <div className="flex w-[230px] items-center gap-2 rounded-lg border border-line bg-card-2 px-2.5 py-1.5 text-[13px] text-text-3">
-          <Search size={14} />
-          <span>Search samples, rules…</span>
-          <kbd className="rounded border border-line bg-card px-1 text-[10px] text-text-3">/</kbd>
-        </div>
-        <span className="flex items-center gap-1.5 text-[13px] text-text-2" title="Driven by data-fetch status (not a control)">
-          <span className="h-2 w-2 rounded-full bg-proceed" />
-          State: Ready
+        <span className="flex items-center gap-1.5 text-[13px] text-text-2" title={HEALTH_META[health].tip}>
+          <span className={`h-2 w-2 rounded-full ${HEALTH_META[health].dot}`} />
+          {HEALTH_META[health].label}
         </span>
         <NotificationBell />
       </div>

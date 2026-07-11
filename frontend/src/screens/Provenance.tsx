@@ -13,6 +13,7 @@ import { fmtTime, groupArtifacts, readGateProvenance, readNum, readStr } from '.
 import { ProvenanceLineage } from '../components/provenance/Lineage'
 import { EventTrail } from '../components/provenance/EventTrail'
 import { ProvenanceArtifacts } from '../components/provenance/Artifacts'
+import { Fingerprint } from '../components/provenance/Fingerprint'
 
 // Provenance is now a thin CONTAINER (PV1): it fetches the run detail + artifacts once (unchanged
 // fetch — no new api call, no wire change) and renders a persistent version-pin header band plus a
@@ -181,11 +182,10 @@ function ProvenanceHeader({ events }: { events: ProvenanceEvent[] }) {
       </div>
       <div className="flex flex-wrap gap-x-8 gap-y-3">
         <Pin label="Analysis run">
-          {/* The run id IS the header's identity handle (an execution key, not a content hash), so
-              it's shown in full + selectable — not deferred behind a show-full like a digest. */}
-          <span className="select-all break-all font-mono text-[11.5px] text-text-2">
-            {started.analysis_run_id ?? '—'}
-          </span>
+          {/* The full arun key is long and wraps, distorting the pin row — defer it behind a
+              "show full" (same idiom as a digest) so the pin stays compact; expansion drops onto
+              its own full-width line and never reflows the neighbouring pins (UIC-9). */}
+          <Fingerprint value={started.analysis_run_id ?? null} label="id" />
         </Pin>
         <Pin label="Rule pack">
           <span className="font-mono text-text-2">{gp.rule_pack_version ?? '—'}</span>
