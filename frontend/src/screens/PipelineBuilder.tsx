@@ -41,7 +41,7 @@ import {
   AuthorToolNodeModal,
   NextflowExportModal,
   PipelineRepairModal,
-  RunHandoffModal,
+  RunPipelineModal,
 } from '../components/BuilderModals'
 import {
   GRAPH_ID,
@@ -165,8 +165,11 @@ export function PipelineBuilder() {
   const [emittedSnap, setEmittedSnap] = useState<Record<string, string> | null>(null)
   const [zoom, setZoom] = useState(1)
 
-  const [userNodes, setUserNodes] = useState<UserNode[]>([])
-  const [userEdges, setUserEdges] = useState<UserEdge[]>([])
+  // The linked germline OPENS as editable user nodes — sources + tools + wired edges carrying the run's
+  // per-step vstatus — so the builder is an editing surface, not a read-only view (ADR-0019 slice 1a).
+  // New/Fork/Load replace these; New→Blank clears them.
+  const [userNodes, setUserNodes] = useState<UserNode[]>(() => germlineTemplate().nodes)
+  const [userEdges, setUserEdges] = useState<UserEdge[]>(() => germlineTemplate().edges)
   const [connectMode, setConnectMode] = useState(false)
   const [connectFrom, setConnectFrom] = useState<string | null>(null)
 
@@ -219,6 +222,13 @@ export function PipelineBuilder() {
   // Only the original seeded pipeline is the LINKED doc; a new draft (blank or template) is not.
   const isLinked = docKind === 'germline' && docName === GRAPH_ID
   const linkedView = isLinked && isView
+  // ADR-0019 edit-lock lifecycle: a pipeline is LOCKED against edits while its bound run is ACTIVE, and
+  // becomes editable only once the run is complete/stopped — so the run-status stays meaningful and no
+  // mid-run drift is possible; editing then mints a NEW version on Save while the run stays pinned to the
+  // version it ran. The linked demo run (RUN-2026-07-07-A) is COMPLETE (it has verdicts) → editable. A
+  // real active run would flip runActive via api.intakeStatus(LINKED_RUN) (queued|running → active).
+  const runActive = false // production seam: derive from intake-status
+  const runLocked = isLinked && runActive
 
   // Create a new pipeline document. Explicit authoring action, so it opens in Edit (View-default
   // only guards accidental edits to the EXISTING linked pipeline). Blank = empty canvas; template =
@@ -398,6 +408,7 @@ export function PipelineBuilder() {
 
   const onSave = async () => {
     const name = pipelineName()
+    const wasLinked = isLinked // saving an edit of the linked run's pipeline mints a NEW version (ADR-0019)
     setSaveStatus('pending') // optimistic
     try {
       // Save creates a draft version, then submit moves it draft → pending_review so Approve is
@@ -425,7 +436,12 @@ export function PipelineBuilder() {
       setDryRun(null)
       setDiff(null)
       setSaveStatus(t.status === 'approved' ? 'approved' : t.status === 'pending_review' ? 'pending' : 'draft')
-      toast(`Saved ${name} · v${ack.version} · ${t.status}`, 'success')
+      toast(
+        wasLinked
+          ? `Saved as v${ack.version} · ${t.status} — a new version; ${LINKED_RUN} stays pinned to the version it ran`
+          : `Saved ${name} · v${ack.version} · ${t.status}`,
+        'success',
+      )
     } catch (e) {
       setSaveStatus('draft') // reconcile: the write didn't land
       toast(`Couldn't save pipeline — ${errMsg(e)}`, 'error')
@@ -684,7 +700,9 @@ export function PipelineBuilder() {
         const col = depth.get(n.id) ?? 0
         const row = rowOf.get(col) ?? 0
         rowOf.set(col, row + 1)
-        pos.set(n.id, { x: 60 + col * 230, y: 56 + row * 120 })
+        // Column pitch must exceed NODE_W (296) so the wider cards don't overlap horizontally; the row
+        // pitch clears the tallest catalog card (MultiQC ≈291) so stacked parallel nodes don't collide.
+        pos.set(n.id, { x: 60 + col * 360, y: 56 + row * 320 })
       }
       return ns.map((n) => ({ ...n, ...(pos.get(n.id) ?? { x: n.x, y: n.y }) }))
     })
@@ -1002,7 +1020,18 @@ export function PipelineBuilder() {
     <div className="-mx-8 -my-7 flex h-[calc(100vh-3.5rem)] flex-col bg-card-2">
       {/* ── sub-header toolbar ── */}
       <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-line bg-card px-3.5">
-        <SegmentedControl options={modeOptions} value={mode} onChange={setMode} />
+        <SegmentedControl
+          options={modeOptions}
+          value={mode}
+          // ADR-0019: editing is locked while the bound run is active; Edit reopens once it completes.
+          onChange={(m) => {
+            if (m === 'edit' && runLocked) {
+              toast(`Locked — ${LINKED_RUN} is still running; editing opens when it completes`, 'error')
+              return
+            }
+            setMode(m)
+          }}
+        />
         <button
           onClick={() => setNewOpen(true)}
           title="Create a new pipeline (blank or from template)"
@@ -1036,7 +1065,7 @@ export function PipelineBuilder() {
           }`}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${linkedView ? 'bg-accent' : 'bg-text-3'}`} />
-          {linkedView ? `Linked · ${LINKED_RUN}` : 'Draft — not run'}
+          {linkedView ? `Linked · ${LINKED_RUN} · ${runLocked ? '🔒 run active' : 'run complete · editable'}` : 'Draft — not run'}
         </span>
 
         <div className="ml-auto flex items-center gap-2">
@@ -1179,9 +1208,11 @@ export function PipelineBuilder() {
 
         <BuilderCanvas
           mode={mode}
-          // Only the ORIGINAL linked pipeline renders the read-only seeded DAG; a new/forked draft
-          // shows its editable composed nodes (germlineTemplate) instead, so the chain is modifiable.
-          showSeeded={isLinked}
+          // The germline now OPENS as editable user nodes, so the read-only seeded ToolCard/RefCard layer
+          // is off whenever user nodes are present; the linked run's terminals (gate run/-port, advisory
+          // agent, ingest connectors + tether) stay via showTerminals (ADR-0019 slice 1a).
+          showSeeded={isLinked && userNodes.length === 0}
+          showTerminals={isLinked}
           selected={selected}
           selNodes={selNodes}
           selEdge={selEdge}
@@ -1275,17 +1306,22 @@ export function PipelineBuilder() {
       />
 
       {/* ── modals ── */}
-      {runOpen && (
-        <RunHandoffModal
-          envHint={envHint}
-          profile={profile}
-          yaml={yaml}
-          curLoc={curLoc}
-          savedName={savedName}
-          onEmit={onEmit}
-          onClose={() => setRunOpen(false)}
-        />
-      )}
+      {runOpen &&
+        (() => {
+          // Real execution: run the composed pipeline via Nextflow (operators execute; only agents
+          // stay off the tools). Fall back to the seeded germline template for the default linked view.
+          const src = userNodes.length ? { nodes: userNodes, edges: userEdges } : germlineTemplate()
+          return (
+            <RunPipelineModal
+              graph={{
+                name: docName,
+                nodes: src.nodes.map((n) => ({ id: n.id, name: n.name, ins: n.ins, outs: n.outs })),
+                edges: src.edges.map((e) => ({ from: e.from, to: e.to })),
+              }}
+              onClose={() => setRunOpen(false)}
+            />
+          )
+        })()}
       {nfOpen &&
         (() => {
           // Compile the current draft; fall back to the seeded germline template for the default

@@ -30,6 +30,7 @@ import type {
   CompiledNextflow,
   MonitoringSignature,
   NextflowGraphBody,
+  RunInputsCatalog,
 } from '../types'
 
 // Honest state when the advisory archivist index can't be reached (off-gate, non-critical). We show
@@ -745,9 +746,10 @@ export function NextflowExportModal({ graph, onClose }: { graph: NextflowGraphBo
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-semibold text-text">Export to Nextflow</div>
           <div className="mt-0.5 text-[12px] leading-relaxed text-text-2">
-            PipeGuard compiles these cards into a runnable nf-core-style DSL2 pipeline. It{' '}
-            <strong>composes</strong> — it never runs a tool or sets a verdict (ADR-0003). Validate
-            with <code className="rounded bg-card-2 px-1 py-px font-mono">nextflow run main.nf -stub-run</code>.
+            PipeGuard compiles these cards into a runnable nf-core-style DSL2 pipeline. Download it to
+            run anywhere, or use <strong>Run</strong> to execute it here (only AI agents stay off the
+            tools — operators run pipelines). Validate with{' '}
+            <code className="rounded bg-card-2 px-1 py-px font-mono">nextflow run main.nf -stub-run</code>.
           </div>
         </div>
         <CloseBtn onClose={onClose} />
@@ -804,6 +806,221 @@ export function NextflowExportModal({ graph, onClose }: { graph: NextflowGraphBo
           {downloading ? 'Preparing…' : 'Download .zip'}
         </button>
       </div>
+    </ModalShell>
+  )
+}
+
+// ── Run pipeline (REAL execution; operator picks inputs; ADR-0003) ────────────
+// PipeGuard COMPOSES the pipeline; Nextflow EXECUTES it. A human operator absolutely can run it —
+// the compose≠execute guardrail is about AI *agents* (advisory, never run a tool/set a verdict) and
+// the decision *core* (framework-agnostic), not about operators. Compiles the current graph, runs it
+// via `POST /api/pipelines/run` against the operator's chosen inputs, polls to a gate-able run.
+const _REF_KINDS = new Set(['reference_fasta', 'panel_bed', 'truth_vcf'])
+const _KIND_CAT: Record<string, 'reads' | 'reference' | 'panel_bed'> = {
+  fastq: 'reads',
+  reference_fasta: 'reference',
+  panel_bed: 'panel_bed',
+}
+function requiredCategories(g: NextflowGraphBody): ('reads' | 'reference' | 'panel_bed')[] {
+  const isSource = (n: NextflowGraphBody['nodes'][number]) =>
+    n.ins.length === 0 && n.outs.length > 0 && n.outs.every((o) => _REF_KINDS.has(o))
+  const byId = new Map(g.nodes.map((n) => [n.id, n]))
+  const incoming = new Map<string, { node: string; idx: number }>()
+  for (const e of g.edges) incoming.set(`${e.to.node}:${e.to.idx}`, e.from)
+  const cats = new Set<'reads' | 'reference' | 'panel_bed'>()
+  for (const n of g.nodes) {
+    if (isSource(n)) continue
+    n.ins.forEach((kind, i) => {
+      const from = incoming.get(`${n.id}:${i}`)
+      const external = !from || (byId.get(from.node) ? isSource(byId.get(from.node)!) : false)
+      if (external && _KIND_CAT[kind]) cats.add(_KIND_CAT[kind])
+    })
+  }
+  return (['reads', 'reference', 'panel_bed'] as const).filter((c) => cats.has(c))
+}
+
+const _CAT_LABEL: Record<string, string> = {
+  reads: 'Reads (fastq)',
+  reference: 'Reference FASTA',
+  panel_bed: 'Panel BED',
+}
+
+export function RunPipelineModal({ graph, onClose }: { graph: NextflowGraphBody; onClose: () => void }) {
+  const nav = useNavigate()
+  const [cat, setCat] = useState<RunInputsCatalog | null>(null)
+  const [choice, setChoice] = useState<Record<string, string>>({})
+  const [runId, setRunId] = useState('')
+  const [sample, setSample] = useState('HG002')
+  const [phase, setPhase] = useState<'form' | 'running' | 'complete' | 'failed'>('form')
+  const [err, setErr] = useState<string | null>(null)
+  const needed = requiredCategories(graph)
+
+  useEffect(() => {
+    api
+      .runInputs()
+      .then((c) => {
+        setCat(c)
+        // Auto-pick the only option per needed category.
+        const pre: Record<string, string> = {}
+        for (const k of needed) if (c[k].length === 1) pre[k] = c[k][0].key
+        setChoice((prev) => ({ ...pre, ...prev }))
+      })
+      .catch((e) => setErr(e instanceof Error ? e.message : String(e)))
+    // A stable, human default run id; the operator can edit it.
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')
+    setRunId(`PIPE-${stamp}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const missing = needed.filter((k) => !choice[k])
+  const canRun = phase === 'form' && runId.trim() !== '' && missing.length === 0
+
+  const poll = (id: string) => {
+    const tick = () =>
+      api
+        .runStatus(id)
+        .then((s) => {
+          if (s.status === 'complete') setPhase('complete')
+          else if (s.status === 'failed') {
+            setErr(s.error ?? 'run failed')
+            setPhase('failed')
+          } else window.setTimeout(tick, 2500)
+        })
+        .catch(() => window.setTimeout(tick, 3000))
+    tick()
+  }
+
+  const run = async () => {
+    setPhase('running')
+    setErr(null)
+    try {
+      const ack = await api.runPipeline({
+        graph: { ...graph, name: graph.name || 'pipeline' },
+        run_id: runId.trim(),
+        sample: sample.trim() || 'HG002',
+        inputs: choice,
+      })
+      poll(ack.run_id)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+      setPhase('failed')
+    }
+  }
+
+  return (
+    <ModalShell width={620} onClose={onClose}>
+      <div className="flex items-start gap-3 border-b border-line px-5 py-4">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-weak text-accent-strong">
+          <Play size={17} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-semibold text-text">Run pipeline</div>
+          <div className="mt-0.5 text-[12px] leading-relaxed text-text-2">
+            Compiles these cards to Nextflow and <strong>runs</strong> them against your chosen
+            inputs → a gate-able run. PipeGuard composes; <strong>Nextflow executes</strong> (only AI
+            agents stay off the tools — operators run pipelines).
+          </div>
+        </div>
+        <CloseBtn onClose={onClose} />
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        {phase === 'complete' ? (
+          <div className="flex flex-col items-start gap-3 py-4">
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-proceed-fg">
+              <Check size={16} /> Run complete — the pipeline executed and the gate decided.
+            </div>
+            <button
+              onClick={() => nav(`/runs/${encodeURIComponent(runId.trim())}`)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:opacity-90"
+            >
+              View decision card →
+            </button>
+          </div>
+        ) : phase === 'failed' ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start gap-2 rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-2.5 text-[12.5px] text-escalate-fg">
+              <TriangleAlert size={15} className="mt-px shrink-0" />
+              <span className="break-words">{err ?? 'The run failed.'}</span>
+            </div>
+            <button
+              onClick={() => setPhase('form')}
+              className="w-fit rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong"
+            >
+              Back
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3.5">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-[11.5px] text-text-3">
+                Run id
+                <input
+                  value={runId}
+                  onChange={(e) => setRunId(e.target.value)}
+                  disabled={phase === 'running'}
+                  className="mt-1 w-full rounded-lg border border-line bg-card px-2.5 py-1.5 font-mono text-[12px] text-text outline-none focus:border-accent"
+                />
+              </label>
+              <label className="text-[11.5px] text-text-3">
+                Sample id
+                <input
+                  value={sample}
+                  onChange={(e) => setSample(e.target.value)}
+                  disabled={phase === 'running'}
+                  className="mt-1 w-full rounded-lg border border-line bg-card px-2.5 py-1.5 font-mono text-[12px] text-text outline-none focus:border-accent"
+                />
+              </label>
+            </div>
+            {needed.length === 0 && (
+              <div className="text-[12px] text-text-3">This graph needs no external inputs.</div>
+            )}
+            {needed.map((k) => {
+              const opts = cat?.[k] ?? []
+              return (
+                <label key={k} className="text-[11.5px] text-text-3">
+                  {_CAT_LABEL[k]}
+                  <select
+                    value={choice[k] ?? ''}
+                    onChange={(e) => setChoice((p) => ({ ...p, [k]: e.target.value }))}
+                    disabled={phase === 'running'}
+                    className="mt-1 w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12.5px] text-text outline-none focus:border-accent"
+                  >
+                    <option value="">{opts.length ? 'Choose…' : 'none available on server'}</option>
+                    {opts.map((o) => (
+                      <option key={o.key} value={o.key}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )
+            })}
+            <div className="text-[11px] text-text-3">
+              Inputs are the real files present on the server (operator uploads are a labelled seam).
+            </div>
+          </div>
+        )}
+      </div>
+
+      {phase !== 'complete' && phase !== 'failed' && (
+        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={run}
+            disabled={!canRun}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {phase === 'running' ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+            {phase === 'running' ? 'Running…' : 'Run pipeline'}
+          </button>
+        </div>
+      )}
     </ModalShell>
   )
 }

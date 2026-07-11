@@ -84,6 +84,7 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [ADR-0016](adr/ADR-0016-postgres-port.md) | Postgres port (guarded, off-by-default): the `Repository` Postgres adapter + five pluggable off-gate stores (feedback/pipeline/review/settings/share) |
 | [ADR-0017](adr/ADR-0017-identity-rbac-authoring-lifecycle.md) | Identity + RBAC (dev shim) + the draft→approve authoring lifecycle across pipeline/settings/review stores |
 | [ADR-0018](adr/ADR-0018-variant-interpretation-advisory-evidence.md) | Variant interpretation as advisory cited evidence + heuristic review-ordering (NOT a clinical decision engine); the report + PHI-scrub share seam ([design](design/variant-interpretation.md)) |
+| [ADR-0019](adr/ADR-0019-pipeline-versioning-run-pinning-edit-lock.md) | 🚧 Proposed — pipeline versioning + run→{name,version} pinning + edit-lock lifecycle (locked while a run is active, editable→new-version when complete; sample provenance immutable); git-versioned model, versioned-store implementation, git-backing as the production seam |
 
 ## Data (the artifacts and their lineage)
 | Doc | Status | Purpose |

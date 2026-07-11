@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Activity, Cable, Lock, Minus, Plus, Redo2, Undo2, Wand2, X } from 'lucide-react'
 import { SelectionActionBar, type AlignKind, type DistributeAxis } from './SelectionActionBar'
+import { BuilderLegend } from './BuilderLegend'
 import {
+  BOX_META,
+  BOX_TOP,
   CARD_FOOTER_H,
   CARD_HEADER_H,
   GATE_CHECKPOINTS,
@@ -12,20 +15,24 @@ import {
   REFS,
   TOOLS,
   V_COLOR,
+  boxCols,
+  boxPorts,
   cardHeight,
   gateSegs,
   isRefKind,
-  layoutPorts,
+  kindColor,
+  layoutCardPorts,
   nodeBBox,
   nodeHeight,
-  portAnchorLocal,
-  portSide,
+  rowTag,
+  type BoxCat,
   type LaidPort,
   type Mode,
   type PortSide,
   type Tool,
   type UserEdge,
   type UserNode,
+  type VStatus,
 } from './BuilderShared'
 
 // The builder canvas: the seeded germline DAG + reference cards + terminal gate + advisory
@@ -39,8 +46,27 @@ import {
 // inner plane's getBoundingClientRect() ÷ the CSS `zoom` factor, so every gesture stays true when
 // zoomed (the inner plane uses non-standard CSS `zoom`, not a transform — see §Q4 of the design).
 
-const INNER_W = 2560
-const INNER_H = 460
+// The content plane. Widened + made taller for the enlarged 296px cards laid out in one row
+// (fastp@40 → MultiQC@2200) with the ingest band + terminal gate to their right (gate right edge
+// ≈3008), and the reference band above the spine — so the plane + minimap scale still frame it all.
+const INNER_W = 3120
+const INNER_H = 560
+// Layout landmarks shared by the seeded cards + minimap + centering (kept in ONE place so a re-space
+// updates render, Fit, and the minimap together). Tools sit at TOOL_Y; references in a band above
+// (REF_Y); ingest + gate to the right of MultiQC.
+const REF_Y = 40 // reference source band, above the tool spine (was below at 372; the taller cards would collide)
+const INGEST_X = 2560
+const INGEST_Y = 200
+const GATE_X = 2800
+const GATE_Y = 180
+const AGENT_X = 2800
+const AGENT_Y = 60
+const GATE_PORT_Y = GATE_Y + 36 // the gate's non-composable run/ input port (item 4 display connector)
+const TERM_RAIL_Y = 490 // a rail below the card row so the norm → ingest connector clears MultiQC (item 4)
+// Mount/Fit centering target (content coords include the plane's 360/480 margin): center of the
+// full seeded extent (x 40..3008 → ~1524; tools y 180..~471 → ~325).
+const CENTER_X = 1884
+const CENTER_Y = 805
 // The inner content plane carries a fixed margin (see the plane style below). The dot grid must fill
 // the ENTIRE scroll surface — the plane box PLUS its margin gutters — so the alignment dots never run
 // out when panning past the cards. PAD_X/PAD_Y mirror that margin ('480px 360px') so an oversized dot
@@ -81,15 +107,23 @@ function routeEdge(
   const d = `M${a.x} ${a.y} L${ax2} ${ay2} H${mx} V${by2} H${bx2} L${b.x} ${b.y}`
   return { d, mid: { x: mx, y: Math.round((ay2 + by2) / 2) } }
 }
-// Absolute-position + half-circle shape for a laid port: the flat side sits ON the card edge at
-// (lx, ly) — the wire anchor — and the round bulge pokes OUTWARD (cards render overflow-visible).
+// Card border widths, shared by ToolCard + UserCard: a 3px coloured left spine + 1px on the other
+// three sides. Ports are position:absolute CHILDREN, so their left/top resolve against the card's
+// PADDING box (inside the borders) — WITHOUT compensation a left port lands ON the 3px spine and a
+// right port overhangs the edge. BORD_X/BORD_Y shift every port so its FLAT SIDE sits on the card's
+// OUTER border-box edge (= p.lx / p.ly, where the wire anchor lives), so the port and the wire tip
+// meet exactly. (A1 — ported from the design mockup's portStyle.)
+const BORD_X = 3 // card border-left width (the spine)
+const BORD_Y = 1 // card top/right/bottom border width
+// Absolute-position + half-circle shape for a laid port: the flat side sits ON the card's outer
+// border-box edge at (lx, ly) — the wire anchor — and the round bulge pokes OUTWARD (overflow-visible).
 function portBoxStyle(p: LaidPort): React.CSSProperties {
   const R = PORT_R
   const base: React.CSSProperties = { position: 'absolute', boxSizing: 'border-box' }
-  if (p.side === 'left') return { ...base, left: p.lx - R, top: p.ly - R, width: R, height: 2 * R, borderRadius: '999px 0 0 999px' }
-  if (p.side === 'right') return { ...base, left: p.lx, top: p.ly - R, width: R, height: 2 * R, borderRadius: '0 999px 999px 0' }
-  if (p.side === 'top') return { ...base, left: p.lx - R, top: p.ly - R, width: 2 * R, height: R, borderRadius: '999px 999px 0 0' }
-  return { ...base, left: p.lx - R, top: p.ly, width: 2 * R, height: R, borderRadius: '0 0 999px 999px' }
+  if (p.side === 'left') return { ...base, left: p.lx - R - BORD_X, top: p.ly - R - BORD_Y, width: R, height: 2 * R, borderRadius: '999px 0 0 999px' }
+  if (p.side === 'right') return { ...base, left: p.lx - BORD_X, top: p.ly - R - BORD_Y, width: R, height: 2 * R, borderRadius: '0 999px 999px 0' }
+  if (p.side === 'top') return { ...base, left: p.lx - R - BORD_X, top: p.ly - R - BORD_Y, width: 2 * R, height: R, borderRadius: '999px 999px 0 0' }
+  return { ...base, left: p.lx - R - BORD_X, top: p.ly - BORD_Y, width: 2 * R, height: R, borderRadius: '0 0 999px 999px' }
 }
 
 // The seeded germline wiring [fromNode, outKind, toNode, inKind], typed so the computed edges
@@ -123,6 +157,10 @@ type CanvasProps = {
   // false for a blank/new pipeline: render only the terminal gate + ingest band + user nodes,
   // not the hardcoded seeded germline chain (so a "New → Blank" canvas is actually empty).
   showSeeded: boolean
+  // The linked run's non-composable terminals (the gate's run/ input port, the advisory agent, the
+  // ingest connectors + tether) render whenever this is the linked doc, even once the germline itself
+  // is editable user nodes and showSeeded is off (ADR-0019 slice 1a).
+  showTerminals: boolean
   selected: string | null
   selNodes: Set<string> // multi-selection (user nodes only)
   selEdge: number | null // index into userEdges, or null
@@ -163,6 +201,7 @@ export function BuilderCanvas(props: CanvasProps) {
   const {
     mode,
     showSeeded,
+    showTerminals,
     selected,
     selNodes,
     selEdge,
@@ -194,8 +233,8 @@ export function BuilderCanvas(props: CanvasProps) {
     if (!el || centered.current) return
     centered.current = true
     requestAnimationFrame(() => {
-      el.scrollLeft = Math.max(0, 1685 - el.clientWidth / 2)
-      el.scrollTop = Math.max(0, 713 - el.clientHeight / 2)
+      el.scrollLeft = Math.max(0, CENTER_X - el.clientWidth / 2)
+      el.scrollTop = Math.max(0, CENTER_Y - el.clientHeight / 2)
       updateVpRef.current()
     })
   }, [])
@@ -247,8 +286,8 @@ export function BuilderCanvas(props: CanvasProps) {
     props.onZoom(1)
     const el = scrollRef.current
     if (!el) return
-    let tx = 1685
-    let ty = 713
+    let tx = CENTER_X
+    let ty = CENTER_Y
     if (userNodes.length) {
       const xs = userNodes.map((n) => n.x)
       const ys = userNodes.map((n) => n.y)
@@ -278,11 +317,14 @@ export function BuilderCanvas(props: CanvasProps) {
   const anchorFull = (id: string, dir: 'out' | 'in', idx: number): { x: number; y: number; side: PortSide } | null => {
     const n = userNodes.find((u) => u.id === id)
     if (!n) return null
-    const kind = (dir === 'out' ? n.outs : n.ins)[idx]
-    if (kind == null) return null
-    const local = portAnchorLocal(n.ins, n.outs, UW, nodeHeight(n), dir, idx)
-    if (!local) return null
-    return { x: n.x + local.x, y: n.y + local.y, side: portSide(kind, dir) }
+    // Resolve the EXACT laid port (position + side) from the SAME layout the card renders with, so a
+    // wire endpoint and its half-circle are one point — even with reserved ports present. Wire-to-tip:
+    // offset the endpoint outward by PORT_R along the port's side normal so it meets the outer edge of
+    // the half-circle (portBoxStyle keeps the flat side on the card edge; only the WIRE anchor moves).
+    const p = layoutCardPorts(n.name, n.ins, n.outs, UW, nodeHeight(n)).find((q) => q.dir === dir && q.idx === idx)
+    if (!p) return null
+    const [nx, ny] = sideVec(p.side)
+    return { x: n.x + p.lx + nx * PORT_R, y: n.y + p.ly + ny * PORT_R, side: p.side }
   }
   // Keep the ORIGINAL userEdges index on each drawn edge so selection/delete address the right wire
   // (a filtered array would renumber and mis-target).
@@ -307,26 +349,53 @@ export function BuilderCanvas(props: CanvasProps) {
     const outs = t.outputs.map((p) => p.kind)
     const idx = (dir === 'out' ? outs : ins).findIndex((k) => k === kind)
     if (idx < 0) return null
-    const local = portAnchorLocal(ins, outs, TW, cardHeight(ins, outs), dir, idx)
-    if (!local) return null
-    return { x: t.x + local.x, y: t.y + local.y, side: portSide(kind, dir) }
+    const p = layoutCardPorts(t.tool, ins, outs, TW, cardHeight(t.tool, ins, outs)).find((q) => q.dir === dir && q.idx === idx)
+    if (!p) return null
+    const [nx, ny] = sideVec(p.side)
+    return { x: t.x + p.lx + nx * PORT_R, y: t.y + p.ly + ny * PORT_R, side: p.side }
   }
+  // Kind-COLOURED wires (B#1): stroke each seeded wire by its data-kind via kindColor (a theme-aware
+  // --k-* var) instead of a flat grey — fastq violet, bam blue, vcf teal, and the QC fan-in gold
+  // (coloured by the OUTPUT kind fk, so the fan-in reads gold automatically).
   const seededPaths = SEEDED_WIRES.map(([fid, fk, tid, tk]) => {
     const a = toolAnchorFull(fid, 'out', fk)
     const b = toolAnchorFull(tid, 'in', tk)
     if (!a || !b) return null
-    return routeEdge(a, b).d
-  }).filter((d): d is string => d != null)
-  // Reference cards sit BELOW the spine (y≈372); their edges RISE over a rail into a tool's TOP
-  // reference port (references enter from the top, builder-cards §2) — approaching from above.
+    return { d: routeEdge(a, b).d, color: kindColor(fk) }
+  }).filter((e): e is { d: string; color: string } => e != null)
+  // Reference cards sit ABOVE the spine (y = REF_Y); their edges DESCEND from the ref card bottom into
+  // the tool's reference port — which now lives on the LEFT side (batch 3a: ports are left/right only).
+  // routeEdge(bottom → left) drops from the ref card, then comes into the left port from the left. b is
+  // already the port TIP (toolAnchorFull offsets by PORT_R), so the wire meets the half-circle.
   const refPaths = REF_WIRES.map(([rid, tid, tk]) => {
     const r = REFS.find((x) => x.id === rid)
     const b = toolAnchorFull(tid, 'in', tk)
     if (!r || !b) return null
-    const ax = r.x + 75 // ref card horizontal center (card is 150 wide)
-    const railY = 150 // rail just above the tool spine (tools at y≈180), so the wire drops into the top port
-    return `M${ax} 372 V${railY} H${b.x} V${b.y}`
-  }).filter((d): d is string => d != null)
+    const a = { x: r.x + 75, y: REF_Y + 52, side: 'bottom' as PortSide } // ref card bottom-centre (card is 150 wide)
+    return { d: routeEdge(a, b).d, color: kindColor(tk) }
+  }).filter((e): e is { d: string; color: string } => e != null)
+
+  // Item 4 — non-composable DISPLAY connectors for the terminal cluster (norm/MultiQC → ingest → gate).
+  // These are pure SVG, seeded-view only; they are NEVER UserEdges and never touch the wiring model.
+  // norm → ingest dips below the card row (TERM_RAIL_Y) so it clears MultiQC in the single-row layout;
+  // MultiQC → ingest is a short hop into the left edge; ingest → gate lands on the gate's run/ port.
+  const termConnectors: string[] = []
+  if (showTerminals) {
+    const normOut = toolAnchorFull('n_norm', 'out', 'filtered_vcf')
+    const mqOut = toolAnchorFull('n_multiqc', 'out', 'multiqc_json')
+    const ingY = INGEST_Y + 75
+    // Rail below the TALLEST tool card so the norm → ingest connector always clears MultiQC (whose
+    // height grows with its port count), computed from the same cardHeight the cards render with.
+    const railY = Math.max(
+      TERM_RAIL_Y,
+      24 + Math.max(...TOOLS.map((t) => t.y + cardHeight(t.tool, t.inputs.map((p) => p.kind), t.outputs.map((p) => p.kind)))),
+    )
+    if (normOut) termConnectors.push(`M${normOut.x} ${normOut.y} H${normOut.x + 16} V${railY} H${INGEST_X + 80} V${INGEST_Y + 150}`)
+    if (mqOut) termConnectors.push(`M${mqOut.x} ${mqOut.y} H${mqOut.x + 16} V${ingY} H${INGEST_X}`)
+    termConnectors.push(`M${INGEST_X + 160} ${ingY} H${INGEST_X + 176} V${GATE_PORT_Y} H${GATE_X - PORT_R}`)
+  }
+  // Advisory tether gate ↔ agent (agent sits above the gate) — dotted accent, non-composable.
+  const tetherPath = showTerminals ? `M${GATE_X + 104} ${GATE_Y} L${AGENT_X + 116} ${AGENT_Y + 62}` : null
 
   // Convert a viewport point to CONTENT coords: subtract the inner plane's on-screen origin and
   // divide by the CSS `zoom` factor. This is the ONLY correct transform for the zoomed plane —
@@ -453,13 +522,19 @@ export function BuilderCanvas(props: CanvasProps) {
           />
           <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={INNER_W} height={INNER_H}>
             {showSeeded &&
-              seededPaths.map((d, i) => (
-                <path key={`s${i}`} d={d} fill="none" stroke="#c6ced7" strokeWidth={1.5} />
+              seededPaths.map((p, i) => (
+                <path key={`s${i}`} d={p.d} fill="none" stroke={p.color} strokeWidth={2} />
               ))}
             {showSeeded &&
-              refPaths.map((d, i) => (
-                <path key={`r${i}`} d={d} fill="none" stroke="#d3dae1" strokeWidth={1.25} strokeDasharray="5 4" />
+              refPaths.map((p, i) => (
+                <path key={`r${i}`} d={p.d} fill="none" stroke={p.color} strokeWidth={1.5} strokeDasharray="5 4" />
               ))}
+            {/* Item 4 — non-composable terminal connectors (norm/MultiQC → ingest → gate), dotted neutral,
+                + the advisory tether (dotted accent). Display-only; not graph edges. */}
+            {termConnectors.map((d, i) => (
+              <path key={`term${i}`} d={d} fill="none" stroke="var(--color-text-3)" strokeWidth={1.6} strokeDasharray="2 4" />
+            ))}
+            {tetherPath && <path d={tetherPath} fill="none" stroke="var(--color-accent)" strokeWidth={1.4} strokeDasharray="2 4" opacity={0.8} />}
             {/* Live alignment guides (single-node drag) — full-extent dashed accent lines. */}
             {guides?.x != null && (
               <line x1={guides.x} y1={-1000} x2={guides.x} y2={INNER_H + 2000} stroke="var(--color-accent)" strokeWidth={1} strokeDasharray="4 3" />
@@ -545,7 +620,34 @@ export function BuilderCanvas(props: CanvasProps) {
               <RefCard key={r.id} r={r} selected={selected === r.id} onSelect={props.onSelect} />
             ))}
           <GateCard isView={isView} selected={selected === 'g_gate'} segs={segs} onSelect={props.onSelect} />
-          {showSeeded && <AgentPill selected={selected === 'a_qc_triage'} onSelect={props.onSelect} />}
+          {/* Item 4 — the gate's non-composable run/ INPUT: a dashed escalate half-circle on the gate's
+              left edge (a canvas-plane sibling, so the gate's overflow-hidden doesn't clip it) + label.
+              It reads run/ via deterministic ingest — not a typed data edge. */}
+          {showTerminals && (
+            <>
+              <span
+                className="pointer-events-none absolute z-[4]"
+                title="run/ · ingest input · not a typed data edge"
+                style={{
+                  left: GATE_X - PORT_R,
+                  top: GATE_PORT_Y - PORT_R,
+                  width: PORT_R,
+                  height: 2 * PORT_R,
+                  borderRadius: '999px 0 0 999px',
+                  background: 'var(--color-card)',
+                  border: '1.5px dashed var(--color-escalate)',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <span
+                className="pointer-events-none absolute z-[4] font-mono text-[8px] font-bold"
+                style={{ left: GATE_X - 32, top: GATE_PORT_Y - 16, color: 'var(--color-escalate-fg)' }}
+              >
+                run/
+              </span>
+            </>
+          )}
+          {showTerminals && <AgentPill selected={selected === 'a_qc_triage'} onSelect={props.onSelect} />}
 
           {userNodes.map((n) => (
             <UserCard
@@ -645,7 +747,7 @@ export function BuilderCanvas(props: CanvasProps) {
                 left: t.x * MM_SCALE,
                 top: MM_VPAD + t.y * MM_SCALE,
                 width: TW * MM_SCALE,
-                height: cardHeight(t.inputs.map((p) => p.kind), t.outputs.map((p) => p.kind)) * MM_SCALE,
+                height: cardHeight(t.tool, t.inputs.map((p) => p.kind), t.outputs.map((p) => p.kind)) * MM_SCALE,
               }}
             />
           ))}
@@ -654,13 +756,13 @@ export function BuilderCanvas(props: CanvasProps) {
             <span
               key={r.id}
               className="absolute rounded-[1px] bg-line"
-              style={{ left: r.x * MM_SCALE, top: MM_VPAD + 372 * MM_SCALE, width: 150 * MM_SCALE, height: 40 * MM_SCALE }}
+              style={{ left: r.x * MM_SCALE, top: MM_VPAD + REF_Y * MM_SCALE, width: 150 * MM_SCALE, height: 40 * MM_SCALE }}
             />
           ))}
         {/* terminal gate */}
         <span
           className="absolute rounded-[1px] bg-text-3"
-          style={{ left: 2100 * MM_SCALE, top: MM_VPAD + 196 * MM_SCALE, width: Math.max(4, 120 * MM_SCALE), height: 64 * MM_SCALE }}
+          style={{ left: GATE_X * MM_SCALE, top: MM_VPAD + GATE_Y * MM_SCALE, width: Math.max(4, 208 * MM_SCALE), height: 64 * MM_SCALE }}
         />
         {userNodes.map((n) => (
           <span
@@ -705,6 +807,9 @@ export function BuilderCanvas(props: CanvasProps) {
         </button>
       </div>
 
+      {/* Card-system legend — a dismissible panel toggled from the canvas top-left (item 3). */}
+      <BuilderLegend edit={!isView} />
+
       {/* Multi-selection action bar (align / distribute / duplicate / delete). */}
       {!isView && selNodes.size > 1 && (
         <SelectionActionBar
@@ -719,35 +824,152 @@ export function BuilderCanvas(props: CanvasProps) {
   )
 }
 
-// A typed half-circle port on a card edge. `interactive`=false for the read-only seeded cards; the
-// composed UserCard adds the data-* + handlers itself. The flat side sits on the edge = the wire
-// anchor; ref-kind ports render outlined (top references), data/metric ports filled.
-function PortHalf({ p, fill, border, className }: { p: LaidPort; fill: string; border: string; className?: string }) {
+// ── Shared card-port rendering (builder-cards §2/§3) — used by BOTH ToolCard (read-only) and
+// UserCard (interactive), so a port looks identical whichever card hosts it. ──
+
+// Per-stage accent hue for the header stage label + the top stage strip (mockup --stage-* vars,
+// inlined so no extra CSS tokens are needed — these mid-tones read on both themes).
+// Theme-aware via the --stage-* vars in index.css (B#3): the dark set brightens so the strip/label
+// stay legible on the dark card (the previous fixed light hexes read dim on dark).
+const STAGE_HEX: Record<string, string> = {
+  'Read QC + trim': 'var(--stage-readqc)',
+  Alignment: 'var(--stage-align)',
+  'Duplicate marking': 'var(--stage-dedup)',
+  Coverage: 'var(--stage-cov)',
+  'Variant calling': 'var(--stage-var)',
+  'Filter / normalize': 'var(--stage-var)',
+  'QC aggregation': 'var(--stage-agg)',
+}
+const LIST_ROW_H = 15
+
+// Batch 3a point 1 — the run status is now carried by the card's LEFT SPINE (no number badge): the
+// bound-run vstatus colours the 3px rail (passed / attention / blocked), neutral when no run is bound
+// (a fresh compose). Honest: per-STEP pass/attention from the pre-committed run, not live "running".
+type RunStatus = 'passed' | 'attention' | 'blocked' | 'notrun'
+const RUN_STATUS: Record<RunStatus, { rail: string; label: string }> = {
+  passed: { rail: 'var(--color-proceed)', label: 'passed' },
+  attention: { rail: 'var(--color-hold)', label: 'needs attention' },
+  blocked: { rail: 'var(--color-escalate)', label: 'blocked' },
+  notrun: { rail: '#c6ced7', label: 'not run' },
+}
+function runStatusOf(isView: boolean, vstatus: VStatus): RunStatus {
+  if (!isView) return 'notrun' // a fresh compose has no bound run
+  return vstatus === 'ok' ? 'passed' : vstatus === 'warn' ? 'attention' : 'blocked'
+}
+
+// Half-circle fill/border by data-kind + state (mockup portFillStyle). Reference-kind inputs render
+// OUTLINED (card bg); required = solid kind fill; optional = 40% kind fill; reserved = dashed hollow,
+// dimmed. Verdict palette is never used here (kindColor is the verdict-safe --k-* family).
+function portVisualStyle(p: LaidPort): React.CSSProperties {
+  const col = kindColor(p.kind)
+  if (isRefKind(p.kind)) {
+    return { background: 'var(--color-card)', borderColor: col, ...(p.state === 'reserved' ? { borderStyle: 'dashed', opacity: 0.7 } : {}) }
+  }
+  if (p.state === 'reserved') return { background: 'transparent', borderColor: col, borderStyle: 'dashed', opacity: 0.7 }
+  if (p.state === 'optional') return { background: `color-mix(in srgb, ${col} 40%, transparent)`, borderColor: col }
+  return { background: col, borderColor: col }
+}
+// A non-interactive port half-circle (seeded ToolCard). The flat side sits on the edge = the wire tip.
+function StaticPort({ p }: { p: LaidPort }) {
   return (
     <span
-      title={`${p.kind} · ${p.dir}`}
-      className={className}
-      style={{ ...portBoxStyle(p), border: `1.5px solid ${border}`, background: isRefKind(p.kind) ? 'var(--color-card)' : fill, zIndex: 4 }}
+      className="pointer-events-none absolute"
+      title={`#${p.cidx} · ${p.kind} · ${p.dir} · ${p.state}`}
+      style={{ ...portBoxStyle(p), borderWidth: 1.5, borderStyle: 'solid', zIndex: 4, ...portVisualStyle(p) }}
     />
   )
 }
-// Small kind label for a LEFT/RIGHT port, hugging the card edge inside the body (top/bottom ports
-// stay label-free — the half-circle + hover title carry them, keeping the header/footer clear).
-function PortLabel({ p, w, className }: { p: LaidPort; w: number; className: string }) {
-  if (p.side !== 'left' && p.side !== 'right') return null
+// Batch 3a point 2 — the per-port NUMBER marker sits OUTSIDE the card, just beyond its half-circle
+// (a left port's number to the left of the card, a right port's to the right), aligned on the port's
+// y. Moving them out frees the interior for the three boxes. Digit centred (leading-none); a solid
+// card bg + shadow so a wired port's number reads over the wire it sits on.
+function PortIndexChip({ p, w }: { p: LaidPort; w: number }) {
+  const pos = p.side === 'left' ? { left: -26, top: p.ly - BORD_Y - 7 } : { left: w + 6, top: p.ly - BORD_Y - 7 }
   return (
     <span
-      className={`pointer-events-none absolute truncate font-mono text-[9px] ${className}`}
-      style={{ top: p.ly - 7, maxWidth: w / 2 - 10, ...(p.side === 'left' ? { left: PORT_R + 5 } : { right: PORT_R + 5, textAlign: 'right' as const }) }}
+      className="pointer-events-none absolute z-[6] grid h-3.5 w-3.5 place-items-center rounded-full bg-card text-[8px] font-bold leading-none text-text-2 shadow-card"
+      style={{ ...pos, border: `1px solid ${kindColor(p.kind)}` }}
     >
-      {p.kind}
+      {p.cidx}
     </span>
+  )
+}
+// The category-tag chip on a box row (refine pass): one consistent set across every box — REQ / REF /
+// OPT / RSVD. REQ neutral, REF tinted with the reference-kind colour, OPT accent (wireable now), RSVD
+// muted (reserved). Same chip shape/size for all four so the tag column reads as one column.
+const TAG_CLASS: Record<'REQ' | 'OPT' | 'RSVD', string> = {
+  REQ: 'bg-card-2 text-text-2',
+  OPT: 'bg-accent-weak text-accent-strong',
+  RSVD: 'bg-card-3 text-text-3',
+}
+function RowTagChip({ tag }: { tag: ReturnType<typeof rowTag> }) {
+  if (tag === 'REF')
+    return (
+      <span
+        className="shrink-0 rounded px-1 text-[7.5px] font-bold uppercase leading-none"
+        style={{ background: 'color-mix(in srgb, var(--k-ref) 18%, transparent)', color: 'var(--k-ref)' }}
+      >
+        REF
+      </span>
+    )
+  return <span className={`shrink-0 rounded px-1 text-[7.5px] font-bold uppercase leading-none ${TAG_CLASS[tag]}`}>{tag}</span>
+}
+// One gray box (batch 3a point 3, columned in the refine pass): a titled panel whose rows are aligned
+// COLUMNS — number-circle · kind · dir · tag. Each row is one PORT (un-deduped) so the columns line up.
+// A box with many ports (boxCols → 2) lays them in a compact 2-column grid, column-major (reads down
+// then across), so it stays scannable instead of a tall list. The number keys to the OUTSIDE marker.
+function ConnBox({ cat, title, ports, top }: { cat: BoxCat; title: string; ports: LaidPort[]; top: number }) {
+  const cols = boxCols(ports.length)
+  const rowsPerCol = Math.ceil(ports.length / cols)
+  return (
+    <div
+      className="pointer-events-none absolute left-[11px] right-[11px] rounded-lg border border-line px-2 pb-1.5 pt-1"
+      style={{ top, background: 'color-mix(in srgb, var(--color-card-2) 60%, transparent)' }}
+    >
+      <div className="mb-0.5 text-[8px] font-bold uppercase tracking-[0.5px] text-text-3">{title} · {ports.length}</div>
+      <div
+        className="grid gap-x-2.5"
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rowsPerCol}, ${LIST_ROW_H}px)`, gridAutoFlow: 'column' }}
+      >
+        {ports.map((p) => (
+          <div key={p.pidx} className="flex items-center gap-1.5">
+            <span
+              className="inline-grid h-[13px] w-[13px] shrink-0 place-items-center rounded-full bg-card text-[7.5px] font-bold leading-none text-text-2"
+              style={{ border: `1px solid ${kindColor(p.kind)}` }}
+            >
+              {p.cidx}
+            </span>
+            <span className="min-w-0 flex-1 truncate font-mono text-[9.5px] text-text">{p.kind}</span>
+            <span className="shrink-0 text-[8px] text-text-3">{p.dir}</span>
+            <RowTagChip tag={rowTag(cat, p.state)} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+// The THREE separate gray boxes (batch 3a point 3), stacked top→bottom: REQUIRED, REFERENCE,
+// OPTIONAL / RESERVED — each rendered only when it has ports; height follows its 1/2-column layout.
+function CardBoxes({ laid }: { laid: LaidPort[] }) {
+  let top = BOX_TOP
+  return (
+    <>
+      {BOX_META.map(({ cat, title }) => {
+        const ports = boxPorts(laid, cat)
+        if (!ports.length) return null
+        const at = top
+        top += 24 + Math.ceil(ports.length / boxCols(ports.length)) * LIST_ROW_H + 8
+        return <ConnBox key={cat} cat={cat} title={title} ports={ports} top={at} />
+      })}
+    </>
   )
 }
 
 function ToolCard({ t, isView, selected, onSelect }: { t: Tool; isView: boolean; selected: boolean; onSelect: (id: string) => void }) {
   const badge = PG_BADGE[t.pg]
-  const rail = isView ? V_COLOR[t.vstatus] : '#c6ced7'
+  // Batch 3a point 1 — the LEFT SPINE now carries the full run-status colour (passed green / attention
+  // amber / blocked red / neutral not-run) via runStatusOf; the 0–6 number badge is removed entirely.
+  const rail = RUN_STATUS[runStatusOf(isView, t.vstatus)].rail
   // Per-side borders (not the `border` shorthand) so the 3px colored left spine can coexist
   // with the other sides without React's shorthand/longhand conflict warning.
   const cardBorder = selected
@@ -758,17 +980,19 @@ function ToolCard({ t, isView, selected, onSelect }: { t: Tool; isView: boolean;
   const Icon = ICONS[t.icon]
   const ins = t.inputs.map((p) => p.kind)
   const outs = t.outputs.map((p) => p.kind)
-  const H = cardHeight(ins, outs)
-  const laid = layoutPorts(ins, outs, TW, H)
-  const portFill = isView ? 'var(--color-text-3)' : 'var(--color-line-strong)'
+  const H = cardHeight(t.tool, ins, outs)
+  const laid = layoutCardPorts(t.tool, ins, outs, TW, H)
+  const stageHex = STAGE_HEX[t.stageLabel] ?? 'var(--color-text-3)'
   return (
     <button
       onClick={(e) => {
         e.stopPropagation()
         onSelect(t.id)
       }}
-      // overflow VISIBLE so the four-sided half-circle ports can poke past the card edge.
-      className="absolute rounded-xl text-left"
+      // overflow VISIBLE so the four-sided half-circle ports can poke past the card edge. Card-state
+      // shading (default / hover / selected) comes from the .pg-node classes (item 1) — box-shadow
+      // lives there so :hover can lift; the inline border keeps the dynamic rail.
+      className={`pg-node absolute rounded-xl text-left${selected ? ' is-selected' : ''}`}
       style={{
         left: t.x,
         top: t.y,
@@ -780,28 +1004,43 @@ function ToolCard({ t, isView, selected, onSelect }: { t: Tool; isView: boolean;
         borderRight: cardBorder,
         borderBottom: cardBorder,
         borderLeft: `3px ${isView || selected ? 'solid' : 'dashed'} ${rail}`,
-        boxShadow: selected ? '0 0 0 2px var(--color-accent-weak), 0 6px 18px rgba(16,24,40,.13)' : '0 1px 2px rgba(16,24,40,.05)',
       }}
     >
-      <div className="flex items-center gap-2 px-3" style={{ height: CARD_HEADER_H }}>
-        <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${isView ? 'bg-card-2 text-text' : 'bg-card-3 text-text-3'}`}>
-          <Icon size={15} />
+      {/* PG pill in an absolute top-right slot; the header reserves 90px on the right (no truncation).
+          The run-status is on the spine now (no top-left badge — batch 3a point 1). */}
+      <span
+        className="absolute z-[5] rounded-[5px] px-[7px] py-0.5 text-[8.5px] font-bold uppercase tracking-wide"
+        style={{ top: 9, right: 12, color: badge.fg, background: badge.bg }}
+      >
+        {badge.label}
+      </span>
+      {/* Header pinned to the top (absolute — a native <button> would otherwise vertically-center its
+          only in-flow child). Ports are now left/right only + numbered OUTSIDE, so no top gutter. */}
+      <div className="absolute inset-x-0 top-0 flex items-center gap-2.5 pl-3 pr-[90px]" style={{ height: CARD_HEADER_H }}>
+        <span className={`grid h-[30px] w-[30px] shrink-0 place-items-center rounded-lg ${isView ? 'bg-card-2 text-text' : 'bg-card-3 text-text-3'}`}>
+          <Icon size={16} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className={`block truncate text-[12.5px] font-semibold ${isView ? 'text-text' : 'text-text-2'}`}>{t.tool}</span>
-          <span className="block font-mono text-[10px] text-text-3">{t.version}</span>
-        </span>
-        <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: badge.fg, background: badge.bg }}>
-          {badge.label}
+          <span className={`block truncate font-mono text-[12.5px] font-semibold ${isView ? 'text-text' : 'text-text-2'}`}>{t.tool}</span>
+          <span className="mt-0.5 flex items-center gap-1.5">
+            <span className="shrink-0 rounded border border-line bg-card-2 px-1 font-mono text-[10px] text-text-2">{t.version}</span>
+            <span className="text-[10px] text-text-3">·</span>
+            <span className="truncate text-[9px] font-bold uppercase tracking-[0.4px]" style={{ color: stageHex }}>
+              {t.stageLabel}
+            </span>
+          </span>
         </span>
       </div>
+      {/* Stage strip — a thin stage-coloured line under the header (mockup .strip). */}
+      <span className="absolute left-[3px] right-0 h-1" style={{ top: CARD_HEADER_H, background: stageHex, borderRadius: '0 3px 0 0' }} />
       {laid.map((p) => (
-        <PortHalf key={`p${p.dir}${p.idx}`} p={p} fill={portFill} border={portFill} className="pointer-events-none" />
+        <StaticPort key={p.pidx} p={p} />
       ))}
       {laid.map((p) => (
-        <PortLabel key={`l${p.dir}${p.idx}`} p={p} w={TW} className={isView ? 'text-text-2' : 'text-text-3'} />
+        <PortIndexChip key={`c${p.pidx}`} p={p} w={TW} />
       ))}
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 px-3" style={{ height: CARD_FOOTER_H }}>
+      <CardBoxes laid={laid} />
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 border-t border-line px-3" style={{ height: CARD_FOOTER_H }}>
         <span className="h-1.5 w-1.5 rounded-full" style={{ background: isView ? V_COLOR[t.vstatus] : '#8b95a1' }} />
         <span className="text-[9.5px] font-bold uppercase tracking-[0.4px]" style={{ color: isView ? V_COLOR[t.vstatus] : 'var(--color-text-3)' }}>
           {isView ? t.vstatus : 'draft'}
@@ -821,7 +1060,7 @@ function RefCard({ r, selected, onSelect }: { r: (typeof REFS)[number]; selected
       className="absolute w-[150px] rounded-[10px] px-2.5 py-2 text-left"
       style={{
         left: r.x,
-        top: 372,
+        top: REF_Y,
         background: 'var(--color-card)',
         borderTop: selected ? '1px solid var(--color-accent)' : '1px solid var(--color-line)',
         borderRight: selected ? '1px solid var(--color-accent)' : '1px solid var(--color-line)',
@@ -844,7 +1083,7 @@ function IngestBand() {
   return (
     <div
       className="absolute flex flex-col items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-line-strong bg-card-3 p-3.5 text-center"
-      style={{ left: 2100, top: 180, width: 160, height: 150 }}
+      style={{ left: INGEST_X, top: INGEST_Y, width: 160, height: 150 }}
     >
       <span className="text-[10px] font-bold uppercase tracking-[0.3px] text-text-2">Deterministic ingest</span>
       <p className="font-mono text-[9.5px] leading-snug text-text-3">
@@ -863,10 +1102,10 @@ function AgentPill({ selected, onSelect }: { selected: boolean; onSelect: (id: s
         e.stopPropagation()
         onSelect('a_qc_triage')
       }}
-      className="absolute box-border w-52 rounded-2xl border-[1.5px] border-dashed border-accent bg-accent-weak px-3 py-2 text-left"
-      style={{ left: 2300, top: 92, boxShadow: selected ? '0 0 0 2px var(--color-accent-weak), 0 5px 14px rgba(31,95,208,.2)' : 'none' }}
+      className="absolute box-border w-[232px] rounded-[14px] border-[1.5px] border-dashed border-accent bg-accent-weak px-3 py-2 text-left"
+      style={{ left: AGENT_X, top: AGENT_Y, boxShadow: selected ? '0 0 0 2px var(--color-accent-weak), 0 5px 14px rgba(31,95,208,.2)' : 'none' }}
     >
-      <div className="text-[8.5px] font-bold uppercase tracking-[0.5px] text-accent-strong">Advisory</div>
+      <div className="text-[8.5px] font-bold uppercase tracking-[0.5px] text-accent-strong">Advisory · off-gate</div>
       <div className="mt-0.5 flex items-center gap-1.5">
         <Activity size={13} className="text-accent-strong" />
         <span className="flex-1 text-[12px] font-semibold text-accent-strong">QC-triage</span>
@@ -874,7 +1113,7 @@ function AgentPill({ selected, onSelect }: { selected: boolean; onSelect: (id: s
         <span className="font-mono text-[9.5px] text-text-2">stub</span>
       </div>
       <p className="mt-0.5 text-[9.5px] text-text-2">
-        observes <span className="font-mono">qc</span> · no data ports
+        observes <span className="font-mono">qc</span> · no data ports · never sets a verdict
       </p>
     </button>
   )
@@ -899,8 +1138,8 @@ function GateCard({
       }}
       className="absolute w-52 overflow-hidden rounded-xl text-left"
       style={{
-        left: 2300,
-        top: 180,
+        left: GATE_X,
+        top: GATE_Y,
         background: 'var(--color-card)',
         borderTop: selected ? '1px solid var(--color-accent)' : '1.5px solid var(--color-line-strong)',
         borderRight: selected ? '1px solid var(--color-accent)' : '1.5px solid var(--color-line-strong)',
@@ -910,7 +1149,10 @@ function GateCard({
       }}
     >
       <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
-        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-card-2 text-text-2">
+        <span
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg"
+          style={{ background: 'var(--color-escalate-bg)', color: 'var(--color-escalate-fg)' }}
+        >
           <ShieldCheckSmall />
         </span>
         <span className="min-w-0 flex-1">
@@ -994,12 +1236,19 @@ function UserCard({
   const highlight = armedNode || selected
   const Icon = ICONS[n.icon]
   const H = nodeHeight(n)
-  const laid = layoutPorts(n.ins, n.outs, UW, H)
+  // Same catalog-resolved layout as the seeded cards, so a template/forked node reuses the full
+  // typed-port card (panels + reserved slots); a hand-composed node with no catalog stays all-required.
+  const laid = layoutCardPorts(n.name, n.ins, n.outs, UW, H)
+  // Left spine carries the bound run's per-step status (passed/attention/blocked) exactly like the seeded
+  // ToolCard; neutral when the node has no bound run — a hand-composed node, or Edit mode (ADR-0019).
+  const rail = n.vstatus ? RUN_STATUS[runStatusOf(isView, n.vstatus)].rail : RUN_STATUS.notrun.rail
   return (
     <div
       onMouseDown={(e) => onDown(n.id, e)}
       onContextMenu={onContextMenu}
-      className="absolute select-none"
+      // Card-state shading (default / hover / selected) via .pg-node (item 1) — box-shadow lives in
+      // the class so :hover lifts; the inline border keeps the highlight (armed/selected) accent rail.
+      className={`pg-node absolute select-none${highlight ? ' is-selected' : ''}`}
       style={{
         left: n.x,
         top: n.y,
@@ -1007,11 +1256,11 @@ function UserCard({
         height: H,
         background: 'var(--color-card)',
         border: `1px solid ${highlight ? 'var(--color-accent)' : 'var(--color-line-strong)'}`,
-        borderLeft: `3px solid ${highlight ? 'var(--color-accent)' : '#c6ced7'}`,
+        borderLeft: `3px solid ${highlight ? 'var(--color-accent)' : rail}`,
         borderRadius: 11,
-        boxShadow: highlight ? '0 0 0 3px var(--color-accent-weak)' : '0 2px 8px rgba(16,24,40,.1)',
         cursor: connectMode ? 'default' : 'grab',
-        // overflow VISIBLE so the four-sided half-circle ports poke past the card edge.
+        // overflow VISIBLE so the half-circle ports poke past the card edge (ports are left/right only,
+        // numbered OUTSIDE — batch 3a — so no top gutter is needed).
         overflow: 'visible',
         zIndex: selected ? 6 : 5,
       }}
@@ -1038,7 +1287,7 @@ function UserCard({
                   onCancelRename()
                 }
               }}
-              className="block w-full rounded border border-accent bg-card px-1 py-0.5 text-[11.5px] font-semibold text-text outline-none"
+              className="block w-full rounded border border-accent bg-card px-1 py-0.5 font-mono text-[11.5px] font-semibold text-text outline-none"
             />
           ) : (
             <span
@@ -1047,7 +1296,7 @@ function UserCard({
                 e.stopPropagation()
                 onStartRename(n.id)
               }}
-              className="block truncate text-[11.5px] font-semibold text-text"
+              className="block truncate font-mono text-[11.5px] font-semibold text-text"
               title={isView ? undefined : 'Double-click to rename'}
             >
               {n.name}
@@ -1068,39 +1317,56 @@ function UserCard({
           </button>
         )}
       </div>
-      {/* Typed half-circle ports on all four sides — carry data-* so drag-to-connect resolves a drop
-          via elementFromPoint; the flat side is the wire anchor. Out ports start a wire on mousedown;
-          in/out both arm click-to-connect. Interactive (no pointer-events-none). */}
+      {/* Typed half-circle ports on all four sides, kind + state coloured. WIREABLE ports (required /
+          optional) carry data-* so drag-to-connect resolves a drop via elementFromPoint; out ports
+          start a wire on mousedown, in/out both arm click-to-connect. RESERVED ports render but are
+          NON-connectable — no data-* (elementFromPoint ignores them) and no handlers. */}
+      {laid.map((p) => {
+        if (p.state === 'reserved') {
+          return (
+            <span
+              key={p.pidx}
+              className="pointer-events-none absolute"
+              title={`#${p.cidx} · ${p.kind} · ${p.dir} · reserved`}
+              style={{ ...portBoxStyle(p), borderWidth: 1.5, borderStyle: 'solid', zIndex: 4, ...portVisualStyle(p) }}
+            />
+          )
+        }
+        const armed = connectFrom === `${n.id}|${p.dir}|${p.idx}`
+        return (
+          <span
+            key={p.pidx}
+            data-port="1"
+            data-node={n.id}
+            data-side={p.dir}
+            data-idx={p.idx}
+            data-kind={p.kind}
+            title={`#${p.cidx} · ${p.kind} · ${p.dir} · ${p.state}`}
+            onMouseDown={(e) => {
+              if (p.dir === 'out') onStartWireDrag(n.id, p.idx, e)
+              else e.stopPropagation()
+            }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onPortTap(n.id, p.dir, p.idx)
+            }}
+            style={{
+              ...portBoxStyle(p),
+              borderWidth: 1.5,
+              borderStyle: 'solid',
+              zIndex: 7,
+              ...portVisualStyle(p),
+              ...(armed ? { background: 'var(--color-accent)', borderColor: 'var(--color-accent)' } : {}),
+              cursor: connectMode ? 'pointer' : p.dir === 'out' ? 'crosshair' : 'default',
+            }}
+          />
+        )
+      })}
       {laid.map((p) => (
-        <span
-          key={`p${p.dir}${p.idx}`}
-          data-port="1"
-          data-node={n.id}
-          data-side={p.dir}
-          data-idx={p.idx}
-          data-kind={p.kind}
-          title={`${p.kind} · ${p.dir}`}
-          onMouseDown={(e) => {
-            if (p.dir === 'out') onStartWireDrag(n.id, p.idx, e)
-            else e.stopPropagation()
-          }}
-          onClick={(e) => {
-            e.stopPropagation()
-            onPortTap(n.id, p.dir, p.idx)
-          }}
-          style={{
-            ...portBoxStyle(p),
-            border: '2px solid var(--color-accent)',
-            background: connectFrom === `${n.id}|${p.dir}|${p.idx}` ? 'var(--color-accent)' : 'var(--color-card)',
-            cursor: connectMode ? 'pointer' : p.dir === 'out' ? 'crosshair' : 'default',
-            zIndex: 7,
-          }}
-        />
+        <PortIndexChip key={`c${p.pidx}`} p={p} w={UW} />
       ))}
-      {laid.map((p) => (
-        <PortLabel key={`l${p.dir}${p.idx}`} p={p} w={UW} className="text-text-2" />
-      ))}
-      <div className="absolute inset-x-0 bottom-0 flex items-center px-2.5" style={{ height: CARD_FOOTER_H }}>
+      <CardBoxes laid={laid} />
+      <div className="absolute inset-x-0 bottom-0 flex items-center border-t border-line px-2.5" style={{ height: CARD_FOOTER_H }}>
         <span className="inline-flex items-center gap-1.5 text-[8.5px] font-bold uppercase tracking-[0.4px] text-accent-strong">
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />
           draft

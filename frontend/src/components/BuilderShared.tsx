@@ -63,6 +63,10 @@ export type Tool = {
 
 // Free-composition node the operator drops onto the canvas (Edit). Visually identical to the
 // seeded DAG cards; carries typed I/O ports so Connect-mode wiring can enforce kind-matching.
+// `vstatus` (optional) carries a bound run's per-STEP QC status — set on the linked germline nodes
+// so their left spine reads passed/attention/blocked exactly as the seeded ToolCard did; a
+// hand-composed node has none (→ neutral 'not run'). It is display-only: the verdict is computed at
+// run time, never stored on the graph (README §7); it just retints the spine.
 export type UserNode = {
   id: string
   name: string
@@ -73,6 +77,7 @@ export type UserNode = {
   outs: string[]
   x: number
   y: number
+  vstatus?: VStatus
 }
 export type UserEdge = { from: { node: string; idx: number }; to: { node: string; idx: number } }
 
@@ -101,7 +106,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_bwa', tool: 'bwa-mem2', version: '2.2.1', stageLabel: 'Alignment', pg: 'partial', icon: 'merge',
-    x: 340, y: 180, vstatus: 'ok', inputs: [{ kind: 'fastq' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'bam' }],
+    x: 400, y: 180, vstatus: 'ok', inputs: [{ kind: 'fastq' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'bam' }],
     params: [
       { k: 'read_group', v: '@RG\\tID:HG002\\tSM:HG002', help: 'Read-group header' },
       { k: 'sort', v: 'coordinate', help: 'Output sort order' },
@@ -113,7 +118,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_markdup', tool: 'samtools markdup', version: '1.20', stageLabel: 'Duplicate marking', pg: 'full', icon: 'copy',
-    x: 640, y: 180, vstatus: 'ok', inputs: [{ kind: 'bam' }], outputs: [{ kind: 'bam' }, { kind: 'bai' }, { kind: 'markdup_metrics' }],
+    x: 760, y: 180, vstatus: 'ok', inputs: [{ kind: 'bam' }], outputs: [{ kind: 'bam' }, { kind: 'bai' }, { kind: 'markdup_metrics' }],
     params: [{ k: 'remove_duplicates', v: 'false', help: 'Mark, do not drop' }],
     io: [
       { name: 'HG002.md.bam', sha: 'sha256:7a11…4c2', size: '32 GB', origin: 'real-giab' },
@@ -122,7 +127,11 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_mosdepth', tool: 'mosdepth', version: '0.3.8', stageLabel: 'Coverage', pg: 'ours', icon: 'bars',
-    x: 940, y: 180, vstatus: 'warn', inputs: [{ kind: 'bam' }, { kind: 'panel_bed', ref: true }], outputs: [{ kind: 'mosdepth_summary' }, { kind: 'mosdepth_thresholds' }],
+    x: 1120, y: 180, vstatus: 'warn', inputs: [{ kind: 'bam' }, { kind: 'panel_bed', ref: true }],
+    // The 3 optional *_dist/regions coverage byproducts (mosdepth --by emits these) — the ONLY new
+    // WIREABLE graph ports this change adds (builder-cards/mosdepth.md §2/§3). They are compose
+    // affordances (bottom QC exits), NOT emitted run_layout locators: GIAB_LOC is untouched.
+    outputs: [{ kind: 'mosdepth_summary' }, { kind: 'mosdepth_thresholds' }, { kind: 'mosdepth_regions' }, { kind: 'mosdepth_global_dist' }, { kind: 'mosdepth_region_dist' }],
     params: [
       { k: 'by', v: 'panel.bed', help: 'Regions to summarise' },
       { k: 'thresholds', v: '1,10,20,30', help: 'Breadth thresholds (x)' },
@@ -133,7 +142,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_call', tool: 'bcftools call', version: '1.20', stageLabel: 'Variant calling', pg: 'partial', icon: 'dna',
-    x: 1240, y: 180, vstatus: 'ok', inputs: [{ kind: 'bam' }, { kind: 'reference_fasta', ref: true }, { kind: 'panel_bed', ref: true }], outputs: [{ kind: 'vcf' }],
+    x: 1480, y: 180, vstatus: 'ok', inputs: [{ kind: 'bam' }, { kind: 'reference_fasta', ref: true }, { kind: 'panel_bed', ref: true }], outputs: [{ kind: 'vcf' }],
     params: [
       { k: 'min_MQ', v: '20', help: 'mpileup min mapping quality' },
       { k: 'min_BQ', v: '20', help: 'mpileup min base quality' },
@@ -143,7 +152,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_norm', tool: 'bcftools norm', version: '1.20', stageLabel: 'Filter / normalize', pg: 'partial', icon: 'funnel',
-    x: 1540, y: 180, vstatus: 'ok', inputs: [{ kind: 'vcf' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'filtered_vcf' }],
+    x: 1840, y: 180, vstatus: 'ok', inputs: [{ kind: 'vcf' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'filtered_vcf' }],
     params: [
       { k: 'norm', v: '-m -both', help: 'Split multiallelics' },
       { k: 'fasta_ref', v: 'GRCh38.fa', help: 'Left-align against the reference' },
@@ -152,7 +161,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_multiqc', tool: 'MultiQC', version: '1.21', stageLabel: 'QC aggregation', pg: 'full', icon: 'layers',
-    x: 1840, y: 180, vstatus: 'ok', inputs: [{ kind: 'fastp_json' }, { kind: 'markdup_metrics' }, { kind: 'mosdepth_summary' }], outputs: [{ kind: 'multiqc_json' }],
+    x: 2200, y: 180, vstatus: 'ok', inputs: [{ kind: 'fastp_json' }, { kind: 'markdup_metrics' }, { kind: 'mosdepth_summary' }], outputs: [{ kind: 'multiqc_json' }],
     params: [{ k: 'force', v: 'true', help: 'Overwrite existing report' }],
     io: [{ name: 'multiqc_data.json', sha: 'sha256:5be3…9c4', size: '2.1 MB', origin: 'real-giab' }],
   },
@@ -163,10 +172,14 @@ export const TOOLS: Tool[] = [
 // removed with the "broken lines" fix.)
 
 export type Ref = { id: string; label: string; kind: string; file: string; x: number }
+// Reference source cards sit in a band ABOVE the tool spine (REF_Y) and descend into each
+// consumer's TOP reference port; x is aligned over the primary consumer (fasta→bwa, bed→mosdepth).
+// Re-spaced for the wider (296px) tool cards (see NODE_W): the old below-spine y=372 would collide
+// with the now-taller cards, so the reference band moved up (BuilderCanvas.REF_Y).
 export const REFS: Ref[] = [
-  { id: 'r_fasta', label: 'Reference genome', kind: 'reference_fasta', file: 'reference/GRCh38.fa', x: 340 },
-  { id: 'r_bed', label: 'Panel BED', kind: 'panel_bed', file: 'reference/panel.bed', x: 940 },
-  { id: 'r_truth', label: 'Truth VCF', kind: 'truth_vcf', file: 'HG002…benchmark.vcf.gz', x: 2300 },
+  { id: 'r_fasta', label: 'Reference genome', kind: 'reference_fasta', file: 'reference/GRCh38.fa', x: 400 },
+  { id: 'r_bed', label: 'Panel BED', kind: 'panel_bed', file: 'reference/panel.bed', x: 1120 },
+  { id: 'r_truth', label: 'Truth VCF', kind: 'truth_vcf', file: 'HG002…benchmark.vcf.gz', x: 2560 },
 ]
 
 export const GATE_CHECKPOINTS = [
@@ -195,7 +208,7 @@ export const BTOOLSPEC: Record<string, { version: string; icon: IconKey; ins: st
   'fastp': { version: '0.23.4', icon: 'scissors', ins: ['fastq'], outs: ['fastp_json', 'fastq'] },
   'bwa-mem2': { version: '2.2.1', icon: 'merge', ins: ['fastq', 'reference_fasta'], outs: ['bam'] },
   'samtools markdup': { version: '1.20', icon: 'copy', ins: ['bam'], outs: ['bam', 'bai', 'markdup_metrics'] },
-  'mosdepth': { version: '0.3.8', icon: 'bars', ins: ['bam', 'panel_bed'], outs: ['mosdepth_summary', 'mosdepth_thresholds'] },
+  'mosdepth': { version: '0.3.8', icon: 'bars', ins: ['bam', 'panel_bed'], outs: ['mosdepth_summary', 'mosdepth_thresholds', 'mosdepth_regions', 'mosdepth_global_dist', 'mosdepth_region_dist'] },
   'bcftools call': { version: '1.20', icon: 'dna', ins: ['bam', 'reference_fasta', 'panel_bed'], outs: ['vcf'] },
   'bcftools norm': { version: '1.20', icon: 'funnel', ins: ['vcf', 'reference_fasta'], outs: ['filtered_vcf'] },
   'MultiQC': { version: '1.21', icon: 'layers', ins: ['fastp_json', 'markdup_metrics', 'mosdepth_summary'], outs: ['multiqc_json'] },
@@ -222,15 +235,16 @@ export function makeUserNode(name: string, kind: string, index: number): UserNod
 // ── Card geometry (builder-cards §3) ─────────────────────────────────────────
 // Larger Databricks-style process cards with typed half-circle ports on all FOUR sides. These
 // constants + functions are the SINGLE source of truth for BOTH the render (BuilderCanvas cards)
-// AND the wire/anchor math — a wire endpoint is computed from the exact same layoutPorts() that
+// AND the wire/anchor math — a wire endpoint is computed from the exact same layoutCardPorts() that
 // positions the port, so an edge can never detach from its port when a card's size/port-count
 // changes. MUST stay in lockstep with BuilderCanvas.UW/TW (out-port anchors sit at n.x + width).
-export const NODE_W = 232 // card width (enlarged from 192; the port-count-driven card, §3)
-export const CARD_HEADER_H = 44 // header band (icon · name · version · badge)
+export const NODE_W = 320 // card width (232 → 296 → 320; bigger cards seat the inside-aligned port index numbers cleanly, §3)
+export const CARD_HEADER_H = 48 // header band (icon · name · version · stage · PG pill)
 export const CARD_FOOTER_H = 22 // draft / verdict status strip
 export const PORT_R = 7 // half-circle port radius (its flat side sits on the card edge = the anchor point)
 const PORT_PITCH = 26 // vertical pitch between stacked left/right ports
-const CARD_MIN_BODY = 42 // min body height so a 1-port card isn't cramped
+const PORTS_ZONE_MIN = 34 // min height of the left/right ports band (a 1-port card isn't cramped)
+const LIST_ROW = 15 // one on-card panel row (index · kind · side · tag)
 
 export type PortSide = 'left' | 'right' | 'top' | 'bottom'
 
@@ -238,6 +252,9 @@ export type PortSide = 'left' | 'right' | 'top' | 'bottom'
 // else follows the primary left(in)→right(out) data lane (builder-cards §2 + each per-tool card doc).
 // A kind's side depends on its DIRECTION: fastp_json is a BOTTOM output on fastp but a LEFT input on
 // MultiQC; mosdepth_summary stays on the RIGHT (a consumed/gated output, not a bottom QC byproduct).
+// portSide() is the FALLBACK for a hand-composed node with no catalog entry; a catalogued node's
+// side/state come from CARD_PORTS (below), which is explicit where portSide can't derive (MultiQC's
+// top discovered-log bay, failed_fastq's bottom exit).
 const REF_IN_KINDS = new Set(['reference_fasta', 'panel_bed', 'truth_vcf', 'adapter_fasta'])
 const METRIC_OUT_KINDS = new Set([
   'fastp_json', 'fastp_html', 'markdup_metrics', 'samtools_stats', 'multiqc_html',
@@ -252,55 +269,259 @@ export function isRefKind(kind: string): boolean {
   return REF_IN_KINDS.has(kind)
 }
 
-export type LaidPort = { kind: string; dir: 'in' | 'out'; idx: number; side: PortSide; lx: number; ly: number }
-
-// Card height grows with the max of the LEFT-in / RIGHT-out counts (the two sides that stack
-// vertically); top/bottom ports spread across the width and don't drive height.
-export function cardHeight(ins: string[], outs: string[]): number {
-  const leftN = ins.filter((k) => portSide(k, 'in') === 'left').length
-  const rightN = outs.filter((k) => portSide(k, 'out') === 'right').length
-  const rows = Math.max(leftN, rightN, 1)
-  return CARD_HEADER_H + CARD_FOOTER_H + Math.max(rows * PORT_PITCH, CARD_MIN_BODY)
+// Port data-kind → colour family (the verdict-SAFE --k-* palette defined in index.css, theme-aware
+// light/dark). Deliberately NOT the proceed/hold/rerun/escalate hues, so a data-kind port never
+// reads as a decision (design invariant: the verdict palette is reserved for the gate).
+const KIND_VAR: Record<string, string> = {
+  fastq: '--k-reads', unpaired_fastq: '--k-reads', failed_fastq: '--k-reads',
+  bam: '--k-align', bai: '--k-align',
+  vcf: '--k-var', filtered_vcf: '--k-var', vcf_index: '--k-var',
+  fastp_json: '--k-qc', fastp_html: '--k-qc', markdup_metrics: '--k-qc', samtools_stats: '--k-qc',
+  mosdepth_summary: '--k-qc', mosdepth_thresholds: '--k-qc', mosdepth_regions: '--k-qc',
+  mosdepth_global_dist: '--k-qc', mosdepth_region_dist: '--k-qc', per_base: '--k-qc',
+  multiqc_json: '--k-qc', multiqc_html: '--k-qc', fastqc_zip: '--k-qc', bcftools_stats: '--k-qc',
+  picard_hsmetrics: '--k-qc', ngscheckmate: '--k-qc',
+  reference_fasta: '--k-ref', panel_bed: '--k-ref', truth_vcf: '--k-ref', adapter_fasta: '--k-ref',
+  read_group: '--k-cfg',
+}
+export function kindColor(kind: string): string {
+  return `var(${KIND_VAR[kind] ?? '--color-text-3'})`
 }
 
-// Lay every port onto its edge, evenly spaced, in LOCAL coords (relative to the card's top-left).
-// left/right ports sit in the body band (below the header, above the footer); top/bottom ports
-// spread along the edge line. (lx, ly) is the EXACT point a wire attaches to — the flat side of the
-// half-circle, centered on the edge — so render + wiring share one formula.
-export function layoutPorts(ins: string[], outs: string[], w: number, h: number): LaidPort[] {
-  const items: { kind: string; dir: 'in' | 'out'; idx: number; side: PortSide }[] = [
-    ...ins.map((kind, idx) => ({ kind, dir: 'in' as const, idx, side: portSide(kind, 'in') })),
-    ...outs.map((kind, idx) => ({ kind, dir: 'out' as const, idx, side: portSide(kind, 'out') })),
-  ]
+// ── Port state + card-port catalog (builder-cards §2/§3) ─────────────────────
+// A port is required (solid), optional (half-fill, still wireable), or reserved (a documented-but-
+// inert slot: rendered, NEVER wired). State is DISPLAY-ONLY — no wiring logic reads it; the graph
+// invariants (kind-match + dedup) are unchanged. CARD_PORTS is the DOCUMENTED full port set per tool
+// (lifted from the design mockup + builder-cards/*.md): side/state stored explicitly, since a few
+// specs assign a side the "ref→top / metric→bottom" heuristic can't derive.
+export type PortState = 'required' | 'optional' | 'reserved'
+export type CardPort = { kind: string; dir: 'in' | 'out'; side: PortSide; state: PortState }
+
+// The authority for RENDER + STATE, keyed EXACTLY to Tool.tool / UserNode.name / BTOOLSPEC keys.
+// A catalogued RESERVED port renders but is never in ins/outs/BTOOLSPEC/ARTIFACT_KINDS (non-wireable).
+// A catalogued REQUIRED input that a tool's real ins doesn't carry (e.g. mosdepth/bcftools-call `bai`)
+// is documentation-only: cardPortList resolves render from the WIREABLE ins/outs + the reserved
+// catalog, so such an entry is simply not shown (only the 3 mosdepth *_dist outs were added as real
+// wireable graph ports; no new inputs). Sides/state are verbatim from the mockup CARDS array.
+export const CARD_PORTS: Record<string, CardPort[]> = {
+  fastp: [
+    { kind: 'fastq', dir: 'in', side: 'left', state: 'required' },
+    { kind: 'adapter_fasta', dir: 'in', side: 'top', state: 'reserved' },
+    { kind: 'fastq', dir: 'out', side: 'right', state: 'required' },
+    { kind: 'unpaired_fastq', dir: 'out', side: 'right', state: 'reserved' },
+    { kind: 'fastp_json', dir: 'out', side: 'bottom', state: 'required' },
+    { kind: 'fastp_html', dir: 'out', side: 'bottom', state: 'reserved' },
+    { kind: 'failed_fastq', dir: 'out', side: 'bottom', state: 'reserved' },
+  ],
+  'bwa-mem2': [
+    { kind: 'fastq', dir: 'in', side: 'left', state: 'required' },
+    { kind: 'reference_fasta', dir: 'in', side: 'top', state: 'required' },
+    { kind: 'read_group', dir: 'in', side: 'left', state: 'reserved' },
+    { kind: 'bam', dir: 'out', side: 'right', state: 'required' },
+  ],
+  'samtools markdup': [
+    { kind: 'bam', dir: 'in', side: 'left', state: 'required' },
+    { kind: 'reference_fasta', dir: 'in', side: 'top', state: 'reserved' },
+    { kind: 'bam', dir: 'out', side: 'right', state: 'required' },
+    { kind: 'bai', dir: 'out', side: 'right', state: 'required' },
+    { kind: 'markdup_metrics', dir: 'out', side: 'bottom', state: 'optional' },
+    { kind: 'samtools_stats', dir: 'out', side: 'bottom', state: 'reserved' },
+  ],
+  mosdepth: [
+    { kind: 'bam', dir: 'in', side: 'left', state: 'required' },
+    { kind: 'bai', dir: 'in', side: 'left', state: 'required' }, // doc-only: not in real ins → not rendered
+    { kind: 'panel_bed', dir: 'in', side: 'top', state: 'required' },
+    { kind: 'mosdepth_summary', dir: 'out', side: 'right', state: 'required' },
+    { kind: 'mosdepth_thresholds', dir: 'out', side: 'right', state: 'required' },
+    { kind: 'mosdepth_regions', dir: 'out', side: 'bottom', state: 'optional' },
+    { kind: 'mosdepth_global_dist', dir: 'out', side: 'bottom', state: 'optional' },
+    { kind: 'mosdepth_region_dist', dir: 'out', side: 'bottom', state: 'optional' },
+    { kind: 'per_base', dir: 'out', side: 'bottom', state: 'reserved' },
+  ],
+  'bcftools call': [
+    { kind: 'bam', dir: 'in', side: 'left', state: 'required' },
+    { kind: 'bai', dir: 'in', side: 'left', state: 'required' }, // doc-only: not in real ins → not rendered
+    { kind: 'reference_fasta', dir: 'in', side: 'top', state: 'required' },
+    { kind: 'panel_bed', dir: 'in', side: 'top', state: 'optional' },
+    { kind: 'vcf', dir: 'out', side: 'right', state: 'required' },
+  ],
+  'bcftools norm': [
+    { kind: 'vcf', dir: 'in', side: 'left', state: 'required' },
+    { kind: 'reference_fasta', dir: 'in', side: 'top', state: 'required' },
+    { kind: 'panel_bed', dir: 'in', side: 'top', state: 'reserved' },
+    { kind: 'filtered_vcf', dir: 'out', side: 'right', state: 'required' },
+    { kind: 'vcf_index', dir: 'out', side: 'bottom', state: 'reserved' },
+  ],
+  MultiQC: [
+    { kind: 'fastp_json', dir: 'in', side: 'left', state: 'required' },
+    { kind: 'markdup_metrics', dir: 'in', side: 'left', state: 'optional' },
+    { kind: 'mosdepth_summary', dir: 'in', side: 'left', state: 'required' },
+    { kind: 'fastqc_zip', dir: 'in', side: 'top', state: 'reserved' },
+    { kind: 'samtools_stats', dir: 'in', side: 'top', state: 'reserved' },
+    { kind: 'bcftools_stats', dir: 'in', side: 'top', state: 'reserved' },
+    { kind: 'picard_hsmetrics', dir: 'in', side: 'top', state: 'reserved' },
+    { kind: 'ngscheckmate', dir: 'in', side: 'top', state: 'reserved' },
+    { kind: 'multiqc_json', dir: 'out', side: 'right', state: 'required' },
+    { kind: 'multiqc_html', dir: 'out', side: 'bottom', state: 'reserved' },
+  ],
+  // Reference SOURCES (used only when dropped as a user node) — emit their artifact downward.
+  'Reference FASTA': [{ kind: 'reference_fasta', dir: 'out', side: 'bottom', state: 'required' }],
+  'Panel BED': [{ kind: 'panel_bed', dir: 'out', side: 'bottom', state: 'required' }],
+  'Truth VCF': [{ kind: 'truth_vcf', dir: 'out', side: 'bottom', state: 'reserved' }],
+}
+
+// Resolve a node's FULL render port list. ins/outs are the WIREABLE truth (editable); their
+// side/state come from the catalog by (kind, dir), defaulting to {required, portSide()} for a
+// hand-composed node with no catalog entry (backward-compatible: all-required, no reserved, no
+// panels beyond its real ports). Reserved ports come from the catalog ONLY. Return order — the
+// card-wide identity order — is: wireable ins, wireable outs, then reserved.
+export function cardPortList(name: string | undefined, ins: string[], outs: string[]): CardPort[] {
+  const cat = (name && CARD_PORTS[name]) || []
+  const look = (kind: string, dir: 'in' | 'out'): CardPort | undefined =>
+    cat.find((p) => p.kind === kind && p.dir === dir)
+  const wIn: CardPort[] = ins.map((kind) => look(kind, 'in') ?? { kind, dir: 'in', side: portSide(kind, 'in'), state: 'required' })
+  const wOut: CardPort[] = outs.map((kind) => look(kind, 'out') ?? { kind, dir: 'out', side: portSide(kind, 'out'), state: 'required' })
+  // Reserved from the catalog, minus any (kind, dir) already made wireable (never double-render).
+  const reserved = cat.filter(
+    (p) => p.state === 'reserved' && !(p.dir === 'in' ? ins : outs).includes(p.kind),
+  )
+  return [...wIn, ...wOut, ...reserved]
+}
+
+// A laid-out port: geometry + identity. `idx` = index into the node's ins/outs for a WIREABLE port
+// (the wire-anchor key), or -1 for a reserved catalog-only port (never wireable). `pidx` = 1-based
+// card-wide identity badge number (wireable ins → wireable outs → reserved, matching cardPortList).
+export type LaidPort = {
+  kind: string
+  dir: 'in' | 'out'
+  side: PortSide
+  state: PortState
+  idx: number
+  pidx: number
+  cidx: number // clockwise DISPLAY index (top L→R, right T→B, bottom R→L, left B→T) — never the wire idx
+  lx: number
+  ly: number
+}
+type IndexedPort = CardPort & { idx: number; pidx: number }
+
+// cardPortList + the wire-anchor idx (index into ins/outs; -1 for reserved) + the card-wide pidx.
+function indexedPorts(name: string | undefined, ins: string[], outs: string[]): IndexedPort[] {
+  let inC = 0
+  let outC = 0
+  return cardPortList(name, ins, outs).map((p, i) => {
+    const wireable = p.state !== 'reserved'
+    const idx = wireable ? (p.dir === 'in' ? inC++ : outC++) : -1
+    return { ...p, idx, pidx: i + 1 }
+  })
+}
+
+// ── Two-side balanced port layout (batch 3a — ports ONLY on left/right, no top/bottom) ──
+// LEFT = required non-ref inputs (top) then references (below); RIGHT = required non-ref outputs. The
+// optional/reserved non-ref ports are then DISTRIBUTED across both sides to balance the per-side count
+// (~equal; an odd total gives LEFT the extra, so left ≥ right always). The card's ins/outs arrays, the
+// wire idx, and the wiring model are untouched — only each port's SIDE / position / display number change.
+const isRef = (kind: string): boolean => REF_IN_KINDS.has(kind)
+function balanceSides(ports: IndexedPort[]): { left: IndexedPort[]; right: IndexedPort[] } {
+  const reqIn = ports.filter((p) => !isRef(p.kind) && p.state === 'required' && p.dir === 'in')
+  const refs = ports.filter((p) => isRef(p.kind))
+  const reqOut = ports.filter((p) => !isRef(p.kind) && p.state === 'required' && p.dir === 'out')
+  const distrib = ports.filter((p) => !isRef(p.kind) && p.state !== 'required')
+  const leftBase = [...reqIn, ...refs]
+  const toLeft = Math.max(0, Math.min(Math.ceil(ports.length / 2) - leftBase.length, distrib.length))
+  return { left: [...leftBase, ...distrib.slice(0, toLeft)], right: [...reqOut, ...distrib.slice(toLeft)] }
+}
+
+// The three in-card boxes (batch 3a): REQUIRED (required non-ref), REFERENCE (reference kinds),
+// OPTIONAL/RESERVED (opt/reserved non-ref). A box row = one PORT (un-deduped, so the row columns
+// number·kind·dir·tag line up), so its row count = ports in that category.
+export type BoxCat = 'required' | 'reference' | 'optreserved'
+export const BOX_META: { cat: BoxCat; title: string }[] = [
+  { cat: 'required', title: 'required' },
+  { cat: 'reference', title: 'reference' },
+  { cat: 'optreserved', title: 'optional / reserved' },
+]
+function inCat(kind: string, state: PortState, cat: BoxCat): boolean {
+  if (cat === 'reference') return isRef(kind)
+  if (cat === 'required') return !isRef(kind) && state === 'required'
+  return !isRef(kind) && state !== 'required'
+}
+// One box ROW per port (un-deduped, so the row columns number·kind·dir·tag line up cleanly). A box
+// with many entries uses a compact 2-column grid so it stays scannable (batch 3a-refine point 3).
+function catPortCount(ports: IndexedPort[], cat: BoxCat): number {
+  return ports.filter((p) => inCat(p.kind, p.state, cat)).length
+}
+export function boxCols(n: number): number {
+  return n >= 6 ? 2 : 1
+}
+function boxH(n: number): number {
+  return n ? 24 + Math.ceil(n / boxCols(n)) * LIST_ROW : 0
+}
+// Total stacked height of the (non-empty) boxes, with an 8px gap between each.
+function boxesTotalH(ports: IndexedPort[]): number {
+  const hs = BOX_META.map((b) => boxH(catPortCount(ports, b.cat))).filter((h) => h > 0)
+  return hs.length ? hs.reduce((a, b) => a + b, 0) + 8 * (hs.length - 1) : 0
+}
+function portsZoneH(ports: IndexedPort[]): number {
+  const { left, right } = balanceSides(ports)
+  return Math.max(Math.max(left.length, right.length, 1) * PORT_PITCH, PORTS_ZONE_MIN)
+}
+// Card BODY = the taller of the ports band and the boxes (ports flank the boxes on the edges — the
+// port numbers now render OUTSIDE the card, freeing the interior for the boxes, batch 3a).
+function bodyHeight(ports: IndexedPort[]): number {
+  return Math.max(portsZoneH(ports), boxesTotalH(ports))
+}
+export function cardHeight(name: string | undefined, ins: string[], outs: string[]): number {
+  return CARD_HEADER_H + bodyHeight(indexedPorts(name, ins, outs)) + CARD_FOOTER_H + 6
+}
+export const BOX_TOP = CARD_HEADER_H + 6 // local y where the box stack starts (just below the header)
+
+// Lay every port onto its balanced side (left/right only), evenly stacked over the card body. cidx =
+// the DISPLAY number in reading order for the 2-side layout: down the left (1..leftN) then down the
+// right (leftN+1..N). (lx, ly) is the flat-side anchor — render + wiring share this one formula, so a
+// wire endpoint (which reads the SAME layout by dir+idx) stays attached wherever the side lands.
+export function layoutCardPorts(name: string | undefined, ins: string[], outs: string[], w: number, _h: number): LaidPort[] {
+  const ports = indexedPorts(name, ins, outs)
+  const bodyH = bodyHeight(ports)
   const bodyTop = CARD_HEADER_H
-  const bodyH = Math.max(0, h - CARD_HEADER_H - CARD_FOOTER_H)
+  const { left, right } = balanceSides(ports)
   const laid: LaidPort[] = []
-  for (const side of ['left', 'right', 'top', 'bottom'] as PortSide[]) {
-    const arr = items.filter((it) => it.side === side)
-    arr.forEach((it, i) => {
-      const frac = (i + 1) / (arr.length + 1)
-      let lx = 0
-      let ly = 0
-      if (side === 'left') { lx = 0; ly = bodyTop + bodyH * frac }
-      else if (side === 'right') { lx = w; ly = bodyTop + bodyH * frac }
-      else if (side === 'top') { lx = w * frac; ly = 0 }
-      else { lx = w * frac; ly = h }
-      laid.push({ ...it, lx, ly })
-    })
-  }
+  left.forEach((p, i) => laid.push({ ...p, side: 'left', lx: 0, ly: bodyTop + (bodyH * (i + 1)) / (left.length + 1), cidx: i + 1 }))
+  right.forEach((p, i) => laid.push({ ...p, side: 'right', lx: w, ly: bodyTop + (bodyH * (i + 1)) / (right.length + 1), cidx: left.length + i + 1 }))
   return laid
 }
 
-// The local (x, y) of ONE port by direction + index — the wire-anchor lookup. Mirrors layoutPorts.
+// Ports of ONE of the three boxes: the laid ports in `cat`, one ROW each (un-deduped — a kind that's
+// both in + out gets a row per direction), ordered by display number so the box reads top→bottom in the
+// same order the outside markers count.
+export function boxPorts(laid: LaidPort[], cat: BoxCat): LaidPort[] {
+  return laid.filter((p) => inCat(p.kind, p.state, cat)).sort((a, b) => a.cidx - b.cidx)
+}
+// The category tag stamped on every box row — one consistent set across all boxes: REQ / REF / OPT /
+// RSVD. Reference-box rows read REF regardless of their req/opt state (the box header already carries
+// "reference"); the OPTIONAL/RESERVED box splits OPT (wireable now) vs RSVD (documented, not-yet-wireable).
+export type RowTag = 'REQ' | 'REF' | 'OPT' | 'RSVD'
+export function rowTag(cat: BoxCat, state: PortState): RowTag {
+  if (cat === 'reference') return 'REF'
+  if (cat === 'required') return 'REQ'
+  return state === 'optional' ? 'OPT' : 'RSVD'
+}
+
+// Backward-compatible fallback for a hand-composed node with no catalog (all-required, no reserved).
+export function layoutPorts(ins: string[], outs: string[], w: number, h: number): LaidPort[] {
+  return layoutCardPorts(undefined, ins, outs, w, h)
+}
+
+// The local (x, y) of ONE WIREABLE port by direction + index — the wire-anchor lookup. Mirrors
+// layoutCardPorts (idx is the index into ins/outs; reserved ports carry idx -1, never matched here).
 export function portAnchorLocal(
-  ins: string[], outs: string[], w: number, h: number, dir: 'in' | 'out', idx: number,
+  name: string | undefined, ins: string[], outs: string[], w: number, h: number, dir: 'in' | 'out', idx: number,
 ): { x: number; y: number } | null {
-  const p = layoutPorts(ins, outs, w, h).find((q) => q.dir === dir && q.idx === idx)
+  const p = layoutCardPorts(name, ins, outs, w, h).find((q) => q.dir === dir && q.idx === idx)
   return p ? { x: p.lx, y: p.ly } : null
 }
 
 export function nodeHeight(n: UserNode): number {
-  return cardHeight(n.ins, n.outs)
+  return cardHeight(n.name, n.ins, n.outs)
 }
 export function nodeBBox(n: UserNode): { x1: number; y1: number; x2: number; y2: number } {
   return { x1: n.x, y1: n.y, x2: n.x + NODE_W, y2: n.y + nodeHeight(n) }
@@ -351,7 +572,7 @@ export function edgeMidpoint(a: { x: number; y: number }, b: { x: number; y: num
 // seeded cards (the hard-coded-DAG report). Node ids/positions/ports mirror the seeded TOOLS, so
 // the layout, the typed-port wiring, and the Validate focus refs all line up. Pure — no run state.
 export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
-  const nodes: UserNode[] = TOOLS.map((t) => ({
+  const toolNodes: UserNode[] = TOOLS.map((t) => ({
     id: t.id,
     name: t.tool,
     kind: t.outputs[0]?.kind ?? 'artifact',
@@ -361,7 +582,19 @@ export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
     outs: t.outputs.map((p) => p.kind),
     x: t.x,
     y: t.y,
+    vstatus: t.vstatus, // carry the bound run's per-step status onto the editable node → left-spine (ADR-0019)
   }))
+  // Reference SOURCES as first-class editable nodes (ins:[]) so the WHOLE pipeline — sources + tools —
+  // is one editable, saveable graph (ADR-0019 slice 1a). Positioned in the top reference band (y ≈ REF_Y),
+  // x aligned over their primary consumer (mirrors the static REFS layout). Truth VCF stays unwired.
+  const SRC_NAME: Record<string, string> = { r_fasta: 'Reference FASTA', r_bed: 'Panel BED', r_truth: 'Truth VCF' }
+  const REF_Y = 40
+  const sourceNodes: UserNode[] = REFS.map((r) => {
+    const name = SRC_NAME[r.id] ?? r.label
+    const spec = BTOOLSPEC[name] ?? { version: 'v1.0', icon: 'db' as IconKey, ins: [], outs: [r.kind] }
+    return { id: r.id, name, kind: r.kind, version: spec.version, icon: spec.icon, ins: [], outs: [r.kind], x: r.x, y: REF_Y }
+  })
+  const nodes: UserNode[] = [...toolNodes, ...sourceNodes]
   // Resolve a port index by kind (0 if absent), so the wiring can never forge a mismatched edge.
   const portIdx = (nodeId: string, side: 'ins' | 'outs', kind: string): number => {
     const n = nodes.find((x) => x.id === nodeId)
@@ -381,6 +614,12 @@ export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
     wire('n_fastp', 'fastp_json', 'n_multiqc', 'fastp_json'),
     wire('n_markdup', 'markdup_metrics', 'n_multiqc', 'markdup_metrics'),
     wire('n_mosdepth', 'mosdepth_summary', 'n_multiqc', 'mosdepth_summary'),
+    // reference source → tool ref-input edges (fasta→bwa/call/norm, bed→mosdepth/call; truth VCF unwired)
+    wire('r_fasta', 'reference_fasta', 'n_bwa', 'reference_fasta'),
+    wire('r_fasta', 'reference_fasta', 'n_call', 'reference_fasta'),
+    wire('r_fasta', 'reference_fasta', 'n_norm', 'reference_fasta'),
+    wire('r_bed', 'panel_bed', 'n_mosdepth', 'panel_bed'),
+    wire('r_bed', 'panel_bed', 'n_call', 'panel_bed'),
   ]
   return { nodes, edges }
 }

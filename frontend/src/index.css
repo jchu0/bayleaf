@@ -67,6 +67,7 @@
 
   /* Elevation (card + popover shadows from the handoff) */
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-lift: 0 8px 22px rgba(16, 24, 40, 0.14); /* hover / selected lift (builder card states) */
   --shadow-pop: 0 14px 36px rgba(16, 24, 40, 0.17);
 }
 
@@ -76,6 +77,26 @@
   font-size: 14px;
   /* Pipeline-builder canvas dot grid — subtle cool dots on the light surface. */
   --canvas-dot: #d3dae4;
+  /* Pipeline-builder port data-kind palette — five verdict-SAFE filled families + reference outlined
+     (see BuilderShared.kindColor). Deliberately NOT the proceed/hold/rerun/escalate hues, so a typed
+     port never reads as a decision. The dark override lives in :root[data-theme='dark']; the other
+     data-palette variants inherit these (they retarget --color-* only). */
+  --k-reads: #7a5af5; /* fastq · unpaired_fastq · failed_fastq (sequence reads) */
+  --k-align: #1f5fd0; /* bam · bai (alignment) */
+  --k-var: #0e8f7e; /* vcf · filtered_vcf · vcf_index (variants) */
+  --k-qc: #c0851c; /* fastp_json · markdup_metrics · mosdepth_* · multiqc_* (QC / metrics) */
+  --k-ref: #5f6b7a; /* reference_fasta · panel_bed · truth_vcf · adapter_fasta (references — OUTLINED) */
+  --k-cfg: #97a1ad; /* read_group (user-defined config) */
+
+  /* Pipeline-builder per-stage accent (the header stage label + the 4px top stage strip). Theme-aware
+     so the strip/label stay legible on the dark card — the dark set (below) brightens, mirroring the
+     design mockup. The palette variants (sand/slate) don't override these, so they fall through here. */
+  --stage-readqc: #7c5cf0;
+  --stage-align: #2f6fe0;
+  --stage-dedup: #3a7bc4;
+  --stage-cov: #c0851c;
+  --stage-var: #0e8f7e;
+  --stage-agg: #5a6b8c;
 }
 
 /* Dark theme — the content surfaces adopt the app's existing dark-nav aesthetic (the nav itself
@@ -118,9 +139,25 @@
   --color-escalate-bd: #53262b;
   --color-escalate-fg: #ef858d;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lift: 0 8px 22px rgba(0, 0, 0, 0.5);
   --shadow-pop: 0 14px 36px rgba(0, 0, 0, 0.5);
   /* Canvas dots much dimmer in dark mode — a faint grid, not a distracting field. */
   --canvas-dot: rgba(150, 165, 185, 0.08);
+  /* Port data-kind palette — brighter in dark so the small half-circles stay legible on the dark
+     canvas (mirrors the design mockup's dark --k-* values). */
+  --k-reads: #a992f7;
+  --k-align: #5b95f2;
+  --k-var: #34c3b0;
+  --k-qc: #dbb24a;
+  --k-ref: #8fa0b3;
+  --k-cfg: #8a94a1;
+  /* Per-stage accent — brightened for the dark card (mirrors the mockup's dark --stage-* values). */
+  --stage-readqc: #a08cf5;
+  --stage-align: #5b95f2;
+  --stage-dedup: #6ba0da;
+  --stage-cov: #dbb24a;
+  --stage-var: #34c3b0;
+  --stage-agg: #8494b5;
 }
 
 /* UIC-7 — palette complements (personal pref, OFF the gate). Beyond the default Clinical(light)/
@@ -266,4 +303,28 @@ body {
 }
 .pg-spin {
   animation: pgspin 0.7s linear infinite;
+}
+
+/* Pipeline-builder card states — reproduce the design mockup's Default / Hover / Selected / Error /
+   Locked EXACTLY on both the seeded ToolCard and the composed UserCard. Box-shadow lives here (not
+   inline) so :hover can lift; the border-COLOUR stays inline (the dynamic rail), and is-selected /
+   is-error override it. Ordered so is-selected beats :hover and is-error beats both (equal specificity
+   → later wins). Theme-aware via the shadow / colour tokens. */
+.pg-node {
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
+}
+.pg-node:hover {
+  box-shadow: var(--shadow-lift);
+}
+.pg-node.is-selected {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 2px var(--color-accent-weak), var(--shadow-lift);
+}
+.pg-node.is-error {
+  border-color: var(--color-escalate) !important;
+  box-shadow: 0 0 0 2px var(--color-escalate-bg);
+}
+.pg-node.is-locked {
+  opacity: 0.82;
 }
