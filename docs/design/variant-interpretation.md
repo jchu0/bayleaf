@@ -2,10 +2,34 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed (design only — not built) |
+| **Status** | Proposed (design; **two components now built**, see §0) |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (the decision), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [architecture.md](architecture.md), [data-platform-and-archivist.md](data-platform-and-archivist.md) |
+| **Related** | [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (the decision), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [qc_metrics.md](../data/qc_metrics.md) (§Route-to-human policy), [schemas.md](../data/schemas.md) (`VariantCall`), [architecture.md](architecture.md), [data-platform-and-archivist.md](data-platform-and-archivist.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md) |
+
+## 0. Build status update (2026-07-10, after the maintainer's D1/D2/D3 sign-off)
+
+The maintainer signed off on ADR-0018 and its three open questions (see the ADR's
+[Maintainer decisions](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#maintainer-decisions-2026-07-10-sign-off)).
+Two pieces of this design are now **BUILT** — everything else below (the interpretation agent,
+`RunReport`, the Share window, the ClinVar/gnomAD fetch scripts, gnomAD AF surfacing,
+inheritance-fit, review-ordering tier) remains design-only, not built:
+
+1. **Route-to-human (D2) — BUILT.** `models.VariantCall` + `parsers.parse_variant_calls`
+   (reads `variants.csv`) + `runbook.RouteToHumanPolicy` + `rules._check_route_to_human`
+   (`VAR-RTH-001`) ship as described in §1/§2 below, **off by default** (9 tests,
+   `tests/test_route_to_human.py`). This is narrower than the full `AnnotatedVariant`/
+   `ClinVarEvidence`/`PriorityTier` model in §1 — only the ClinVar-significance routing slice
+   landed, not gnomAD AF, inheritance-fit, or the review-ordering tier.
+2. **De-identification default (D3) — PARTIALLY BUILT.** `api/safe_harbor.py`, a conservative
+   Safe-Harbor-**style** scrub (direct-identifier drop, date→year, age-90+ cap, mechanical
+   free-text redaction of the 18 §164.514(b)(2) classes), ships standalone and unit-tested
+   (8 tests, `tests/test_safe_harbor.py`) — but **not yet wired to any egress endpoint**, because
+   the report/Share window it is meant to default on (§4 below) is not yet built. `GET
+   /api/export` still runs the separate, less-strict `api/deid.py` policy.
+3. Sections §1/§3–§6 below describe the **full** design (interpretation agent, `RunReport`,
+   Share window, fetch scripts, gnomAD/inheritance evidence) as originally proposed — still
+   entirely unbuilt except for the two pieces above.
 
 ## Overview
 
@@ -59,11 +83,13 @@ plus the order a human should review them — it decides nothing (ADR-0001).
 
 The downstream steps are **stages under the (unchanged) variant QC gate**, not new gates — so no annotation can move
 a verdict (ADR-0001/0013). Any interpretation *issue* that ever fires is a cited, immutable `Finding` routed through
-the existing verdict policy (a *route-to-human* HOLD/ESCALATE), **never an AI-set verdict** — and even that
-route-to-human rule is an **off-by-default, operator-owned config seam** pending maintainer sign-off (ADR-0018 open
-question 2). `rules._check_variant_annotation` is **surface-only** for the MVP: it attaches cited evidence, it does
-not gate. The `PipelineStage` enum + the provenance DAG `STAGES` gain filter/annotate/interpret/report entries shown
-honestly as "not run in this build" until an annotated VCF is present (P4).
+the existing verdict policy (a *route-to-human* ESCALATE), **never an AI-set verdict** — and that route-to-human
+rule is now **BUILT** as `VAR-RTH-001` (§0), an **off-by-default, operator-armed config seam** per the maintainer's
+2026-07-10 sign-off (ADR-0018 D2 — the earlier "pending sign-off" framing here is resolved). The broader
+per-variant evidence surfacing (`rules._check_variant_annotation` / `AnnotatedVariant` §1) that would be
+**surface-only** for the MVP — attaching cited evidence without gating — is **still unbuilt**. The `PipelineStage`
+enum + the provenance DAG `STAGES` gaining filter/annotate/interpret/report entries shown honestly as "not run in
+this build" until an annotated VCF is present (P4) is also **still unbuilt**.
 
 ## 3. Data & grounding
 
@@ -89,9 +115,12 @@ honestly as "not run in this build" until an annotated VCF is present (P4).
   L0 internal/raw, local-only + approver-only) driving the `api/deid.py` policy · **scrub preview** via `redact()`
   · explicit `ConfirmDialog` → `POST /api/share` (`require_role("approver")` for external) → audited `ShareEvent`
   in the Admin Activity feed. **PHI-scrub is a demo seam, explicitly NOT HIPAA de-identification.** Field-class
-  contract: drop operator PII; gate cohort keys (`subject_id`/`tissue`) by origin (built); `DateShift` +
-  free-text 18-identifier redaction + `sample_id` pseudonymization + VCF-aware raw stripping are **labelled seams**.
-  Raw-artifact egress for guarded origins is **disallowed by default** (opaque bytes can't be scrubbed).
+  contract: drop operator PII; gate cohort keys (`subject_id`/`tissue`) by origin (built, `api/deid.py`); date
+  generalization + free-text 18-identifier redaction are **now built standalone** (2026-07-10, `api/safe_harbor.py`,
+  ADR-0018 D3, §0) but **not yet wired here** — the Share window itself doesn't exist yet to select it as the L2
+  policy; `DateShift` (a *shift*, distinct from `safe_harbor.py`'s coarser year-only *generalization*),
+  `sample_id` pseudonymization, and VCF-aware raw stripping remain **labelled seams**. Raw-artifact egress for
+  guarded origins is **disallowed by default** (opaque bytes can't be scrubbed).
 
 ## 5. Phasing
 
@@ -105,14 +134,22 @@ honestly as "not run in this build" until an annotated VCF is present (P4).
    confirm → audited `ShareEvent`.
 6. Ground plumbing on real GIAB HG002; the flagged-variant demo on a contrived spiked variant.
 
-**Deferred / labelled seams (documented, not built):** the interpretation **agent**; the route-to-human config rule;
+**Deferred / labelled seams (documented, not built):** the interpretation **agent**;
 trio/inheritance-aware context (de novo / comp-het / segregation — needs pedigree); more annotation sources
-(SpliceAI/REVEL/MANE/popmax); `DateShift` + free-text redaction + raw-artifact scrubbing; real external egress
-(S3 live / Box / GCS / signed link); PDF; a persisted ledger-anchored signed report; and **any emission of a final
-ACMG/pathogenicity classification** (explicitly out of scope — ADR-0018).
+(SpliceAI/REVEL/MANE/popmax); raw-artifact scrubbing + real external egress (S3 live / Box / GCS / signed link);
+PDF; a persisted ledger-anchored signed report; and **any emission of a final ACMG/pathogenicity classification**
+(explicitly out of scope — ADR-0018). **Built, 2026-07-10 (§0), no longer deferred:** the route-to-human config
+rule (`VAR-RTH-001`) and a conservative Safe-Harbor-style date-generalization + free-text-redaction module
+(`api/safe_harbor.py`) — the latter is built but **not yet wired** to any egress endpoint, since the Share window
+that would consume it (§4) is itself still unbuilt.
 
 ## 6. Open questions
 
-See [ADR-0018 §Open questions](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#open-questions-need-a-maintainer-decision-beforewhile-building)
-— they all need a maintainer decision before/while building. The highest-sensitivity one: whether any
-ClinVar/gnomAD-driven *route-to-human* belongs on the gate (recommendation: off the gate for MVP; advisory only).
+See [ADR-0018 §Open questions](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#open-questions)
+— three of the seven were resolved by the maintainer's 2026-07-10 sign-off (report name D1;
+route-to-human on the gate D2, **now built**, see §0; de-id conservatism D3, **partially built**,
+see §0). The highest-sensitivity one, whether any ClinVar-driven *route-to-human* belongs on the
+gate, is **resolved (D2, yes — off by default, RBAC-gated)**, overriding this doc's earlier "off
+the gate for MVP" recommendation everywhere else it appears above. The remaining four
+(reference-data licensing, transcript/gnomAD-version convention, report grain, egress
+destinations + PDF/persist) stay open build-time questions.

@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md) |
+| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md) |
 
 ## Overview
 
@@ -19,7 +19,7 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **364 tests across 22 files** — 361 pass and 3 skip (the Postgres
+The offline suite is **381 tests across 24 files** — 378 pass and 3 skip (the Postgres
 live-integration checks in `test_persistence_postgres_live`, which need a reachable Postgres
 and are off by default). By collected size: `test_api` (42), `test_notify` (36),
 `test_synthetic` (33), `test_fetch_giab` (32), `test_gate` (29), `test_persistence` (17),
@@ -28,13 +28,18 @@ and are off by default). By collected size: `test_api` (42), `test_notify` (36),
 `test_settings` (13, config-override authoring), `test_review_queue` (13, the ticket domain),
 `test_card_readout` (13, the QC-readout projection incl. the gate-dependency `blocked_by`
 case, T-087), `test_pipeline_lifecycle` (11,
-submit/approve/dry-run/diff), `test_auth` (10, the RBAC dev shim), `test_gate_notify` (9),
-`test_artifacts_s3` (9), `test_execution_trace` (8, the structured execution-trace feed →
+submit/approve/dry-run/diff), `test_auth` (10, the RBAC dev shim),
+`test_route_to_human` (9, the off-by-default route-to-human gate rule VAR-RTH-001, ADR-0018 D2),
+`test_gate_notify` (9), `test_artifacts_s3` (9),
+`test_safe_harbor` (8, the conservative Safe-Harbor-style de-id egress transform, ADR-0018 D3),
+`test_execution_trace` (8, the structured execution-trace feed →
 EXEC-001), `test_pipelines` (8, the Pipeline Builder save/version store),
 `test_artifacts` (7), `test_metrics_mapping` (5), `test_persistence_postgres_live` (3) — all
 runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `test_api` and
-`test_triage` suites need the api/claude extras to import FastAPI, while `test_execution_trace`
-and the two agent suites run pure-offline over the core + pydantic).
+`test_triage` suites need the api/claude extras to import FastAPI, while `test_execution_trace`,
+`test_route_to_human`, `test_safe_harbor`, and the two agent suites run pure-offline over the
+core + pydantic). Census verified via `uv run pytest --collect-only -q` (381 collected) +
+`uv run pytest -q` (378 passed, 3 skipped) + `git ls-files 'tests/*.py' | wc -l` (24).
 
 ## What "good" means (principles)
 
@@ -212,6 +217,40 @@ break the tolerant boundary — asserted by `test_parse_execution_trace_is_toler
 trace must not change the pinned demo verdicts (those runs have no `trace.txt`) — preserved by
 EVAL-001/EVAL-010.
 
+### EVAL-012 — Route-to-human (VAR-RTH-001): off by default, verbatim ClinVar, rules decide
+
+| Field | Value |
+|---|---|
+| **Target** | Route-to-human gate rule (`rules._check_route_to_human`, **VAR-RTH-001**) — `runbook.RouteToHumanPolicy` + `models.VariantCall` + `parsers.parse_variant_calls` end-to-end through the gate |
+| **Type** | Failure-mode |
+| **Automated?** | Yes — `test_route_to_human.py` (`test_parse_variant_calls_reads_verbatim`, `test_parse_variant_calls_is_tolerant`, `test_route_to_human_is_off_by_default`, `test_armed_pathogenic_routes_to_human`, `test_armed_benign_does_not_route`, `test_significance_match_is_separator_insensitive`, `test_review_status_floor_gates_routing`, `test_end_to_end_armed_run_escalates_the_card`, `test_disarmed_run_matches_stock_evaluation`) |
+
+**Definition of good.** With the policy **disarmed** (the shipped default — empty
+`significances`), a run carrying even a Pathogenic candidate produces **no** routing finding and
+`evaluate_sample` is byte-identical to a run with no `variants.csv` at all. **Armed** with a
+significance list, a matching candidate produces a CRITICAL `Finding` (`rule_id="VAR-RTH-001"`,
+`category=variant`, lands on `Gate.VARIANT`) whose `suggested_verdict` is **ESCALATE** and drives
+the card to ESCALATE end-to-end (rules decide, ADR-0001); a Benign candidate never routes; the
+match is separator-/case-insensitive (`Likely_pathogenic` ≈ `"Likely pathogenic"`) while the
+**quoted evidence stays verbatim** (never PipeGuard's own determination, ADR-0004); an optional
+review-status allow-list acts as a stricter star-rating floor. The parser preserves
+`clinvar_significance` verbatim and is tolerant of an absent file or alternate column spellings
+(`clnsig`/`clnrevstat`/`clnacc`).
+
+**Method.** Parse a contrived `variants.csv` (one Pathogenic, one Benign candidate, `origin=
+contrived`, never implying a real individual — the only real substrate is GIAB HG002); assert the
+rule is a no-op on the disarmed `DEFAULT_RUNBOOK`; arm a copy of the runbook and assert the finding
+fires only for the matching significance, cites the accession/version, and quotes CLNSIG verbatim;
+assert the review-status floor gates a single-submitter call; run the gate end-to-end on an armed
+vs. disarmed runbook and assert ESCALATE only when armed.
+
+**Known failure modes.** A rule that fired on a disarmed default would move the pinned demo
+verdicts — prevented structurally (empty tuple ⇒ `.armed is False`) and pinned by
+`test_route_to_human_is_off_by_default`/`test_disarmed_run_matches_stock_evaluation`. A rule that
+normalized or reclassified `clinvar_significance` before quoting it would risk PipeGuard
+authoring pathogenicity — pinned by `test_armed_pathogenic_routes_to_human` asserting the quoted
+value is verbatim.
+
 ## Faithfulness cases (AI narrates, never decides)
 
 ### EVAL-020 — Triage note never touches the verdict
@@ -323,6 +362,45 @@ usage.
 rules-decide invariant — structurally prevented (the payload only reads already-decided
 fields). Interpolating timestamps/ids into the body would break reproducibility — the builder
 interpolates none.
+
+## De-identification cases (egress transform, never touches a decision)
+
+### EVAL-050 — Safe-Harbor-style scrub redacts identifiers and never touches a verdict
+
+| Field | Value |
+|---|---|
+| **Target** | Conservative Safe-Harbor-style de-id egress transform (`api/safe_harbor.py`, ADR-0018 D3) |
+| **Type** | Faithfulness |
+| **Automated?** | Yes — `test_safe_harbor.py` (`test_redact_free_text_scrubs_each_class`, `test_redact_free_text_leaves_non_identifiers`, `test_generalize_date_keeps_year_only`, `test_cap_age_buckets_over_89`, `test_redact_record_drops_direct_identifiers`, `test_redact_record_caps_age`, `test_redact_record_never_touches_verdict_or_gate`, `test_policy_is_labelled_style_not_certified`) |
+
+**Definition of good.** `redact_free_text` replaces every regex-detectable identifier (email,
+phone, SSN, URL, IP, date, ZIP, long numeric id) with `[REDACTED:CLASS]` and leaves a benign
+sentence unchanged. `generalize_date` reduces any date to year-only and **fails closed** to
+`[REDACTED:DATE]` (never a silent passthrough) when no year is recognizable. `cap_age` buckets
+ages over 89 into `"90+"`. `redact_record` drops direct-identifier fields (`submitted_by`,
+`subject_id`, …) entirely, generalizes date fields, redacts free-text fields, caps age, and —
+**the ADR-0001 boundary this suite pins** — passes a `verdict`/`confidence`/`gate` riding along in
+an egress row through **untouched**: the scrub shapes identifiers, it never reads or alters a
+decision. The honesty guardrail: `SAFE_HARBOR_POLICY_ID` contains `"style"` and never claims
+`"hipaa-compliant"`; all 18 §164.514(b)(2) identifier classes are documented (some as explicit
+"not present in this data model" seams).
+
+**Method.** Feed a free-text string carrying every regex-detectable class and assert none of the
+raw values survive; feed a benign sentence and assert it is byte-identical; feed several date
+formats and a non-date string and assert year-only / fail-closed; feed ages under/over 89; build a
+record with direct identifiers + a date + free text + a verdict/confidence and assert the
+identifiers are gone/generalized/redacted while the decision fields pass through unchanged;
+inspect the policy id string and the class table.
+
+**Known failure modes.** A record scrub that also touched `verdict`/`confidence`/`gate` would
+violate the egress-transform-only boundary (ADR-0001) — pinned by
+`test_redact_record_never_touches_verdict_or_gate`. Free-text redaction is **mechanical** (regex,
+not NLP) and will miss a name embedded in prose — documented in the module docstring and
+`HIPAA_SAFE_HARBOR_CLASSES`, not silently assumed complete. **Not yet exercised end-to-end**: the
+module is not wired into any egress endpoint today (`GET /api/export` still uses the separate,
+less-strict `api/deid.py` pseudonymization policy) — grepped `api/` + `src/` for `safe_harbor`:
+only the module itself and its test import it, confirming this is a standalone, tested-but-unwired
+seam (see [scope-and-wishlist.md](../requirements/scope-and-wishlist.md) #14).
 
 ## Real-data evaluation (Phase 2 — planned)
 

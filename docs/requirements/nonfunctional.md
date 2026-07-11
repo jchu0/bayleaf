@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md) |
+| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) |
 
 ## Overview
 
@@ -72,8 +72,20 @@ links to [evaluation.md](../quality/evaluation.md).
 4. **REQ-NF-023 — De-identification is a precondition for real PHI.** Any future
    real-patient integration is gated on a configurable de-identification module
    *(wishlist #14)*; note that `subject_key` is not PHI-free by construction and real
-   deployments route through de-id. *Trace:* [scope-and-wishlist.md](scope-and-wishlist.md),
-   [schemas.md](../data/schemas.md) §Sample.
+   deployments route through de-id. **Two de-id modules exist today, at different
+   conservatism levels:** `api/deid.py` (salted-hash pseudonymization, wired into
+   `GET /api/export`) and, as of 2026-07-10, `api/safe_harbor.py` — a more conservative
+   Safe-Harbor-**style** scrub (direct-identifier drop, date→year generalization, age
+   capping, mechanical free-text redaction of the §164.514(b)(2) classes; ADR-0018 D3, the
+   maintainer's most-conservative choice). Neither makes a certified/attested compliance
+   claim — both are explicitly labelled **not** HIPAA-compliant de-identification (no
+   Expert Determination, no audit, no BAA/DUA). `safe_harbor.py` is **built and unit-tested
+   but not yet wired to any egress endpoint** (the report/share surface it is intended for,
+   ADR-0018 §5–6, is not yet built) — this requirement is only *partially* satisfied until
+   that wiring lands. *Trace:* [scope-and-wishlist.md](scope-and-wishlist.md) #14,
+   [schemas.md](../data/schemas.md) §Sample,
+   [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) D3,
+   [quality/evaluation.md](../quality/evaluation.md) EVAL-050.
 
 ## Performance & cost
 

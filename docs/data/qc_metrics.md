@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization + wiring status), [schemas.md](schemas.md) (§6 units contract), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) |
+| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, D2), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) (no invented pathogenicity), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC review queue), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization + wiring status), [schemas.md](schemas.md) (§6 units contract, `VariantCall`), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md) |
 
 ## Overview
 
@@ -72,6 +72,10 @@ edge cases.
 | Het/Hom SNV ratio | bcftools | < 3 (GE) | HOLD |
 | Flagged variant: gnomAD AF + ClinVar | `INFO/AF`, `CLNSIG` | rare-disease AF cutoffs; ClinVar 5-tier | ESCALATE / HOLD |
 
+The ClinVar half of that last row now has a concrete, **off-by-default** implementation — the
+**route-to-human policy (VAR-RTH-001)** below. It routes to a human (ESCALATE) rather than gating
+on AF; the gnomAD AF cutoff itself is still design-only (no code path reads `INFO/AF`).
+
 ## Verdict policy (ADR-0013)
 
 1. Borderline (near the configured default) → **HOLD**.
@@ -102,6 +106,45 @@ Both rules **read** an artifact the pipeline dropped; PipeGuard composes, it doe
 execute — the gate never runs a process ([ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)).
 `trace.txt` is an **optional** input: present only for runs that had a process failure
 (see [`data/README.md`](../../data/README.md)).
+
+## Route-to-human policy (VAR-RTH-001) — OFF BY DEFAULT (2026-07-10, ADR-0018 D2)
+
+A **variant-gate** rule, distinct from the call-quality rows in Gate 3 above: it does not gate
+DP/GQ/allele-balance, it **routes a sample to mandatory human review** when an annotated candidate
+carries a clinically-significant ClinVar classification. Realizes the maintainer's decision that a
+route-to-human action belongs on the gate as a **role-based human-review routing rule** (ADR-0018
+D2) — the highest clinical-sensitivity call in the system, so its scope is drawn tightly:
+
+1. **Disarmed by default.** `Runbook.route_to_human` (`runbook.RouteToHumanPolicy`) carries an
+   empty `significances` tuple — `.armed` is `False` — so the **stock runbook never routes** and
+   the pinned demo scenario (and every other verdict) is byte-for-byte unchanged. An operator arms
+   it by configuring the ClinVar `CLNSIG` values (e.g. `("Pathogenic", "Likely_pathogenic")`) that
+   should route, and optionally a `review_statuses` star-rating floor (a stricter arming — a
+   single-submitter call does not route unless its review status is on the allow-list).
+2. **Rules decide to ROUTE; a human decides the outcome (ADR-0001).** When armed and a
+   `VariantCall` for the sample matches (significance folded case-/separator-insensitively for
+   matching only — the cited value stays verbatim), `rules._check_route_to_human` emits a
+   **CRITICAL** `Finding` — category `variant` (lands on the **variant** gate, `Gate.VARIANT`),
+   `rule_id="VAR-RTH-001"`, `suggested_verdict=ESCALATE` (route to a human — the most conservative
+   action). It **quotes ClinVar verbatim** as cited `Evidence` (`source_field="CLNSIG"`, the
+   accession + release version as the citation, the review status as the threshold field) — it
+   authors **no pathogenicity determination of its own** (ADR-0004). A qualified human adjudicates
+   via the existing RBAC-gated review queue ([ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md));
+   no new access pattern.
+3. **Not a clinical-significance gate.** The action space is only `{route-to-human}` — there is no
+   Pathogenic/Benign verdict and no probability. It escalates *toward* human judgment; the variant
+   **QC** gate (DP/GQ/AB, Gate 3 table above) is untouched — this is a distinct, additive
+   review-routing rule on the same gate.
+4. **Reads, never runs.** The rule reads `RunArtifacts.variant_calls` (`VariantCall`, parsed from
+   an externally-produced `variants.csv` by `parsers.parse_variant_calls`) — PipeGuard never runs
+   an annotator (compose ≠ execute, ADR-0003). Empty for every run today, so a run without
+   `variants.csv` is unaffected (belt-and-suspenders: `evaluate_sample` on a run with variant calls
+   but a disarmed policy yields the exact finding set it would without any variant data).
+
+**Status.** Built and unit/end-to-end tested (`tests/test_route_to_human.py`, 9 cases), **off by
+default in every shipped fixture** — no committed run carries an armed `route_to_human` policy or a
+`variants.csv`, so this row does not yet appear in the demo. See [schemas.md](schemas.md) for the
+`VariantCall`/`RouteToHumanPolicy` field contracts.
 
 ## CNV & mosaicism
 
@@ -147,6 +190,10 @@ skipped, never NA-flagged — so a lean real run stays clean while a rich contri
 2. **% mapped** (`qc.pct_mapped`) — `required=False`.
 3. **On-target rate** (`qc.on_target`) — `required=False`.
 4. **Depth (DP)** (`variant.dp`) — `required=False`, the first **Gate 3** threshold implemented.
+
+**2026-07-10 addition (ADR-0018 D2):** the **route-to-human policy (VAR-RTH-001)**, above, is a
+fifth Gate-3 rule — not a `QCThreshold`/metric-registry gate like 1–4, but a policy-driven `Finding`
+read from `RunArtifacts.variant_calls`. **Off by default**; no committed fixture arms it.
 
 **Ungated observations** (registered + wired, no threshold, never NA-flagged, never a finding):
 % PhiX aligned (`preflight.phix_aligned`), Genotype quality (`variant.gq`), Ti/Tv (`variant.titv`)

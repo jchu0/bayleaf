@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) |
+| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / route-to-human), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md) |
 
 ## Overview
 
@@ -64,9 +64,30 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > `parsers.load_run` hands the rules (ADR-0015 *tolerant intake*, distinct from the persisted
 > records above): `run_id` plus per-sample collections `samples[]` (`Sample`), `sample_sheet[]`
 > (`SampleSheetEntry`), `demux[]` (`DemuxRecord`), `qc[]` (`QCMetrics`), `log_lines[]` (raw
-> `pipeline.log` lines), and **`execution_trace[]` (`TraceRecord`)** — plus the run-level header
-> context above. **Each collection defaults empty**; a missing on-disk artifact yields no rows,
-> not a crash (tolerant boundary, CLAUDE.md data-handling 2).
+> `pipeline.log` lines), **`execution_trace[]` (`TraceRecord`)**, and **`variant_calls[]`
+> (`VariantCall`)** — plus the run-level header context above. **Each collection defaults empty**;
+> a missing on-disk artifact yields no rows, not a crash (tolerant boundary, CLAUDE.md
+> data-handling 2).
+>
+> **`VariantCall` (ADR-0018 D2, 2026-07-10).** One annotated candidate variant PipeGuard **READS**
+> from an externally-produced annotated VCF/table — a driver ran VEP/bcftools, PipeGuard never does
+> (composes ≠ executes, ADR-0001/0003) — parsed by `parsers.parse_variant_calls` from the on-disk
+> artifact **`variants.csv`** (tolerant of alt column spellings `clnsig`/`clnrevstat`/`clnacc`; an
+> absent file yields `[]`). Fields — `sample_id` (required) plus **all-optional** `gene` · `hgvs` ·
+> `clinvar_significance` (raw `CLNSIG`) · `clinvar_review_status` (raw `CLNREVSTAT`) ·
+> `clinvar_accession` · `clinvar_version`. **Clinical significance is stored VERBATIM** — the
+> parser and the rule that reads it never normalize or reclassify the string; PipeGuard authors no
+> pathogenicity of its own (ADR-0004). `variant_calls` is folded into `RunArtifacts.sample_ids()`
+> (a sample present only via an annotated variant still gets evaluated). **Empty for every run
+> today** (no `variants.csv` ships in any committed fixture); it feeds **only** the off-by-default
+> route-to-human rule below — it sets no verdict by itself.
+>
+> **Route-to-human policy (`runbook.RouteToHumanPolicy`, ADR-0018 D2).** A `Runbook.route_to_human`
+> field, **OFF BY DEFAULT** (`significances: tuple[str, ...] = ()`  — an empty tuple is
+> *disarmed*, `.armed` is `False`). An operator arms it with the ClinVar `CLNSIG` values (and,
+> optionally, a `review_statuses` star-rating floor) that should route a sample to mandatory human
+> review. This is a config object on the runbook, **not** a persisted record — see
+> [qc_metrics.md](qc_metrics.md) for the rule it drives (**VAR-RTH-001**) and its verdict.
 >
 > **`QCMetrics` (T-082).** The frozen-CSV five (`q30` · `pct_reads_identified` ·
 > `mean_coverage` · `dup_rate` · `cluster_pf`, every run carries these) plus **8 additional
