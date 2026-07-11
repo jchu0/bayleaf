@@ -1,206 +1,63 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { ArrowDownToLine, ArrowUpFromLine, ChevronRight, ExternalLink } from 'lucide-react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { PageHeader } from '../components/PageHeader'
 import { ErrorBox, Loading } from '../components/States'
-import type { Gate, PipelineStage, RunArtifact, RunDetail, Verdict } from '../types'
-import { GATE_DOT, VERDICT_LABEL } from '../verdict'
+import { Tabs } from '../components/Tabs'
+import type { ProvenanceEvent, RunArtifact, RunDetail } from '../types'
+import { fmtTime, groupArtifacts, readGateProvenance, readNum, readStr } from '../provenance'
+import { Fingerprint } from '../components/provenance/Fingerprint'
+import { ProvenanceLineage } from '../components/provenance/Lineage'
+import { EventTrail } from '../components/provenance/EventTrail'
+import { ProvenanceArtifacts } from '../components/provenance/Artifacts'
 
-// Fixed pipeline lineage (§5.6). Tools describe what this build actually touches: it starts
-// from FASTQ, so alignment/variant-calling are shown but marked "not run in this build" (no
-// artifacts) rather than fabricating an aligner/caller run — the honesty guardrail wins over
-// the prototype's populated-looking mock.
-const STAGES: { key: PipelineStage; n: number; title: string; tool: string; gate?: Gate }[] = [
-  { key: 'intake', n: 1, title: 'Sample intake', tool: 'Sample sheet + metadata' },
-  { key: 'demux', n: 2, title: 'Demultiplex', tool: 'demux stats', gate: 'preflight' },
-  { key: 'qc', n: 3, title: 'Quality control', tool: 'fastp · mosdepth', gate: 'qc' },
-  { key: 'align', n: 4, title: 'Alignment', tool: 'not run in this build' },
-  { key: 'variant', n: 5, title: 'Variant calling', tool: 'not run in this build', gate: 'variant' },
-  { key: 'gate', n: 6, title: 'Decision gate', tool: 'PipeGuard rules' },
-]
+// Provenance is now a thin CONTAINER (PV1): it fetches the run detail + artifacts once (unchanged
+// fetch — no new api call, no wire change) and renders a persistent version-pin header band plus a
+// three-way view switch (Lineage · Event trail · Artifacts). The centerpiece — a filterable,
+// paginated timeline with finding→evidence trace-back — renders `detail.events`, the real
+// append-only ledger trail that already shipped to the client but the screen used to discard.
+// 100% read-only: the screen never sets a verdict/confidence — it displays what the rules
+// authored (ADR-0001) and labels the LLM narration as narration.
 
-type Status = 'ok' | 'warn' | 'blocked' | 'skipped' | 'partial'
-type Stage = (typeof STAGES)[number]
-const VERDICT_RANK: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
-
-// Nodes color by STAGE STATUS ONLY (§5.6). The number badge is the primary signal: a solid
-// status fill; the detail badge/pill use the tinted treatment (bg + solid border + solid text).
-// `skipped` stays deliberately neutral — the app declines to color a stage it never ran.
-const STATUS_STYLE: Record<
-  Status,
-  { numBadge: string; dot: string; headBadge: string; pill: string; label: string }
-> = {
-  ok: {
-    numBadge: 'bg-proceed text-white',
-    dot: 'bg-proceed',
-    headBadge: 'bg-proceed-bg border-proceed text-proceed',
-    pill: 'bg-proceed-bg border-proceed text-proceed',
-    label: 'Completed',
-  },
-  warn: {
-    numBadge: 'bg-hold text-white',
-    dot: 'bg-hold',
-    headBadge: 'bg-hold-bg border-hold text-hold',
-    pill: 'bg-hold-bg border-hold text-hold',
-    label: 'Completed with warnings',
-  },
-  blocked: {
-    numBadge: 'bg-escalate text-white',
-    dot: 'bg-escalate',
-    headBadge: 'bg-escalate-bg border-escalate text-escalate',
-    pill: 'bg-escalate-bg border-escalate text-escalate',
-    label: 'Awaiting review',
-  },
-  skipped: {
-    numBadge: 'bg-line-strong text-white',
-    dot: 'bg-line-strong',
-    headBadge: 'bg-card-2 border-line text-text-3',
-    pill: 'bg-card-2 border-line text-text-3',
-    label: 'Not run in this build',
-  },
-  // The terminal gate DECIDED, but on partial lineage (upstream stages didn't run) — a muted,
-  // deliberately-not-green treatment so an incomplete sequence never ends in a confident "Completed".
-  partial: {
-    numBadge: 'bg-text-3 text-white',
-    dot: 'bg-text-3',
-    headBadge: 'bg-card-2 border-line-strong text-text-2',
-    pill: 'bg-card-2 border-line-strong text-text-2',
-    label: 'Decided on partial lineage',
-  },
-}
-
-// Gate pill tags per the handoff (note the asymmetry — preflight has no "gate" suffix).
-const GATE_TAG: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', variant: 'Variant gate' }
-
-function fmtSize(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`
-  return `${(n / 1024 ** 3).toFixed(1)} GB`
-}
+type ProvView = 'lineage' | 'events' | 'artifacts'
+const VIEWS: ProvView[] = ['lineage', 'events', 'artifacts']
 
 export function Provenance() {
   const { runId = '' } = useParams()
   const [detail, setDetail] = useState<RunDetail | null>(null)
   const [artifacts, setArtifacts] = useState<RunArtifact[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [selected, setSelected] = useState<PipelineStage | null>(null)
+  const [params, setParams] = useSearchParams()
 
   useEffect(() => {
     setDetail(null)
     setArtifacts(null)
-    setSelected(null)
+    setError(null) // clear a prior run's error so switching runs via the top switcher never shows stale text
     api.run(runId).then(setDetail).catch((e) => setError(String(e)))
+    // The artifacts fetch degrades to [] on failure (tolerant boundary) — the empty state renders,
+    // never a crash.
     api.artifacts(runId).then(setArtifacts).catch(() => setArtifacts([]))
   }, [runId])
 
-  // Worst (most-urgent) verdict each gate produced across the run's samples, and overall —
-  // the canvas colors a stage by the gate checkpoint that sits on it. The rules already
-  // decided these (ADR-0001); the canvas only visualizes them.
-  const { gateWorst, runWorst } = useMemo(() => {
-    const gateWorst: Record<Gate, Verdict | null> = { preflight: null, qc: null, variant: null }
-    let runWorst: Verdict = 'proceed'
-    if (detail) {
-      for (const c of detail.cards) {
-        if (VERDICT_RANK[c.verdict] < VERDICT_RANK[runWorst]) runWorst = c.verdict
-        for (const g of c.gate_results) {
-          const cur = gateWorst[g.gate]
-          if (cur === null || VERDICT_RANK[g.verdict] < VERDICT_RANK[cur]) gateWorst[g.gate] = g.verdict
-        }
-      }
-    }
-    return { gateWorst, runWorst }
-  }, [detail])
+  // The URL owns the view so trace-back deep-links and refreshes are stable (?view=events).
+  const rawView = params.get('view')
+  const view: ProvView = rawView && VIEWS.includes(rawView as ProvView) ? (rawView as ProvView) : 'lineage'
+  const setView = (v: ProvView) =>
+    setParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        if (v === 'lineage') p.delete('view')
+        else p.set('view', v)
+        return p
+      },
+      { replace: true },
+    )
 
-  const statusFor = useMemo(() => {
-    return (stage: Stage): Status => {
-      const arts = artifacts?.filter((a) => a.stage === stage.key) ?? []
-      if ((stage.key === 'align' || stage.key === 'variant') && arts.length === 0) return 'skipped'
-      if (stage.gate) {
-        const w = gateWorst[stage.gate]
-        if (w === 'escalate') return 'blocked'
-        if (w === 'hold' || w === 'rerun') return 'warn'
-      }
-      if (stage.key === 'gate') {
-        if (runWorst === 'escalate') return 'blocked'
-        if (runWorst !== 'proceed') return 'warn'
-        // Proceed — but the DAG shows sequence, so a terminal green while upstream align/variant are
-        // gray (skipped, not run in this build) is misleading (P3). Read "partial lineage" instead of
-        // a clean green "Completed" whenever a stage upstream of the gate never ran.
-        const upstreamSkipped = STAGES.some(
-          (s) => (s.key === 'align' || s.key === 'variant') && (artifacts?.filter((a) => a.stage === s.key).length ?? 0) === 0,
-        )
-        if (upstreamSkipped) return 'partial'
-      }
-      return 'ok'
-    }
-  }, [artifacts, gateWorst, runWorst])
+  // Grouped artifact count for the tab badge (one row per file, not per stage·role edge).
+  const artifactCount = useMemo(() => (artifacts ? groupArtifacts(artifacts).length : 0), [artifacts])
 
   if (error) return <ErrorBox message={error} />
   if (!detail || !artifacts) return <Loading label="Loading provenance…" />
-
-  // Per-stage note for the drill-in band — every stage gets a real note, never an empty bar.
-  // Gate stages prefer the worst gate result's rationale (rules-authored); when that's missing
-  // (or whitespace-only), and for the ungated stages, we fall back to an honest derived status
-  // note — a count/state we actually know, never a fabricated metric.
-  const noteFor = (stage: Stage): string => {
-    const n = detail.cards.length
-    const plural = n === 1 ? '' : 's'
-
-    // Alignment/variant-calling are honestly not run in this build (lineage starts from FASTQ).
-    // Short-circuit before the gate-rationale lookup so a stray variant-gate note can't surface.
-    if (stage.key === 'align')
-      return 'Not run in this build — lineage starts from FASTQ; alignment provenance is future work.'
-    if (stage.key === 'variant')
-      return 'Not run in this build — variant-calling provenance is future work.'
-
-    if (stage.gate) {
-      const results = detail.cards.flatMap((c) => c.gate_results).filter((g) => g.gate === stage.gate)
-      if (results.length) {
-        const worst = results.reduce((a, b) => (VERDICT_RANK[b.verdict] < VERDICT_RANK[a.verdict] ? b : a))
-        if (worst.rationale.trim()) return worst.rationale
-      }
-    }
-
-    switch (stage.key) {
-      case 'intake':
-        return `${n} sample${plural} registered from the sample sheet.`
-      case 'demux':
-        return `Demultiplexed ${n} sample${plural} from the sample sheet.`
-      case 'qc': {
-        // Honest fallback when the QC gate carried no rationale: report how many samples the
-        // QC gate flagged (verdict below proceed), derived from the rules' own gate results.
-        const flagged = detail.cards.filter((c) =>
-          c.gate_results.some((g) => g.gate === 'qc' && g.verdict !== 'proceed'),
-        ).length
-        return flagged === 0
-          ? `Per-sample QC ran across ${n} sample${plural}; none flagged.`
-          : `Per-sample QC ran across ${n} sample${plural}; ${flagged} flagged.`
-      }
-      case 'gate': {
-        const upstreamSkipped = STAGES.some(
-          (s) => (s.key === 'align' || s.key === 'variant') && artifacts.filter((a) => a.stage === s.key).length === 0,
-        )
-        const base = `Aggregates the gates that ran → overall verdict ${VERDICT_LABEL[runWorst]}.`
-        return upstreamSkipped
-          ? `${base} Decided on partial lineage — alignment/variant-calling didn't run in this build, so this isn't an end-to-end pass.`
-          : base
-      }
-      default:
-        return 'No stage note captured for this stage.'
-    }
-  }
-
-  // Default the drill-in to the first stage that flagged (most interesting), else the gate.
-  const firstFlagged = STAGES.find((s) => statusFor(s) === 'blocked' || statusFor(s) === 'warn')
-  const active = selected ?? firstFlagged?.key ?? 'gate'
-  const activeStage = STAGES.find((s) => s.key === active) ?? STAGES[STAGES.length - 1]
-  const activeStatus = statusFor(activeStage)
-  const sc = STATUS_STYLE[activeStatus]
-  const stageArts = artifacts.filter((a) => a.stage === activeStage.key)
-  const inputs = stageArts.filter((a) => a.role === 'input')
-  const outputs = stageArts.filter((a) => a.role === 'output')
 
   return (
     <div className="mx-auto max-w-[1080px]">
@@ -209,210 +66,106 @@ export function Provenance() {
         title="Provenance"
         subtitle={
           <>
-            Read-only lineage for <span className="font-mono text-text">{detail.run_id}</span>. Click a stage to
-            inspect its data I/O.
+            Read-only provenance for <span className="font-mono text-text">{detail.run_id}</span> — the fixed-lineage
+            DAG, the append-only event trail, and the artifact index.
           </>
         }
       />
 
-      {/* Left→right stage DAG — nodes stretch equally with auto-width chevrons between. */}
-      <div
-        className="mt-[18px] grid items-stretch gap-1 px-0.5 pb-2.5 pt-1.5"
-        style={{ gridTemplateColumns: 'repeat(5, minmax(0,1fr) auto) minmax(0,1fr)' }}
-      >
-        {STAGES.flatMap((stage, i) => {
-          const status = statusFor(stage)
-          const s = STATUS_STYLE[status]
-          const isActive = stage.key === active
-          const cells: ReactNode[] = [
-            <button
-              key={stage.key}
-              onClick={() => setSelected(stage.key)}
-              className={`flex w-full flex-col gap-[7px] overflow-hidden rounded-xl border bg-card p-3 text-left transition-shadow ${
-                isActive ? 'border-accent shadow-card ring-[3px] ring-accent-weak' : 'border-line'
-              }`}
-            >
-              <div className="flex w-full items-center justify-between">
-                <span
-                  className={`grid h-[22px] w-[22px] place-items-center rounded-[7px] font-mono text-[12px] font-semibold ${s.numBadge}`}
-                >
-                  {stage.n}
-                </span>
-                <span
-                  className={`h-[9px] w-[9px] rounded-full shadow-[0_0_0_3px_var(--color-page)] ${s.dot}`}
-                  title={s.label}
-                />
-              </div>
-              <div className="text-left text-[12.5px] font-semibold leading-[1.25] text-text">{stage.title}</div>
-              <div className="max-w-full truncate text-left font-mono text-[9.5px] text-text-3">{stage.tool}</div>
-              {stage.gate && (
-                <span className="inline-flex max-w-full items-center gap-1 self-start whitespace-nowrap rounded-full border border-line bg-page px-[7px] py-0.5 text-[8.5px] font-semibold uppercase text-text-2">
-                  <span className={`h-[5px] w-[5px] shrink-0 rounded-full ${GATE_DOT[stage.gate]}`} />
-                  {GATE_TAG[stage.gate]}
-                </span>
-              )}
-            </button>,
-          ]
-          if (i < STAGES.length - 1) {
-            cells.push(
-              <div key={`chev-${stage.key}`} className="flex shrink-0 items-center px-[3px]">
-                <ChevronRight size={16} strokeWidth={2.4} className="text-line-strong" />
-              </div>,
-            )
-          }
-          return cells
-        })}
+      <ProvenanceHeader events={detail.events} />
+
+      <div className="mt-5">
+        <Tabs<ProvView>
+          items={[
+            { value: 'lineage', label: 'Lineage' },
+            { value: 'events', label: 'Event trail', count: detail.events.length },
+            { value: 'artifacts', label: 'Artifacts', count: artifactCount },
+          ]}
+          value={view}
+          onChange={setView}
+        />
       </div>
 
-      {/* Drill-in: header · note bar · I/O grid */}
-      <div className="mt-[14px] overflow-hidden rounded-[14px] border border-line bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
-        <div className="flex items-center gap-[13px] border-b border-line px-5 py-4">
-          <span
-            className={`grid h-9 w-9 shrink-0 place-items-center rounded-[9px] border font-mono text-[15px] font-semibold ${sc.headBadge}`}
-          >
-            {activeStage.n}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-base font-semibold text-text">{activeStage.title}</div>
-            <div className="font-mono text-[11.5px] text-text-3">{activeStage.tool}</div>
-          </div>
-          <span
-            className={`shrink-0 rounded-full border px-[11px] py-1 text-[11px] font-semibold uppercase tracking-[0.3px] ${sc.pill}`}
-          >
-            {sc.label}
-          </span>
-        </div>
-
-        {/* Per-stage note bar — shown for every stage. */}
-        <div className="border-b border-line bg-card-2 px-5 py-[11px] text-[12.5px] leading-[1.5] text-text-2">
-          {noteFor(activeStage)}
-        </div>
-
-        <div className="grid grid-cols-2">
-          <ProvColumn icon={<ArrowDownToLine size={14} strokeWidth={2} />} label="Inputs" refs={inputs} />
-          <ProvColumn
-            icon={<ArrowUpFromLine size={14} strokeWidth={2} />}
-            label="Outputs"
-            refs={outputs}
-            className="border-l border-line"
-          />
-        </div>
+      <div className="mt-5">
+        {view === 'lineage' && <ProvenanceLineage detail={detail} artifacts={artifacts} />}
+        {view === 'events' && <EventTrail events={detail.events} cards={detail.cards} runId={detail.run_id} />}
+        {view === 'artifacts' && <ProvenanceArtifacts artifacts={artifacts} />}
       </div>
     </div>
   )
 }
 
-function ProvColumn({
-  icon,
-  label,
-  refs,
-  className = '',
-}: {
-  icon: ReactNode
-  label: string
-  refs: RunArtifact[]
-  className?: string
-}) {
-  return (
-    <div className={`px-5 py-4 ${className}`}>
-      <div className="flex items-center gap-[7px] text-[11px] font-semibold uppercase tracking-[0.5px] text-text-3">
-        {icon}
-        {label}
+// The version-pin band — the real provenance of THIS gate execution, read straight from the
+// started/completed events (never faked). The one honest seam is the pipeline provenance pin:
+// AnalysisRun.gate_provenance reserves the sarek params_hash / execution_trace for phase 2
+// (provenance.py:50-56), so it's labelled as a seam, not populated with a fabricated value.
+function ProvenanceHeader({ events }: { events: ProvenanceEvent[] }) {
+  const started = events.find((e) => e.event_type === 'analysis_run.started')
+  const completed = events.find((e) => e.event_type === 'analysis_run.completed')
+
+  // Defensive empty — mirrors the lineage screen's honesty posture.
+  if (!started) {
+    return (
+      <div className="rounded-[14px] border border-line bg-card px-5 py-4 text-[12.5px] text-text-3">
+        No run header captured for this run.
       </div>
-      <div className="mt-1.5">
-        {refs.length === 0 ? (
-          <p className="py-[11px] font-mono text-[12px] text-text-3">—</p>
-        ) : (
-          refs.map((a) => <ProvArtifactRow key={a.name} art={a} />)
-        )}
-      </div>
-    </div>
-  )
-}
-
-// Every artifact is a link (§5.6): open-in-store / copy-fingerprint / show-full / download — all
-// wired to the real same-origin artifact URL (GET /api/runs/:id/artifacts/:name). The value is a
-// CONTENT fingerprint of the file's bytes (a fixity/integrity check, not a process/task/ledger id —
-// those are arun_… and evt_…). Labelled "fingerprint" in the UI — accurate (it's not a process id)
-// without advertising the digest algorithm. Hovering shows the full value; "show full" pins it; copy grabs it.
-function ProvArtifactRow({ art }: { art: RunArtifact }) {
-  const [copied, setCopied] = useState(false)
-  const [showFull, setShowFull] = useState(false)
-
-  // Surface the two intake sheets' distinction (they look similar but are different files at
-  // different stages): sample_metadata.csv is the LIMS/subject sheet (intake); SampleSheet.csv is
-  // the Illumina barcode/index manifest demux consumes (demux). Shown on hover of the name.
-  const lower = art.name.toLowerCase()
-  const nameTitle =
-    lower === 'sample_metadata.csv'
-      ? 'Intake · LIMS/subject metadata sheet — click to view'
-      : lower === 'samplesheet.csv'
-        ? 'Demux · Illumina barcode/index manifest — click to view'
-        : 'Open artifact at its location (view)'
-
-  const copyDigest = () => {
-    if (!art.sha256) return
-    void navigator.clipboard?.writeText(art.sha256).then(
-      () => {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
-      },
-      () => {},
     )
   }
 
+  const gp = readGateProvenance(started.payload)
+  const narration = readStr(started.payload, 'generated_by') ?? 'unknown'
+  const nSamples = completed ? readNum(completed.payload, 'n_samples') : null
+  const status = completed ? readStr(completed.payload, 'status') : null
+
   return (
-    <div className="border-b border-line py-[11px]">
-      <div className="flex items-center justify-between gap-2">
-        <a
-          href={art.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={nameTitle}
-          className="inline-flex items-center gap-[5px] break-all font-mono text-[12.5px] font-medium text-accent-strong hover:underline"
-        >
-          <ExternalLink size={12} strokeWidth={1.9} className="shrink-0" />
-          {art.name}
-        </a>
+    <div className="rounded-[14px] border border-line bg-card px-5 py-4">
+      <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.6px] text-text-3">
+        Version pins · this gate execution
       </div>
-      <div className="mt-[5px] flex flex-wrap items-center gap-[10px]">
-        {art.sha256 ? (
-          <>
-            <button
-              type="button"
-              onClick={copyDigest}
-              title={`Content fingerprint · ${art.sha256} · click to copy`}
-              className="font-mono text-[11px] text-accent-strong hover:underline"
-            >
-              {copied ? 'copied ✓' : `fingerprint ${art.sha256.slice(0, 12)}…`}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowFull((v) => !v)}
-              className="text-[10.5px] text-text-3 hover:text-text-2"
-            >
-              {showFull ? 'hide' : 'show full'}
-            </button>
-          </>
-        ) : (
-          <span className="font-mono text-[11px] text-text-3">fingerprint n/a</span>
-        )}
-        <span className="text-[11px] text-text-3">{fmtSize(art.size_bytes)}</span>
-        <span className="text-[11px] text-text-3">·</span>
-        <a
-          href={`${art.url}?download=1`}
-          download={art.name}
-          title="Download artifact"
-          className="text-[11px] text-accent-strong hover:underline"
+      <div className="flex flex-wrap gap-x-8 gap-y-3">
+        <Pin label="Analysis run">
+          <Fingerprint value={started.analysis_run_id} label="run" />
+        </Pin>
+        <Pin label="Rule pack">
+          <span className="font-mono text-text-2">{gp.rule_pack_version ?? '—'}</span>
+        </Pin>
+        <Pin label="Runbook metrics" title={gp.runbook_metrics.join(', ') || undefined}>
+          <span className="font-mono text-text-2">{gp.runbook_metrics.length}</span>
+        </Pin>
+        <Pin label="Narration provenance" title="How the card prose was generated — the rules decide the verdict regardless (ADR-0001).">
+          <span className="font-mono text-text-2">{narration}</span>
+        </Pin>
+        <Pin label="Samples">
+          <span className="font-mono text-text-2">
+            {nSamples ?? '—'}
+            {status ? ` · ${status}` : ''}
+          </span>
+        </Pin>
+        <Pin label="Events">
+          <span className="font-mono text-text-2">{events.length}</span>
+        </Pin>
+        <Pin label="Started">
+          <span className="text-text-2">{fmtTime(started.created_at)}</span>
+        </Pin>
+        <Pin label="Completed">
+          <span className="text-text-2">{completed ? fmtTime(completed.created_at) : '—'}</span>
+        </Pin>
+        <Pin
+          label="Pipeline provenance"
+          title="Reserved for phase 2 — the sarek params hash / execution trace is not captured in this build (provenance.py:50-56)."
         >
-          download
-        </a>
+          <span className="text-text-3">params hash · execution trace — phase 2</span>
+        </Pin>
       </div>
-      {showFull && art.sha256 && (
-        <div className="mt-1.5 select-all break-all font-mono text-[10.5px] leading-relaxed text-text-2">
-          hash {art.sha256}
-        </div>
-      )}
+    </div>
+  )
+}
+
+function Pin({ label, title, children }: { label: string; title?: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0" title={title}>
+      <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.5px] text-text-3">{label}</div>
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px]">{children}</div>
     </div>
   )
 }
