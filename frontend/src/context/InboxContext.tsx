@@ -103,6 +103,7 @@ type InboxState = {
   setAssignee: (id: string, assignee: string | null) => void // IB14 — wire assignment to the roster
   addComment: (id: string, body: string) => void // IB14 — comment (mentions resolved from body)
   deleteComment: (id: string, commentId: string) => void
+  resolveTicket: (id: string) => Promise<void> // close a ticket-derived card (audited server-side)
   addSelfItem: (title: string, opts?: { due?: string | null; note?: string; folder?: string | null }) => void
   updateSelfItem: (id: string, patch: { title?: string; note?: string }) => void
   deleteSelfItem: (id: string) => void
@@ -359,6 +360,18 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  // Resolve a review-queue-derived card straight from the Inbox. `id` is the item's REAL backend
+  // ticket id — a derived item's id IS the ticket id from listTickets (shortItemId is display-only) —
+  // so the close lands on the right ticket. It's an audited server-side write; refresh then re-pulls
+  // the open/in-review feed, dropping the now-resolved ticket so its card leaves the board columns.
+  const resolveTicket = useCallback(
+    async (id: string) => {
+      await api.ticketAction(id, 'resolve')
+      await refresh()
+    },
+    [refresh],
+  )
+
   const addSelfItem = useCallback(
     (title: string, opts?: { due?: string | null; note?: string; folder?: string | null }) => {
       const t = title.trim()
@@ -443,6 +456,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     setAssignee,
     addComment,
     deleteComment,
+    resolveTicket,
     addSelfItem,
     updateSelfItem,
     deleteSelfItem,

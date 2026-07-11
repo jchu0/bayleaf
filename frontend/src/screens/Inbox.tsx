@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react'
 import { type ChangeEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { DEMO_ACCOUNTS } from '../auth'
 import { useConfirm } from '../components/ConfirmDialog'
@@ -422,7 +423,21 @@ function InboxTab() {
 }
 
 // ── BOARD tab: kanban with native drag-and-drop ────────────────────────────────
-function BoardCard({ item, onOpen }: { item: InboxItem; onOpen: () => void }) {
+// A per-column reveal cap so a 100+-ticket column stays navigable (scale-aware, like the app's pagers)
+// — the first N cards render, the rest hide behind a "Show N more" expander.
+const COLUMN_PAGE = 20
+
+function BoardCard({
+  item,
+  onOpen,
+  onResolve,
+  resolving,
+}: {
+  item: InboxItem
+  onOpen: () => void
+  onResolve: () => void
+  resolving: boolean
+}) {
   const { toggleFlag, comments } = useInbox()
   const src = SOURCE_META[item.source]
   const commentCount = comments[item.id]?.length ?? 0
@@ -446,6 +461,21 @@ function BoardCard({ item, onOpen }: { item: InboxItem; onOpen: () => void }) {
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
           {item.assignee && <Avatar id={item.assignee} size={17} />}
+          {/* Resolve straight from the card (ticket-derived only) — confirm-gated + audited upstream. */}
+          {!item.isSelf && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onResolve()
+              }}
+              disabled={resolving}
+              className="text-text-3 hover:text-accent-strong disabled:opacity-40"
+              title="Resolve ticket"
+              aria-label="Resolve ticket"
+            >
+              <CheckCheck size={13} />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -590,7 +620,9 @@ function MentionComposer({ itemId }: { itemId: string }) {
         className="w-full resize-y rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[12px] text-text placeholder:text-text-3"
       />
       {query !== null && matches.length > 0 && (
-        <div className="absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-md border border-line-strong bg-card shadow-pop">
+        // Opens UPWARD (bottom-full): the composer is pinned at the modal's bottom edge, so a downward
+        // menu would spill past the dialog. Above the textarea it stays inside the visible dialog.
+        <div className="absolute inset-x-0 bottom-full z-10 mb-1 overflow-hidden rounded-md border border-line-strong bg-card shadow-pop">
           {matches.map((a, i) => (
             <button
               key={a.id}
@@ -631,18 +663,45 @@ function MentionComposer({ itemId }: { itemId: string }) {
 }
 
 // The board card detail (UIC-14): the referenceable id, an editable description, assignment + status
-// wired to the roster, and the @-mention comment thread. A modal, since a kanban column is too narrow.
-function BoardCardDetail({ item, onClose }: { item: InboxItem; onClose: () => void }) {
+// wired to the roster, and the @-mention comment thread. A large, user-RESIZABLE dialog (a kanban
+// column is far too narrow for a discussion), split into a fixed meta/description top region and a
+// dominant, scrollable comments region with the composer pinned at the bottom.
+function BoardCardDetail({
+  item,
+  onClose,
+  onResolve,
+  resolving,
+}: {
+  item: InboxItem
+  onClose: () => void
+  onResolve: () => void
+  resolving: boolean
+}) {
   const { setNote, setAssignee, setColumn, setPriority, setDue, comments } = useInbox()
   const { actor } = useRole()
   const src = SOURCE_META[item.source]
   const list = comments[item.id] ?? []
-  return (
+  // Portal to <body> so the fixed backdrop is VIEWPORT-relative — the page's `.pg-fade` transition
+  // wrapper carries a transform, which otherwise traps `fixed` and drops the dialog low (the "too low"
+  // complaint). At the body it centres in the viewport, sitting higher regardless of board scroll.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="flex max-h-[85vh] w-[560px] max-w-full flex-col overflow-hidden rounded-2xl border border-line bg-card shadow-pop"
+        // Generous default size + a native drag grip (CSS `resize: both`) at the bottom-right corner,
+        // so an operator can grow the dialog to give the thread even more room. Theme-aware via tokens.
+        className="flex flex-col overflow-hidden rounded-2xl border border-line bg-card shadow-pop"
+        style={{
+          resize: 'both',
+          width: 'min(880px, 95vw)',
+          height: 'min(760px, 88vh)',
+          minWidth: 720,
+          minHeight: 520,
+          maxWidth: '96vw',
+          maxHeight: '92vh',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header — id + title + a Resolve action (ticket-derived only) beside the close button. */}
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3.5">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -656,18 +715,33 @@ function BoardCardDetail({ item, onClose }: { item: InboxItem; onClose: () => vo
               <span>· {timeAgo(item.createdAt)}</span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-2 hover:bg-page"
-            aria-label="Close"
-          >
-            <X size={17} />
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* A neutral outlined Resolve (matching the review queue's own resolve styling) — the
+                backend close is confirm-gated + audited by the caller. */}
+            {!item.isSelf && (
+              <button
+                onClick={onResolve}
+                disabled={resolving}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-2.5 py-1.5 text-[12px] font-medium text-text-2 hover:border-accent hover:text-accent-strong disabled:opacity-50"
+                title="Resolve this ticket in the review queue"
+              >
+                <CheckCheck size={14} /> Resolve
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-2 hover:bg-page"
+              aria-label="Close"
+            >
+              <X size={17} />
+            </button>
+          </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        {/* Meta + description — the fixed top region; kept compact so comments get the vertical space. */}
+        <div className="border-b border-line px-5 py-4">
           {/* Assignment + status wired to the user/review system (UIC-14). */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <label className="flex flex-col gap-1 text-[10.5px] text-text-3">
               Assignee
               <select
@@ -723,52 +797,91 @@ function BoardCardDetail({ item, onClose }: { item: InboxItem; onClose: () => vo
           </div>
 
           {/* IB14: a body/description — the card's working notes (autosaved to your overlay). */}
-          <label className="mt-4 flex flex-col gap-1 text-[10.5px] text-text-3">
+          <label className="mt-3 flex flex-col gap-1 text-[10.5px] text-text-3">
             Description
             <textarea
               value={item.note}
               onChange={(e) => setNote(item.id, e.target.value)}
-              rows={3}
+              rows={2}
               placeholder="What's the plan for this card…"
               className="resize-y rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[12px] text-text placeholder:text-text-3"
             />
           </label>
+        </div>
 
-          {/* IB14: comment thread with @-mentions. */}
-          <div className="mt-4 border-t border-line pt-3">
-            <div className="mb-2.5 flex items-center gap-1.5 text-[12px] font-semibold text-text">
-              <MessageSquare size={14} /> Comments
-              <span className="font-mono text-[11px] text-text-3">{list.length}</span>
-            </div>
-            <div className="flex flex-col gap-3">
-              {list.length === 0 ? (
-                <p className="text-[12px] text-text-3">No comments yet — @-mention a teammate to loop them in.</p>
-              ) : (
-                list.map((c) => <CommentRow key={c.id} itemId={item.id} c={c} canDelete={c.authorId === actor.id} />)
-              )}
-            </div>
-            <MentionComposer itemId={item.id} />
+        {/* Comments — the dominant, scrollable region; the composer stays pinned below the thread. */}
+        <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
+          <div className="mb-2.5 flex items-center gap-1.5 text-[12px] font-semibold text-text">
+            <MessageSquare size={14} /> Comments
+            <span className="font-mono text-[11px] text-text-3">{list.length}</span>
           </div>
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+            {list.length === 0 ? (
+              <p className="text-[12px] text-text-3">No comments yet — @-mention a teammate to loop them in.</p>
+            ) : (
+              list.map((c) => <CommentRow key={c.id} itemId={item.id} c={c} canDelete={c.authorId === actor.id} />)
+            )}
+          </div>
+          <MentionComposer itemId={item.id} />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
 function BoardTab() {
-  const { items, setColumn } = useInbox()
+  const { items, setColumn, resolveTicket } = useInbox()
+  const confirm = useConfirm()
+  const { toast } = useToast()
   const [dragOver, setDragOver] = useState<InboxColumn | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [resolving, setResolving] = useState(false)
+  // Per-column reveal counts — each column shows COLUMN_PAGE cards, then reveals more on demand.
+  const [shownPer, setShownPer] = useState<Record<InboxColumn, number>>({
+    inbox: COLUMN_PAGE,
+    todo: COLUMN_PAGE,
+    doing: COLUMN_PAGE,
+    done: COLUMN_PAGE,
+  })
   // Resolve the open card from live items (not a captured copy) so edits reflect instantly.
   const openItem = openId ? (items.find((i) => i.id === openId) ?? null) : null
   const byColumn = (c: InboxColumn) =>
     items
       .filter((i) => i.column === c)
       .sort((a, b) => PRIORITY_META[b.priority].weight - PRIORITY_META[a.priority].weight)
+
+  // Close a ticket-derived card from the board. A state-changing backend write, so it's confirm-gated
+  // (naming that it resolves + is audited) and resolves against the item's REAL ticket id.
+  const handleResolve = async (item: InboxItem) => {
+    if (item.isSelf || resolving) return
+    const ok = await confirm({
+      title: 'Resolve this ticket?',
+      body: 'Closes it in the review queue and drops it from your board. Recorded in the audit log.',
+      confirmLabel: 'Resolve',
+    })
+    if (!ok) return
+    setResolving(true)
+    try {
+      await resolveTicket(item.id)
+      setOpenId((cur) => (cur === item.id ? null : cur))
+      toast('Ticket resolved.', 'success')
+    } catch (e) {
+      toast(String(e), 'error')
+    } finally {
+      setResolving(false)
+    }
+  }
+  const showMore = (c: InboxColumn) => setShownPer((p) => ({ ...p, [c]: p[c] + COLUMN_PAGE }))
+  const collapse = (c: InboxColumn) => setShownPer((p) => ({ ...p, [c]: COLUMN_PAGE }))
+
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {COLUMNS.map((col) => {
         const cards = byColumn(col.key)
+        const limit = shownPer[col.key]
+        const visible = cards.slice(0, limit)
+        const hidden = cards.length - visible.length
         return (
           <div
             key={col.key}
@@ -796,12 +909,49 @@ function BoardTab() {
                 {col.hint}
               </div>
             ) : (
-              cards.map((i) => <BoardCard key={i.id} item={i} onOpen={() => setOpenId(i.id)} />)
+              <>
+                {visible.map((i) => (
+                  <BoardCard
+                    key={i.id}
+                    item={i}
+                    onOpen={() => setOpenId(i.id)}
+                    onResolve={() => void handleResolve(i)}
+                    resolving={resolving}
+                  />
+                ))}
+                {/* Scale-aware reveal — the cap keeps a long column navigable; expand/collapse on demand. */}
+                {hidden > 0 ? (
+                  <button
+                    onClick={() => showMore(col.key)}
+                    className="mt-0.5 rounded-[9px] border border-dashed border-line px-2 py-1.5 text-[11px] text-text-2 transition-colors hover:border-line-strong hover:text-text"
+                  >
+                    Show {Math.min(hidden, COLUMN_PAGE)} more
+                    <span className="ml-1 font-mono text-[10.5px] text-text-3">· {hidden} hidden</span>
+                  </button>
+                ) : (
+                  limit > COLUMN_PAGE &&
+                  cards.length > COLUMN_PAGE && (
+                    <button
+                      onClick={() => collapse(col.key)}
+                      className="mt-0.5 rounded-[9px] border border-dashed border-line px-2 py-1.5 text-[11px] text-text-2 transition-colors hover:border-line-strong hover:text-text"
+                    >
+                      Show less
+                    </button>
+                  )
+                )}
+              </>
             )}
           </div>
         )
       })}
-      {openItem && <BoardCardDetail item={openItem} onClose={() => setOpenId(null)} />}
+      {openItem && (
+        <BoardCardDetail
+          item={openItem}
+          onClose={() => setOpenId(null)}
+          onResolve={() => void handleResolve(openItem)}
+          resolving={resolving}
+        />
+      )}
     </div>
   )
 }
@@ -811,6 +961,7 @@ const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 
 function CalendarTab() {
   const { items, addSelfItem } = useInbox()
+  const { toast } = useToast()
   const today = todayYmd()
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
@@ -848,8 +999,38 @@ function CalendarTab() {
   const selectedItems = byDay.get(selected) ?? []
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="rounded-[14px] border border-line bg-card p-4">
+    <div>
+      {/* IB1: calendar connectors live UNDER the Calendar tab (they belong to this view, not Notes).
+          Labelled phase-2 seams — a toast, not a real OAuth flow. */}
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-[12px] border border-line bg-card px-4 py-3">
+        <div className="mr-auto min-w-0">
+          <div className="text-[12.5px] font-semibold text-text">Calendar sync</div>
+          <p className="text-[11px] text-text-3">
+            Push reminders to your calendar. Connectors are a production seam — not yet wired.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { k: 'gmail', label: 'Google Calendar' },
+            { k: 'outlook', label: 'Outlook Calendar' },
+          ].map((c) => (
+            <button
+              key={c.k}
+              onClick={() => toast(`${c.label} connector isn't wired in this build (a labelled seam).`, 'info')}
+              className="inline-flex items-center gap-2 rounded-md border border-line-strong bg-card-2 px-2.5 py-2 text-[12px] text-text-2 hover:border-accent hover:text-accent-strong"
+            >
+              <Mail size={14} />
+              Connect {c.label}
+              <span className="ml-0.5 rounded-full border border-line bg-card px-1.5 py-px text-[9.5px] text-text-3">
+                phase-2
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="rounded-[14px] border border-line bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <span className="text-[14px] font-semibold text-text">{monthLabel}</span>
           <div className="flex items-center gap-1">
@@ -960,6 +1141,7 @@ function CalendarTab() {
           </button>
         </form>
       </div>
+      </div>
     </div>
   )
 }
@@ -967,11 +1149,18 @@ function CalendarTab() {
 // ── NOTES tab: self reminders + notes to self, with edit-gating + folders ───────
 const UNFILED = '__unfiled__'
 
+// An absolute created-date for a note header (4a). Tolerant of a bad timestamp (house rule: a
+// boundary never crashes) — falls back to the raw yyyy-mm-dd, mirroring timeAgo's own fallback.
+function fmtDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10)
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 function NotesTab() {
   const { items, folders, addSelfItem, updateSelfItem, deleteSelfItem, setFolder, addFolder, deleteFolder } =
     useInbox()
   const confirm = useConfirm()
-  const { toast } = useToast()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [composerFolder, setComposerFolder] = useState('')
@@ -1025,11 +1214,91 @@ function NotesTab() {
   }
 
   const folderOpts = [{ v: '', label: 'Unfiled' }, ...folders.map((f) => ({ v: f, label: f }))]
+  // The folder sidebar's nav/filter list — All + Unfiled pseudo-entries, then each real folder
+  // (deletable). Merges the old right-side filter chips + left-side folder manager into one column.
+  const folderNav: { v: string; label: string; count: number; deletable: boolean }[] = [
+    { v: 'all', label: 'All notes', count: noted.length, deletable: false },
+    { v: UNFILED, label: 'Unfiled', count: noted.filter((i) => !i.folder).length, deletable: false },
+    ...folders.map((f) => ({ v: f, label: f, count: noted.filter((i) => i.folder === f).length, deletable: true })),
+  ]
+  const filterLabel = folderNav.find((e) => e.v === folderFilter)?.label ?? 'All notes'
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
-      {/* LEFT: composer + folders + calendar connectors */}
-      <div className="flex h-fit flex-col gap-4">
+    // 4b: a NARROW folders sidebar + a dominant editing area (the composer + notes list get the room).
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+      {/* LEFT: a compact folders sidebar — new-folder at the TOP (4c), then the filter/nav list. */}
+      <aside className="h-fit rounded-[14px] border border-line bg-card p-3.5">
+        <div className="mb-2.5 text-[12.5px] font-semibold text-text">Folders</div>
+        {/* 4c: create a folder ABOVE the folder list + the note view (was buried below the list). */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            addFolder(newFolder)
+            setNewFolder('')
+          }}
+          className="mb-3 flex items-center gap-1.5"
+        >
+          <input
+            value={newFolder}
+            onChange={(e) => setNewFolder(e.target.value)}
+            placeholder="New folder…"
+            className="min-w-0 flex-1 rounded-md border border-line bg-card-2 px-2 py-1.5 text-[12px] text-text placeholder:text-text-3"
+          />
+          <button
+            type="submit"
+            disabled={!newFolder.trim()}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line-strong bg-card px-2 py-1.5 text-[12px] text-text-2 hover:border-accent hover:text-accent-strong disabled:opacity-40"
+            aria-label="Add folder"
+          >
+            <FolderPlus size={13} />
+          </button>
+        </form>
+        {/* IB8: the folder filter/nav — click to filter; each real folder carries a delete affordance. */}
+        <div className="flex flex-col gap-0.5">
+          {folderNav.map((e) => (
+            <div
+              key={e.v}
+              className={`flex items-center gap-1 rounded-md border transition-colors ${
+                folderFilter === e.v ? 'border-accent bg-accent-weak' : 'border-transparent hover:bg-card-2'
+              }`}
+            >
+              <button
+                onClick={() => setFolderFilter(e.v)}
+                className={`flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-[12px] ${
+                  folderFilter === e.v ? 'font-medium text-accent-strong' : 'text-text-2'
+                }`}
+              >
+                <Folder size={12} className="shrink-0 text-text-3" />
+                <span className="min-w-0 flex-1 truncate">{e.label}</span>
+                <span className="font-mono text-[10.5px] text-text-3">{e.count}</span>
+              </button>
+              {e.deletable && (
+                <button
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: `Delete folder "${e.label}"?`,
+                      body: 'Notes in it are kept and moved to Unfiled.',
+                      confirmLabel: 'Delete folder',
+                    })
+                    if (ok) {
+                      deleteFolder(e.label)
+                      // Don't strand the list on a filter that no longer exists.
+                      setFolderFilter((f) => (f === e.label ? 'all' : f))
+                    }
+                  }}
+                  className="shrink-0 px-1.5 text-text-3 hover:text-escalate"
+                  aria-label={`Delete folder ${e.label}`}
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      {/* RIGHT: the dominant editing area — composer + notes list. */}
+      <div className="flex min-w-0 flex-col gap-3">
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -1052,7 +1321,7 @@ function NotesTab() {
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            rows={4}
+            rows={5}
             placeholder="Details (optional)…"
             className="mt-2 w-full resize-y rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[12.5px] text-text placeholder:text-text-3"
           />
@@ -1079,109 +1348,11 @@ function NotesTab() {
           </div>
         </form>
 
-        {/* IB8: folder manager */}
-        <div className="rounded-[14px] border border-line bg-card p-4">
-          <div className="mb-2 text-[12.5px] font-semibold text-text">Folders</div>
-          <div className="flex flex-col gap-1.5">
-            {folders.length === 0 && <p className="text-[11.5px] text-text-3">No folders yet — group your notes.</p>}
-            {folders.map((f) => (
-              <div key={f} className="flex items-center gap-2 rounded-md border border-line bg-card-2 px-2.5 py-1.5">
-                <Folder size={13} className="text-text-3" />
-                <span className="flex-1 truncate text-[12px] text-text-2">{f}</span>
-                <span className="font-mono text-[10.5px] text-text-3">{noted.filter((i) => i.folder === f).length}</span>
-                <button
-                  onClick={async () => {
-                    const ok = await confirm({
-                      title: `Delete folder "${f}"?`,
-                      body: 'Notes in it are kept and moved to Unfiled.',
-                      confirmLabel: 'Delete folder',
-                    })
-                    if (ok) deleteFolder(f)
-                  }}
-                  className="text-text-3 hover:text-escalate"
-                  aria-label={`Delete folder ${f}`}
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              addFolder(newFolder)
-              setNewFolder('')
-            }}
-            className="mt-2 flex items-center gap-2"
-          >
-            <input
-              value={newFolder}
-              onChange={(e) => setNewFolder(e.target.value)}
-              placeholder="New folder…"
-              className="min-w-0 flex-1 rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[12px] text-text placeholder:text-text-3"
-            />
-            <button
-              type="submit"
-              disabled={!newFolder.trim()}
-              className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-card px-2.5 py-1.5 text-[12px] text-text-2 hover:border-accent hover:text-accent-strong disabled:opacity-40"
-            >
-              <FolderPlus size={13} /> Add
-            </button>
-          </form>
-        </div>
-
-        {/* IB1: calendar connectors (labelled seams — not yet wired to a real OAuth flow) */}
-        <div className="rounded-[14px] border border-line bg-card p-4">
-          <div className="text-[12.5px] font-semibold text-text">Calendar sync</div>
-          <p className="mb-2.5 mt-0.5 text-[11px] text-text-3">
-            Push reminders to your calendar. Connectors are a production seam — not yet wired.
-          </p>
-          <div className="flex flex-col gap-2">
-            {[
-              { k: 'gmail', label: 'Google Calendar' },
-              { k: 'outlook', label: 'Outlook Calendar' },
-            ].map((c) => (
-              <button
-                key={c.k}
-                onClick={() => toast(`${c.label} connector isn't wired in this build (a labelled seam).`, 'info')}
-                className="flex items-center gap-2 rounded-md border border-line-strong bg-card-2 px-2.5 py-2 text-[12px] text-text-2 hover:border-accent hover:text-accent-strong"
-              >
-                <Mail size={14} />
-                Connect {c.label}
-                <span className="ml-auto rounded-full border border-line bg-card px-1.5 py-px text-[9.5px] text-text-3">
-                  phase-2
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* RIGHT: folder filter + mass-delete + list */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* IB8: filter the list by folder. */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {[
-              { v: 'all', label: 'All' },
-              { v: UNFILED, label: 'Unfiled' },
-              ...folders.map((f) => ({ v: f, label: f })),
-            ].map((o) => (
-              <button
-                key={o.v}
-                onClick={() => setFolderFilter(o.v)}
-                className={`rounded-full border px-2.5 py-1 text-[11.5px] transition-colors ${
-                  folderFilter === o.v
-                    ? 'border-accent bg-accent-weak text-accent-strong'
-                    : 'border-line bg-card text-text-2 hover:border-line-strong'
-                }`}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex-1" />
-          {/* IB7: mass delete the checkbox selection (self notes only). */}
+        {/* Active-filter label + the mass-delete for the checkbox selection (self notes only, IB7). */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[11.5px] text-text-3">
+            {filterLabel} · <span className="font-mono">{shown.length}</span>
+          </span>
           {selfSelected.length > 0 && (
             <button
               onClick={() => void deleteSelected()}
@@ -1194,7 +1365,7 @@ function NotesTab() {
 
         <div className="flex flex-col gap-2.5">
           {shown.length === 0 ? (
-            <Empty message="No notes here. Jot a reminder to yourself on the left." />
+            <Empty message="No notes here. Jot a reminder to yourself in the composer above." />
           ) : (
             shown.map((i) => {
               const editing = editingId === i.id
@@ -1228,10 +1399,13 @@ function NotesTab() {
                           </span>
                         )}
                       </div>
-                      {/* IB6: created + edited timestamps. */}
+                      {/* IB6/4a: the absolute created DATE (in the note header), plus the relative
+                          edited timestamp when present. */}
                       <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-text-3">
                         {i.runId && <span className="font-mono">{i.runId}</span>}
-                        <span>Created {timeAgo(i.createdAt)}</span>
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarDays size={10} /> Created {fmtDate(i.createdAt)}
+                        </span>
                         {i.updatedAt && <span>· edited {timeAgo(i.updatedAt)}</span>}
                       </div>
 
