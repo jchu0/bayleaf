@@ -67,7 +67,10 @@ const SAVE_ST: Record<SaveStatus, { label: string; cls: string }> = {
 
 // Palette rows: click a tool/contamination tile to add a node; agents open their advisory modal
 // (or select the QC-triage pill); the gate tile is pinned/disabled.
-type PaletteItem = { name: string; sub: string; icon: IconKey; disabled?: boolean; onClick?: () => void }
+// `alwaysEnabled` exempts an item from the View-mode palette lock — used for the advisory agents,
+// which are read-only (they open a modal / select the triage pill; they never mutate the pipeline),
+// so an operator can consult them without switching the whole canvas into Edit.
+type PaletteItem = { name: string; sub: string; icon: IconKey; disabled?: boolean; alwaysEnabled?: boolean; onClick?: () => void }
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
@@ -468,9 +471,9 @@ export function PipelineBuilder() {
     {
       heading: 'Agents',
       items: [
-        { name: 'QC-triage', sub: 'advisory · MVP', icon: 'activity', onClick: () => setSelected('a_qc_triage') },
-        { name: 'Pipeline-repair', sub: 'advisory · proposes fixes', icon: 'wrench', onClick: () => setRepairOpen(true) },
-        { name: 'Archivist', sub: 'advisory · cold storage', icon: 'archive', onClick: () => setArchivistOpen(true) },
+        { name: 'QC-triage', sub: 'advisory · MVP', icon: 'activity', alwaysEnabled: true, onClick: () => setSelected('a_qc_triage') },
+        { name: 'Pipeline-repair', sub: 'advisory · proposes fixes', icon: 'wrench', alwaysEnabled: true, onClick: () => setRepairOpen(true) },
+        { name: 'Archivist', sub: 'advisory · cold storage', icon: 'archive', alwaysEnabled: true, onClick: () => setArchivistOpen(true) },
       ],
     },
     { heading: 'Gate', items: [{ name: 'Decision gate', sub: 'terminal · pinned', icon: 'shield', disabled: true }] },
@@ -961,7 +964,7 @@ function Palette({
                 <div className="space-y-1.5">
                   {s.items.map((it) => {
                     const Icon = ICONS[it.icon]
-                    const disabled = it.disabled || isView
+                    const disabled = it.disabled || (isView && !it.alwaysEnabled)
                     return (
                       <div
                         key={it.name}

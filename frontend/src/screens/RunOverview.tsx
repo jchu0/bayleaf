@@ -43,15 +43,17 @@ const FACETS: { key: StatusFacet; label: string }[] = [
 // has no per-sample verdicts yet, so it reads a single neutral track instead of an empty bar.
 function VerdictBar({ counts, running }: { counts: Record<string, number>; running: boolean }) {
   const total = VERDICTS.reduce((s, v) => s + (counts[v] ?? 0), 0) || 1
+  // Conservative width (capped, not full-row) + 2px gaps between segments so adjacent verdict tones
+  // (esp. hold amber / rerun orange) read as distinct blocks instead of one bleeding gradient.
   return (
-    <div className="flex h-2 w-full overflow-hidden rounded-[5px] bg-card-2">
+    <div className="flex h-2 w-full max-w-[300px] gap-[2px] overflow-hidden rounded-[5px] bg-card-2">
       {running ? (
         <div className="w-full bg-card-3" title="sequencing" />
       ) : (
         VERDICTS.map((v) => {
           const n = counts[v] ?? 0
           return n ? (
-            <div key={v} className={VERDICT_BAR[v]} style={{ width: `${(n / total) * 100}%` }} title={`${n} ${v}`} />
+            <div key={v} className={`rounded-[3px] ${VERDICT_BAR[v]}`} style={{ width: `${(n / total) * 100}%` }} title={`${n} ${v}`} />
           ) : null
         })
       )}

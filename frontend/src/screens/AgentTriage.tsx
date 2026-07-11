@@ -23,10 +23,12 @@ export function AgentTriage() {
   // Whether the operator wants live-model narration. Reflects/requests the *narration* source
   // only — the rule engine owns the verdict regardless of this toggle (INV-c).
   const [live, setLive] = useState(false)
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     setDetail(null)
     setPicked(null)
+    setPage(1)
     api.run(runId).then(setDetail).catch((e) => setError(String(e)))
   }, [runId])
 
@@ -40,6 +42,13 @@ export function AgentTriage() {
 
   const sampleParam = picked ?? params.get('sample')
   const active = flagged.find((c) => c.sample_id === sampleParam) ?? flagged[0] ?? null
+
+  // Cap the flagged table at 10 rows/page — a large mixed flowcell can flag dozens of samples, and
+  // an unbounded table doesn't scale (scale-aware UI rule). Selection persists across pages.
+  const PER = 10
+  const pages = Math.max(1, Math.ceil(flagged.length / PER))
+  const curPage = Math.min(page, pages)
+  const pagedFlagged = flagged.slice((curPage - 1) * PER, curPage * PER)
 
   // Fetch the advisory triage note for the active subject. Keyed on sample so switching the
   // picker re-asks. `live` is re-seeded from whether the note carried a model (armed agent).
@@ -132,7 +141,7 @@ export function AgentTriage() {
                 <div className="px-[10px] py-[9px]">Headline</div>
                 <div className="px-[10px] py-[9px] text-center">Findings</div>
               </div>
-              {flagged.map((c, i) => {
+              {pagedFlagged.map((c, i) => {
                 const isActive = c.sample_id === active?.sample_id
                 // The gate that drove this card's verdict (else the leading finding's gate) — the
                 // same governing-gate derivation CardHead uses. Rules decide the verdict; this only
@@ -176,6 +185,43 @@ export function AgentTriage() {
                 )
               })}
             </div>
+            {flagged.length > PER && (
+              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-text-2">
+                <span>
+                  Showing {(curPage - 1) * PER + 1}–{Math.min(curPage * PER, flagged.length)} of {flagged.length} flagged
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPage(Math.max(1, curPage - 1))}
+                    className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 hover:border-line-strong"
+                    aria-label="Previous page"
+                  >
+                    ‹
+                  </button>
+                  {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setPage(n)}
+                      className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] ${
+                        n === curPage ? 'bg-accent font-semibold text-white' : 'border border-line bg-card text-text-2 hover:border-line-strong'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setPage(Math.min(pages, curPage + 1))}
+                    className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 hover:border-line-strong"
+                    aria-label="Next page"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {(noteState === 'loading' || noteState === 'idle') && (

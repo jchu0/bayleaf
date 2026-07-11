@@ -307,11 +307,11 @@ function ProvColumn({
   )
 }
 
-// Every artifact is a link (§5.6): open-in-store / copy-hash / show-full-hash / download — all
+// Every artifact is a link (§5.6): open-in-store / copy-fingerprint / show-full / download — all
 // wired to the real same-origin artifact URL (GET /api/runs/:id/artifacts/:name). The value is a
-// CONTENT hash of the file's bytes (a fixity/integrity check, not a process/task/ledger id — those
-// are arun_… and evt_…). Labelled "hash" in the UI rather than naming the algorithm — no reason to
-// advertise the digest type to every viewer. "show full" reveals the whole value; copy grabs it.
+// CONTENT fingerprint of the file's bytes (a fixity/integrity check, not a process/task/ledger id —
+// those are arun_… and evt_…). Labelled "fingerprint" in the UI — accurate (it's not a process id)
+// without advertising the digest algorithm. Hovering shows the full value; "show full" pins it; copy grabs it.
 function ProvArtifactRow({ art }: { art: RunArtifact }) {
   const [copied, setCopied] = useState(false)
   const [showFull, setShowFull] = useState(false)
@@ -358,10 +358,10 @@ function ProvArtifactRow({ art }: { art: RunArtifact }) {
             <button
               type="button"
               onClick={copyDigest}
-              title="Copy content hash"
+              title={`Content fingerprint · ${art.sha256} · click to copy`}
               className="font-mono text-[11px] text-accent-strong hover:underline"
             >
-              {copied ? 'copied ✓' : `hash ${art.sha256.slice(0, 12)}…`}
+              {copied ? 'copied ✓' : `fingerprint ${art.sha256.slice(0, 12)}…`}
             </button>
             <button
               type="button"
@@ -372,7 +372,7 @@ function ProvArtifactRow({ art }: { art: RunArtifact }) {
             </button>
           </>
         ) : (
-          <span className="font-mono text-[11px] text-text-3">hash n/a</span>
+          <span className="font-mono text-[11px] text-text-3">fingerprint n/a</span>
         )}
         <span className="text-[11px] text-text-3">{fmtSize(art.size_bytes)}</span>
         <span className="text-[11px] text-text-3">·</span>
