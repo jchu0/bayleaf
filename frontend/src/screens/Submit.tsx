@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
@@ -6,10 +6,12 @@ import {
   CircleCheck,
   FileCheck,
   Info,
+  Paperclip,
   Plus,
   RefreshCw,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react'
 import { api } from '../api'
 import { PageHeader } from '../components/PageHeader'
@@ -58,6 +60,126 @@ const RUN_FIELDS: { key: keyof RunMeta; label: string; hint: string }[] = [
 const INPUT_CLS =
   'w-full rounded-[7px] border border-line bg-card px-[9px] py-[7px] font-mono text-[12px] text-text outline-none focus:border-accent'
 
+// Per-sample metadata parsed from a sample_metadata.csv (the LIMS/subject sheet, distinct from the
+// samplesheet). subject_id is intake identity — kept CLIENT-SIDE for now (POST /api/runs has no
+// subject field yet; a labelled seam), tissue merges into the sample's type column.
+type SampleMeta = { subject_id?: string; tissue?: string }
+type ParsedSheet = { meta: Partial<RunMeta>; samples: SampleRow[] }
+
+// Tolerant CSV line split — handles simple double-quoted fields; trims each cell. Not a full RFC
+// parser (no embedded newlines), which is fine for a samplesheet a boundary reads defensively.
+function splitCsv(line: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  let inQ = false
+  for (const c of line) {
+    if (c === '"') inQ = !inQ
+    else if (c === ',' && !inQ) {
+      out.push(cur)
+      cur = ''
+    } else cur += c
+  }
+  out.push(cur)
+  return out.map((s) => s.trim())
+}
+
+// Resolve a column index tolerantly by any of several accepted header names (case-insensitive).
+function colIndex(header: string[], names: string[]): number {
+  const lc = header.map((h) => h.toLowerCase())
+  for (const n of names) {
+    const i = lc.indexOf(n)
+    if (i >= 0) return i
+  }
+  return -1
+}
+
+// Parse an Illumina v2 SampleSheet ([Header] key-values + a [*_Data] section) OR a plain CSV
+// (Sample_ID,Sample_Type,index,index2,Study). A missing field is a signal, not a crash (boundary
+// tolerance) — an unrecognized column just yields empty/defaulted cells.
+function parseSamplesheet(text: string): ParsedSheet {
+  const lines = text.split(/\r?\n/)
+  const meta: Partial<RunMeta> = {}
+  let header: string[] = []
+  let dataStart = -1
+  let inHeader = false
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i].trim()
+    if (!raw) continue
+    if (/^\[header\]/i.test(raw)) {
+      inHeader = true
+      continue
+    }
+    if (/^\[.*data\]/i.test(raw)) {
+      header = splitCsv(lines[i + 1] ?? '')
+      dataStart = i + 2
+      break
+    }
+    if (/^\[/.test(raw)) {
+      inHeader = false
+      continue
+    }
+    if (inHeader) {
+      const [k, v] = splitCsv(raw)
+      const key = (k ?? '').toLowerCase()
+      if (v) {
+        if (['run name', 'experiment name', 'run_name'].includes(key)) meta.runName = v
+        else if (key === 'assay') meta.assay = v
+        else if (['instrument type', 'instrument platform', 'platform'].includes(key)) meta.platform = v
+      }
+    }
+  }
+  // Plain-CSV fallback: no [Data] section → the first non-empty line is the column header.
+  if (dataStart === -1) {
+    const first = lines.findIndex((l) => l.trim())
+    header = splitCsv(lines[first] ?? '')
+    dataStart = first + 1
+  }
+  const cSample = colIndex(header, ['sample_id', 'sample', 'sampleid', 'sample name'])
+  const cType = colIndex(header, ['sample_type', 'type', 'tissue', 'library_type'])
+  const cI7 = colIndex(header, ['index', 'i7_index_id', 'i7', 'index1'])
+  const cI5 = colIndex(header, ['index2', 'i5_index_id', 'i5'])
+  const cStudy = colIndex(header, ['study', 'sample_project', 'project'])
+  const samples: SampleRow[] = []
+  for (let i = dataStart; i < lines.length; i++) {
+    const raw = lines[i]
+    if (!raw || !raw.trim()) continue
+    if (/^\[/.test(raw.trim())) break // next section — stop
+    const parts = splitCsv(raw)
+    const sample = (cSample >= 0 ? parts[cSample] : parts[0]) ?? ''
+    if (!sample) continue
+    samples.push({
+      sample,
+      type: (cType >= 0 ? parts[cType] : '') || 'Whole blood',
+      i7: cI7 >= 0 ? (parts[cI7] ?? '') : '',
+      i5: cI5 >= 0 ? (parts[cI5] ?? '') : '',
+      study: (cStudy >= 0 ? parts[cStudy] : '') || '',
+    })
+  }
+  if (!meta.study && samples[0]?.study) meta.study = samples[0].study
+  return { meta, samples }
+}
+
+// Parse a sample_metadata.csv → per-sample subject_id + tissue, keyed by sample id.
+function parseMetadata(text: string): Record<string, SampleMeta> {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim())
+  if (!lines.length) return {}
+  const header = splitCsv(lines[0])
+  const cSample = colIndex(header, ['sample_id', 'sample', 'sampleid'])
+  const cSubject = colIndex(header, ['subject_id', 'subject', 'patient_id', 'individual'])
+  const cTissue = colIndex(header, ['tissue', 'sample_type', 'source'])
+  const out: Record<string, SampleMeta> = {}
+  for (let i = 1; i < lines.length; i++) {
+    const parts = splitCsv(lines[i])
+    const sample = (cSample >= 0 ? parts[cSample] : parts[0]) ?? ''
+    if (!sample) continue
+    out[sample] = {
+      subject_id: cSubject >= 0 ? parts[cSubject] || undefined : undefined,
+      tissue: cTissue >= 0 ? parts[cTissue] || undefined : undefined,
+    }
+  }
+  return out
+}
+
 export function Submit() {
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -65,6 +187,16 @@ export function Submit() {
   const [method, setMethod] = useState<'upload' | 'basespace'>('upload')
   const [meta, setMeta] = useState<RunMeta>(SEED_META)
   const [samples, setSamples] = useState<SampleRow[]>(SEED_SAMPLES)
+  // Real file parsing (was a hardcoded mock): the parsed samplesheet name + the sample_metadata
+  // sheet (subject/tissue) keyed by sample id. Sample-table pagination scales past a demo handful.
+  const [uploadName, setUploadName] = useState<string | null>(null)
+  const [sampleMeta, setSampleMeta] = useState<Record<string, SampleMeta>>({})
+  const [metaName, setMetaName] = useState<string | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const [page, setPage] = useState(1)
+  const sheetInput = useRef<HTMLInputElement>(null)
+  const metaInput = useRef<HTMLInputElement>(null)
+  const PER = 25 // sample rows per page (scale-aware — a mixed flowcell is routinely 100+ samples)
 
   // BaseSpace connect flow. `imported` gates whether run details + samples are populated in
   // BaseSpace mode — blank until Import, per the design. Upload mode is always populated.
@@ -76,6 +208,11 @@ export function Submit() {
 
   const loaded = method === 'upload' || imported
   const count = loaded ? samples.length : 0
+  // Paginate the sample table so a 100+ sample flowcell stays navigable (scale-aware UI rule).
+  const pages = Math.max(1, Math.ceil(samples.length / PER))
+  const curPage = Math.min(page, pages)
+  const pageStart = (curPage - 1) * PER
+  const pagedSamples = samples.slice(pageStart, pageStart + PER)
 
   function setField(key: keyof RunMeta, value: string) {
     setMeta((m) => ({ ...m, [key]: value }))
@@ -92,6 +229,53 @@ export function Submit() {
   }
   function removeSample(i: number) {
     setSamples((rows) => rows.filter((_, j) => j !== i))
+  }
+
+  // Parse a dropped/selected samplesheet for real (replaces the old hardcoded "Parsed 4 samples"
+  // mock). Merges any already-loaded sample_metadata tissue onto the fresh rows.
+  async function onSheetFile(file: File) {
+    try {
+      const parsed = parseSamplesheet(await file.text())
+      if (parsed.samples.length === 0) {
+        toast(`No sample rows found in ${file.name}. Expected an Illumina v2 sheet or a CSV with Sample_ID/index columns.`, 'error')
+        return
+      }
+      const merged = parsed.samples.map((s) => {
+        const m = sampleMeta[s.sample]
+        return m?.tissue ? { ...s, type: m.tissue } : s
+      })
+      setSamples(merged)
+      setMeta((prev) => ({ ...prev, ...parsed.meta }))
+      setUploadName(file.name)
+      setPage(1)
+      toast(`Parsed ${parsed.samples.length} samples from ${file.name}.`, 'success')
+    } catch (e) {
+      toast(`Couldn't read ${file.name} — ${e instanceof Error ? e.message : String(e)}`, 'error')
+    }
+  }
+
+  // Parse the sample_metadata.csv (LIMS/subject sheet, G2) and merge tissue onto matching samples.
+  // subject_id is held client-side (a labelled seam — POST /api/runs carries no subject field yet).
+  async function onMetaFile(file: File) {
+    try {
+      const map = parseMetadata(await file.text())
+      const n = Object.keys(map).length
+      if (n === 0) {
+        toast(`No rows found in ${file.name}. Expected columns like Sample_ID, Subject_ID, Tissue.`, 'error')
+        return
+      }
+      setSampleMeta(map)
+      setMetaName(file.name)
+      setSamples((rows) => rows.map((r) => (map[r.sample]?.tissue ? { ...r, type: map[r.sample].tissue as string } : r)))
+      toast(`Attached metadata for ${n} samples from ${file.name}.`, 'success')
+    } catch (e) {
+      toast(`Couldn't read ${file.name} — ${e instanceof Error ? e.message : String(e)}`, 'error')
+    }
+  }
+
+  function clearMetadata() {
+    setSampleMeta({})
+    setMetaName(null)
   }
 
   function connectBase() {
@@ -124,10 +308,14 @@ export function Submit() {
     }
     try {
       const ack = await api.submitRun(body)
-      const skip = ack.skipped_samples.length
-        ? ` Skipped ${ack.skipped_samples.join(', ')} — no reads on disk for this demo.`
-        : ''
-      toast(`Processing ${ack.processed_samples.join(', ')} through the pipeline…${skip}`, 'info')
+      // Scale-aware summary: a 100-sample flowcell can't dump every name into a toast (surfaced by
+      // the 100-sample test) — list up to 5, else summarize the count.
+      const summarize = (arr: string[]) => (arr.length <= 5 ? arr.join(', ') : `${arr.length} samples`)
+      const procMsg = ack.processed_samples.length
+        ? `Processing ${summarize(ack.processed_samples)}`
+        : 'No samples with reads on disk to process'
+      const skip = ack.skipped_samples.length ? ` · skipped ${summarize(ack.skipped_samples)} (no reads on disk for this demo)` : ''
+      toast(`${procMsg} through the pipeline…${skip}`, 'info')
       const poll = async (): Promise<void> => {
         const st = await api.intakeStatus(ack.run_id)
         if (st.status === 'complete') {
@@ -188,10 +376,50 @@ export function Submit() {
         />
       </div>
 
-      {/* UPLOAD panel — drop zone + parsed chip (visual mock; no real file parse) */}
+      {/* UPLOAD panel — real file parse (samplesheet + optional sample_metadata.csv) */}
       {method === 'upload' && (
         <>
-          <div className="mt-[14px] flex items-center gap-[18px] rounded-[14px] border-[1.5px] border-dashed border-line-strong bg-card p-[26px]">
+          {/* Hidden real inputs; the drop zone / buttons trigger them. Reset value on change so the
+              same file can be re-selected. */}
+          <input
+            ref={sheetInput}
+            type="file"
+            accept=".csv,.txt,.tsv"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void onSheetFile(f)
+              e.target.value = ''
+            }}
+          />
+          <input
+            ref={metaInput}
+            type="file"
+            accept=".csv,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void onMetaFile(f)
+              e.target.value = ''
+            }}
+          />
+          <div
+            onClick={() => sheetInput.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragging(false)
+              const f = e.dataTransfer.files?.[0]
+              if (f) void onSheetFile(f)
+            }}
+            className={`mt-[14px] flex cursor-pointer items-center gap-[18px] rounded-[14px] border-[1.5px] border-dashed p-[26px] transition-colors ${
+              dragging ? 'border-accent bg-accent-weak' : 'border-line-strong bg-card hover:border-accent'
+            }`}
+          >
             <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-accent-weak">
               <Upload size={23} strokeWidth={1.7} className="text-accent-strong" />
             </div>
@@ -205,20 +433,77 @@ export function Submit() {
             </div>
             <button
               type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                sheetInput.current?.click()
+              }}
               className="whitespace-nowrap rounded-[9px] border border-line-strong bg-card px-[15px] py-[9px] text-[13px] font-medium text-accent-strong"
             >
               Browse files
             </button>
           </div>
-          <div className="mt-[10px] flex items-center gap-[11px] rounded-[11px] border border-proceed-bd bg-proceed-bg px-[14px] py-[11px]">
-            <FileCheck size={18} strokeWidth={1.9} className="shrink-0 text-proceed" />
-            <div className="min-w-0 flex-1">
-              <div className="font-mono text-[12.5px] font-semibold text-proceed-fg">SampleSheet_2026-07-09.csv</div>
-              <div className="text-[11.5px] text-text-2">
-                Parsed 4 samples · detected run <span className="font-mono text-text">RUN-2026-07-09-A</span> · study{' '}
-                <span className="font-mono text-text">GIAB-QC</span>. Review below before submitting.
+          {/* Real parsed chip — appears only after a file is actually parsed. */}
+          {uploadName && (
+            <div className="mt-[10px] flex items-center gap-[11px] rounded-[11px] border border-proceed-bd bg-proceed-bg px-[14px] py-[11px]">
+              <FileCheck size={18} strokeWidth={1.9} className="shrink-0 text-proceed" />
+              <div className="min-w-0 flex-1">
+                <div className="font-mono text-[12.5px] font-semibold text-proceed-fg">{uploadName}</div>
+                <div className="text-[11.5px] text-text-2">
+                  Parsed <strong className="text-text">{samples.length}</strong> samples
+                  {meta.runName ? (
+                    <>
+                      {' '}
+                      · detected run <span className="font-mono text-text">{meta.runName}</span>
+                    </>
+                  ) : null}
+                  {meta.study ? (
+                    <>
+                      {' '}
+                      · study <span className="font-mono text-text">{meta.study}</span>
+                    </>
+                  ) : null}
+                  . Review below before submitting.
+                </div>
               </div>
             </div>
+          )}
+          {/* sample_metadata.csv (LIMS/subject sheet) — distinct from the samplesheet (G2). */}
+          <div className="mt-[10px] flex flex-wrap items-center gap-[11px] rounded-[11px] border border-line bg-card px-[14px] py-[11px]">
+            <Paperclip size={16} strokeWidth={1.9} className="shrink-0 text-text-3" />
+            <div className="min-w-0 flex-1">
+              {metaName ? (
+                <>
+                  <div className="font-mono text-[12px] font-semibold text-text">{metaName}</div>
+                  <div className="text-[11px] text-text-2">
+                    {Object.keys(sampleMeta).length} subjects mapped · tissue merged into Sample type.{' '}
+                    <span className="text-text-3">Subject ids held client-side (not yet sent — a labelled seam).</span>
+                  </div>
+                </>
+              ) : (
+                <div className="text-[12px] text-text-2">
+                  <strong className="text-text">Sample metadata</strong> (optional) — a{' '}
+                  <span className="font-mono">sample_metadata.csv</span> (Sample_ID, Subject_ID, Tissue) enriches
+                  subject &amp; tissue.
+                </div>
+              )}
+            </div>
+            {metaName ? (
+              <button
+                type="button"
+                onClick={clearMetadata}
+                className="inline-flex items-center gap-1 rounded-[8px] border border-line-strong bg-card px-3 py-1.5 text-[12px] text-text-2 hover:border-line"
+              >
+                <X size={12} /> Remove
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => metaInput.current?.click()}
+                className="whitespace-nowrap rounded-[8px] border border-line-strong bg-card px-3 py-1.5 text-[12px] font-medium text-accent-strong"
+              >
+                Attach metadata
+              </button>
+            )}
           </div>
         </>
       )}
@@ -422,34 +707,86 @@ export function Submit() {
             </div>
           </div>
         ) : (
-          samples.map((s, i) => (
-            <div
-              key={i}
-              className="grid grid-cols-[34px_1.4fr_1.2fr_1fr_1fr_1.1fr_34px] items-center gap-[9px] border-b border-line px-4 py-[9px]"
-            >
-              <div className="font-mono text-[11.5px] text-text-3">{i + 1}</div>
-              <input value={s.sample} onChange={(e) => patchSample(i, { sample: e.target.value })} className={INPUT_CLS} />
-              <button
-                type="button"
-                onClick={() => cycleType(i)}
-                className="flex w-full items-center justify-between gap-1.5 rounded-[7px] border border-line-strong bg-card-2 px-[10px] py-[6px] font-mono text-[11.5px] text-text-2"
+          // Render only the current page; the global index `i` (not the page-local one) drives
+          // patch/remove/cycle so edits land on the right row across pages.
+          pagedSamples.map((s, li) => {
+            const i = pageStart + li
+            const subject = sampleMeta[s.sample]?.subject_id
+            return (
+              <div
+                key={i}
+                className="grid grid-cols-[34px_1.4fr_1.2fr_1fr_1fr_1.1fr_34px] items-center gap-[9px] border-b border-line px-4 py-[9px]"
               >
-                {s.type}
-                <ChevronDown size={12} strokeWidth={2} className="text-text-3" />
-              </button>
-              <input value={s.i7} onChange={(e) => patchSample(i, { i7: e.target.value })} className={INPUT_CLS} />
-              <input value={s.i5} onChange={(e) => patchSample(i, { i5: e.target.value })} className={INPUT_CLS} />
-              <input value={s.study} onChange={(e) => patchSample(i, { study: e.target.value })} className={INPUT_CLS} />
-              <button
-                type="button"
-                onClick={() => removeSample(i)}
-                title="Remove sample"
-                className="flex h-7 w-7 items-center justify-center rounded-[7px] border border-line bg-card text-text-3"
-              >
-                <Trash2 size={13} strokeWidth={1.9} />
-              </button>
-            </div>
-          ))
+                <div className="font-mono text-[11.5px] text-text-3">{i + 1}</div>
+                <div className="min-w-0">
+                  <input value={s.sample} onChange={(e) => patchSample(i, { sample: e.target.value })} className={INPUT_CLS} />
+                  {subject && (
+                    <div className="mt-0.5 truncate font-mono text-[9.5px] text-text-3" title={`Subject ${subject}`}>
+                      subject {subject}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => cycleType(i)}
+                  className="flex w-full items-center justify-between gap-1.5 rounded-[7px] border border-line-strong bg-card-2 px-[10px] py-[6px] font-mono text-[11.5px] text-text-2"
+                >
+                  {s.type}
+                  <ChevronDown size={12} strokeWidth={2} className="text-text-3" />
+                </button>
+                <input value={s.i7} onChange={(e) => patchSample(i, { i7: e.target.value })} className={INPUT_CLS} />
+                <input value={s.i5} onChange={(e) => patchSample(i, { i5: e.target.value })} className={INPUT_CLS} />
+                <input value={s.study} onChange={(e) => patchSample(i, { study: e.target.value })} className={INPUT_CLS} />
+                <button
+                  type="button"
+                  onClick={() => removeSample(i)}
+                  title="Remove sample"
+                  className="flex h-7 w-7 items-center justify-center rounded-[7px] border border-line bg-card text-text-3"
+                >
+                  <Trash2 size={13} strokeWidth={1.9} />
+                </button>
+              </div>
+            )
+          })
+        )}
+        {count > PER && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-[11px] text-[11.5px] text-text-2">
+            <span>
+              Showing {pageStart + 1}–{Math.min(pageStart + PER, count)} of {count} samples
+            </span>
+            {pages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPage(Math.max(1, curPage - 1))}
+                  className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 hover:border-line-strong"
+                  aria-label="Previous page"
+                >
+                  ‹
+                </button>
+                {Array.from({ length: pages }, (_, k) => k + 1).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setPage(n)}
+                    className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] ${
+                      n === curPage ? 'bg-accent font-semibold text-white' : 'border border-line bg-card text-text-2 hover:border-line-strong'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setPage(Math.min(pages, curPage + 1))}
+                  className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 hover:border-line-strong"
+                  aria-label="Next page"
+                >
+                  ›
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
