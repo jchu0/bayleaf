@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, Cable, Lock, Minus, Plus, Redo2, Undo2, Wand2, X } from 'lucide-react'
+import { Activity, Cable, Database, Lock, Minus, Plus, Redo2, Undo2, Wand2, X } from 'lucide-react'
 import { SelectionActionBar, type AlignKind, type DistributeAxis } from './SelectionActionBar'
 import { BuilderLegend } from './BuilderLegend'
 import {
+  ADVISORY_AGENT,
   BOX_META,
   BOX_TOP,
   CARD_FOOTER_H,
@@ -19,6 +20,7 @@ import {
   boxPorts,
   cardHeight,
   computeGraphPortLayout,
+  fanPortsToTargets,
   gateSegs,
   isRefKind,
   kindColor,
@@ -59,11 +61,25 @@ const INNER_H = 1120
 const REF_Y = 40 // source band (references + FASTQ input), above the spine
 const INGEST_X = 2040
 const INGEST_Y = 400
+const INGEST_W = 200
+const INGEST_H = 118
 const GATE_X = 2320
 const GATE_Y = 360
-const AGENT_X = 2320
-const AGENT_Y = 200
+const GATE_W = 208
+const GATE_H = 156
+// The advisory agent is OFF-gate (ADR-0001): it sits with the QC tools it observes (below the branch),
+// NOT clustered with the data terminals (gate/ingest) — its dotted links fan UP to its attached tools.
+const AGENT_X = 1180
+const AGENT_Y = 940
+const AGENT_W = 236
+const AGENT_H = 96
 const GATE_PORT_Y = GATE_Y + 36 // the gate's non-composable run/ input port (item 4 display connector)
+// Advisory attach badge — a small dashed-accent marker hugging each TOOL card's top-right corner (clear
+// of the typed data ports + the delete button), distinct from the half-circle data ports. Its centre is
+// the advisory-edge endpoint on the tool side.
+const ADV_BADGE_DX = NODE_W - 8
+const ADV_BADGE_DY = -8
+const ADV_BADGE_R = 8
 // Mount/Fit centering target (content coords include the plane's 360/480 margin): matches fitToDag's
 // user-node framing (min_x 40, max_x 1560, y-band 40..600) so mount and Fit agree, nudged right so the
 // terminal cluster peeks in.
@@ -228,6 +244,18 @@ export function BuilderCanvas(props: CanvasProps) {
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [wireDrag, setWireDrag] = useState<{ fromNode: string; fromIdx: number; cx: number; cy: number } | null>(null)
   const [hoverEdge, setHoverEdge] = useState<number | null>(null)
+  // Advisory attachments (the QC-triage agent → the tools it observes). Deliberately NOT UserEdges — an
+  // agent is OFF the deterministic critical path (ADR-0001), so its links never live in the typed data
+  // graph and can never influence a verdict. Seeded, and operator-togglable via each tool's advisory badge.
+  const [advisoryAttach, setAdvisoryAttach] = useState<Set<string>>(() => new Set(ADVISORY_AGENT.defaultAttach))
+  const toggleAdvisory = useCallback((toolId: string) => {
+    setAdvisoryAttach((s) => {
+      const next = new Set(s)
+      if (next.has(toolId)) next.delete(toolId)
+      else next.add(toolId)
+      return next
+    })
+  }, [])
 
   // Center the viewport on the pipeline once on mount (README §6: "loads centered").
   useEffect(() => {
@@ -390,13 +418,21 @@ export function BuilderCanvas(props: CanvasProps) {
   if (showTerminals) {
     const normOut = toolAnchorFull('n_norm', 'out', 'filtered_vcf')
     const mqOut = toolAnchorFull('n_multiqc', 'out', 'multiqc_json')
-    const ingY = INGEST_Y + 75
-    if (normOut) termConnectors.push(`M${normOut.x} ${normOut.y} H${INGEST_X - 24} V${INGEST_Y + 45} H${INGEST_X}`)
-    if (mqOut) termConnectors.push(`M${mqOut.x} ${mqOut.y} V${INGEST_Y + 105} H${INGEST_X}`)
-    termConnectors.push(`M${INGEST_X + 160} ${ingY} H${INGEST_X + 176} V${GATE_PORT_Y} H${GATE_X - PORT_R}`)
+    const ingY = INGEST_Y + INGEST_H / 2
+    if (normOut) termConnectors.push(`M${normOut.x} ${normOut.y} H${INGEST_X - 24} V${INGEST_Y + 38} H${INGEST_X}`)
+    if (mqOut) termConnectors.push(`M${mqOut.x} ${mqOut.y} V${INGEST_Y + INGEST_H - 38} H${INGEST_X}`)
+    termConnectors.push(`M${INGEST_X + INGEST_W} ${ingY} H${INGEST_X + INGEST_W + 16} V${GATE_PORT_Y} H${GATE_X - PORT_R}`)
   }
-  // Advisory tether gate ↔ agent (agent sits above the gate) — dotted accent, non-composable.
-  const tetherPath = showTerminals ? `M${GATE_X + 104} ${GATE_Y} L${AGENT_X + 116} ${AGENT_Y + 62}` : null
+  // Advisory fan-out (replaces the old gate↔agent tether): the agent card links to EACH attached tool via
+  // a DISTINCT dotted accent line — visually + semantically apart from the solid kind-coloured DATA wires,
+  // reflecting that the agent OBSERVES/advises but never carries data or sets a verdict (ADR-0001). ONE
+  // agent → MANY tools: a fan-out port per attached tool, placed nearest that tool (like a multi-out ref).
+  const attachedTools = showTerminals
+    ? userNodes.filter((n) => advisoryAttach.has(n.id) && n.ins.length > 0 && n.outs.length > 0)
+    : []
+  const toolBadgeOf = (n: UserNode) => ({ x: n.x + ADV_BADGE_DX, y: n.y + ADV_BADGE_DY })
+  const agentFan = fanPortsToTargets({ x: AGENT_X, y: AGENT_Y, w: AGENT_W, h: AGENT_H }, attachedTools.map(toolBadgeOf))
+  const advisoryEdges = attachedTools.map((n, i) => ({ from: agentFan[i], to: toolBadgeOf(n) }))
 
   // Convert a viewport point to CONTENT coords: subtract the inner plane's on-screen origin and
   // divide by the CSS `zoom` factor. This is the ONLY correct transform for the zoomed plane —
@@ -530,12 +566,26 @@ export function BuilderCanvas(props: CanvasProps) {
               refPaths.map((p, i) => (
                 <path key={`r${i}`} d={p.d} fill="none" stroke={p.color} strokeWidth={1.5} strokeDasharray="5 4" />
               ))}
-            {/* Item 4 — non-composable terminal connectors (norm/MultiQC → ingest → gate), dotted neutral,
-                + the advisory tether (dotted accent). Display-only; not graph edges. */}
+            {/* Item 4 — non-composable terminal connectors (norm/MultiQC → ingest → gate), dotted neutral.
+                Display-only; not graph edges. */}
             {termConnectors.map((d, i) => (
               <path key={`term${i}`} d={d} fill="none" stroke="var(--color-text-3)" strokeWidth={1.6} strokeDasharray="2 4" />
             ))}
-            {tetherPath && <path d={tetherPath} fill="none" stroke="var(--color-accent)" strokeWidth={1.4} strokeDasharray="2 4" opacity={0.8} />}
+            {/* ADVISORY edges (agent → each attached tool). DELIBERATELY distinct from the solid, kind-
+                coloured DATA wires: a thin DOTTED accent line, so an agent visibly never sits on a data
+                edge (ADR-0001). Straight (not the orthogonal data elbow) to read as a soft observe-link. */}
+            {advisoryEdges.map((e, i) => (
+              <path
+                key={`adv${i}`}
+                d={`M${e.from.x} ${e.from.y} L${e.to.x} ${e.to.y}`}
+                fill="none"
+                stroke="var(--color-accent)"
+                strokeWidth={1.4}
+                strokeDasharray="1 5"
+                strokeLinecap="round"
+                opacity={0.75}
+              />
+            ))}
             {/* Live alignment guides (single-node drag) — full-extent dashed accent lines. */}
             {guides?.x != null && (
               <line x1={guides.x} y1={-1000} x2={guides.x} y2={INNER_H + 2000} stroke="var(--color-accent)" strokeWidth={1} strokeDasharray="4 3" />
@@ -620,7 +670,7 @@ export function BuilderCanvas(props: CanvasProps) {
             REFS.map((r) => (
               <RefCard key={r.id} r={r} selected={selected === r.id} onSelect={props.onSelect} />
             ))}
-          <GateCard isView={isView} selected={selected === 'g_gate'} segs={segs} onSelect={props.onSelect} />
+          <GateCard isView={isView} selected={selected === 'g_gate'} segs={segs} onActivate={() => props.onSelect('g_gate')} />
           {/* Item 4 — the gate's non-composable run/ INPUT: a dashed escalate half-circle on the gate's
               left edge (a canvas-plane sibling, so the gate's overflow-hidden doesn't clip it) + label.
               It reads run/ via deterministic ingest — not a typed data edge. */}
@@ -648,7 +698,20 @@ export function BuilderCanvas(props: CanvasProps) {
               </span>
             </>
           )}
-          {showTerminals && <AgentPill selected={selected === 'a_qc_triage'} onSelect={props.onSelect} />}
+          {/* Advisory agent (off-gate) + its fan-out ports (one per attached tool). The dotted advisory
+              edges are drawn in the SVG layer above; these markers sit on the agent card's perimeter. */}
+          {showTerminals && (
+            <>
+              <AgentCard
+                selected={selected === ADVISORY_AGENT.id}
+                onActivate={() => props.onSelect(ADVISORY_AGENT.id)}
+                attachCount={attachedTools.length}
+              />
+              {agentFan.map((p, i) => (
+                <AdvisoryPortMarker key={`ap${i}`} x={p.x} y={p.y} />
+              ))}
+            </>
+          )}
 
           {userNodes.map((n) => (
             <UserCard
@@ -660,6 +723,9 @@ export function BuilderCanvas(props: CanvasProps) {
               renaming={renamingId === n.id}
               connectMode={connectMode}
               connectFrom={connectFrom}
+              advisoryShown={showTerminals && n.ins.length > 0 && n.outs.length > 0}
+              advisoryOn={advisoryAttach.has(n.id)}
+              onAdvisoryToggle={() => toggleAdvisory(n.id)}
               onDown={props.onNodeDrag}
               onPortTap={props.onPortTap}
               onStartWireDrag={startWireDrag}
@@ -1092,90 +1158,146 @@ function RefCard({ r, selected, onSelect }: { r: (typeof REFS)[number]; selected
   )
 }
 
-function IngestBand() {
-  return (
-    <div
-      className="absolute flex flex-col items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-line-strong bg-card-3 p-3.5 text-center"
-      style={{ left: INGEST_X, top: INGEST_Y, width: 160, height: 150 }}
-    >
-      <span className="text-[10px] font-bold uppercase tracking-[0.3px] text-text-2">Deterministic ingest</span>
-      <p className="font-mono text-[9.5px] leading-snug text-text-3">
-        write_run_dir
-        <br />→ run/ (5 CSVs)
-      </p>
-      <p className="text-[9px] italic text-text-3">non-composable</p>
-    </div>
-  )
-}
-
-function AgentPill({ selected, onSelect }: { selected: boolean; onSelect: (id: string) => void }) {
+// ── Unified canvas card frame (item 1) ───────────────────────────────────────
+// The SAME chrome the tool/source cards use — so the terminals (gate / ingest / advisory agent) read as
+// first-class cards instead of bespoke pills: pg-node body (hover/selected shading), rounded-xl, a 3px
+// left spine, an icon-tile + title + subtitle header, an optional right slot + child body. Callers keep
+// their SPECIAL semantics in the body; this only unifies the LOOK. overflow-visible so ports can poke out.
+function CanvasCardFrame({
+  x, y, w, h, selected, onActivate, railColor, railSolid = true, borderColor, dashedBorder, iconTone, icon, title, subtitle, right, children,
+}: {
+  x: number
+  y: number
+  w: number
+  h?: number
+  selected: boolean
+  onActivate?: () => void
+  railColor: string
+  railSolid?: boolean
+  borderColor: string
+  dashedBorder?: boolean
+  iconTone?: React.CSSProperties
+  icon: React.ReactNode
+  title: string
+  subtitle: string
+  right?: React.ReactNode
+  children?: React.ReactNode
+}) {
+  const sideBorder = `1px ${dashedBorder ? 'dashed' : 'solid'} ${selected ? 'var(--color-accent)' : borderColor}`
   return (
     <button
       onClick={(e) => {
         e.stopPropagation()
-        onSelect('a_qc_triage')
+        onActivate?.()
       }}
-      className="absolute box-border w-[232px] rounded-[14px] border-[1.5px] border-dashed border-accent bg-accent-weak px-3 py-2 text-left"
-      style={{ left: AGENT_X, top: AGENT_Y, boxShadow: selected ? '0 0 0 2px var(--color-accent-weak), 0 5px 14px rgba(31,95,208,.2)' : 'none' }}
+      className={`pg-node absolute rounded-xl text-left${selected ? ' is-selected' : ''}`}
+      style={{
+        left: x,
+        top: y,
+        width: w,
+        height: h,
+        overflow: 'visible',
+        background: 'var(--color-card)',
+        borderTop: sideBorder,
+        borderRight: sideBorder,
+        borderBottom: sideBorder,
+        borderLeft: `3px ${railSolid ? 'solid' : 'dashed'} ${selected ? 'var(--color-accent)' : railColor}`,
+        cursor: onActivate ? 'pointer' : 'default',
+      }}
     >
-      <div className="text-[8.5px] font-bold uppercase tracking-[0.5px] text-accent-strong">Advisory · off-gate</div>
-      <div className="mt-0.5 flex items-center gap-1.5">
-        <Activity size={13} className="text-accent-strong" />
-        <span className="flex-1 text-[12px] font-semibold text-accent-strong">QC-triage</span>
-        <span className="h-[7px] w-[7px] rounded-full bg-text-3" />
-        <span className="font-mono text-[9.5px] text-text-2">stub</span>
+      <div className="flex items-center gap-2 px-3" style={{ height: CARD_HEADER_H }}>
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-card-2 text-text-2" style={iconTone}>
+          {icon}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12px] font-bold text-text">{title}</span>
+          <span className="block truncate font-mono text-[9.5px] text-text-3">{subtitle}</span>
+        </span>
+        {right}
       </div>
-      <p className="mt-0.5 text-[9.5px] text-text-2">
-        observes <span className="font-mono">qc</span> · no data ports · never sets a verdict
-      </p>
+      {children}
     </button>
   )
 }
 
-function GateCard({
-  isView,
-  selected,
-  segs,
-  onSelect,
-}: {
-  isView: boolean
-  selected: boolean
-  segs: { c: string; w: string }[]
-  onSelect: (id: string) => void
-}) {
+// Deterministic ingest (item 1) — non-composable (dashed frame + neutral spine): writes run/ for the gate.
+function IngestBand() {
   return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation()
-        onSelect('g_gate')
-      }}
-      className="absolute w-52 overflow-hidden rounded-xl text-left"
-      style={{
-        left: GATE_X,
-        top: GATE_Y,
-        background: 'var(--color-card)',
-        borderTop: selected ? '1px solid var(--color-accent)' : '1.5px solid var(--color-line-strong)',
-        borderRight: selected ? '1px solid var(--color-accent)' : '1.5px solid var(--color-line-strong)',
-        borderBottom: selected ? '1px solid var(--color-accent)' : '1.5px solid var(--color-line-strong)',
-        borderLeft: `3px solid ${isView ? 'var(--color-escalate)' : '#c6ced7'}`,
-        boxShadow: selected ? '0 0 0 2px var(--color-accent-weak), 0 8px 22px rgba(16,24,40,.16)' : '0 3px 12px rgba(16,24,40,.09)',
-      }}
+    <CanvasCardFrame
+      x={INGEST_X}
+      y={INGEST_Y}
+      w={INGEST_W}
+      h={INGEST_H}
+      selected={false}
+      railColor="#8b95a1"
+      borderColor="var(--color-line-strong)"
+      dashedBorder
+      icon={<Database size={15} className="text-text-3" />}
+      title="Deterministic ingest"
+      subtitle="non-composable"
     >
-      <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
-        <span
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg"
-          style={{ background: 'var(--color-escalate-bg)', color: 'var(--color-escalate-fg)' }}
-        >
-          <ShieldCheckSmall />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[12px] font-bold text-text">Decision gate</span>
-          <span className="block font-mono text-[9.5px] text-text-3">terminal · reads run/</span>
-        </span>
-        <Lock size={13} className="shrink-0 text-text-3" aria-label="non-removable" />
-
+      <div className="px-3 pt-1.5">
+        <p className="font-mono text-[10px] leading-snug text-text-2">write_run_dir</p>
+        <p className="font-mono text-[10px] leading-snug text-text-3">→ run/ (5 CSVs)</p>
+        <p className="mt-1.5 text-[9px] italic text-text-3">writes the run dir the gate reads</p>
       </div>
-      <div className="flex flex-col gap-1.5 px-3 py-2.5">
+    </CanvasCardFrame>
+  )
+}
+
+// Advisory agent (item 1 + 3) — OFF-gate: dashed ACCENT frame/spine, no data ports, no verdict (ADR-0001).
+// `attachCount` = how many tools it currently observes (its fan-out ports render as canvas-plane siblings).
+function AgentCard({ selected, onActivate, attachCount }: { selected: boolean; onActivate?: () => void; attachCount: number }) {
+  return (
+    <CanvasCardFrame
+      x={AGENT_X}
+      y={AGENT_Y}
+      w={AGENT_W}
+      h={AGENT_H}
+      selected={selected}
+      onActivate={onActivate}
+      railColor="var(--color-accent)"
+      railSolid={false}
+      borderColor="var(--color-accent)"
+      dashedBorder
+      iconTone={{ background: 'var(--color-accent-weak)', color: 'var(--color-accent-strong)' }}
+      icon={<Activity size={15} />}
+      title={ADVISORY_AGENT.name}
+      subtitle="advisory · off-gate"
+      right={<span className="shrink-0 rounded bg-card-2 px-1.5 py-0.5 font-mono text-[9px] text-text-2">{ADVISORY_AGENT.model}</span>}
+    >
+      <div className="px-3 pt-1">
+        <p className="text-[9.5px] text-text-2">
+          observes <span className="font-mono">{ADVISORY_AGENT.observes}</span> · never sets a verdict
+        </p>
+        <p className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.3px] text-accent-strong">
+          {attachCount} tool{attachCount === 1 ? '' : 's'} attached · advisory link only
+        </p>
+      </div>
+    </CanvasCardFrame>
+  )
+}
+
+// Decision gate (item 1) — the non-composable TERMINAL: escalate spine, a Lock (non-removable), the three
+// checkpoints, and the verdict readout footer. Its run/ INPUT port renders as a canvas-plane sibling.
+function GateCard({ isView, selected, segs, onActivate }: { isView: boolean; selected: boolean; segs: { c: string; w: string }[]; onActivate?: () => void }) {
+  return (
+    <CanvasCardFrame
+      x={GATE_X}
+      y={GATE_Y}
+      w={GATE_W}
+      h={GATE_H}
+      selected={selected}
+      onActivate={onActivate}
+      railColor={isView ? 'var(--color-escalate)' : '#c6ced7'}
+      borderColor="var(--color-line-strong)"
+      iconTone={{ background: 'var(--color-escalate-bg)', color: 'var(--color-escalate-fg)' }}
+      icon={<ShieldCheckSmall />}
+      title="Decision gate"
+      subtitle="terminal · reads run/"
+      right={<Lock size={13} className="shrink-0 text-text-3" aria-label="non-removable" />}
+    >
+      <div className="flex flex-col gap-1 px-3 pt-1">
         {GATE_CHECKPOINTS.map((c) => (
           <div key={c.label} className="flex items-center gap-1.5">
             <span className="h-[7px] w-[7px] rounded-full" style={{ background: c.c }} />
@@ -1183,7 +1305,7 @@ function GateCard({
           </div>
         ))}
       </div>
-      <div className="border-t border-line bg-card-2 px-3 py-2">
+      <div className="absolute inset-x-0 bottom-0 overflow-hidden rounded-b-[10px] border-t border-line bg-card-2 px-3 py-2">
         {isView && (
           <div className="mb-1.5 flex h-[7px] overflow-hidden rounded bg-card-3">
             {segs.map((s, i) => (
@@ -1195,7 +1317,28 @@ function GateCard({
           {isView ? 'proceed 3 · hold 1 · escalate 1' : 'pending — no verdict'}
         </div>
       </div>
-    </button>
+    </CanvasCardFrame>
+  )
+}
+
+// One ADVISORY fan-out port on the agent card's perimeter — a dashed ACCENT ring, deliberately NOT a
+// half-circle data port (an advisory link never carries data). Rendered as a canvas-plane sibling.
+function AdvisoryPortMarker({ x, y }: { x: number; y: number }) {
+  const R = 6
+  return (
+    <span
+      className="pointer-events-none absolute z-[4] rounded-full"
+      title="advisory link · off-gate (no data)"
+      style={{
+        left: x - R,
+        top: y - R,
+        width: 2 * R,
+        height: 2 * R,
+        background: 'var(--color-accent-weak)',
+        border: '1.5px dashed var(--color-accent)',
+        boxSizing: 'border-box',
+      }}
+    />
   )
 }
 
@@ -1220,6 +1363,9 @@ function UserCard({
   renaming,
   connectMode,
   connectFrom,
+  advisoryShown,
+  advisoryOn,
+  onAdvisoryToggle,
   onDown,
   onPortTap,
   onStartWireDrag,
@@ -1236,6 +1382,9 @@ function UserCard({
   renaming: boolean
   connectMode: boolean
   connectFrom: string | null
+  advisoryShown: boolean
+  advisoryOn: boolean
+  onAdvisoryToggle: () => void
   onDown: (id: string, e: React.MouseEvent) => void
   onPortTap: (id: string, side: 'in' | 'out', idx: number) => void
   onStartWireDrag: (fromNode: string, fromIdx: number, e: React.MouseEvent) => void
@@ -1379,6 +1528,33 @@ function UserCard({
       {laid.map((p) => (
         <PortIndexChip key={`c${p.pidx}`} p={p} w={UW} />
       ))}
+      {/* ADVISORY agent-attach point (item 2) — a small dashed-accent badge hugging the top-right corner,
+          DISTINCT from the half-circle data ports (an advisory link, not a data edge). Click toggles the
+          agent's attachment to THIS tool; when attached it fills accent. Off-gate: never a data/verdict edge. */}
+      {advisoryShown && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            onAdvisoryToggle()
+          }}
+          title={advisoryOn ? 'Advisory agent attached — click to detach' : 'Attach advisory agent (off-gate)'}
+          className="absolute z-[7] grid place-items-center rounded-full"
+          style={{
+            left: ADV_BADGE_DX - ADV_BADGE_R,
+            top: ADV_BADGE_DY - ADV_BADGE_R,
+            width: 2 * ADV_BADGE_R,
+            height: 2 * ADV_BADGE_R,
+            boxSizing: 'border-box',
+            background: advisoryOn ? 'var(--color-accent)' : 'var(--color-card)',
+            border: `1.5px ${advisoryOn ? 'solid' : 'dashed'} var(--color-accent)`,
+            color: advisoryOn ? '#fff' : 'var(--color-accent-strong)',
+          }}
+        >
+          <Activity size={9} />
+        </button>
+      )}
       <CardBoxes laid={laid} />
       <div className="absolute inset-x-0 bottom-0 flex items-center border-t border-line px-2.5" style={{ height: CARD_FOOTER_H }}>
         <span className="inline-flex items-center gap-1.5 text-[8.5px] font-bold uppercase tracking-[0.4px] text-accent-strong">

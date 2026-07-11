@@ -636,6 +636,52 @@ export function computeGraphPortLayout(nodes: UserNode[], edges: UserEdge[]): Ma
   return result
 }
 
+// ── Advisory agents (off-gate, ADR-0001) ─────────────────────────────────────
+// An advisory agent OBSERVES tools and advises; it is OFF the deterministic critical path — it never
+// carries typed data and never sets a verdict/confidence. It is deliberately NOT a UserNode and its
+// links are NOT UserEdges, so it can never sit on a data edge or influence the gate. `defaultAttach`
+// seeds which tools it watches; the canvas holds the live (togglable) attach set. One agent can attach
+// to MANY tools (multi-port fan-out, like a multi-output reference source).
+export type AdvisoryAgent = { id: string; name: string; observes: string; model: string; live: boolean; defaultAttach: string[] }
+export const ADVISORY_AGENT: AdvisoryAgent = {
+  id: 'a_qc_triage',
+  name: 'QC-triage',
+  observes: 'qc',
+  model: 'stub',
+  live: false,
+  // The QC-signal producers + the aggregator this agent triages (seeded; the operator can re-attach).
+  defaultAttach: ['n_fastp', 'n_mosdepth', 'n_multiqc'],
+}
+
+// Place ONE anchor point per target on a rectangle's perimeter, each on the side nearest its target and
+// spread evenly per side so they never overlap — the agent-card fan-out (mirrors the nearest-side port
+// model, but for a non-graph terminal card against arbitrary target points). Returns content-space points.
+export type FanPort = { side: PortSide; x: number; y: number }
+export function fanPortsToTargets(rect: { x: number; y: number; w: number; h: number }, targets: Vec2[]): FanPort[] {
+  const cx = rect.x + rect.w / 2
+  const cy = rect.y + rect.h / 2
+  const want = targets.map((t, i) => {
+    const raw = { x: t.x - cx, y: t.y - cy }
+    const dir = raw.x === 0 && raw.y === 0 ? { x: 1, y: 0 } : raw
+    return { i, ...sideAndAlong(dir, rect.w, rect.h) }
+  })
+  const out: FanPort[] = new Array(targets.length)
+  for (const side of ['left', 'right', 'top', 'bottom'] as PortSide[]) {
+    const grp = want.filter((q) => q.side === side).sort((a, b) => a.along - b.along)
+    const vert = side === 'left' || side === 'right'
+    const lo = vert ? 10 : 14
+    const hi = vert ? rect.h - 10 : rect.w - 14
+    const span = Math.max(0, hi - lo)
+    grp.forEach((q, k) => {
+      const pos = lo + (span * (k + 1)) / (grp.length + 1)
+      const lx = side === 'left' ? 0 : side === 'right' ? rect.w : pos
+      const ly = side === 'top' ? 0 : side === 'bottom' ? rect.h : pos
+      out[q.i] = { side, x: rect.x + lx, y: rect.y + ly }
+    })
+  }
+  return out
+}
+
 export function renameNode(ns: UserNode[], id: string, name: string): UserNode[] {
   return ns.map((n) => (n.id === id ? { ...n, name } : n))
 }
