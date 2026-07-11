@@ -5,19 +5,32 @@ import { GATE_DOT, VERDICT_LABEL } from '../../verdict'
 import { artifactNameTitle, fmtSize } from '../../provenance'
 import { Fingerprint } from './Fingerprint'
 
-// The fixed-lineage DAG + drill-in, extracted VERBATIM from the old Provenance.tsx (behavior
-// unchanged) so it stays one of the three provenance views. Tools describe what this build
-// actually touches: it starts from FASTQ, so alignment/variant-calling are shown but marked "not
-// run in this build" (no artifacts) rather than fabricating an aligner/caller run — the honesty
-// guardrail wins over the prototype's populated-looking mock.
+// The fixed-lineage DAG + drill-in, extracted from the old Provenance.tsx so it stays one of the
+// three provenance views. Tools describe what this build actually touches: it starts from FASTQ, so
+// alignment/variant-calling/filter are shown but marked "not run in this build" (no artifacts)
+// rather than fabricating a run — the honesty guardrail wins over a populated-looking mock. The
+// three post-variant stages (filter/normalize, route-to-human review, de-identified share) are
+// honest downstream nodes (W3): each reads "not run in this build" unless THIS build actually
+// produced its artifact or fired its rule. The route-to-human REVIEW node carries the variant gate
+// (VAR-RTH-001) — so a fired ESCALATE surfaces there instead of the DAG lying "skipped" while the
+// decision escalated (the CLINVAR-RTH honesty fix). Variant *calling* stays "not run" (no VCF),
+// which is the honest read — the route-to-human check ran over externally-annotated calls.
 const STAGES: { key: PipelineStage; n: number; title: string; tool: string; gate?: Gate }[] = [
   { key: 'intake', n: 1, title: 'Sample intake', tool: 'Sample sheet + metadata' },
   { key: 'demux', n: 2, title: 'Demultiplex', tool: 'demux stats', gate: 'preflight' },
   { key: 'qc', n: 3, title: 'Quality control', tool: 'fastp · mosdepth', gate: 'qc' },
   { key: 'align', n: 4, title: 'Alignment', tool: 'not run in this build' },
-  { key: 'variant', n: 5, title: 'Variant calling', tool: 'not run in this build', gate: 'variant' },
-  { key: 'gate', n: 6, title: 'Decision gate', tool: 'PipeGuard rules' },
+  { key: 'variant', n: 5, title: 'Variant calling', tool: 'not run in this build' },
+  { key: 'filter', n: 6, title: 'Filter / normalize', tool: 'not run in this build' },
+  { key: 'review', n: 7, title: 'Route to human', tool: 'route-to-human · VAR-RTH-001', gate: 'variant' },
+  { key: 'gate', n: 8, title: 'Decision gate', tool: 'PipeGuard rules' },
+  { key: 'share', n: 9, title: 'De-identified share', tool: 'Safe-Harbor-style scrub' },
 ]
+
+// Downstream stages that only "run" when THIS build produced their artifact OR fired their gate/
+// event; absent that signal they read "not run in this build" instead of a fabricated green. The
+// review node's variant gate is the win-over signal for the CLINVAR-RTH escalate (see statusFor).
+const CONDITIONAL_STAGES = new Set<PipelineStage>(['align', 'variant', 'filter', 'review', 'share'])
 
 type Status = 'ok' | 'warn' | 'blocked' | 'skipped' | 'partial'
 type Stage = (typeof STAGES)[number]
@@ -91,29 +104,44 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
     return { gateWorst, runWorst }
   }, [detail])
 
-  const statusFor = useMemo(() => {
-    return (stage: Stage): Status => {
-      const arts = artifacts.filter((a) => a.stage === stage.key)
-      if ((stage.key === 'align' || stage.key === 'variant') && arts.length === 0) return 'skipped'
-      if (stage.gate) {
-        const w = gateWorst[stage.gate]
-        if (w === 'escalate') return 'blocked'
-        if (w === 'hold' || w === 'rerun') return 'warn'
-      }
-      if (stage.key === 'gate') {
-        if (runWorst === 'escalate') return 'blocked'
-        if (runWorst !== 'proceed') return 'warn'
-        // Proceed — but the DAG shows sequence, so a terminal green while upstream align/variant are
-        // gray (skipped, not run in this build) is misleading (P3). Read "partial lineage" instead of
-        // a clean green "Completed" whenever a stage upstream of the gate never ran.
-        const upstreamSkipped = STAGES.some(
-          (s) => (s.key === 'align' || s.key === 'variant') && artifacts.filter((a) => a.stage === s.key).length === 0,
-        )
-        if (upstreamSkipped) return 'partial'
-      }
-      return 'ok'
+  // Whether a de-identified share left the boundary for this run (ADR-0018 D3): the presence of a
+  // DATA_EXPORTED event is the "share ran" signal — a share writes no on-disk artifact, so the
+  // event trail is its only honest evidence. Absent it, the Share stage reads "not run in this build".
+  const shared = useMemo(() => detail.events.some((e) => e.event_type === 'data.exported'), [detail])
+
+  // A downstream stage is "not run in this build" when it produced no artifact AND (for a gated
+  // stage) its gate never fired anything actionable. This is the honesty short-circuit — BUT a
+  // fired gate must WIN over it: the CLINVAR-RTH fixture carries only variants.csv (no .vcf), so
+  // the review node has zero artifacts while VAR-RTH-001 ESCALATED it. Reading "skipped" there
+  // would contradict the decision the rules already made, so a fired gate falls through to the
+  // gate-status branch below (escalate → blocked, hold/rerun → warn).
+  const isNotRun = (stage: Stage): boolean => {
+    if (!CONDITIONAL_STAGES.has(stage.key)) return false
+    if (stage.key === 'share') return !shared
+    const arts = artifacts.filter((a) => a.stage === stage.key)
+    const gv = stage.gate ? gateWorst[stage.gate] : null
+    const gateFired = gv != null && gv !== 'proceed'
+    return arts.length === 0 && !gateFired
+  }
+
+  const statusFor = (stage: Stage): Status => {
+    if (isNotRun(stage)) return 'skipped'
+    if (stage.gate) {
+      const w = gateWorst[stage.gate]
+      if (w === 'escalate') return 'blocked'
+      if (w === 'hold' || w === 'rerun') return 'warn'
     }
-  }, [artifacts, gateWorst, runWorst])
+    if (stage.key === 'gate') {
+      if (runWorst === 'escalate') return 'blocked'
+      if (runWorst !== 'proceed') return 'warn'
+      // Proceed — but the DAG shows sequence, so a terminal green while upstream stages are gray
+      // (skipped, not run in this build) is misleading (P3). Read "partial lineage" instead of a
+      // clean green "Completed" whenever a processing stage upstream of the gate never ran.
+      const upstreamSkipped = STAGES.some((s) => s.key !== 'gate' && s.key !== 'share' && isNotRun(s))
+      if (upstreamSkipped) return 'partial'
+    }
+    return 'ok'
+  }
 
   // Per-stage note for the drill-in band — every stage gets a real note, never an empty bar.
   // Gate stages prefer the worst gate result's rationale (rules-authored); when that's missing
@@ -123,12 +151,24 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
     const n = detail.cards.length
     const plural = n === 1 ? '' : 's'
 
-    // Alignment/variant-calling are honestly not run in this build (lineage starts from FASTQ).
-    // Short-circuit before the gate-rationale lookup so a stray variant-gate note can't surface.
+    // Alignment / variant calling / filter are honestly not run in this build (lineage starts from
+    // FASTQ; no aligner/caller/filter produced an artifact). Short-circuit before the gate-rationale
+    // lookup so a stray gate note can't surface on a stage that never ran.
     if (stage.key === 'align')
       return 'Not run in this build — lineage starts from FASTQ; alignment provenance is future work.'
     if (stage.key === 'variant')
-      return 'Not run in this build — variant-calling provenance is future work.'
+      return 'Not run in this build — no in-build variant caller ran; the route-to-human check reads externally-annotated calls (variants.csv).'
+    if (stage.key === 'filter')
+      return 'Not run in this build — variant filtering / normalization provenance is future work.'
+    // Route-to-human: prefer the fired variant-gate rationale (rules-authored, below). When the
+    // policy is disarmed / no candidate matched, the gate produced nothing → honest "not run".
+    if (stage.key === 'review' && isNotRun(stage))
+      return 'Not run in this build — route-to-human (VAR-RTH-001) is off by default; no clinically-significant variant was routed for review this run.'
+    // De-identified share (ADR-0018 D3): status/note come from the event trail, not an artifact.
+    if (stage.key === 'share')
+      return shared
+        ? 'A de-identified report left the boundary for this run (DATA_EXPORTED) — see the Event trail. The scrub is a version, not a compliance attestation.'
+        : 'Not run in this build — no de-identified report has been shared for this run.'
 
     if (stage.gate) {
       const results = detail.cards.flatMap((c) => c.gate_results).filter((g) => g.gate === stage.gate)
@@ -154,12 +194,10 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
           : `Per-sample QC ran across ${n} sample${plural}; ${flagged} flagged.`
       }
       case 'gate': {
-        const upstreamSkipped = STAGES.some(
-          (s) => (s.key === 'align' || s.key === 'variant') && artifacts.filter((a) => a.stage === s.key).length === 0,
-        )
+        const upstreamSkipped = STAGES.some((s) => s.key !== 'gate' && s.key !== 'share' && isNotRun(s))
         const base = `Aggregates the gates that ran → overall verdict ${VERDICT_LABEL[runWorst]}.`
         return upstreamSkipped
-          ? `${base} Decided on partial lineage — alignment/variant-calling didn't run in this build, so this isn't an end-to-end pass.`
+          ? `${base} Decided on partial lineage — one or more processing stages (alignment / variant calling / filter) didn't run in this build, so this isn't an end-to-end pass.`
           : base
       }
       default:
@@ -181,10 +219,12 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
     <div>
       <p className="mb-[18px] text-[12.5px] text-text-2">Click a stage to inspect its data I/O.</p>
 
-      {/* Left→right stage DAG — nodes stretch equally with auto-width chevrons between. */}
+      {/* Left→right stage DAG — nodes stretch equally with auto-width chevrons between. Now 9
+          stages (the 3 post-variant nodes added in W3), so the column template is derived from
+          STAGES.length and the row scrolls sideways (min node width) instead of crushing every card. */}
       <div
-        className="grid items-stretch gap-1 px-0.5 pb-2.5 pt-1.5"
-        style={{ gridTemplateColumns: 'repeat(5, minmax(0,1fr) auto) minmax(0,1fr)' }}
+        className="grid items-stretch gap-1 overflow-x-auto px-0.5 pb-2.5 pt-1.5"
+        style={{ gridTemplateColumns: `repeat(${STAGES.length - 1}, minmax(104px,1fr) auto) minmax(104px,1fr)` }}
       >
         {STAGES.flatMap((stage, i) => {
           const status = statusFor(stage)

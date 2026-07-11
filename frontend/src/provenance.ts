@@ -152,7 +152,10 @@ export const STAGE_LABEL: Record<PipelineStage, string> = {
   qc: 'QC',
   align: 'Align',
   variant: 'Variant',
+  filter: 'Filter',
+  review: 'Review',
   gate: 'Gate',
+  share: 'Share',
 }
 // Which pipeline stages sit under a gate checkpoint (drives the gate dot on an artifact edge).
 export const STAGE_GATE: Partial<Record<PipelineStage, Gate>> = { demux: 'preflight', qc: 'qc', variant: 'variant' }

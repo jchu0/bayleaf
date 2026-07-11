@@ -122,9 +122,21 @@ export type RunsPage = {
   limit: number | null
 }
 
-// The pipeline stages of the provenance canvas (§5). Fixed order: intake → demux → qc →
-// align → variant → gate; the three gate checkpoints attach to demux/qc/variant.
-export type PipelineStage = 'intake' | 'demux' | 'qc' | 'align' | 'variant' | 'gate'
+// The pipeline stages of the provenance canvas (§5). Fixed order: intake → demux → qc → align →
+// variant → filter → review → gate → share. The gate checkpoints attach to demux (preflight),
+// qc (qc), and review (variant — the route-to-human VAR-RTH-001 step). The post-variant stages
+// (filter/normalize, route-to-human review, de-identified share) are honest lineage nodes that
+// read "not run in this build" when this build produced no artifact/event for them (W3).
+export type PipelineStage =
+  | 'intake'
+  | 'demux'
+  | 'qc'
+  | 'align'
+  | 'variant'
+  | 'filter'
+  | 'review'
+  | 'gate'
+  | 'share'
 
 // One data artifact in a run's lineage (GET /api/runs/:id/artifacts). sha256 is null for
 // raw reads above the API's hash cap; origin tags where the data came from.

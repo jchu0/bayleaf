@@ -14,6 +14,7 @@ import { GateResultStrip } from '../components/GateResultStrip'
 import { QCReadout, emptyGateGroup, notMeasuredGroup, type ReadoutGroup } from '../components/MetricsPanel'
 import { PageHeader } from '../components/PageHeader'
 import { Pager, type PerPage } from '../components/Pager'
+import { RunReport } from '../components/RunReport'
 import { ErrorBox } from '../components/States'
 import { VerdictBadge } from '../components/VerdictBadge'
 import type {
@@ -30,6 +31,8 @@ import { usePrefs } from '../context/PrefsContext'
 
 type Density = 'split' | 'brief' | 'dense'
 type CardFilter = Verdict | 'all' | 'attention'
+// Top-level view switch: the per-sample decision cards vs. the single-document run Report (W3).
+type RunView = 'cards' | 'report'
 // Readout join keyed by sample; 'error' marks a readout that failed to load (the card still
 // renders rule-derived content — a missing hero is a signal, not a crash).
 type ReadoutState = Record<string, CardReadout | 'error'>
@@ -107,6 +110,20 @@ export function RunDetail() {
     }
   }, [])
 
+  // The URL owns the top-level view (`?view=report`) so a Report deep-link / refresh is stable,
+  // sitting alongside the verdict `?filter`. Unknown values fall back to the decision cards.
+  const view: RunView = searchParams.get('view') === 'report' ? 'report' : 'cards'
+  const setView = (v: RunView) =>
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        if (v === 'cards') p.delete('view')
+        else p.set('view', v)
+        return p
+      },
+      { replace: true },
+    )
+
   // The URL owns the filter so Monitoring can deep-link `?filter=attention` to a run's flagged
   // samples. Unknown values fall back to "all".
   const rawFilter = searchParams.get('filter')
@@ -133,16 +150,42 @@ export function RunDetail() {
   // still shown per-card in the context rail), and the Layout control are all gone.
   return (
     <div className="mx-auto max-w-[1080px]">
-      <PageHeader title="Decision cards" />
+      <PageHeader title={view === 'report' ? 'Run report' : 'Decision cards'} />
       {renderBody()}
     </div>
   )
+
+  // The top-level Decision-cards ↔ Report view switch (W3). Shown once the run has decided cards
+  // to render (hidden on running/released/error states, where there is nothing to switch between).
+  function viewTabs() {
+    return (
+      <div className="mb-4">
+        <Tabs<RunView>
+          items={[
+            { value: 'cards', label: 'Decision cards' },
+            { value: 'report', label: 'Report' },
+          ]}
+          value={view}
+          onChange={setView}
+        />
+      </div>
+    )
+  }
 
   function renderBody() {
     if (error) return <ErrorBox message={error} onRetry={() => setReload((r) => r + 1)} />
     if (!detail) return <DecisionLoading />
     if (detail.summary.status === 'running') return <DecisionLoading />
     if (detail.summary.status === 'released') return <DecisionReleased count={detail.summary.n_samples} />
+
+    if (view === 'report') {
+      return (
+        <>
+          {viewTabs()}
+          <RunReport detail={detail} />
+        </>
+      )
+    }
 
     const counts = detail.summary.counts
     const cards = [...detail.cards].sort(
@@ -178,6 +221,8 @@ export function RunDetail() {
 
     return (
       <>
+        {viewTabs()}
+
         {synthesisError && <DecisionSynthesisError onRetry={() => setReload((r) => r + 1)} />}
 
         <DecisionVerdictBar counts={counts} />

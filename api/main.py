@@ -565,6 +565,12 @@ _ARTIFACT_STAGE: dict[str, list[tuple[str, str]]] = {
     "demux_stats.csv": [("demux", "output"), ("qc", "input")],
     "qc_metrics.csv": [("qc", "output")],
     "pipeline.log": [("gate", "input")],
+    # Post-variant lineage seams (W3). No committed fixture emits these, so the downstream
+    # provenance stages honestly read "not run in this build" — but when a build DOES publish a
+    # route-to-human routing record or a de-identified share manifest, it lands on the right stage
+    # instead of vanishing (the route_to_human ARMING marker stays config, never a data artifact).
+    "route_to_human.json": [("review", "output")],
+    "share_manifest.json": [("share", "output")],
 }
 _SKIP_ARTIFACTS = {"origin"}  # provenance marker, not a data artifact
 _SKIP_SUFFIXES = {".bai", ".tbi", ".csi", ".pyc"}  # index/sidecar files
@@ -576,6 +582,10 @@ def _artifact_stage_roles(name: str) -> list[tuple[str, str]]:
         return _ARTIFACT_STAGE[lower]
     if lower.endswith((".bam", ".cram")):
         return [("align", "output")]
+    # A filtered/normalized VCF is the OUTPUT of the post-call filter stage (W3) — matched before
+    # the generic .vcf rule so it lands on 'filter', not 'variant' (the raw-caller output).
+    if lower.endswith((".filtered.vcf", ".filtered.vcf.gz", ".norm.vcf", ".norm.vcf.gz")):
+        return [("filter", "output")]
     if lower.endswith((".vcf", ".vcf.gz")):
         return [("variant", "output")]
     if lower.endswith((".fastq", ".fastq.gz", ".fq", ".fq.gz")):
