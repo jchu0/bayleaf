@@ -55,9 +55,29 @@ function authHeaders(): Record<string, string> {
 }
 
 // ── low-level fetch ──────────────────────────────────────────────────────────
+// Surface FastAPI's error body, not just the status: a 4xx HTTPException carries a `detail` string
+// (e.g. "no processable sample — only HG002 …"), a 422 carries a `detail` array of {msg}. Without
+// this every toast read as a bare "422 Unprocessable Content" (surfaced by the 100-sample test).
+async function httpError(res: Response): Promise<Error> {
+  let detail = ''
+  try {
+    const j = (await res.json()) as { detail?: unknown }
+    if (typeof j?.detail === 'string') detail = j.detail
+    else if (Array.isArray(j?.detail))
+      detail = (j.detail as Array<{ msg?: string }>)
+        .map((d) => d?.msg)
+        .filter(Boolean)
+        .join('; ')
+    else if (j?.detail) detail = JSON.stringify(j.detail)
+  } catch {
+    /* non-JSON error body — fall back to the status line */
+  }
+  return new Error(detail ? `${res.status} · ${detail}` : `${res.status} ${res.statusText}`)
+}
+
 async function get<T>(url: string): Promise<T> {
   const res = await fetch(url)
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  if (!res.ok) throw await httpError(res)
   return (await res.json()) as T
 }
 
@@ -67,7 +87,7 @@ async function write<T>(url: string, method: 'POST' | 'PATCH' | 'DELETE', body?:
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  if (!res.ok) throw await httpError(res)
   return (await res.json()) as T
 }
 
@@ -100,7 +120,7 @@ function runsQs(opts: RunsQuery = {}): string {
 // response headers a plain get<T> would drop.
 async function fetchRunsPage(opts: RunsQuery = {}): Promise<RunsPage> {
   const res = await fetch(`/api/runs${runsQs(opts)}`)
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  if (!res.ok) throw await httpError(res)
   const data = (await res.json()) as RunSummary[]
   const totalHeader = res.headers.get('X-PipeGuard-Total-Count')
   const countsHeader = res.headers.get('X-PipeGuard-Status-Counts')
