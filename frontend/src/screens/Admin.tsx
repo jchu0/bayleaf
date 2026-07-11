@@ -5,6 +5,7 @@ import { FacetChip } from '../components/FacetChip'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { DEMO_ACCOUNTS } from '../auth'
 import { useRole } from '../context/RoleContext'
 import type {
@@ -57,6 +58,7 @@ function DemoBanner({ text }: { text: string }) {
 function UsersTab() {
   const { actor, setActor } = useRole()
   const { toast } = useToast()
+  const confirm = useConfirm()
   const [users, setUsers] = useState(SEED_USERS)
   // Password/email reset is a production seam — no live mail in the demo. The admin action toasts
   // what would happen (a signed, expiring reset link emailed to the user).
@@ -84,10 +86,14 @@ function UsersTab() {
   }
   // Act-as impersonation is already admin-gated (the whole panel is isAdmin-only); confirm it so it
   // is a deliberate, audited switch rather than a stray click.
-  const actAs = (u: (typeof users)[number]) => {
+  const actAs = async (u: (typeof users)[number]) => {
     if (u.id === actor.id) return
-    if (!window.confirm(`Act as ${u.name} (${u.role})? Subsequent off-gate writes are attributed to them.`)) return
-    setActor({ id: u.id, role: u.role })
+    const ok = await confirm({
+      title: `Act as ${u.name}?`,
+      body: `Subsequent off-gate writes (approvals, tickets) are attributed to ${u.name} (${u.role}) and recorded in the audit log.`,
+      confirmLabel: 'Act as',
+    })
+    if (ok) setActor({ id: u.id, role: u.role })
   }
 
   return (
@@ -148,7 +154,7 @@ function UsersTab() {
               </div>
               <div className="text-right">
                 <button
-                  onClick={() => actAs(u)}
+                  onClick={() => void actAs(u)}
                   disabled={isCurrent}
                   className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
                     isCurrent

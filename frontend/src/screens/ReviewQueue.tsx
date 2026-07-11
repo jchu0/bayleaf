@@ -20,6 +20,7 @@ import { ReviewStatusBar, type ReviewStatusSegment } from '../components/ReviewS
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { ErrorBox, Loading } from '../components/States'
 import { useToast } from '../components/Toast'
+import { useConfirm, type ConfirmOpts } from '../components/ConfirmDialog'
 import { useRole } from '../context/RoleContext'
 import type {
   AgentProposal,
@@ -179,6 +180,7 @@ function PriorityBars({ level }: { level: number }) {
 export function ReviewQueue() {
   const { actor, isReviewer, isApprover } = useRole()
   const { toast } = useToast()
+  const confirm = useConfirm()
   const [details, setDetails] = useState<RunDetail[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ui, setUi] = useState<Record<string, TicketUi>>({})
@@ -328,6 +330,47 @@ export function ReviewQueue() {
     else act(t, 'suppress')
   }
 
+  // Explicit-confirm gate (maintainer rule: no accidental single click may fire a cascading/
+  // state-changing write). Each stakes-y ticket action confirms first, naming its effect + that it's
+  // audited; the actions themselves already persist to the review store, which the Admin Activity
+  // log reads. Acknowledge stays a direct one-click (a soft "start reviewing", non-destructive).
+  const ACTION_CONFIRM: Record<'resolve' | 'escalate' | 'reopen', ConfirmOpts> = {
+    resolve: {
+      title: 'Resolve this ticket?',
+      body: 'Marks the hold cleared and moves it out of the open queue. Reversible via Reopen; recorded in the audit log.',
+      confirmLabel: 'Resolve',
+    },
+    escalate: {
+      title: 'Escalate to an approver?',
+      body: 'Requests approver sign-off and moves the ticket into review. Recorded in the audit log.',
+      confirmLabel: 'Escalate',
+    },
+    reopen: {
+      title: 'Reopen this ticket?',
+      body: 'Returns a resolved ticket to the open queue. Recorded in the audit log.',
+      confirmLabel: 'Reopen',
+    },
+  }
+  const confirmAct = async (t: QueueTicket, action: 'resolve' | 'escalate' | 'reopen') => {
+    if (!(await confirm(ACTION_CONFIRM[action]))) return
+    act(t, action)
+  }
+  // Suppressing hides an issue class going forward (cascading) — confirm it; un-suppressing merely
+  // restores visibility (low-stakes), so it toggles straight through.
+  const confirmSuppress = async (t: QueueTicket) => {
+    if (uiRef.current[keyOf(t)]?.suppressed) {
+      toggleSuppress(t)
+      return
+    }
+    const ok = await confirm({
+      title: 'Suppress this issue class?',
+      body: `Future occurrences of ${t.primary.rule_id} across runs are hidden from the queue until un-suppressed. Recorded in the audit log.`,
+      confirmLabel: 'Suppress',
+      tone: 'danger',
+    })
+    if (ok) toggleSuppress(t)
+  }
+
   const escalateRepair = async (t: QueueTicket) => {
     const key = keyOf(t)
     patch(key, { repairEscalated: true, repairLoading: true, repairApproved: 'none' })
@@ -363,7 +406,20 @@ export function ReviewQueue() {
   // Resolve against the live ticket list every render so keys that have since left the clearable set
   // (already resolved, or filtered away) never drive a batch action.
   const selectedTickets = tickets.filter((t) => selected.has(keyOf(t)) && clearable(t))
-  const batchAct = (action: 'resolve' | 'suppress') => {
+  const batchAct = async (action: 'resolve' | 'suppress') => {
+    const n = selectedTickets.length
+    if (n === 0) return
+    // Batch clearance is the biggest cascading-click risk (N tickets at once) — always confirm.
+    const ok = await confirm({
+      title: `${action === 'resolve' ? 'Resolve' : 'Suppress'} ${n} selected ticket${n === 1 ? '' : 's'}?`,
+      body:
+        action === 'resolve'
+          ? 'Clears every selected hold at once. Reversible per-ticket via Reopen; each is recorded in the audit log.'
+          : 'Suppresses the issue class for each selected ticket. Recorded in the audit log.',
+      confirmLabel: action === 'resolve' ? 'Resolve selected' : 'Suppress selected',
+      tone: action === 'suppress' ? 'danger' : undefined,
+    })
+    if (!ok) return
     for (const t of selectedTickets) {
       if (action === 'resolve') act(t, 'resolve')
       else toggleSuppress(t)
@@ -493,14 +549,14 @@ export function ReviewQueue() {
               <div className="ml-auto flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => batchAct('resolve')}
+                  onClick={() => void batchAct('resolve')}
                   className="rounded-md border border-proceed-bd bg-proceed-bg px-2.5 py-1 text-[12px] font-semibold text-proceed-fg hover:brightness-95"
                 >
                   Resolve selected
                 </button>
                 <button
                   type="button"
-                  onClick={() => batchAct('suppress')}
+                  onClick={() => void batchAct('suppress')}
                   className="rounded-md border border-line-strong bg-card px-2.5 py-1 text-[12px] font-semibold text-text-2 hover:bg-card-2"
                 >
                   Suppress selected
@@ -566,11 +622,11 @@ export function ReviewQueue() {
                         isApprover={isApprover}
                         onToggle={() => setOpen((m) => ({ ...m, [key]: !m[key] }))}
                         on={{
-                          ack: () => act(t, 'acknowledge'),
-                          resolve: () => act(t, 'resolve'),
-                          reopen: () => act(t, 'reopen'),
-                          escalate: () => act(t, 'escalate'),
-                          suppress: () => toggleSuppress(t),
+                          ack: () => act(t, 'acknowledge'), // soft, non-destructive — no confirm
+                          resolve: () => void confirmAct(t, 'resolve'),
+                          reopen: () => void confirmAct(t, 'reopen'),
+                          escalate: () => void confirmAct(t, 'escalate'),
+                          suppress: () => void confirmSuppress(t),
                           escalateRepair: () => void escalateRepair(t),
                           approveFix: (scope) => approveFix(t, scope),
                         }}

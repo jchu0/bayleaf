@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import type { ReactNode } from 'react'
 import { Layout } from './components/Layout'
 import { ToastProvider } from './components/Toast'
+import { ConfirmProvider } from './components/ConfirmDialog'
 import { PrefsProvider } from './context/PrefsContext'
 import { RoleProvider, useRole } from './context/RoleContext'
 import { Admin } from './screens/Admin'
@@ -31,6 +32,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <ToastProvider>
+      <ConfirmProvider>
       <PrefsProvider>
       <RoleProvider>
         <BrowserRouter>
@@ -59,6 +61,7 @@ export default function App() {
         </BrowserRouter>
       </RoleProvider>
       </PrefsProvider>
+      </ConfirmProvider>
     </ToastProvider>
   )
 }
