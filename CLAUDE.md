@@ -368,6 +368,19 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    would at today's volume, but the underlying payload-size risk T-072 tracks is unmitigated in
    either direction until the backend gains `page`/`limit` on `runs[]`, mirroring `GET
    /api/runs`).
+   **Audit retrofit (2026-07-10, commit `d65c9c1`, "Wave 3") — frontend-only, no verdict/gate/
+   ADR-0001 boundary changed** (`git diff --stat 9733842 d65c9c1 -- src/ api/ tests/` empty).
+   Realizes the maintainer's standing rule that no single accidental click may fire a
+   cascading/state-changing write: a new reusable `components/ConfirmDialog.tsx`
+   (`ConfirmProvider` mounted at the app root, outermost after `ToastProvider`; `useConfirm()`
+   returns an async `confirm(opts) → Promise<boolean>`, Escape/click-outside both cancel) gates
+   every stakes-y off-gate write. Review queue: Resolve/Escalate/Reopen confirm first (naming
+   the effect + that it's audited); Suppress is DANGER-toned (names the cross-run cascade);
+   batch Resolve/Suppress confirm the selected count; Acknowledge and un-suppress stay direct
+   one-clicks (low-stakes, non-destructive). Admin's Act-as swaps its native `window.confirm`
+   (T-092) for the same branded dialog. No new endpoint, no wire change — every confirmed
+   action still calls the exact backend write it always did, landing in the Admin Activity
+   audit feed unchanged; a reusable primitive for the Settings/variant authoring work ahead.
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
 

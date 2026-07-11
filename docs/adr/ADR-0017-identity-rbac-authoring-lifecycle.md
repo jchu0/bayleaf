@@ -85,3 +85,24 @@ login roster, layered *above* the `viewer|reviewer|approver` `Role` this ADR def
 becomes a fourth wire role, and `api/auth.py` has no concept of "admin." See
 [risks.md](../quality/risks.md) RISK-035 and
 [functional.md](../requirements/functional.md) REQ-F-069/REQ-F-066 for the full framing.
+
+## Realized addendum (2026-07-10) — explicit-confirm gate on off-gate writes, no decision change
+
+The frontend gained a reusable confirm-gate primitive (`frontend/src/components/
+ConfirmDialog.tsx`, a `ConfirmProvider`/`useConfirm()`, commit `d65c9c1`, "Wave 3") enforcing
+the maintainer's standing rule that no single accidental click may fire a cascading/
+state-changing off-gate write. The review queue (`ReviewQueue.tsx`) routes Resolve/Escalate/
+Reopen/Suppress and the batch Resolve/Suppress actions through it, each confirm naming its
+effect and that it is recorded in the audit log (Suppress is DANGER-toned, naming the
+cross-run cascade); Admin's Act-as (`Admin.tsx`) swaps its native `window.confirm` (T-092) for
+the same dialog. **Additive framing, not a new decision:** the actions still call the exact
+same backend writes this ADR's draft→approve/`*_by` audit guardrails already cover
+(`api/routers/review_queue.py`'s `ticketAction`, the client-mock `RoleContext.setActor`) — no
+new endpoint, no wire change, `current_actor()`/`require_role` untouched. This is the
+frontend-UX realization of Decision 4 above ("identity is server-captured into audit/`*_by`
+fields"): the confirm step makes the human side of that attribution **deliberate**, not just
+recorded after the fact. Low-stakes/non-destructive actions (acknowledge, un-suppress)
+intentionally stay direct one-clicks — gating them would add friction without mitigating a real
+accidental-click risk. See [architecture.md](../design/architecture.md) §Invariants,
+[risks.md](../quality/risks.md) RISK-035, and
+[functional.md](../requirements/functional.md) REQ-F-075 for the full framing.

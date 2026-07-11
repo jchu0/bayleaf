@@ -197,6 +197,21 @@ resolve).
   (mirrors Monitoring); tickets visually grouped under a sticky per-run subheader; the default
   filter flipped all → open so resolved tickets leave the active view but stay reachable via the
   Resolved facet chip.
+- **Actions now confirm first (Shipped 2026-07-10, "Audit retrofit," T-102, commit `d65c9c1`).**
+  A new reusable **`ConfirmDialog`** (`components/ConfirmDialog.tsx`: a `ConfirmProvider`
+  mounted at the app root + `useConfirm()`, an async `confirm(opts) → Promise<boolean>`; Escape
+  and click-outside both cancel) realizes the maintainer's standing rule that no single
+  accidental click may fire a cascading/state-changing write. **Resolve / Escalate / Reopen**
+  confirm first, each naming its effect and that it's recorded in the audit log; **Suppress**
+  uses a DANGER-toned confirm spelling out the cascade ("future occurrences of \<rule\> across
+  runs are hidden until un-suppressed"); the **batch** Resolve/Suppress bar (T-097) confirms the
+  selected count. **Acknowledge and un-suppress stay direct one-clicks** — deliberately: they're
+  low-stakes and non-destructive (un-suppress only restores visibility; acknowledge is a soft
+  "start reviewing"), so gating them too would just be friction without a real accidental-click
+  risk. No backend/wire change — every confirmed action still calls the same
+  `ticketAction`/`toggleSuppress` path it always did, so it lands in the Admin Activity audit
+  feed exactly as before. The same `ConfirmDialog` primitive is reused by Admin's Act-as (§11)
+  and is intended for the Settings/variant authoring surfaces ahead.
 
 ### 5.6 Provenance  (`view: 'provenance'`)
 Left→right stage DAG + a per-stage I/O inspector.
@@ -538,6 +553,10 @@ governance; **not** "any approver," which was the original, now-corrected framin
    role changed). "Act as" now **confirms** before impersonating, naming the target user + role,
    since it is already admin-panel-gated. Still the same client-mock roster — this hardens the
    legitimate UI path, not the underlying security boundary ([risks.md RISK-035](../../quality/risks.md)).
+   **Upgraded 2026-07-10 (T-102, commit `d65c9c1`):** Act-as's confirm now uses the same
+   reusable, branded **`ConfirmDialog`** the review queue adopted (§5.5) instead of the earlier
+   native `window.confirm` — a UI-consistency change only; the confirmation copy and the
+   admin-panel gating are unchanged.
 2. **Activity log** — a REAL, zero-new-backend audit feed merging `GET /api/settings/thresholds`
    + `GET /api/pipelines` + `GET /api/review/tickets` into one append-only when/actor/kind/target/
    status table, facet-filterable by kind. **Shipped 2026-07-10 (T-093, commit `8a14661`, "A2"):**
