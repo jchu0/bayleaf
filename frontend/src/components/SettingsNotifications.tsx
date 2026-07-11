@@ -1,5 +1,7 @@
 import { type ReactNode, useState } from 'react'
+import { Pencil } from 'lucide-react'
 import { SettingsToggle } from './SettingsToggle'
+import { useToast } from './Toast'
 
 // Notifications (dc.html 1225-1244): three channel rows — Slack + Microsoft Teams connected with
 // a live toggle, Discord unconnected with a Connect affordance. Purely presentational demo state;
@@ -84,15 +86,73 @@ function ChannelRow({
 }
 
 export function SettingsNotifications() {
+  const { toast } = useToast()
+  // Committed channel state. UIC-4: these toggles read at a glance but are only mutable behind an
+  // explicit Edit → Save, so a stray click can't silently mute the gate's alerts. `draft*` holds the
+  // uncommitted edit; Save commits, Cancel discards (nothing changes until Save).
   const [slackOn, setSlackOn] = useState(true)
   const [teamsOn, setTeamsOn] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [draftSlack, setDraftSlack] = useState(true)
+  const [draftTeams, setDraftTeams] = useState(true)
+
+  const beginEdit = () => {
+    setDraftSlack(slackOn)
+    setDraftTeams(teamsOn)
+    setEditing(true)
+  }
+  const cancelEdit = () => setEditing(false)
+  const saveEdit = () => {
+    setSlackOn(draftSlack)
+    setTeamsOn(draftTeams)
+    setEditing(false)
+    // Local demo state (no channel wiring on this seam) — surface the outcome the same way every
+    // off-gate write does, via a toast, rather than diverging silently.
+    toast('Notification settings saved', 'success')
+  }
+
+  // In edit mode the toggles bind to the draft; in view mode they show the committed value and are
+  // locked (disabled) so the switch is legible but not directly flippable.
+  const slackView = editing ? draftSlack : slackOn
+  const teamsView = editing ? draftTeams : teamsOn
 
   return (
     <section className="rounded-[13px] border border-line bg-card px-[18px] py-[17px]">
-      <div className="text-[14.5px] font-semibold text-text">Notifications</div>
-      <p className="mt-[3px] text-[12.5px] text-text-2">
-        Ping the channel when a run reaches the gate with samples needing attention.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[14.5px] font-semibold text-text">Notifications</div>
+          <p className="mt-[3px] text-[12.5px] text-text-2">
+            Ping the channel when a run reaches the gate with samples needing attention.
+          </p>
+        </div>
+        {editing ? (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={saveEdit}
+              className="rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-accent-strong"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 transition-colors hover:border-line-strong"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={beginEdit}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 transition-colors hover:border-accent hover:text-accent-strong"
+          >
+            <Pencil size={13} />
+            Edit
+          </button>
+        )}
+      </div>
       <div className="mt-[13px] space-y-[9px]">
         <ChannelRow
           tinted
@@ -105,7 +165,14 @@ export function SettingsNotifications() {
             </>
           }
           status={<ConnectedDot />}
-          control={<SettingsToggle on={slackOn} onChange={setSlackOn} label="Slack notifications" />}
+          control={
+            <SettingsToggle
+              on={slackView}
+              onChange={setDraftSlack}
+              disabled={!editing}
+              label="Slack notifications"
+            />
+          }
         />
         <ChannelRow
           iconTone="text-text-2"
@@ -116,7 +183,14 @@ export function SettingsNotifications() {
             </>
           }
           status={<ConnectedDot />}
-          control={<SettingsToggle on={teamsOn} onChange={setTeamsOn} label="Microsoft Teams notifications" />}
+          control={
+            <SettingsToggle
+              on={teamsView}
+              onChange={setDraftTeams}
+              disabled={!editing}
+              label="Microsoft Teams notifications"
+            />
+          }
         />
         <ChannelRow
           iconTone="text-text-3"

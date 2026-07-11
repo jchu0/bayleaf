@@ -219,9 +219,11 @@ export function makeUserNode(name: string, kind: string, index: number): UserNod
 // Pure array rewrites + geometry, framework-thin so the screen owns the history/state and these
 // stay unit-testable. Every mutation is over the local draft (compose ≠ execute).
 
-// User-node width mirrors BuilderCanvas UW (the card is a fixed 168px); height is derived from the
+// User-node width mirrors BuilderCanvas UW (the card is a fixed 192px — enlarged toward the
+// Databricks process-card footprint, docs/design/builder-cards §3); height is derived from the
 // port-row count so marquee-intersection and alignment-guide hit-testing track the rendered card.
-export const NODE_W = 168
+// MUST stay in lockstep with BuilderCanvas.UW (out-port anchors sit at n.x + UW).
+export const NODE_W = 192
 export function nodeHeight(n: UserNode): number {
   // header (icon + name + ×) ≈ 42, per-port row ≈ 18, draft footer ≈ 26 — close enough for hit-testing.
   const rows = Math.max(n.ins.length, n.outs.length, 1)

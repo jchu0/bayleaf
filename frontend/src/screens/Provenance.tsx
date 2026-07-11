@@ -6,7 +6,6 @@ import { ErrorBox, Loading } from '../components/States'
 import { Tabs } from '../components/Tabs'
 import type { ProvenanceEvent, RunArtifact, RunDetail } from '../types'
 import { fmtTime, groupArtifacts, readGateProvenance, readNum, readStr } from '../provenance'
-import { Fingerprint } from '../components/provenance/Fingerprint'
 import { ProvenanceLineage } from '../components/provenance/Lineage'
 import { EventTrail } from '../components/provenance/EventTrail'
 import { ProvenanceArtifacts } from '../components/provenance/Artifacts'
@@ -61,16 +60,9 @@ export function Provenance() {
 
   return (
     <div className="mx-auto max-w-[1080px]">
-      <PageHeader
-        eyebrow="Lineage"
-        title="Provenance"
-        subtitle={
-          <>
-            Read-only provenance for <span className="font-mono text-text">{detail.run_id}</span> — the fixed-lineage
-            DAG, the append-only event trail, and the artifact index.
-          </>
-        }
-      />
+      {/* UIC-1: the run switcher already names which run this is — drop the eyebrow + descriptive
+          subtitle (pure page chrome), keep only the title. */}
+      <PageHeader title="Provenance" />
 
       <ProvenanceHeader events={detail.events} />
 
@@ -124,7 +116,11 @@ function ProvenanceHeader({ events }: { events: ProvenanceEvent[] }) {
       </div>
       <div className="flex flex-wrap gap-x-8 gap-y-3">
         <Pin label="Analysis run">
-          <Fingerprint value={started.analysis_run_id} label="run" />
+          {/* The run id IS the header's identity handle (an execution key, not a content hash), so
+              it's shown in full + selectable — not deferred behind a show-full like a digest. */}
+          <span className="select-all break-all font-mono text-[11.5px] text-text-2">
+            {started.analysis_run_id ?? '—'}
+          </span>
         </Pin>
         <Pin label="Rule pack">
           <span className="font-mono text-text-2">{gp.rule_pack_version ?? '—'}</span>

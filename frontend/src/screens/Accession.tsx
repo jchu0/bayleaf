@@ -141,16 +141,9 @@ export function Accession() {
 
   return (
     <div className="mx-auto max-w-[1160px]">
-      <PageHeader
-        eyebrow="Accessioning"
-        title="Sample accessioning"
-        subtitle={
-          <>
-            Register <strong className="text-text">subjects and samples</strong> (the CRM step) before the wetlab
-            samplesheet. Compose subject metadata here, then hand it off to intake — this screen never runs a tool.
-          </>
-        }
-      />
+      {/* UIC-1: the left-nav names this page — no eyebrow/subtitle prose. The PII seam banner below
+          is an explicit safety/limitation warning and stays. */}
+      <PageHeader title="Sample accessioning" />
 
       {/* PII seam banner — prominent, honest: nothing here leaves the browser. */}
       <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-hold-bd bg-hold-bg px-4 py-3 text-[12.5px] leading-relaxed text-hold-fg">

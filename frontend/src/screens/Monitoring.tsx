@@ -225,14 +225,7 @@ export function Monitoring() {
     </div>
   )
 
-  const header = (
-    <PageHeader
-      eyebrow="Fleet health"
-      title="Monitoring"
-      subtitle="Run throughput and verdict trends across recent runs. System telemetry (Prometheus) lands with the backend."
-      actions={control}
-    />
-  )
+  const header = <PageHeader title="Monitoring" actions={control} />
 
   if (error) return <div className="mx-auto max-w-[1040px]">{header}<ErrorBox message={error} onRetry={() => refresh().catch((e) => setError(String(e)))} /></div>
   if (!data) return <div className="mx-auto max-w-[1040px]">{header}<Loading label="Loading monitoring…" /></div>

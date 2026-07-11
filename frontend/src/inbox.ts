@@ -37,6 +37,24 @@ export const PRIORITY_META: Record<InboxPriority, { label: string; chip: string;
 }
 export const PRIORITY_ORDER: InboxPriority[] = ['none', 'low', 'med', 'high']
 
+// A short, human-referenceable id for a board card (UIC-14 "visible, referenceable id"). A derived
+// ticket already carries its review-queue id (shared identity, so it reads the same in both places);
+// a self reminder's raw `self:<uuid>` is unfriendly, so it collapses to a stable IB-XXXX tail.
+export function shortItemId(id: string, isSelf: boolean): string {
+  if (!isSelf) return id
+  const tail = id.replace(/^self:/, '').replace(/-/g, '')
+  return `IB-${tail.slice(0, 4).toUpperCase()}`
+}
+
+// Two-letter initials for a roster avatar chip (first + last word). Tolerant of a single-word or
+// empty name so an unknown actor id never crashes the render.
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  const first = parts[0]?.[0] ?? ''
+  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : ''
+  return (first + last).toUpperCase() || '?'
+}
+
 // A relative "time ago" from an ISO timestamp, kept compact for dense rows. Falls back to the raw
 // date if parsing fails (tolerant-at-boundaries house rule).
 export function timeAgo(iso: string): string {

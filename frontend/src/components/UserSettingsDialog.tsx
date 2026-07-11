@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
 import { useState } from 'react'
-import { type Density, usePrefs } from '../context/PrefsContext'
+import { type Density, type Palette, usePrefs } from '../context/PrefsContext'
 import { useRole } from '../context/RoleContext'
 import { SegmentedControl } from './SegmentedControl'
 
@@ -51,10 +51,31 @@ function PrefRow({
 
 export function UserSettingsDialog({ onClose }: { onClose: () => void }) {
   const { role } = useRole()
-  const { theme, setTheme, density, setDensity } = usePrefs()
+  const { theme, setTheme, density, setDensity, palette, setPalette } = usePrefs()
   const [emailDigest, setEmailDigest] = useState(true)
   // Matches the prototype seed prefInApp: true (dc.html) — opens ON.
   const [desktopNotifications, setDesktopNotifications] = useState(true)
+
+  // UIC-7 — a palette family shows its light name in light mode, its dark complement's name in
+  // dark mode. Resolve "system" the same way PrefsContext does so the labels match what's on screen.
+  const resolvedTheme =
+    theme === 'system'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light'
+      : theme
+  const paletteOptions: { value: Palette; label: string }[] =
+    resolvedTheme === 'dark'
+      ? [
+          { value: 'clinical', label: 'Midnight' },
+          { value: 'sand', label: 'Carbon' },
+          { value: 'slate', label: 'Indigo' },
+        ]
+      : [
+          { value: 'clinical', label: 'Clinical' },
+          { value: 'sand', label: 'Sand' },
+          { value: 'slate', label: 'Slate' },
+        ]
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -139,6 +160,9 @@ export function UserSettingsDialog({ onClose }: { onClose: () => void }) {
                     { value: 'system', label: 'System' },
                   ]}
                 />
+              </PrefRow>
+              <PrefRow label="Palette" hint="Color theme for the current mode">
+                <SegmentedControl<Palette> value={palette} onChange={setPalette} options={paletteOptions} />
               </PrefRow>
               <PrefRow label="Card density" hint="Default decision-card layout">
                 <SegmentedControl<Density>

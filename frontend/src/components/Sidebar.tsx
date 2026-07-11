@@ -49,7 +49,8 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
       // Ordered Notification → Action → Steps (G4): the operator starts at what needs their
       // attention (Inbox), then what needs resolving (Review queue), then walks the process steps.
       // Accessioning is the FIRST process step (upstream of the samplesheet), so it leads the
-      // step sub-sequence: accession → submit → runs → intake → decide.
+      // step sub-sequence: accession → submit → intake → decide, with Runs (a list/index, not a
+      // process step) pinned to the BOTTOM of the group (UIC-15).
       heading: 'Operate',
       items: [
         // Notification: the personal triage workspace (GA3), badged with the operator's unread count.
@@ -59,7 +60,6 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
         // Steps: the process flow, beginning at subject accessioning (the CRM step).
         { label: 'Sample accessioning', to: '/accession', icon: ClipboardList, active: pathname.startsWith('/accession'), page: 'accession' },
         { label: 'Submit samplesheet', to: '/submit', icon: FileUp, active: pathname.startsWith('/submit'), page: 'submit' },
-        { label: 'Runs', to: '/', icon: Rows3, active: pathname === '/', page: 'runs' },
         {
           label: 'Intake gate',
           to: run ? `/runs/${run}/intake` : '/',
@@ -75,6 +75,9 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
           badge: flagged || undefined,
           page: 'cards',
         },
+        // Runs sits at the BOTTOM of the group — a list/index the operator returns to, not a
+        // sequential process step (UIC-15).
+        { label: 'Runs', to: '/', icon: Rows3, active: pathname === '/', page: 'runs' },
       ],
     },
     {

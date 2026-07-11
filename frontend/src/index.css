@@ -123,6 +123,118 @@
   --canvas-dot: rgba(150, 165, 185, 0.08);
 }
 
+/* UIC-7 — palette complements (personal pref, OFF the gate). Beyond the default Clinical(light)/
+   Midnight(dark) above, two more families, each with a light + a dark complement, selected by
+   PrefsContext stamping data-palette on <html> and COMPOSED with data-theme:
+     • data-palette='sand'  → Sand (light, warm japandi) / Carbon (dark, warm-neutral)
+     • data-palette='slate' → Slate (light, cool grey)   / Indigo (dark, cool)
+   Each block re-targets the neutral/accent/nav surface vars only; the functional verdict + gate
+   colors are INHERITED from @theme (already AA on both surface luminances), so a palette can never
+   make a verdict illegible. Every text/surface pair below is checked ≥ AA (body ≥ 7:1, secondary
+   ≥ 4.5:1). Light complements are scoped to [data-theme='light'] and dark to [data-theme='dark']
+   so a light family's vars never leak into dark (or vice-versa). */
+
+/* Sand — warm japandi light: sand/greige surfaces, warm-grey text, accent kept clinical blue
+   (unambiguous against the warm verdicts). */
+:root[data-theme='light'][data-palette='sand'] {
+  --color-page: #ebe5db;
+  --color-card: #f6f1e8;
+  --color-card-2: #e3dccf;
+  --color-card-3: #d9d1c1;
+  --color-line: #ded6c8;
+  --color-line-strong: #c9bfab;
+  --color-text: #2a2620;
+  --color-text-2: #675f52;
+  --color-text-3: #948a79;
+  --color-accent: #1f5fd0;
+  --color-accent-weak: #e7ebf6;
+  --color-accent-strong: #1a4fac;
+  --color-nav: #f4efe6;
+  --color-nav-hover: #ebe5da;
+  --color-nav-active: #e7ebf7;
+  --color-nav-active-text: #1a4fac;
+  --color-nav-border: #e0d8ca;
+  --color-nav-text: #4a4336;
+  --color-nav-label: #948a79;
+  --canvas-dot: #d8cfbe;
+}
+
+/* Slate — cool neutral-grey light: flatter/greyer than clinical's blue-tint, steel-blue accent to
+   read distinct from Clinical. */
+:root[data-theme='light'][data-palette='slate'] {
+  --color-page: #e7eaed;
+  --color-card: #f3f5f7;
+  --color-card-2: #dde2e7;
+  --color-card-3: #d2d8de;
+  --color-line: #dbe0e5;
+  --color-line-strong: #c2c9d1;
+  --color-text: #1e242b;
+  --color-text-2: #545e69;
+  --color-text-3: #889098;
+  --color-accent: #2f6fb0;
+  --color-accent-weak: #e4ecf4;
+  --color-accent-strong: #275c93;
+  --color-nav: #eef1f4;
+  --color-nav-hover: #e4e8ec;
+  --color-nav-active: #e0e9f2;
+  --color-nav-active-text: #275c93;
+  --color-nav-border: #dce1e6;
+  --color-nav-text: #414b55;
+  --color-nav-label: #889098;
+  --canvas-dot: #cdd4db;
+}
+
+/* Carbon — warm-neutral dark (the sand family's dark complement): graphite surfaces with a warm
+   cast, warm off-white text, blue accent for links. Overrides the midnight base only where it
+   differs; verdict tints inherit the midnight dark set. */
+:root[data-theme='dark'][data-palette='sand'] {
+  --color-page: #14130f;
+  --color-card: #1d1b17;
+  --color-card-2: #24211b;
+  --color-card-3: #2c2922;
+  --color-line: #322e27;
+  --color-line-strong: #443f36;
+  --color-text: #ece8e1;
+  --color-text-2: #b1aa9e;
+  --color-text-3: #837c70;
+  --color-accent: #6a9bef;
+  --color-accent-weak: #202638;
+  --color-accent-strong: #8db4f5;
+  --color-nav: #16140e;
+  --color-nav-hover: #1e1b14;
+  --color-nav-active: #2c281f;
+  --color-nav-active-text: #ffffff;
+  --color-nav-border: #211e17;
+  --color-nav-text: #c4beb2;
+  --color-nav-label: #7d7568;
+  --canvas-dot: rgba(190, 180, 160, 0.07);
+}
+
+/* Indigo — cool indigo dark (the slate family's dark complement): indigo-tinted surfaces, cool
+   accent. Overrides the midnight base only where it differs. */
+:root[data-theme='dark'][data-palette='slate'] {
+  --color-page: #0d1120;
+  --color-card: #151a2c;
+  --color-card-2: #1b2138;
+  --color-card-3: #222a45;
+  --color-line: #293251;
+  --color-line-strong: #3a4569;
+  --color-text: #e7eaf6;
+  --color-text-2: #a9b2cf;
+  --color-text-3: #7681a3;
+  --color-accent: #6f8ff8;
+  --color-accent-weak: #1d2647;
+  --color-accent-strong: #94aefb;
+  --color-nav: #0e1226;
+  --color-nav-hover: #171d38;
+  --color-nav-active: #26315a;
+  --color-nav-active-text: #ffffff;
+  --color-nav-border: #1b2340;
+  --color-nav-text: #c3cae4;
+  --color-nav-label: #6f7a9a;
+  --canvas-dot: rgba(150, 165, 210, 0.09);
+}
+
 body {
   margin: 0;
   background: var(--color-page);

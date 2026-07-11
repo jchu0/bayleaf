@@ -9,8 +9,10 @@ import {
   FileText,
   Lock,
   RefreshCw,
+  RotateCcw,
   ShieldCheck,
   Sparkles,
+  X,
 } from 'lucide-react'
 import { api } from '../api'
 import { PageHeader } from '../components/PageHeader'
@@ -22,6 +24,8 @@ import { ErrorBox, Loading } from '../components/States'
 import { useToast } from '../components/Toast'
 import { useConfirm, type ConfirmOpts } from '../components/ConfirmDialog'
 import { useRole } from '../context/RoleContext'
+import { useAccess } from '../context/AccessContext'
+import { useRangeSelect } from '../hooks/useRangeSelect'
 import type {
   AgentProposal,
   DecisionCard,
@@ -77,6 +81,11 @@ const TICKET_PER_PAGE: SegmentOption<TicketPerPage>[] = [
   { value: '50', label: '50' },
   { value: '100', label: '100' },
 ]
+
+// Cleared-from-view (RQ / UIC-10) is a REVERSIBLE, personal view filter — mirroring Monitoring's
+// recurring-issue cards: localStorage-persisted, keyed by the ticket key, never a DB purge. Cleared
+// tickets stay restorable from the "Cleared · N" section regardless of the status tab.
+const CLEARED_VIEW_KEY = 'pipeguard.queue.clearedView'
 
 // A ticket derived from a flagged card (recurrence + issue class stay frontend-derived per the
 // data contract — they are NOT wire fields on Ticket).
@@ -153,6 +162,15 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
+function loadClearedView(): Set<string> {
+  try {
+    const raw = localStorage.getItem(CLEARED_VIEW_KEY)
+    return new Set<string>(raw ? (JSON.parse(raw) as string[]) : [])
+  } catch {
+    return new Set<string>()
+  }
+}
+
 // Honest resolution copy: resolving a ticket records that a reviewer/approver cleared it — it
 // does NOT run a rerun or re-measure a metric (compose != execute), so we never assert a QC
 // outcome that did not occur. The rerun line is a next-step, not a fabricated result.
@@ -179,20 +197,22 @@ function PriorityBars({ level }: { level: number }) {
 
 export function ReviewQueue() {
   const { actor, isReviewer, isApprover } = useRole()
+  const { canSee } = useAccess()
   const { toast } = useToast()
   const confirm = useConfirm()
   const [details, setDetails] = useState<RunDetail[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ui, setUi] = useState<Record<string, TicketUi>>({})
-  // Batch clearance (DC2 part 2): a HOLD/ESCALATE can be cleared individually OR in bulk. Selected
-  // keys drive the batch bar; only still-open/in-review tickets are selectable.
-  const [selected, setSelected] = useState<Set<string>>(new Set())
   // Default to Open so resolved (and in-review) tickets leave the active list but stay reachable via
   // their facet chip (part c) — resolved is still a searchable TicketStatus, never dropped.
   const [filter, setFilter] = useState<'all' | TicketStatus>('open')
   const [perPage, setPerPage] = useState<TicketPerPage>('25')
   const [page, setPage] = useState(1)
   const [open, setOpen] = useState<Record<string, boolean>>({})
+  // Reversible clear-from-view (UIC-10) — see CLEARED_VIEW_KEY. `showClearedView` toggles the
+  // "Cleared · N" restore drawer.
+  const [clearedView, setClearedView] = useState<Set<string>>(() => loadClearedView())
+  const [showClearedView, setShowClearedView] = useState(false)
   const seededRef = useRef(false)
   // Per-key sync de-dup state (see syncAction): a synchronous server-id map + an in-flight
   // promise chain so a rapid double-action materializes exactly one server ticket.
@@ -264,6 +284,59 @@ export function ReviewQueue() {
     return { tickets: list, recurrence: rec }
   }, [details])
 
+  // One derivation pass (counts → status filter → cleared-from-view → pagination → run grouping) so
+  // `orderedIds` — the flat top-to-bottom render order of the selectable checkboxes — is computed
+  // BEFORE useRangeSelect below, which its shift-range math indexes into (UIC-3.1). Returning
+  // statusOf/clearable keeps a single source for the same predicates in the render.
+  const view = useMemo(() => {
+    const statusOf = (t: QueueTicket): TicketStatus => ui[keyOf(t)]?.status ?? 'open'
+    // A ticket is batch-clearable / selectable only while awaiting a decision (open/in-review);
+    // resolved tickets fall out of the selection so a stale check can't re-fire an action on them.
+    const clearable = (t: QueueTicket): boolean => {
+      const s = statusOf(t)
+      return s === 'open' || s === 'in_review'
+    }
+    const counts: Record<'all' | TicketStatus, number> = {
+      all: tickets.length,
+      open: tickets.filter((t) => statusOf(t) === 'open').length,
+      in_review: tickets.filter((t) => statusOf(t) === 'in_review').length,
+      resolved: tickets.filter((t) => statusOf(t) === 'resolved').length,
+    }
+    // Cleared-from-view is pulled out first, across EVERY status, so a cleared ticket is always
+    // restorable from the drawer no matter which status tab is active.
+    const clearedList = tickets.filter((t) => clearedView.has(keyOf(t)))
+    const shown = tickets.filter(
+      (t) => (filter === 'all' || statusOf(t) === filter) && !clearedView.has(keyOf(t)),
+    )
+    // Client-side pagination over the visible tickets, mirroring Monitoring's recurring-signature
+    // pager. Clamp the current page so a narrowing filter can't strand the pager on an empty page.
+    const per = Number(perPage)
+    const total = shown.length
+    const pages = Math.max(1, Math.ceil(total / per))
+    const curPage = Math.min(page, pages)
+    const fromIdx = total === 0 ? 0 : (curPage - 1) * per + 1
+    const toIdx = Math.min(curPage * per, total)
+    const pagedTickets = shown.slice((curPage - 1) * per, curPage * per)
+    // The flat render order of the SELECTABLE checkboxes on this page — a shift-range spans exactly
+    // the open tickets the operator sees (across run groups), never a hidden or resolved row.
+    const orderedIds = pagedTickets.filter(clearable).map(keyOf)
+    // Group the paginated slice by run so tickets read under their run. The slice is verdict-sorted
+    // already; re-sort each group defensively to keep the verdict sort explicit.
+    const grouped = new Map<string, QueueTicket[]>()
+    for (const t of pagedTickets) {
+      const g = grouped.get(t.runId)
+      if (g) g.push(t)
+      else grouped.set(t.runId, [t])
+    }
+    const groups = Array.from(grouped.entries())
+    for (const [, g] of groups) g.sort((a, b) => VERDICT_ORDER[a.card.verdict] - VERDICT_ORDER[b.card.verdict])
+    return { statusOf, clearable, counts, clearedList, shown, total, pages, curPage, fromIdx, toIdx, pagedTickets, orderedIds, groups }
+  }, [tickets, ui, filter, perPage, page, clearedView])
+
+  // The one app-wide checkbox model (UIC-3): the parent run checkbox drives its children via
+  // setMany; sample checkboxes shift-click range-select via toggle(id, shiftKey).
+  const rs = useRangeSelect(view.orderedIds)
+
   // First-open: seed the most-urgent ticket expanded once, the rest collapsed.
   useEffect(() => {
     if (!seededRef.current && tickets.length > 0) {
@@ -272,10 +345,21 @@ export function ReviewQueue() {
     }
   }, [tickets])
 
-  // Reset to page 1 when the filter or per-page changes (mirror Monitoring).
+  // Reset to page 1 when the filter or per-page changes (mirror Monitoring). Selection is
+  // page-scoped — `selectedTickets` resolves against the current page's tickets — so a stale
+  // off-page key in the Set is never surfaced or acted on (no clear-on-navigate needed).
   useEffect(() => {
     setPage(1)
   }, [filter, perPage])
+
+  // Persist the reversible cleared-from-view set (UIC-10) — a labelled client-side view filter.
+  useEffect(() => {
+    try {
+      localStorage.setItem(CLEARED_VIEW_KEY, JSON.stringify([...clearedView]))
+    } catch {
+      /* localStorage unavailable — the clear-from-view filter simply won't persist across reloads. */
+    }
+  }, [clearedView])
 
   if (error) return <ErrorBox message={error} />
   if (!details) return <Loading label="Loading queue…" />
@@ -341,8 +425,9 @@ export function ReviewQueue() {
       confirmLabel: 'Resolve',
     },
     escalate: {
+      // Names where the escalation routes (UIC-10): an Approver who also holds review-queue access.
       title: 'Escalate to an approver?',
-      body: 'Requests approver sign-off and moves the ticket into review. Recorded in the audit log.',
+      body: 'Requests sign-off from an Approver with review-queue access and moves the ticket into review. Recorded in the audit log.',
       confirmLabel: 'Escalate',
     },
     reopen: {
@@ -387,25 +472,32 @@ export function ReviewQueue() {
     patch(keyOf(t), { repairApproved: scope })
   }
 
-  const statusOf = (t: QueueTicket): TicketStatus => ui[keyOf(t)]?.status ?? 'open'
-
-  // A ticket is batch-clearable only while it is still awaiting a decision (open/in-review). Resolved
-  // or suppressed tickets fall out of the selection so a stale check can't re-fire an action on them.
-  const clearable = (t: QueueTicket): boolean => {
-    const s = statusOf(t)
-    return s === 'open' || s === 'in_review'
-  }
-  const toggleSelect = (key: string) =>
-    setSelected((prev) => {
+  // Reversible clear-from-view toggle (UIC-10) — a personal view filter, never a write, so it is NOT
+  // role-gated (a viewer can tidy their own queue). Restores from the "Cleared · N" drawer.
+  const toggleClearView = (key: string) =>
+    setClearedView((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
       return next
     })
-  const clearSelection = () => setSelected(new Set())
-  // Resolve against the live ticket list every render so keys that have since left the clearable set
-  // (already resolved, or filtered away) never drive a batch action.
-  const selectedTickets = tickets.filter((t) => selected.has(keyOf(t)) && clearable(t))
+
+  // Selection + batch clearance is a reviewer capability (writes); a viewer sees no checkboxes.
+  const canSelect = isReviewer
+  // Escalation is gated by role AND page access (UIC-10): a viewer can't escalate, and the actor
+  // must hold review-queue access. It routes to an Approver who also holds that access.
+  const canEscalate = isReviewer && canSee('queue')
+  const roleLabel = isApprover ? 'Approver' : isReviewer ? 'Reviewer' : 'Viewer'
+
+  const clearSelection = () => rs.clear()
+  // Global select-all / clear-all (UIC-3.2) over the clearable tickets on the CURRENT page — scoped
+  // to the page so it never silently selects tickets you can't see (a surprising batch count).
+  const pageClearableKeys = view.pagedTickets.filter(view.clearable).map(keyOf)
+  const allShownSelected = rs.allSelected(pageClearableKeys)
+  const selectAllShown = () => rs.setMany(pageClearableKeys, !allShownSelected)
+  // Resolve against the live paged tickets so keys that have since left the clearable set (already
+  // resolved) never drive a batch action.
+  const selectedTickets = view.pagedTickets.filter((t) => rs.isSelected(keyOf(t)) && view.clearable(t))
   const batchAct = async (action: 'resolve' | 'suppress') => {
     const n = selectedTickets.length
     if (n === 0) return
@@ -427,51 +519,6 @@ export function ReviewQueue() {
     clearSelection()
   }
 
-  const counts: Record<'all' | TicketStatus, number> = {
-    all: tickets.length,
-    open: tickets.filter((t) => statusOf(t) === 'open').length,
-    in_review: tickets.filter((t) => statusOf(t) === 'in_review').length,
-    resolved: tickets.filter((t) => statusOf(t) === 'resolved').length,
-  }
-  const shown = tickets.filter((t) => filter === 'all' || statusOf(t) === filter)
-
-  // Client-side pagination over the filtered tickets, mirroring Monitoring's recurring-signature
-  // pager. Clamp the current page so a narrowing filter can't strand the pager on an empty page.
-  const per = Number(perPage)
-  const total = shown.length
-  const pages = Math.max(1, Math.ceil(total / per))
-  const curPage = Math.min(page, pages)
-  const fromIdx = total === 0 ? 0 : (curPage - 1) * per + 1
-  const toIdx = Math.min(curPage * per, total)
-  const pagedTickets = shown.slice((curPage - 1) * per, curPage * per)
-
-  // Global select-all / clear-all (RQ2) over the clearable tickets currently on the page — scoped to
-  // the page (not the whole filtered set) so it never silently selects tickets you can't see, which
-  // would make the batch confirm's count surprising.
-  const pageClearable = pagedTickets.filter(clearable)
-  const allShownSelected = pageClearable.length > 0 && pageClearable.every((t) => selected.has(keyOf(t)))
-  const selectAllShown = () =>
-    setSelected((prev) => {
-      const next = new Set(prev)
-      for (const t of pageClearable) {
-        if (allShownSelected) next.delete(keyOf(t))
-        else next.add(keyOf(t))
-      }
-      return next
-    })
-
-  // Group the PAGINATED slice by run so tickets read under their run. The slice is already
-  // verdict-sorted (see the `tickets` memo), so Map insertion order preserves both the group order
-  // and per-group ordering; we re-sort each group defensively to keep the verdict sort explicit.
-  const grouped = new Map<string, QueueTicket[]>()
-  for (const t of pagedTickets) {
-    const g = grouped.get(t.runId)
-    if (g) g.push(t)
-    else grouped.set(t.runId, [t])
-  }
-  const groups = Array.from(grouped.entries())
-  for (const [, g] of groups) g.sort((a, b) => VERDICT_ORDER[a.card.verdict] - VERDICT_ORDER[b.card.verdict])
-
   const segments: ReviewStatusSegment[] = [
     { verdict: 'escalate', label: 'Escalations', count: tickets.filter((t) => t.card.verdict === 'escalate').length },
     { verdict: 'rerun', label: 'Reruns', count: tickets.filter((t) => t.card.verdict === 'rerun').length },
@@ -483,27 +530,31 @@ export function ReviewQueue() {
 
   return (
     <div className="mx-auto max-w-[940px]">
-      <PageHeader
-        eyebrow="Triage"
-        title="Review queue"
-        subtitle="Flagged samples become tickets. Acknowledge, suppress an issue class, escalate, or resolve."
-      />
+      {/* UIC-1: nav names the page — no eyebrow/subtitle prose. */}
+      <PageHeader title="Review queue" />
 
-      {/* RBAC context — reads the shared RoleContext (a demo toggle in the user panel); the copy
-          tracks the current role so what you can resolve is never ambiguous. */}
+      {/* RBAC context — reads the shared RoleContext + page access (a demo toggle in the user panel);
+          the copy tracks the current role so what you can do here is never ambiguous. */}
       <div className="mt-1 flex items-start gap-2.5 rounded-xl border border-line bg-card px-[14px] py-[11px] shadow-card">
         <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-accent-weak">
           <ShieldCheck size={16} className="text-accent" />
         </span>
         <p className="text-[12.5px] leading-snug text-text-2">
           Signed in as <span className="font-mono text-text">{actor.id}</span> ·{' '}
-          <span className="font-semibold text-text">{isApprover ? 'Approver' : 'Reviewer'}</span>.{' '}
+          <span className="font-semibold text-text">{roleLabel}</span>.{' '}
           {isApprover ? (
             <>You can resolve holds, reruns, and escalations.</>
+          ) : isReviewer ? (
+            <>
+              You can resolve holds and reruns, and escalate to an{' '}
+              <span className="font-semibold text-text">Approver</span> — resolving an{' '}
+              <span className="font-semibold text-escalate-fg">escalation</span> needs one.
+            </>
           ) : (
             <>
-              You can resolve holds and reruns; resolving an{' '}
-              <span className="font-semibold text-escalate-fg">escalation</span> requires an{' '}
+              You can review the queue, but acknowledging, resolving, or{' '}
+              <span className="font-semibold text-text">escalating</span> a ticket needs a{' '}
+              <span className="font-semibold text-text">Reviewer</span> or{' '}
               <span className="font-semibold text-text">Approver</span>.
             </>
           )}
@@ -515,15 +566,15 @@ export function ReviewQueue() {
       {/* Status views as tabs (G5) — reads as a view selector, not highlighted values. */}
       <div className="mt-4">
         <Tabs<'all' | TicketStatus>
-          items={STATUS_FILTERS.map((f) => ({ value: f.key, label: f.label, count: counts[f.key] }))}
+          items={STATUS_FILTERS.map((f) => ({ value: f.key, label: f.label, count: view.counts[f.key] }))}
           value={filter}
           onChange={setFilter}
         />
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {/* Global select-all / clear-all for the selection checkboxes (RQ2), reviewers only. */}
-        {isReviewer && pageClearable.length > 0 && (
+        {/* Global select-all / clear-all for the selection checkboxes (UIC-3.2), reviewers only. */}
+        {canSelect && pageClearableKeys.length > 0 && (
           <button
             type="button"
             onClick={selectAllShown}
@@ -535,13 +586,28 @@ export function ReviewQueue() {
             {allShownSelected ? 'Clear all' : 'Select all'}
           </button>
         )}
-        {isReviewer && selectedTickets.length > 0 && (
+        {canSelect && selectedTickets.length > 0 && (
           <button
             type="button"
             onClick={clearSelection}
             className="rounded-lg px-2 py-1.5 text-[12px] text-text-3 transition-colors hover:text-text-2"
           >
             Clear selection ({selectedTickets.length})
+          </button>
+        )}
+        {/* Cleared-from-view drawer toggle (UIC-10), mirroring Monitoring — count keeps a cleared
+            ticket discoverable so it's never silently lost. Available to everyone (a personal view). */}
+        {view.clearedList.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowClearedView((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-[11px] py-1.5 text-[12px] transition-colors ${
+              showClearedView ? 'border-accent bg-accent-weak text-accent-strong' : 'border-line bg-card-2 text-text-2 hover:border-line-strong'
+            }`}
+            title="Show tickets you've cleared from view (reversible — not purged)"
+          >
+            <EyeOff size={13} />
+            Cleared · {view.clearedList.length}
           </button>
         )}
         <div className="min-w-3 flex-1" />
@@ -561,7 +627,7 @@ export function ReviewQueue() {
         </button>
       </div>
 
-      {shown.length === 0 ? (
+      {view.shown.length === 0 ? (
         <div className="mt-4 flex flex-col items-center gap-2.5 rounded-[13px] border border-dashed border-line-strong bg-card px-6 py-10 text-center">
           <span className="flex h-[46px] w-[46px] items-center justify-center rounded-xl bg-proceed-bg">
             <CheckCircle2 size={23} className="text-proceed" />
@@ -577,7 +643,7 @@ export function ReviewQueue() {
               per-run sticky subheaders (z-20) so it stays reachable while scrolling. Resolve and
               Suppress reuse the same backend-persisted act/toggleSuppress path as the per-ticket buttons —
               a HOLD/ESCALATE is a clearable state, and the user clears it individually or in bulk. */}
-          {isReviewer && selectedTickets.length > 0 && (
+          {canSelect && selectedTickets.length > 0 && (
             <div className="sticky top-0 z-20 mt-4 flex flex-wrap items-center gap-2.5 rounded-lg border border-accent bg-accent-weak px-3.5 py-2.5 shadow-sm">
               <span className="text-[12.5px] font-semibold text-text">
                 {selectedTickets.length} selected
@@ -608,46 +674,30 @@ export function ReviewQueue() {
               </div>
             </div>
           )}
-          {/* Grouped by run: each group sits under a sticky run subheader; the verdict sort is
-              preserved inside every group (see the grouping block above). */}
+          {/* Grouped by run: the PARENT run/flowcell checkbox sits at the far LEFT, and the vertical
+              group line starts UNDER it, enclosing the indented sample-ticket rows — the maintainer's
+              exact parent→children tree (UIC-3.3 / UIC-10). */}
           <div className="mt-4 flex flex-col gap-5">
-            {groups.map(([runId, groupTickets]) => {
+            {view.groups.map(([runId, groupTickets]) => {
               const groupDate = formatDate(groupTickets[0].runDate)
-              // RQ3: a left rail binds each run's tickets into a visible group, and the checkboxes
-              // sit in a fixed gutter just inside it (subheader select-all + per-ticket align on one
-              // column) — a designed placement, not a floating afterthought. The rail lights accent
-              // when the group has a selection.
-              const groupClearable = groupTickets.filter(clearable)
-              const groupHasSelection = groupTickets.some((t) => selected.has(keyOf(t)))
-              const allSel = groupClearable.length > 0 && groupClearable.every((t) => selected.has(keyOf(t)))
+              // The group's selectable children (open/in-review). The parent checkbox toggles all of
+              // them via setMany; the vertical rail lights accent when the group has a selection.
+              const groupChildKeys = groupTickets.filter(view.clearable).map(keyOf)
+              const groupAllSel = rs.allSelected(groupChildKeys)
+              const groupHasSelection = groupChildKeys.some((k) => rs.isSelected(k))
               return (
-                <div
-                  key={runId}
-                  className={`flex flex-col gap-[13px] border-l-2 pl-3 transition-colors ${
-                    groupHasSelection ? 'border-accent' : 'border-line-strong'
-                  }`}
-                >
-                  {/* Sticky run subheader — the mono run-id + date idiom. Its select-all toggle sits
-                      in the same gutter the per-ticket checkboxes use, so they align on the rail. */}
+                <div key={runId} className="flex flex-col">
+                  {/* Run/flowcell header row — the PARENT checkbox is the leftmost element. */}
                   <div className="sticky top-0 z-10 flex items-center gap-2 bg-page py-2">
-                    {isReviewer && (
-                      <span className="flex w-4 shrink-0 justify-center">
-                        {groupClearable.length > 0 && (
+                    {canSelect && (
+                      <span className="flex w-3.5 shrink-0 justify-center">
+                        {groupChildKeys.length > 0 && (
                           <input
                             type="checkbox"
                             className="h-3.5 w-3.5 accent-accent"
                             aria-label={`Select all open tickets in ${runId}`}
-                            checked={allSel}
-                            onChange={() =>
-                              setSelected((prev) => {
-                                const next = new Set(prev)
-                                for (const t of groupClearable) {
-                                  if (allSel) next.delete(keyOf(t))
-                                  else next.add(keyOf(t))
-                                }
-                                return next
-                              })
-                            }
+                            checked={groupAllSel}
+                            onChange={() => rs.setMany(groupChildKeys, !groupAllSel)}
                           />
                         )}
                       </span>
@@ -658,81 +708,93 @@ export function ReviewQueue() {
                       {groupTickets.length} ticket{groupTickets.length === 1 ? '' : 's'}
                     </span>
                   </div>
-                  {groupTickets.map((t) => {
-                    const key = keyOf(t)
-                    const selectable = isReviewer && clearable(t)
-                    const card = (
-                      <TicketCard
-                        t={t}
-                        ui={ui[key] ?? {}}
-                        recurrence={recurrence.get(t.primary.rule_id)}
-                        open={!!open[key]}
-                        isApprover={isApprover}
-                        onToggle={() => setOpen((m) => ({ ...m, [key]: !m[key] }))}
-                        on={{
-                          ack: () => act(t, 'acknowledge'), // soft, non-destructive — no confirm
-                          resolve: () => void confirmAct(t, 'resolve'),
-                          reopen: () => void confirmAct(t, 'reopen'),
-                          escalate: () => void confirmAct(t, 'escalate'),
-                          suppress: () => void confirmSuppress(t),
-                          escalateRepair: () => void escalateRepair(t),
-                          approveFix: (scope) => approveFix(t, scope),
-                        }}
-                      />
-                    )
-                    return (
-                      <div key={key} className="flex items-start gap-2">
-                        {isReviewer && (
-                          // Fixed gutter so every checkbox aligns on the rail; cleared/viewer rows
-                          // reserve it (empty) instead of shifting the card left.
-                          <span className="flex w-4 shrink-0 justify-center pt-[15px]">
-                            {selectable && (
-                              <input
-                                type="checkbox"
-                                className="h-3.5 w-3.5 accent-accent"
-                                aria-label={`Select ${t.card.sample_id}`}
-                                checked={selected.has(key)}
-                                onChange={() => toggleSelect(key)}
-                              />
-                            )}
-                          </span>
-                        )}
-                        <div className="min-w-0 flex-1">{card}</div>
-                      </div>
-                    )
-                  })}
+                  {/* Children — the vertical group line starts UNDER the parent checkbox (ml-[6px]
+                      centers the 2px rail beneath the 14px box), enclosing the indented sample rows. */}
+                  <div
+                    className={`ml-[6px] flex flex-col gap-[13px] border-l-2 pb-1 pl-3 transition-colors ${
+                      groupHasSelection ? 'border-accent' : 'border-line-strong'
+                    }`}
+                  >
+                    {groupTickets.map((t) => {
+                      const key = keyOf(t)
+                      const selectable = canSelect && view.clearable(t)
+                      return (
+                        <div key={key} className="flex items-start gap-2">
+                          {canSelect && (
+                            // Fixed gutter so every sample checkbox aligns just inside the rail;
+                            // cleared/non-selectable rows reserve it (empty) instead of shifting left.
+                            <span className="flex w-3.5 shrink-0 justify-center pt-[15px]">
+                              {selectable && (
+                                <input
+                                  type="checkbox"
+                                  className="h-3.5 w-3.5 accent-accent"
+                                  aria-label={`Select ${t.card.sample_id}`}
+                                  checked={rs.isSelected(key)}
+                                  // onClick (not onChange) so the native event's shiftKey drives the
+                                  // range-select; onChange is a controlled-input no-op.
+                                  onChange={() => {}}
+                                  onClick={(e) => rs.toggle(key, e.shiftKey)}
+                                />
+                              )}
+                            </span>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <TicketCard
+                              t={t}
+                              ui={ui[key] ?? {}}
+                              recurrence={recurrence.get(t.primary.rule_id)}
+                              open={!!open[key]}
+                              isApprover={isApprover}
+                              canEscalate={canEscalate}
+                              onToggle={() => setOpen((m) => ({ ...m, [key]: !m[key] }))}
+                              onClearView={() => toggleClearView(key)}
+                              on={{
+                                ack: () => act(t, 'acknowledge'), // soft, non-destructive — no confirm
+                                resolve: () => void confirmAct(t, 'resolve'),
+                                reopen: () => void confirmAct(t, 'reopen'),
+                                escalate: () => void confirmAct(t, 'escalate'),
+                                suppress: () => void confirmSuppress(t),
+                                escalateRepair: () => void escalateRepair(t),
+                                approveFix: (scope) => approveFix(t, scope),
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )
             })}
           </div>
 
-          {total > 0 && (
+          {view.total > 0 && (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-[11.5px] text-text-2">
               <span>
-                Showing {fromIdx}–{toIdx} of {total} tickets
+                Showing {view.fromIdx}–{view.toIdx} of {view.total} tickets
               </span>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[11.5px] text-text-3">Per page</span>
                   <SegmentedControl<TicketPerPage> options={TICKET_PER_PAGE} value={perPage} onChange={setPerPage} />
                 </div>
-                {pages > 1 && (
+                {view.pages > 1 && (
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => setPage(Math.max(1, curPage - 1))}
+                      onClick={() => setPage(Math.max(1, view.curPage - 1))}
                       className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
                       aria-label="Previous page"
                     >
                       ‹
                     </button>
-                    {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
+                    {Array.from({ length: view.pages }, (_, i) => i + 1).map((n) => (
                       <button
                         key={n}
                         type="button"
                         onClick={() => setPage(n)}
                         className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] transition-colors ${
-                          n === curPage
+                          n === view.curPage
                             ? 'bg-accent font-semibold text-white'
                             : 'border border-line bg-card text-text-2 hover:border-line-strong'
                         }`}
@@ -742,7 +804,7 @@ export function ReviewQueue() {
                     ))}
                     <button
                       type="button"
-                      onClick={() => setPage(Math.min(pages, curPage + 1))}
+                      onClick={() => setPage(Math.min(view.pages, view.curPage + 1))}
                       className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
                       aria-label="Next page"
                     >
@@ -754,6 +816,48 @@ export function ReviewQueue() {
             </div>
           )}
         </>
+      )}
+
+      {/* Cleared-from-view drawer (UIC-10) — reversibly hidden tickets, still fully restorable; a
+          compact row per ticket keeps the drawer light (never a DB purge). */}
+      {showClearedView && view.clearedList.length > 0 && (
+        <div className="mt-5 border-t border-line pt-4">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.4px] text-text-3">
+            Cleared from view · {view.clearedList.length}
+          </div>
+          <div className="flex flex-col gap-2 opacity-90">
+            {view.clearedList.map((t) => {
+              const key = keyOf(t)
+              return (
+                <div
+                  key={key}
+                  className="flex flex-wrap items-center gap-2.5 rounded-lg border border-dashed border-line-strong bg-card-2 px-3 py-2"
+                >
+                  <span className="font-mono text-[12px] font-semibold text-text-2">{ticketLabel(t.card)}</span>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${VERDICT_BADGE[t.card.verdict]}`}
+                  >
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${VERDICT_DOT[t.card.verdict]}`} />
+                    {VERDICT_LABEL[t.card.verdict]}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-text-2">{t.card.headline}</span>
+                  <span className="shrink-0 font-mono text-[11px] text-text-3">
+                    {t.runId} · {t.card.sample_id}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleClearView(key)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-card px-2.5 py-1.5 text-[12px] text-text-2 transition-colors hover:border-line"
+                    title="Restore this ticket to the main queue"
+                  >
+                    <RotateCcw size={13} />
+                    Restore to view
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       )}
     </div>
   )
@@ -775,7 +879,9 @@ function TicketCard({
   recurrence,
   open,
   isApprover,
+  canEscalate,
   onToggle,
+  onClearView,
   on,
 }: {
   t: QueueTicket
@@ -783,7 +889,9 @@ function TicketCard({
   recurrence: Recurrence | undefined
   open: boolean
   isApprover: boolean
+  canEscalate: boolean
   onToggle: () => void
+  onClearView: () => void
   on: TicketHandlers
 }) {
   const { card, gate } = t
@@ -806,7 +914,10 @@ function TicketCard({
   const canAck = status === 'open'
   const canResolve = status !== 'resolved' && (!needsApprover || isApprover)
   const resolveLocked = status !== 'resolved' && needsApprover && !isApprover
-  const showEscalate = !needsApprover && status !== 'resolved'
+  // Escalation is offered only to those who can escalate (UIC-10); a viewer gets a labelled locked
+  // affordance so it's clear WHY they can't, not a silently-missing button.
+  const showEscalate = canEscalate && !needsApprover && status !== 'resolved'
+  const escalateLocked = !canEscalate && !needsApprover && status !== 'resolved'
 
   const header = (
     <div className="min-w-0">
@@ -868,6 +979,20 @@ function TicketCard({
           className={`shrink-0 text-text-3 transition-transform ${open ? 'rotate-90' : ''}`}
         />
         <div className="min-w-0 flex-1">{header}</div>
+        {/* Clear-from-view (UIC-10) — a reversible personal dismiss, stopPropagation so it never
+            toggles the drawer. Restore from the "Cleared · N" drawer. */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onClearView()
+          }}
+          className="shrink-0 rounded-md p-1 text-text-3 transition-colors hover:bg-card-2 hover:text-text-2"
+          title="Clear from view (reversible — not purged; restorable)"
+          aria-label="Clear ticket from view"
+        >
+          <X size={14} />
+        </button>
       </div>
 
       {open && (
@@ -892,7 +1017,7 @@ function TicketCard({
                 <span className="font-mono">{recurrence.runsLabel}</span>
               </span>
               {ui.repairEscalated ? (
-                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#cfe0fb] bg-accent-weak px-2.5 py-1 text-[11px] font-semibold text-accent-strong">
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-accent-weak bg-accent-weak px-2.5 py-1 text-[11px] font-semibold text-accent-strong">
                   <Check size={12} />
                   Sent to pipeline-repair agent
                 </span>
@@ -921,7 +1046,7 @@ function TicketCard({
           {needsApprover && status !== 'resolved' && (
             <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-2 text-[12px] text-escalate-fg">
               <ChevronUp size={14} className="shrink-0" />
-              Escalated to approver — awaiting sign-off from an Approver.
+              Escalated to approver — awaiting sign-off from an Approver with review-queue access.
             </div>
           )}
         </div>
@@ -982,6 +1107,15 @@ function TicketCard({
                 <ChevronUp size={13} />
                 Escalate to approver
               </button>
+            )}
+            {escalateLocked && (
+              <span
+                className="inline-flex cursor-default items-center gap-1.5 rounded-lg border border-line bg-card-2 px-2.5 py-1.5 text-[12px] text-text-3"
+                title="Escalating a ticket requires a Reviewer or Approver with review-queue access."
+              >
+                <Lock size={13} />
+                Escalation needs a Reviewer
+              </span>
             )}
             {canAck && (
               <button

@@ -1,4 +1,5 @@
 import {
+  AtSign,
   BellPlus,
   CalendarDays,
   Check,
@@ -13,23 +14,28 @@ import {
   Inbox as InboxIcon,
   LayoutGrid,
   Mail,
+  MessageSquare,
   Pencil,
   Plus,
   RotateCw,
+  Send,
   StickyNote,
   Trash2,
   X,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { type ChangeEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { DEMO_ACCOUNTS } from '../auth'
 import { useConfirm } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
+import { Pager, PER_PAGE_25, type PerPage } from '../components/Pager'
 import { Truncate } from '../components/Truncate'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { useToast } from '../components/Toast'
 import {
   type InboxColumn,
+  type InboxComment,
   type InboxItem,
   type InboxNotify,
   type InboxPriority,
@@ -38,14 +44,17 @@ import {
   type NotifyChannel,
   useInbox,
 } from '../context/InboxContext'
+import { useRole } from '../context/RoleContext'
 import {
   COLUMN_LABEL,
   COLUMNS,
   DUE_META,
   dueStatus,
+  initials,
   localYmd,
   PRIORITY_META,
   PRIORITY_ORDER,
+  shortItemId,
   SOURCE_META,
   timeAgo,
   todayYmd,
@@ -73,6 +82,44 @@ function DueChip({ due }: { due: string | null }) {
     <span className={`rounded-full border px-1.5 py-px text-[10px] font-medium ${m.chip}`} title={due ?? undefined}>
       {m.label}
     </span>
+  )
+}
+// ── IB14: kanban QOL — ids, assignees, @-mention comments (UIC-14), all off the gate ─────────────
+function accountName(id: string): string {
+  return DEMO_ACCOUNTS.find((a) => a.id === id)?.name ?? id
+}
+// A round initials chip for a roster member — the assignment surface on cards + comments.
+function Avatar({ id, size = 18 }: { id: string; size?: number }) {
+  const name = accountName(id)
+  return (
+    <span
+      className="grid shrink-0 place-items-center rounded-full bg-accent-weak font-semibold text-accent-strong"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
+      title={name}
+    >
+      {initials(name)}
+    </span>
+  )
+}
+// A comment body with @handles resolved to the mentioned member's display name + accent highlight.
+function CommentBody({ body }: { body: string }) {
+  const parts = body.split(/(@[a-z0-9._-]+)/gi)
+  return (
+    <p className="whitespace-pre-wrap break-words text-[12px] leading-snug text-text-2">
+      {parts.map((p, i) => {
+        if (p.startsWith('@')) {
+          const acct = DEMO_ACCOUNTS.find((a) => a.id === p.slice(1))
+          if (acct) {
+            return (
+              <span key={i} className="rounded bg-accent-weak px-1 font-medium text-accent-strong">
+                @{acct.name}
+              </span>
+            )
+          }
+        }
+        return <span key={i}>{p}</span>
+      })}
+    </p>
   )
 }
 // ── IB4: per-reminder notification config (Slack/Teams/Discord/email + cadence + ≤3 reminders) ──
@@ -289,6 +336,9 @@ function InboxRow({ item }: { item: InboxItem }) {
 function InboxTab() {
   const { items, markAllRead, markAllUnread } = useInbox()
   const [filter, setFilter] = useState<InboxFilter>('all')
+  // UIC-5: the notification stream paginates (25/50/100) — never an unbounded scroll.
+  const [perPage, setPerPage] = useState<PerPage>('25')
+  const [page, setPage] = useState(1)
   const shown = useMemo(() => {
     // Default view hides the archived (done) column; the board/calendar still show it.
     const base = items.filter((i) => i.column !== 'done')
@@ -297,6 +347,16 @@ function InboxTab() {
     return base
   }, [items, filter])
   const unread = items.filter((i) => !i.read && i.column !== 'done').length
+
+  const per = Number(perPage)
+  const total = shown.length
+  const pages = Math.max(1, Math.ceil(total / per))
+  const curPage = Math.min(page, pages) // clamp so a narrowing filter can't strand the pager
+  const paged = shown.slice((curPage - 1) * per, curPage * per)
+  // Reset to page 1 whenever the filter or per-page changes.
+  useEffect(() => {
+    setPage(1)
+  }, [filter, perPage])
 
   const FILTERS: { key: InboxFilter; label: string; n: number }[] = [
     { key: 'all', label: 'All', n: items.filter((i) => i.column !== 'done').length },
@@ -342,20 +402,30 @@ function InboxTab() {
         </div>
       </div>
       <div className="flex flex-col gap-2">
-        {shown.length === 0 ? (
+        {total === 0 ? (
           <Empty message={filter === 'all' ? 'Your inbox is clear. New escalations, reruns, and holds land here.' : `No ${filter} items.`} />
         ) : (
-          shown.map((i) => <InboxRow key={i.id} item={i} />)
+          paged.map((i) => <InboxRow key={i.id} item={i} />)
         )}
       </div>
+      <Pager
+        total={total}
+        page={curPage}
+        perPage={perPage}
+        onPage={setPage}
+        onPerPage={setPerPage}
+        perPageOptions={PER_PAGE_25}
+        noun="notifications"
+      />
     </div>
   )
 }
 
 // ── BOARD tab: kanban with native drag-and-drop ────────────────────────────────
-function BoardCard({ item }: { item: InboxItem }) {
-  const { toggleFlag } = useInbox()
+function BoardCard({ item, onOpen }: { item: InboxItem; onOpen: () => void }) {
+  const { toggleFlag, comments } = useInbox()
   const src = SOURCE_META[item.source]
+  const commentCount = comments[item.id]?.length ?? 0
   return (
     <div
       draggable
@@ -363,27 +433,323 @@ function BoardCard({ item }: { item: InboxItem }) {
         e.dataTransfer.setData('text/plain', item.id)
         e.dataTransfer.effectAllowed = 'move'
       }}
-      className="cursor-grab rounded-[10px] border border-line bg-card px-3 py-2.5 shadow-card active:cursor-grabbing"
+      // A plain click opens the card detail (native drag never fires click); the flag button stops it.
+      onClick={onOpen}
+      className="cursor-grab rounded-[10px] border border-line bg-card px-3 py-2.5 shadow-card transition-colors hover:border-line-strong active:cursor-grabbing"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5">
-          <span className={`h-2 w-2 rounded-full ${src.dot}`} />
-          <span className="text-[10px] font-medium text-text-3">{src.label}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className={`h-2 w-2 shrink-0 rounded-full ${src.dot}`} />
+          <span className="shrink-0 text-[10px] font-medium text-text-3">{src.label}</span>
+          {/* IB14: a stable, referenceable id — a ticket shows its review-queue id, a self card IB-XXXX. */}
+          <span className="truncate font-mono text-[10px] text-text-3">{shortItemId(item.id, item.isSelf)}</span>
         </span>
-        <button
-          onClick={() => toggleFlag(item.id)}
-          className={item.flagged ? 'text-escalate' : 'text-text-3 hover:text-text-2'}
-          title={item.flagged ? 'Unflag' : 'Flag'}
-          aria-label={item.flagged ? 'Unflag' : 'Flag'}
-        >
-          <Flag size={13} fill={item.flagged ? 'currentColor' : 'none'} />
-        </button>
+        <span className="flex shrink-0 items-center gap-1.5">
+          {item.assignee && <Avatar id={item.assignee} size={17} />}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleFlag(item.id)
+            }}
+            className={item.flagged ? 'text-escalate' : 'text-text-3 hover:text-text-2'}
+            title={item.flagged ? 'Unflag' : 'Flag'}
+            aria-label={item.flagged ? 'Unflag' : 'Flag'}
+          >
+            <Flag size={13} fill={item.flagged ? 'currentColor' : 'none'} />
+          </button>
+        </span>
       </div>
       <div className="mt-1 text-[12.5px] leading-snug text-text">{item.title}</div>
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         <PriorityChip p={item.priority} />
         <DueChip due={item.due} />
         {item.runId && <span className="font-mono text-[10px] text-text-3">{item.runId}</span>}
+        {commentCount > 0 && (
+          <span className="inline-flex items-center gap-1 text-[10px] text-text-3">
+            <MessageSquare size={11} /> {commentCount}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// A single rendered comment; its author can delete it (author == acting operator at read time).
+function CommentRow({ itemId, c, canDelete }: { itemId: string; c: InboxComment; canDelete: boolean }) {
+  const { deleteComment } = useInbox()
+  return (
+    <div className="flex gap-2.5">
+      <Avatar id={c.authorId} size={22} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] font-medium text-text">{c.authorName}</span>
+          <span className="text-[10.5px] text-text-3">{timeAgo(c.createdAt)}</span>
+          {canDelete && (
+            <button
+              onClick={() => deleteComment(itemId, c.id)}
+              className="ml-auto text-text-3 hover:text-escalate"
+              title="Delete comment"
+              aria-label="Delete comment"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
+        </div>
+        <CommentBody body={c.body} />
+      </div>
+    </div>
+  )
+}
+
+// The @-mention comment composer: typing "@" opens a roster autocomplete (arrow keys + Enter/Tab to
+// pick, Escape to dismiss); ⌘/Ctrl-Enter posts. Mentions are resolved from the body on submit.
+function MentionComposer({ itemId }: { itemId: string }) {
+  const { addComment } = useInbox()
+  const [text, setText] = useState('')
+  const [query, setQuery] = useState<string | null>(null) // active @-token being typed, or null
+  const [hi, setHi] = useState(0) // highlighted suggestion index
+  const taRef = useRef<HTMLTextAreaElement>(null)
+
+  const matches = useMemo(() => {
+    if (query === null) return []
+    const q = query.toLowerCase()
+    return DEMO_ACCOUNTS.filter((a) => a.id.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)).slice(0, 6)
+  }, [query])
+  // Reset the highlight whenever the candidate token changes so it never points past the list.
+  useEffect(() => {
+    setHi(0)
+  }, [query])
+
+  const onChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value
+    setText(val)
+    const caret = e.target.selectionStart ?? val.length
+    const m = val.slice(0, caret).match(/@([a-z0-9._-]*)$/i)
+    setQuery(m ? m[1] : null)
+  }
+
+  const insert = (acct: (typeof DEMO_ACCOUNTS)[number]) => {
+    const ta = taRef.current
+    const caret = ta?.selectionStart ?? text.length
+    const before = text.slice(0, caret).replace(/@([a-z0-9._-]*)$/i, `@${acct.id} `)
+    const after = text.slice(caret)
+    setText(before + after)
+    setQuery(null)
+    // Restore focus + drop the caret right after the inserted mention.
+    requestAnimationFrame(() => {
+      ta?.focus()
+      ta?.setSelectionRange(before.length, before.length)
+    })
+  }
+
+  const submit = () => {
+    if (!text.trim()) return
+    addComment(itemId, text)
+    setText('')
+    setQuery(null)
+  }
+
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (query !== null && matches.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setHi((h) => (h + 1) % matches.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setHi((h) => (h - 1 + matches.length) % matches.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        insert(matches[hi] ?? matches[0])
+        return
+      }
+      if (e.key === 'Escape') {
+        setQuery(null)
+        return
+      }
+    }
+    // ⌘/Ctrl-Enter posts; a plain Enter keeps adding newlines to the body.
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault()
+      submit()
+    }
+  }
+
+  return (
+    <div className="relative mt-3">
+      <textarea
+        ref={taRef}
+        value={text}
+        onChange={onChange}
+        onKeyDown={onKeyDown}
+        rows={2}
+        placeholder="Add a comment… use @ to mention a teammate"
+        className="w-full resize-y rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[12px] text-text placeholder:text-text-3"
+      />
+      {query !== null && matches.length > 0 && (
+        <div className="absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-md border border-line-strong bg-card shadow-pop">
+          {matches.map((a, i) => (
+            <button
+              key={a.id}
+              type="button"
+              // mousedown (not click) so the textarea keeps focus + selection while we insert.
+              onMouseDown={(e) => {
+                e.preventDefault()
+                insert(a)
+              }}
+              onMouseEnter={() => setHi(i)}
+              className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] ${
+                i === hi ? 'bg-accent-weak' : 'hover:bg-card-2'
+              }`}
+            >
+              <Avatar id={a.id} size={18} />
+              <span className="font-medium text-text">{a.name}</span>
+              <span className="font-mono text-[10.5px] text-text-3">@{a.id}</span>
+              <span className="ml-auto text-[10px] capitalize text-text-3">{a.role}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1 text-[10.5px] text-text-3">
+          <AtSign size={11} /> Mentions are a demo seam — stored locally, not a live ping.
+        </span>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!text.trim()}
+          className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-white disabled:opacity-40"
+        >
+          <Send size={12} /> Comment
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// The board card detail (UIC-14): the referenceable id, an editable description, assignment + status
+// wired to the roster, and the @-mention comment thread. A modal, since a kanban column is too narrow.
+function BoardCardDetail({ item, onClose }: { item: InboxItem; onClose: () => void }) {
+  const { setNote, setAssignee, setColumn, setPriority, setDue, comments } = useInbox()
+  const { actor } = useRole()
+  const src = SOURCE_META[item.source]
+  const list = comments[item.id] ?? []
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="flex max-h-[85vh] w-[560px] max-w-full flex-col overflow-hidden rounded-2xl border border-line bg-card shadow-pop"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3.5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className={`rounded-md border px-1.5 py-px text-[10px] font-medium ${src.badge}`}>{src.label}</span>
+              <span className="font-mono text-[11px] text-text-3">{shortItemId(item.id, item.isSelf)}</span>
+            </div>
+            <h2 className="mt-1.5 text-[15px] font-medium leading-snug text-text">{item.title}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-text-3">
+              {item.runId && <span className="font-mono">{item.runId}</span>}
+              {item.sampleId && <span className="font-mono">· {item.sampleId}</span>}
+              <span>· {timeAgo(item.createdAt)}</span>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-2 hover:bg-page"
+            aria-label="Close"
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {/* Assignment + status wired to the user/review system (UIC-14). */}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-[10.5px] text-text-3">
+              Assignee
+              <select
+                value={item.assignee ?? ''}
+                onChange={(e) => setAssignee(item.id, e.target.value || null)}
+                className="rounded-md border border-line bg-card-2 px-2 py-1.5 text-[12px] text-text"
+              >
+                <option value="">Unassigned</option>
+                {DEMO_ACCOUNTS.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} · {a.role}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[10.5px] text-text-3">
+              Status
+              <select
+                value={item.column}
+                onChange={(e) => setColumn(item.id, e.target.value as InboxColumn)}
+                className="rounded-md border border-line bg-card-2 px-2 py-1.5 text-[12px] text-text"
+              >
+                {COLUMNS.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[10.5px] text-text-3">
+              Priority
+              <select
+                value={item.priority}
+                onChange={(e) => setPriority(item.id, e.target.value as InboxPriority)}
+                className="rounded-md border border-line bg-card-2 px-2 py-1.5 text-[12px] text-text"
+              >
+                {PRIORITY_ORDER.slice().reverse().map((p) => (
+                  <option key={p} value={p}>
+                    {PRIORITY_META[p].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[10.5px] text-text-3">
+              Due date
+              <input
+                type="date"
+                value={item.due ?? ''}
+                onChange={(e) => setDue(item.id, e.target.value || null)}
+                className="rounded-md border border-line bg-card-2 px-2 py-1.5 text-[12px] text-text"
+              />
+            </label>
+          </div>
+
+          {/* IB14: a body/description — the card's working notes (autosaved to your overlay). */}
+          <label className="mt-4 flex flex-col gap-1 text-[10.5px] text-text-3">
+            Description
+            <textarea
+              value={item.note}
+              onChange={(e) => setNote(item.id, e.target.value)}
+              rows={3}
+              placeholder="What's the plan for this card…"
+              className="resize-y rounded-md border border-line bg-card-2 px-2.5 py-1.5 text-[12px] text-text placeholder:text-text-3"
+            />
+          </label>
+
+          {/* IB14: comment thread with @-mentions. */}
+          <div className="mt-4 border-t border-line pt-3">
+            <div className="mb-2.5 flex items-center gap-1.5 text-[12px] font-semibold text-text">
+              <MessageSquare size={14} /> Comments
+              <span className="font-mono text-[11px] text-text-3">{list.length}</span>
+            </div>
+            <div className="flex flex-col gap-3">
+              {list.length === 0 ? (
+                <p className="text-[12px] text-text-3">No comments yet — @-mention a teammate to loop them in.</p>
+              ) : (
+                list.map((c) => <CommentRow key={c.id} itemId={item.id} c={c} canDelete={c.authorId === actor.id} />)
+              )}
+            </div>
+            <MentionComposer itemId={item.id} />
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -392,6 +758,9 @@ function BoardCard({ item }: { item: InboxItem }) {
 function BoardTab() {
   const { items, setColumn } = useInbox()
   const [dragOver, setDragOver] = useState<InboxColumn | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
+  // Resolve the open card from live items (not a captured copy) so edits reflect instantly.
+  const openItem = openId ? (items.find((i) => i.id === openId) ?? null) : null
   const byColumn = (c: InboxColumn) =>
     items
       .filter((i) => i.column === c)
@@ -427,11 +796,12 @@ function BoardTab() {
                 {col.hint}
               </div>
             ) : (
-              cards.map((i) => <BoardCard key={i.id} item={i} />)
+              cards.map((i) => <BoardCard key={i.id} item={i} onOpen={() => setOpenId(i.id)} />)
             )}
           </div>
         )
       })}
+      {openItem && <BoardCardDetail item={openItem} onClose={() => setOpenId(null)} />}
     </div>
   )
 }
@@ -970,9 +1340,7 @@ export function Inbox() {
   return (
     <div>
       <PageHeader
-        eyebrow="Workspace"
         title="Inbox"
-        subtitle="Triage escalations, reruns, and holds on your own terms — flag, prioritize, schedule, and note. A personal layer, off the decision gate."
         actions={
           <button
             onClick={() => refresh()}

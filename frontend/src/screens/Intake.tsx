@@ -4,6 +4,7 @@ import { Check, CheckCircle2, ChevronRight, RefreshCw } from 'lucide-react'
 import { api } from '../api'
 import { MeterBar } from '../components/Bar'
 import { CollapsibleRow } from '../components/CollapsibleRow'
+import { Pager, type PerPage } from '../components/Pager'
 import { PageHeader } from '../components/PageHeader'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { useRefresh } from '../hooks/useRefresh'
@@ -120,14 +121,7 @@ export function Intake() {
   return (
     <div className="pg-fade mx-auto max-w-[1000px]">
       <PageHeader
-        eyebrow="Preflight"
         title="Intake gate"
-        subtitle={
-          <>
-            Preflight checkpoint — <strong className="text-text">before processing</strong>. Run-level sequencing QC
-            and which samples are admitted. <span className="font-mono text-text">{run.run_id}</span>
-          </>
-        }
         actions={<IntakeHeaderActions updatedLabel={updatedLabel} spinning={spinning} onRefresh={refresh} />}
       />
 
@@ -299,13 +293,24 @@ function SampleAdmission({
     return { card, yield_, q30, flaggedAtIntake, sparse }
   })
 
+  // Scale-aware pagination (UIC-5 / scale-aware rule): a 100+ sample flowcell can't render every
+  // admission row at once. 25/page default; the page resets when the run changes so a deep page
+  // never strands on a smaller run.
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState<PerPage>('25')
+  useEffect(() => setPage(1), [run.run_id])
+  const per = Number(perPage)
+  const pages = Math.max(1, Math.ceil(rows.length / per))
+  const curPage = Math.min(page, pages)
+  const pagedRows = rows.slice((curPage - 1) * per, curPage * per)
+
   // Lazy-load each OPEN sample's card header (sample_type / library_prep / origin) — real preflight
   // metadata the DecisionCard itself doesn't carry (it lives on the CardReadout header). Fetched
   // only for expanded rows so a 100-sample run never fires 100 requests (scale-aware). undefined =
   // untouched, null = in-flight, object = loaded; a null field on a loaded header reads "not captured".
   const [headers, setHeaders] = useState<Record<string, CardHeader | null>>({})
   useEffect(() => {
-    for (const { card, sparse, flaggedAtIntake } of rows) {
+    for (const { card, sparse, flaggedAtIntake } of pagedRows) {
       const id = card.sample_id
       const isOpen = openMap[id] ?? (sparse || flaggedAtIntake)
       if (isOpen && !(id in headers)) {
@@ -316,7 +321,7 @@ function SampleAdmission({
           .catch(() => undefined)
       }
     }
-  }, [rows, openMap, headers, run.run_id])
+  }, [pagedRows, openMap, headers, run.run_id])
 
   return (
     <section className="mt-[14px] overflow-hidden rounded-[14px] border border-line bg-card shadow-card">
@@ -328,8 +333,8 @@ function SampleAdmission({
         </div>
       </div>
 
-      <div className="flex flex-col gap-[9px] px-4 pb-4 pt-3">
-        {rows.map(({ card, yield_, q30, flaggedAtIntake, sparse }) => {
+      <div className="flex flex-col gap-[9px] px-4 pt-3">
+        {pagedRows.map(({ card, yield_, q30, flaggedAtIntake, sparse }) => {
           const id = card.sample_id
           const overridden = !!overrides[id]
           const admitted = !flaggedAtIntake && (!sparse || overridden)
@@ -410,6 +415,21 @@ function SampleAdmission({
             </CollapsibleRow>
           )
         })}
+      </div>
+
+      {/* Scale-aware pager (UIC-5) — shared primitive; self-hides at zero rows. */}
+      <div className="px-4 pb-4">
+        <Pager
+          total={rows.length}
+          page={curPage}
+          perPage={perPage}
+          onPage={setPage}
+          onPerPage={(p) => {
+            setPerPage(p)
+            setPage(1)
+          }}
+          noun="samples"
+        />
       </div>
     </section>
   )

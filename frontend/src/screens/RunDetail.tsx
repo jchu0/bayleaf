@@ -13,7 +13,7 @@ import { Truncate } from '../components/Truncate'
 import { GateResultStrip } from '../components/GateResultStrip'
 import { QCReadout, emptyGateGroup, notMeasuredGroup, type ReadoutGroup } from '../components/MetricsPanel'
 import { PageHeader } from '../components/PageHeader'
-import { SegmentedControl } from '../components/SegmentedControl'
+import { Pager, type PerPage } from '../components/Pager'
 import { ErrorBox } from '../components/States'
 import { VerdictBadge } from '../components/VerdictBadge'
 import type {
@@ -36,11 +36,6 @@ type ReadoutState = Record<string, CardReadout | 'error'>
 
 const ORDER: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
 const FILTERS: CardFilter[] = ['all', 'attention', 'escalate', 'rerun', 'hold', 'proceed']
-const LAYOUTS: { value: Density; label: string }[] = [
-  { value: 'split', label: 'Split' },
-  { value: 'brief', label: 'Brief' },
-  { value: 'dense', label: 'Dense' },
-]
 // The design's origin tags — where a card's verdict originated (qc/variant read as "… gate").
 const GATE_TAG: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', variant: 'Variant gate' }
 // Pipeline order for the QC-readout gate groups, so an injected placeholder group sorts into place.
@@ -55,14 +50,19 @@ export function RunDetail() {
   // Run-independent QC policy, backing the "QC gate ran but nothing measured" placeholder (S3).
   const [runbook, setRunbook] = useState<RunbookPolicy | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // Density is a saved user preference (persists across runs + refresh) — the Layout control below
-  // updates it in place, so changing it here is the same setting the profile dialog exposes.
-  const { density, setDensity } = usePrefs()
+  // Density is a saved user preference (persists across runs + refresh); it is now authored ONLY in
+  // user Settings / the profile dialog (UIC-8 removed the per-page Layout control), so this screen
+  // reads it but never sets it — default stays 'split' via PrefsContext.
+  const { density } = usePrefs()
   const [reload, setReload] = useState(0)
   // Per-card open overrides + a screen-wide expand/collapse latch. Absent override → the
   // default (first card open, rest collapsed); expand/collapse-all clears the overrides.
   const [override, setOverride] = useState<Record<string, boolean>>({})
   const [allState, setAllState] = useState<'all' | 'none' | null>(null)
+  // A full flowcell can carry 100+ per-sample cards, so the list is paginated (scale-aware rule,
+  // 25/50/100). Page state lives here so it survives a render; it resets on run/filter change below.
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState<PerPage>('25')
 
   useEffect(() => {
     setOverride({})
@@ -122,30 +122,18 @@ export function RunDetail() {
       { replace: true },
     )
 
-  const subtitle: ReactNode = detail ? (
-    <span>
-      <span className="font-mono text-text">{detail.run_id}</span> · {detail.summary.platform ?? '—'} ·{' '}
-      {detail.summary.run_date ?? '—'} · {detail.summary.n_samples} samples · sorted most-urgent first
-    </span>
-  ) : (
-    <span>
-      <span className="font-mono text-text">{runId}</span> · loading…
-    </span>
-  )
+  // Reset to the first page when the run or the verdict filter changes — a stale page could
+  // otherwise land past the (new, shorter) last page.
+  useEffect(() => {
+    setPage(1)
+  }, [filter, runId])
 
+  // UIC-1: the nav + top-bar run switcher already name the page and the active run, so the header
+  // is just a concise title — the eyebrow, the descriptive subtitle (run id/platform/date/samples,
+  // still shown per-card in the context rail), and the Layout control are all gone.
   return (
     <div className="mx-auto max-w-[1080px]">
-      <PageHeader
-        eyebrow="Decision gate"
-        title="Decision cards"
-        subtitle={subtitle}
-        actions={
-          <div className="flex items-center gap-2.5">
-            <span className="text-[11.5px] font-medium text-text-3">Layout</span>
-            <SegmentedControl<Density> options={LAYOUTS} value={density} onChange={setDensity} />
-          </div>
-        }
-      />
+      <PageHeader title="Decision cards" />
       {renderBody()}
     </div>
   )
@@ -181,6 +169,12 @@ export function RunDetail() {
 
     const defaultOpen = (idx: number) => (allState === 'all' ? true : allState === 'none' ? false : idx === 0)
     const isOpen = (c: DecisionCard, idx: number) => override[c.sample_id] ?? defaultOpen(idx)
+
+    // Paginate the (sorted, filtered) card list; clamp so a narrowing filter can't strand the pager.
+    const per = Number(perPage)
+    const pageCount = Math.max(1, Math.ceil(filtered.length / per))
+    const curPage = Math.min(page, pageCount)
+    const pageCards = filtered.slice((curPage - 1) * per, curPage * per)
 
     return (
       <>
@@ -239,31 +233,44 @@ export function RunDetail() {
             <div className="mt-1 text-[13px] text-text-2">Try a different verdict, or clear the filter.</div>
           </div>
         ) : (
-          <div className="mt-4 flex flex-col gap-[13px]">
-            {filtered.map((card, idx) => {
-              const open = isOpen(card, idx)
-              const rd = readouts[card.sample_id]
-              const readout = rd && rd !== 'error' ? rd : null
-              return (
-                <CollapsibleRow
-                  key={card.sample_id}
-                  open={open}
-                  onToggle={() => setOverride((o) => ({ ...o, [card.sample_id]: !open }))}
-                  header={<CardHead card={card} header={readout?.header ?? null} />}
-                >
-                  <CardBody
-                    runId={runId}
-                    card={card}
-                    density={density}
-                    readout={readout}
-                    runbook={runbook}
-                    platform={detail!.summary.platform}
-                    date={detail!.summary.run_date}
-                  />
-                </CollapsibleRow>
-              )
-            })}
-          </div>
+          <>
+            <div className="mt-4 flex flex-col gap-[13px]">
+              {pageCards.map((card, idx) => {
+                const open = isOpen(card, idx)
+                const rd = readouts[card.sample_id]
+                const readout = rd && rd !== 'error' ? rd : null
+                return (
+                  <CollapsibleRow
+                    key={card.sample_id}
+                    open={open}
+                    onToggle={() => setOverride((o) => ({ ...o, [card.sample_id]: !open }))}
+                    header={<CardHead card={card} header={readout?.header ?? null} />}
+                  >
+                    <CardBody
+                      runId={runId}
+                      card={card}
+                      density={density}
+                      readout={readout}
+                      runbook={runbook}
+                      platform={detail!.summary.platform}
+                      date={detail!.summary.run_date}
+                    />
+                  </CollapsibleRow>
+                )
+              })}
+            </div>
+            <Pager
+              total={filtered.length}
+              page={curPage}
+              perPage={perPage}
+              onPage={setPage}
+              onPerPage={(p) => {
+                setPerPage(p)
+                setPage(1)
+              }}
+              noun="cards"
+            />
+          </>
         )}
       </>
     )
@@ -336,6 +343,34 @@ function NextSteps({ steps, variant }: { steps: string[]; variant: 'arrow' | 'nu
         ))}
       </div>
     </>
+  )
+}
+
+// UIC-8 / ADR-0001: the Claude-generated narration + "recommended next steps" are the ONLY
+// AI-authored content on a card. Framing them as one bordered, explicitly-labelled "advisory"
+// block (placed *under* the rules-derived metric tables + cited evidence) keeps the separation
+// legible: evidence reads first, the synthesizer's narration reads second and never sets a
+// verdict. Renders nothing when the synthesizer produced neither (a blank rationale on a card
+// with findings is surfaced by the run-level synthesis-error banner instead).
+function AiNarration({
+  rationale,
+  steps,
+  variant,
+}: {
+  rationale: string | null
+  steps: string[]
+  variant: 'arrow' | 'numbered'
+}) {
+  if (!rationale?.trim() && steps.length === 0) return null
+  return (
+    <div className="mt-4 rounded-[10px] border border-line bg-card-2 px-4 py-3.5">
+      <SectionLabel className="flex items-center gap-1.5">
+        <Sparkles size={12} className="text-accent" />
+        AI narration (advisory)
+      </SectionLabel>
+      {rationale?.trim() && <p className="mt-2.5 text-[13.5px] leading-[1.6] text-text">{rationale}</p>}
+      <NextSteps steps={steps} variant={variant} />
+    </div>
   )
 }
 
@@ -436,11 +471,10 @@ function CardBody({
           )}
           <div className="flex">
             <div className="min-w-0 flex-1 px-5 py-4">
-              {card.rationale && <p className="text-[13.5px] leading-[1.6] text-text">{card.rationale}</p>}
-              <NextSteps steps={card.next_steps} variant="arrow" />
+              {/* Evidence/tables first (rules-derived), then the AI narration block (advisory). */}
               {hasFindings ? (
                 <>
-                  <SectionLabel className="mt-[18px]">Supporting evidence · cited</SectionLabel>
+                  <SectionLabel>Supporting evidence · cited</SectionLabel>
                   <div className="mt-2.5">
                     <CitedEvidence findings={card.findings} variant="split" />
                   </div>
@@ -448,6 +482,7 @@ function CardBody({
               ) : clean ? (
                 <CleanPanel />
               ) : null}
+              <AiNarration rationale={card.rationale} steps={card.next_steps} variant="arrow" />
               <DecisionFeedback
                 runId={runId}
                 sampleId={card.sample_id}
@@ -471,11 +506,10 @@ function CardBody({
 
       {density === 'brief' && (
         <div className="max-w-[760px] px-6 py-5">
-          {card.rationale && <p className="text-[15px] leading-[1.6] text-text">{card.rationale}</p>}
-          <NextSteps steps={card.next_steps} variant="numbered" />
+          {/* Evidence/tables first (rules-derived), then the AI narration block (advisory). */}
           {hasFindings ? (
             <>
-              <SectionLabel className="mt-5 border-t border-line pt-[18px]">Cited evidence</SectionLabel>
+              <SectionLabel>Cited evidence</SectionLabel>
               <div className="mt-2.5">
                 <CitedEvidence findings={card.findings} variant="brief" />
               </div>
@@ -491,6 +525,7 @@ function CardBody({
               </div>
             </>
           )}
+          <AiNarration rationale={card.rationale} steps={card.next_steps} variant="numbered" />
           <div className="mt-3.5 flex gap-2.5">
             <RailButton to={`/runs/${runId}/provenance`}>
               <GitBranch size={14} /> View lineage
@@ -506,7 +541,8 @@ function CardBody({
 
       {density === 'dense' && (
         <div className="px-[18px] py-[13px]">
-          {card.rationale && <div className="mb-2.5 text-[12.5px] leading-[1.5] text-text-2">{card.rationale}</div>}
+          {/* Evidence/tables first (rules-derived); the AI narration reads last, in a compact
+              labelled advisory block — dense drops the recommended-next-steps list to stay terse. */}
           {hasFindings ? (
             <CitedEvidence findings={card.findings} variant="dense" />
           ) : clean ? (
@@ -517,6 +553,15 @@ function CardBody({
           {hasReadout && (
             <div className="mt-2.5">
               <QCReadout gates={gates} variant="dense" />
+            </div>
+          )}
+          {card.rationale?.trim() && (
+            <div className="mt-2.5 rounded-[9px] border border-line bg-card-2 px-3 py-2.5">
+              <SectionLabel className="flex items-center gap-1.5">
+                <Sparkles size={12} className="text-accent" />
+                AI narration (advisory)
+              </SectionLabel>
+              <div className="mt-1.5 text-[12.5px] leading-[1.5] text-text-2">{card.rationale}</div>
             </div>
           )}
         </div>

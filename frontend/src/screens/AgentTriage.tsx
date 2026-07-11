@@ -101,9 +101,8 @@ export function AgentTriage() {
   return (
     <div className="pg-fade mx-auto max-w-[800px]">
       <PageHeader
-        eyebrow="Advisory"
         title="Agent triage"
-        subtitle="AI-assisted triage to speed up diagnosis. The agent advises; the human decides."
+        subtitle="The agent advises; the human decides."
         actions={
           active ? (
             <AgentSourceToggle live={hasLiveModel || live} label={sourceLabel} onToggle={() => setLive((v) => !v)} />

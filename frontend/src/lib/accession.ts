@@ -166,3 +166,121 @@ export function loadAccessionDraft(): AccessionRecord[] | null {
     return null
   }
 }
+
+// ── Sample-identity join (Submit intake gate, UIC-11) ─────────────────────────────────────────
+// The samplesheet is a SEQUENCING structure (sample id + barcodes + sample type); sample_metadata
+// is the SUBJECT/clinical sheet that says WHO each library belongs to. Before a run proceeds the two
+// are joined so a human can confirm identity. Sample-identity mixups are the highest-consequence
+// error at intake, so the join NEVER trusts a single-column (Sample_ID-only) match: it requires
+// Sample_ID PLUS a corroborating column — tissue ↔ sample-type, the field both sheets carry — to
+// agree. Every row that is not a clean corroborated match is surfaced loudly and BLOCKS the approval
+// gate. Pure + client-side (no network): compose ≠ execute, same as the rest of accessioning.
+//
+// Honest limitation (a labelled seam): when the corroborating column is uniform across a run (e.g.
+// every library is Whole blood), tissue agreement cannot reveal a 1-index-off mixup — no field in
+// these two sheets discriminates it. A stronger corroborator (subject-level study/site) lands when
+// the metadata model widens; the join still catches every mismatch that Sample_ID / tissue CAN.
+
+export type SampleMetaMap = Record<string, { subject_id?: string; tissue?: string }>
+
+export type JoinStatus = 'matched' | 'conflict' | 'weak' | 'unmatched' | 'duplicate'
+export type JoinRow = {
+  sample: string
+  sheetType: string
+  metaTissue?: string
+  subjectId?: string
+  status: JoinStatus
+  reason: string
+}
+export type IdentityJoin = {
+  rows: JoinRow[] // one per samplesheet library, in table order
+  orphans: { sample: string; subjectId?: string; tissue?: string }[] // metadata subjects not on this flowcell
+  counts: Record<JoinStatus, number>
+  blocking: number // rows that are NOT a clean corroborated match — these gate approval
+  metadataPresent: boolean
+}
+
+const normTissue = (s: string | undefined): string => (s ?? '').trim().toLowerCase()
+
+export function computeIdentityJoin(
+  samples: { sample: string; type: string }[],
+  meta: SampleMetaMap,
+): IdentityJoin {
+  const metadataPresent = Object.keys(meta).length > 0
+  // Count Sample_ID occurrences in the SAMPLESHEET so a duplicated library id reads as ambiguous
+  // identity (two rows claiming the same sample) rather than silently last-wins.
+  const idCount = new Map<string, number>()
+  for (const s of samples) {
+    const id = s.sample.trim()
+    if (id) idCount.set(id, (idCount.get(id) ?? 0) + 1)
+  }
+  const rows: JoinRow[] = samples.map((s) => {
+    const sample = s.sample.trim()
+    const sheetType = s.type
+    const m = meta[sample]
+    if (!sample) {
+      return { sample: s.sample, sheetType, status: 'unmatched', reason: 'Blank sample name — this library cannot be identified.' }
+    }
+    if ((idCount.get(sample) ?? 0) > 1) {
+      return { sample, sheetType, metaTissue: m?.tissue, subjectId: m?.subject_id, status: 'duplicate', reason: `Sample_ID "${sample}" appears ${idCount.get(sample)}× in the samplesheet — ambiguous identity.` }
+    }
+    if (!m) {
+      return { sample, sheetType, status: 'unmatched', reason: 'No sample_metadata row — this library is not identified to a subject.' }
+    }
+    const metaTissue = m.tissue
+    if (!normTissue(metaTissue)) {
+      return { sample, sheetType, subjectId: m.subject_id, status: 'weak', reason: 'Matched on Sample_ID only — no corroborating tissue in the metadata to confirm identity.' }
+    }
+    if (normTissue(metaTissue) === normTissue(sheetType)) {
+      return { sample, sheetType, metaTissue, subjectId: m.subject_id, status: 'matched', reason: 'Sample_ID and tissue agree.' }
+    }
+    return { sample, sheetType, metaTissue, subjectId: m.subject_id, status: 'conflict', reason: `Tissue conflict — samplesheet "${sheetType || '—'}" vs metadata "${metaTissue}".` }
+  })
+  // Metadata subjects with no matching samplesheet library. Common (a metadata sheet can cover more
+  // than one flowcell), so this is a loud INFO — never a hard block, but never hidden either.
+  const sheetIds = new Set(samples.map((s) => s.sample.trim()).filter(Boolean))
+  const orphans = Object.entries(meta)
+    .filter(([id]) => id && !sheetIds.has(id))
+    .map(([id, m]) => ({ sample: id, subjectId: m.subject_id, tissue: m.tissue }))
+  const counts: Record<JoinStatus, number> = { matched: 0, conflict: 0, weak: 0, unmatched: 0, duplicate: 0 }
+  for (const r of rows) counts[r.status]++
+  const blocking = rows.length - counts.matched
+  return { rows, orphans, counts, blocking, metadataPresent }
+}
+
+// A stable signature of the join so an APPROVAL auto-invalidates the moment any edit (a sample type,
+// a re-attached metadata sheet, an added/removed row) changes it — a human re-confirms identity after
+// any change, never inherits a stale approval.
+export function joinSignature(join: IdentityJoin): string {
+  return JSON.stringify(join.rows.map((r) => [r.sample, r.sheetType, r.metaTissue ?? '', r.subjectId ?? '', r.status]))
+}
+
+// ── Submit identity audit (client-side, labelled seam) ────────────────────────────────────────
+// The identity join, its edits, and the human approval are logged to a localStorage feed shaped like
+// the Admin Activity rows (when/actor/action/detail). No backend: POST /api/runs carries no subject
+// field, so — like the page-access store — this trail is an honest client-side seam, surfaced in the
+// Submit screen. Capped so it can't grow unbounded.
+export type SubmitAuditEntry = { at: string; actor: string; action: string; detail: string }
+const SUBMIT_AUDIT_KEY = 'pipeguard.submit.audit'
+const SUBMIT_AUDIT_CAP = 200
+
+export function readSubmitAudit(): SubmitAuditEntry[] {
+  try {
+    const raw = localStorage.getItem(SUBMIT_AUDIT_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as SubmitAuditEntry[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function appendSubmitAudit(entry: SubmitAuditEntry): SubmitAuditEntry[] {
+  const next = [entry, ...readSubmitAudit()].slice(0, SUBMIT_AUDIT_CAP)
+  try {
+    localStorage.setItem(SUBMIT_AUDIT_KEY, JSON.stringify(next))
+  } catch {
+    // storage unavailable (private mode) — the audit just won't persist across a refresh.
+  }
+  return next
+}

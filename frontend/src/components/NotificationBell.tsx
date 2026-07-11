@@ -1,8 +1,22 @@
 import { Bell, CheckCheck, Flag } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { DEMO_ACCOUNTS } from '../auth'
 import { useInbox } from '../context/InboxContext'
-import { SOURCE_META, timeAgo } from '../inbox'
+import { initials, SOURCE_META, timeAgo } from '../inbox'
+
+// A tiny assignee chip so the quick-glance surface shows who owns an item (IB14 / UIC-14 assignment).
+function AssigneeChip({ id }: { id: string }) {
+  const name = DEMO_ACCOUNTS.find((a) => a.id === id)?.name ?? id
+  return (
+    <span
+      className="mt-0.5 grid h-[16px] w-[16px] shrink-0 place-items-center rounded-full bg-accent-weak text-[7.5px] font-semibold text-accent-strong"
+      title={`Assigned to ${name}`}
+    >
+      {initials(name)}
+    </span>
+  )
+}
 
 // The top-bar bell — a QUICK-GLANCE triage surface, deliberately distinct from the full /inbox
 // workspace (the maintainer's complaint was that a bare scrolling list loses people). It shows the
@@ -80,6 +94,7 @@ export function NotificationBell() {
                         <span>· {timeAgo(i.createdAt)}</span>
                       </div>
                     </div>
+                    {i.assignee && <AssigneeChip id={i.assignee} />}
                     <button
                       onClick={() => toggleFlag(i.id)}
                       className={`mt-0.5 shrink-0 ${i.flagged ? 'text-escalate' : 'text-text-3 hover:text-text-2'}`}

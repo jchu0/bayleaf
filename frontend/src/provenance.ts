@@ -178,6 +178,40 @@ export function fmtPayloadValue(v: unknown): string {
   return String(v)
 }
 
+// ── code / stderr payload classification (event trail, UIC-9) ─────────────────
+// A payload value is rendered as a copyable CODE BLOCK — not a compact k/v cell — when it is a
+// command line, an error/stderr dump, or a structured object/array. This keeps an execution-trace
+// `.command.err` payload (or the nested gate_provenance JSON) readable and copyable instead of
+// crammed onto one line. Pure classification over the untyped payload — renders verbatim, never
+// invents a field the event didn't carry (the same defensive posture as the readers above).
+const CODE_KEYS = new Set([
+  'command',
+  'cmd',
+  'command_line',
+  'commandline',
+  'script',
+  'stderr',
+  'stdout',
+  'error',
+  'err',
+  'traceback',
+  'stack',
+  'stacktrace',
+  'log',
+  'logs',
+  'output',
+])
+export function isCodeValue(key: string, v: unknown): boolean {
+  if (v !== null && typeof v === 'object') return true // structured payload → pretty JSON block
+  if (typeof v === 'string' && v.includes('\n')) return true // multi-line = a log/stderr dump
+  return CODE_KEYS.has(key.toLowerCase()) // a command / error stream, even single-line
+}
+export function stringifyCode(v: unknown): string {
+  if (typeof v === 'string') return v
+  if (v === null || v === undefined) return ''
+  return JSON.stringify(v, null, 2)
+}
+
 // ── trace-back index maps (built once from cards) ────────────────────────────
 export function indexFindings(cards: DecisionCard[]): Map<string, { finding: Finding; sampleId: string }> {
   const m = new Map<string, { finding: Finding; sampleId: string }>()

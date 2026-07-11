@@ -40,11 +40,9 @@ export function Settings() {
 
   return (
     <div className="mx-auto max-w-[720px]">
-      <PageHeader
-        eyebrow="Configure"
-        title="Settings"
-        subtitle="Operator profile, notifications, and model tiering. Mostly informational for this pass."
-      />
+      {/* UIC-1: no page eyebrow/subtitle — the left-nav already names the page. Explicit
+          safety/limitation notes (the Metric-catalog disclaimer below) are kept verbatim. */}
+      <PageHeader title="Settings" />
 
       <div className="space-y-[14px]">
         {/* Operator profile */}

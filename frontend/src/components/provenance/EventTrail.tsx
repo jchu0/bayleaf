@@ -10,8 +10,10 @@ import {
   distinct,
   indexCards,
   indexFindings,
+  isCodeValue,
   readSeverity,
   readVerdict,
+  stringifyCode,
   summarizeEvent,
 } from '../../provenance'
 import { CollapsibleRow } from '../CollapsibleRow'
@@ -20,6 +22,7 @@ import { VerdictBadge } from '../VerdictBadge'
 import { Empty } from '../States'
 import { Pager, type PerPage } from '../Pager'
 import { SegmentedControl } from '../SegmentedControl'
+import { CodeBlock } from './CodeBlock'
 import { Fingerprint } from './Fingerprint'
 
 // The append-only event trail — the honest centerpiece of PV1. It renders `RunDetail.events`, the
@@ -333,23 +336,35 @@ function VerdictTrace({ event, cardIx, runId }: { event: ProvenanceEvent; cardIx
 }
 
 // started / completed / sample.registered / unknown / any unresolved ref → the raw payload k/v +
-// any entity refs. Reads the untyped payload verbatim, never inventing a field.
+// any entity refs. Reads the untyped payload verbatim, never inventing a field. Scalar keys stay
+// in the compact k/v grid; a command/error/stderr value or a structured object splits out into a
+// copyable CodeBlock so a `.command.err` dump or the nested gate_provenance JSON reads and copies
+// cleanly rather than crammed onto one line (UIC-9).
 function PayloadBlock({ event }: { event: ProvenanceEvent }) {
   const payload = event.payload ?? {}
   const keys = Object.keys(payload)
+  const scalarKeys = keys.filter((k) => !isCodeValue(k, payload[k]))
+  const codeKeys = keys.filter((k) => isCodeValue(k, payload[k]))
   return (
     <div className="flex flex-col gap-3">
       {keys.length === 0 ? (
         <p className="font-mono text-[11.5px] text-text-3">No payload recorded for this event.</p>
       ) : (
-        <dl className="grid grid-cols-[minmax(90px,auto)_1fr] gap-x-4 gap-y-1 font-mono text-[11.5px]">
-          {keys.map((k) => (
-            <Fragment key={k}>
-              <dt className="text-text-3">{k}</dt>
-              <dd className="break-all text-text-2">{fmtPayloadValue(payload[k])}</dd>
-            </Fragment>
+        <>
+          {scalarKeys.length > 0 && (
+            <dl className="grid grid-cols-[minmax(90px,auto)_1fr] gap-x-4 gap-y-1 font-mono text-[11.5px]">
+              {scalarKeys.map((k) => (
+                <Fragment key={k}>
+                  <dt className="text-text-3">{k}</dt>
+                  <dd className="break-all text-text-2">{fmtPayloadValue(payload[k])}</dd>
+                </Fragment>
+              ))}
+            </dl>
+          )}
+          {codeKeys.map((k) => (
+            <CodeBlock key={k} label={k} code={stringifyCode(payload[k])} />
           ))}
-        </dl>
+        </>
       )}
       {event.inputs.length > 0 && <RefList label="Inputs" refs={event.inputs} />}
       {event.outputs.length > 0 && <RefList label="Outputs" refs={event.outputs} />}

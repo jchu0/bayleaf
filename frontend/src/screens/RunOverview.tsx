@@ -124,18 +124,13 @@ function RunCard({ run }: { run: RunSummary }) {
   )
 }
 
-// Static title block — renders during loading/error too, so the shell stays stable.
+// Static title block — renders during loading/error too, so the shell stays stable. The nav names
+// the page, so UIC-1 drops the eyebrow + descriptive subtitle; only the live "Gate online" status
+// (an operational health indicator, not flavor prose) stays in the actions slot.
 function RunsHeader() {
   return (
     <PageHeader
-      eyebrow="Operations"
       title="Sequencing runs"
-      subtitle={
-        <>
-          Provenance &amp; QC decision gate. Each run resolves to a per-sample verdict —{' '}
-          <span className="font-medium text-text">proceed, hold, rerun, or escalate</span>.
-        </>
-      }
       actions={
         <span className="flex items-center gap-2 whitespace-nowrap text-[12px] text-text-3">
           <span className="h-[7px] w-[7px] rounded-full bg-proceed shadow-[0_0_0_3px_var(--color-proceed-bg)]" />

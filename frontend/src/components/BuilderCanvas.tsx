@@ -30,6 +30,13 @@ import {
 
 const INNER_W = 2560
 const INNER_H = 460
+// The inner content plane carries a fixed margin (see the plane style below). The dot grid must fill
+// the ENTIRE scroll surface — the plane box PLUS its margin gutters — so the alignment dots never run
+// out when panning past the cards. PAD_X/PAD_Y mirror that margin ('480px 360px') so an oversized dot
+// layer (inside the zoomed plane, so it pans/zooms WITH the pipeline) covers exactly the scroll region
+// and not one pixel more (a larger layer would add empty scroll; a smaller one leaves bald gutters).
+const PAD_X = 360
+const PAD_Y = 480
 const MM_W = 210 // minimap width
 const MM_H = 108 // minimap height — a bigger, squarer canvas mirror than the old 168×46 strip
 const MM_SCALE = MM_W / INNER_W // uniform proportional scale (no x/y distortion)
@@ -37,10 +44,10 @@ const MM_VPAD = (MM_H - INNER_H * MM_SCALE) / 2 // vertically center the canvas 
 const ZMIN = 0.6
 const ZMAX = 1.4
 const clampZoom = (z: number): number => Math.min(ZMAX, Math.max(ZMIN, +z.toFixed(2)))
-const UW = 168 // user-node width — port anchors depend on it
+const UW = 192 // user-node width (enlarged toward the Databricks card, builder-cards §3) — port anchors depend on it; MUST equal BuilderShared.NODE_W
 const UPT = 52 // user-node first-port y-offset from card top
 const UROW = 18 // user-node port-row pitch
-const TW = 208 // seeded ToolCard width (w-52) — output dots sit at its right edge
+const TW = 224 // seeded ToolCard width (w-56, enlarged from w-52) — output dots sit at its right edge
 const TPT = 56 // seeded ToolCard first-port y-offset from card top (header + grid start)
 const TROW = 18 // seeded ToolCard port-row pitch
 
@@ -369,17 +376,29 @@ export function BuilderCanvas(props: CanvasProps) {
           style={{
             width: INNER_W,
             height: INNER_H,
-            margin: '480px 360px',
+            margin: `${PAD_Y}px ${PAD_X}px`,
             zoom,
-            // A SINGLE dot grid, on the content plane only, so it pans/zooms WITH the pipeline (the
-            // dots are the canvas, not a fixed overlay). A second grid on the scroll surface produced
-            // a static layer sliding over a moving one (regression, fixed 2026-07-10). Theme-aware
-            // via --canvas-dot (cool+subtle light, dim in dark).
-            backgroundImage: 'radial-gradient(var(--canvas-dot) 1px, transparent 1px)',
-            backgroundSize: '20px 20px',
-            backgroundPosition: '12px 12px',
           }}
         >
+          {/* The alignment dot grid, on a child that overhangs the plane's margin gutters by exactly
+              PAD_X/PAD_Y so it fills the FULL scroll surface (plane box + gutters), not just the plane
+              box (the old on-plane background stopped at the box edge, leaving bald gutters — the
+              "partially present" report). Lives INSIDE the zoomed plane so it still pans/zooms WITH the
+              pipeline; first child + no z-index so the edges/cards paint above it. Theme-aware via
+              --canvas-dot (cool+subtle light, dim in dark). */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute"
+            style={{
+              left: -PAD_X,
+              top: -PAD_Y,
+              width: INNER_W + PAD_X * 2,
+              height: INNER_H + PAD_Y * 2,
+              backgroundImage: 'radial-gradient(var(--canvas-dot) 1px, transparent 1px)',
+              backgroundSize: '20px 20px',
+              backgroundPosition: '12px 12px',
+            }}
+          />
           <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={INNER_W} height={INNER_H}>
             {showSeeded &&
               seededPaths.map((d, i) => (
@@ -675,7 +694,7 @@ function ToolCard({ t, isView, selected, onSelect }: { t: Tool; isView: boolean;
         e.stopPropagation()
         onSelect(t.id)
       }}
-      className="absolute w-52 overflow-hidden rounded-xl text-left"
+      className="absolute w-56 overflow-hidden rounded-xl text-left"
       style={{
         left: t.x,
         top: t.y,

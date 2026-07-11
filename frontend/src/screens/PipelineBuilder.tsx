@@ -5,6 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ChevronsRight,
   CopyPlus,
   Download,
   FolderOpen,
@@ -132,7 +133,10 @@ const SAVE_ST: Record<SaveStatus, { label: string; cls: string }> = {
 // `alwaysEnabled` exempts an item from the View-mode palette lock — used for the advisory agents,
 // which are read-only (they open a modal / select the triage pill; they never mutate the pipeline),
 // so an operator can consult them without switching the whole canvas into Edit.
-type PaletteItem = { name: string; sub: string; icon: IconKey; disabled?: boolean; alwaysEnabled?: boolean; onClick?: () => void }
+// `used` = this node/reference/agent is actually present in the CURRENT pipeline; the palette shows
+// used items by default and hides the rest behind a per-section "all" expander (builder-cards §5 /
+// UIC-16 "the tools palette shows the current pipeline's tools with a `>` expander to all available").
+type PaletteItem = { name: string; sub: string; icon: IconKey; disabled?: boolean; alwaysEnabled?: boolean; used?: boolean; onClick?: () => void }
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
@@ -922,7 +926,25 @@ export function PipelineBuilder() {
   }
 
   // ── palette model ──
-  const paletteSections: { heading: string; items: PaletteItem[] }[] = [
+  // The names of nodes actually in the current pipeline — the seeded germline tools when the linked
+  // doc is open, otherwise the composed user nodes. Drives the palette's "current tools by default"
+  // default (builder-cards §5): an item is `used` if it's on the canvas now.
+  const currentNodeNames = useMemo(() => {
+    const s = new Set<string>()
+    if (isLinked) TOOLS.forEach((t) => s.add(t.tool))
+    userNodes.forEach((n) => s.add(n.name))
+    return s
+  }, [isLinked, userNodes])
+  // Per-item "in this pipeline" test. Gate is always present; the QC-triage pill rides the seeded
+  // canvas (so it's "used" only in the linked view); the other advisory agents are consult-only tools,
+  // never part of the graph. References are all on the linked canvas; on a draft they match by name.
+  const isUsedItem = (heading: string, name: string): boolean => {
+    if (heading === 'Gate') return true
+    if (heading === 'Agents') return name === 'QC-triage' && isLinked
+    if (heading === 'References') return isLinked || currentNodeNames.has(name)
+    return currentNodeNames.has(name)
+  }
+  const rawPaletteSections: { heading: string; items: PaletteItem[] }[] = [
     {
       heading: 'Tool nodes',
       items: [
@@ -957,6 +979,11 @@ export function PipelineBuilder() {
     },
     { heading: 'Gate', items: [{ name: 'Decision gate', sub: 'terminal · pinned', icon: 'shield', disabled: true }] },
   ]
+  // Stamp each item with whether it's in the current pipeline (the Palette renders used-first, all-on-expand).
+  const paletteSections = rawPaletteSections.map((s) => ({
+    ...s,
+    items: s.items.map((it) => ({ ...it, used: isUsedItem(s.heading, it.name) })),
+  }))
 
   const modeOptions: SegmentOption<Mode>[] = [
     { value: 'edit', label: 'Edit' },
@@ -1421,6 +1448,15 @@ function Palette({
 }) {
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // Sections switched from "used in this pipeline" (default) to "all available" via the `>` expander.
+  const [showAll, setShowAll] = useState<Set<string>>(new Set())
+  const toggleShowAll = (heading: string) =>
+    setShowAll((c) => {
+      const n = new Set(c)
+      if (n.has(heading)) n.delete(heading)
+      else n.add(heading)
+      return n
+    })
   const q = query.trim().toLowerCase()
   const filtered = q
     ? sections
@@ -1451,26 +1487,58 @@ function Palette({
           // Collapsible sections keep a long, growing palette navigable; a search overrides collapse
           // so matches are always visible. The count hints at how much each section holds.
           const isCollapsed = collapsed.has(s.heading) && !q
+          // Default view = only the tools/refs/agents actually in the current pipeline; the `>` expander
+          // (or an active search) reveals ALL available items in the section. `hiddenCount` = how many
+          // are held back so the expander only shows when there's something more to see.
+          const usedItems = s.items.filter((it) => it.used)
+          const expanded = !!q || showAll.has(s.heading)
+          const visibleItems = expanded ? s.items : usedItems
+          const hiddenCount = s.items.length - usedItems.length
           return (
             <div key={s.heading}>
-              <button
-                onClick={() =>
-                  setCollapsed((c) => {
-                    const n = new Set(c)
-                    if (n.has(s.heading)) n.delete(s.heading)
-                    else n.add(s.heading)
-                    return n
-                  })
-                }
-                className="mb-1.5 flex w-full items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.5px] text-text-3 hover:text-text-2"
-              >
-                <ChevronRight size={11} className={`shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
-                <span>{s.heading}</span>
-                <span className="ml-auto font-mono normal-case text-text-3">{s.items.length}</span>
-              </button>
-              {!isCollapsed && (
+              <div className="mb-1.5 flex items-center gap-1">
+                <button
+                  onClick={() =>
+                    setCollapsed((c) => {
+                      const n = new Set(c)
+                      if (n.has(s.heading)) n.delete(s.heading)
+                      else n.add(s.heading)
+                      return n
+                    })
+                  }
+                  className="flex min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.5px] text-text-3 hover:text-text-2"
+                >
+                  <ChevronRight size={11} className={`shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+                  <span className="truncate">{s.heading}</span>
+                  <span className="ml-auto font-mono normal-case text-text-3">{s.items.length}</span>
+                </button>
+                {/* `>` expander — used-only ⇄ all. Same row as the collapse arrow (builder-cards §5).
+                    Hidden while searching (search already shows every match) and when nothing is held back. */}
+                {!q && hiddenCount > 0 && (
+                  <button
+                    onClick={() => toggleShowAll(s.heading)}
+                    title={showAll.has(s.heading) ? 'Show only tools in this pipeline' : `Show all ${s.items.length}`}
+                    className={`inline-flex shrink-0 items-center gap-0.5 rounded border px-1 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3px] ${
+                      showAll.has(s.heading) ? 'border-accent bg-accent-weak text-accent-strong' : 'border-line text-text-3 hover:text-text-2'
+                    }`}
+                  >
+                    <ChevronsRight size={10} className={`transition-transform ${showAll.has(s.heading) ? 'rotate-90' : ''}`} />
+                    all
+                  </button>
+                )}
+              </div>
+              {!isCollapsed && visibleItems.length === 0 && (
+                // Nothing from this section is in the pipeline yet — offer the reveal inline.
+                <button
+                  onClick={() => toggleShowAll(s.heading)}
+                  className="w-full rounded-md border border-dashed border-line px-2.5 py-2 text-left text-[10.5px] text-text-3 hover:border-line-strong hover:text-text-2"
+                >
+                  None in this pipeline · show all {s.items.length}
+                </button>
+              )}
+              {!isCollapsed && visibleItems.length > 0 && (
                 <div className="space-y-1.5">
-                  {s.items.map((it) => {
+                  {visibleItems.map((it) => {
                     const Icon = ICONS[it.icon]
                     const disabled = it.disabled || (isView && !it.alwaysEnabled)
                     return (
@@ -1484,10 +1552,12 @@ function Palette({
                         <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-card-2 ${disabled ? 'text-text-3' : 'text-text-2'}`}>
                           <Icon size={14} />
                         </span>
-                        <span className="min-w-0">
+                        <span className="min-w-0 flex-1">
                           <span className="block truncate text-[12.5px] font-medium text-text">{it.name}</span>
                           <span className="block truncate font-mono text-[10px] text-text-3">{it.sub}</span>
                         </span>
+                        {/* A muted dot marks items in the current pipeline once "all" is revealed. */}
+                        {it.used && expanded && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" title="in this pipeline" />}
                       </div>
                     )
                   })}

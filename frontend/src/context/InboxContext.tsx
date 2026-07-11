@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
+import { DEMO_ACCOUNTS } from '../auth'
 import { useRole } from './RoleContext'
 
 // GA3 — the intentional notification workspace. This is a PERSONAL organization layer that sits
@@ -25,6 +26,20 @@ export type NotifyCadence = 'once' | 'daily' | 'weekdays'
 export type InboxNotify = { channels: NotifyChannel[]; cadence: NotifyCadence; leads: string[] }
 export const MAX_LEADS = 3
 
+// IB14 — a kanban card comment (UIC-14). Author is the ACTING operator at write time (snapshotted so
+// a later roster edit can't rewrite history); `mentions` are the roster ids @-mentioned in the body,
+// resolved on write. Like the rest of this context it persists per-operator to localStorage — so
+// mentions are a labelled DEMO seam (a real ping to the mentioned user needs a shared server store),
+// never a live notification. Off the gate: a comment never sets or reads a verdict/confidence.
+export type InboxComment = {
+  id: string
+  authorId: string
+  authorName: string
+  body: string
+  createdAt: string
+  mentions: string[]
+}
+
 // The user-owned mutable state for a single item (both derived tickets and self-authored items).
 // Every field is optional — an absent overlay means "untouched", so defaults come from the base.
 type ItemMeta = {
@@ -36,6 +51,7 @@ type ItemMeta = {
   note?: string
   folder?: string | null // IB8 — the notes folder this item is filed under
   notify?: InboxNotify | null // IB4 — per-reminder notification config
+  assignee?: string | null // IB14 — roster id this card is assigned to (UIC-14), or null
 }
 
 // A self-authored reminder — the immutable creation record; its mutable state lives in the overlay
@@ -64,12 +80,14 @@ export type InboxItem = {
   note: string
   folder: string | null
   notify: InboxNotify | null
+  assignee: string | null
 }
 
 type InboxState = {
   items: InboxItem[]
   unreadCount: number
   folders: string[]
+  comments: Record<string, InboxComment[]> // IB14 — keyed by item id
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
@@ -82,6 +100,9 @@ type InboxState = {
   setDue: (id: string, due: string | null) => void
   setNote: (id: string, note: string) => void
   setNotify: (id: string, notify: InboxNotify | null) => void
+  setAssignee: (id: string, assignee: string | null) => void // IB14 — wire assignment to the roster
+  addComment: (id: string, body: string) => void // IB14 — comment (mentions resolved from body)
+  deleteComment: (id: string, commentId: string) => void
   addSelfItem: (title: string, opts?: { due?: string | null; note?: string; folder?: string | null }) => void
   updateSelfItem: (id: string, patch: { title?: string; note?: string }) => void
   deleteSelfItem: (id: string) => void
@@ -102,6 +123,9 @@ function selfKey(actorId: string): string {
 function folderKey(actorId: string): string {
   return `pipeguard.inbox.folders.${actorId}`
 }
+function commentsKey(actorId: string): string {
+  return `pipeguard.inbox.comments.${actorId}`
+}
 
 function loadJson<T>(key: string, fallback: T): T {
   try {
@@ -121,6 +145,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
   const [selfItems, setSelfItems] = useState<SelfRaw[]>(() => loadJson(selfKey(actorId), []))
   const [overlay, setOverlay] = useState<Record<string, ItemMeta>>(() => loadJson(overlayKey(actorId), {}))
   const [folders, setFolders] = useState<string[]>(() => loadJson(folderKey(actorId), []))
+  const [comments, setComments] = useState<Record<string, InboxComment[]>>(() => loadJson(commentsKey(actorId), {}))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -130,6 +155,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     setSelfItems(loadJson(selfKey(actorId), []))
     setOverlay(loadJson(overlayKey(actorId), {}))
     setFolders(loadJson(folderKey(actorId), []))
+    setComments(loadJson(commentsKey(actorId), {}))
   }, [actorId])
 
   // Persist the two user-owned stores. Derived tickets are re-fetched, never persisted.
@@ -154,6 +180,13 @@ export function InboxProvider({ children }: { children: ReactNode }) {
       /* see above */
     }
   }, [folders, actorId])
+  useEffect(() => {
+    try {
+      localStorage.setItem(commentsKey(actorId), JSON.stringify(comments))
+    } catch {
+      /* see above */
+    }
+  }, [comments, actorId])
 
   // Pull the actionable tickets (open + in review) — these ARE the notifications. Resolved tickets
   // drop off the feed. A failed fetch degrades to an empty derived feed; self items still work.
@@ -214,6 +247,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
         note: m.note ?? '',
         folder: m.folder ?? null,
         notify: m.notify ?? null,
+        assignee: m.assignee ?? null,
       }
     })
     const selves: InboxItem[] = selfItems.map((s) => {
@@ -237,6 +271,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
         note: m.note ?? '',
         folder: m.folder ?? null,
         notify: m.notify ?? null,
+        assignee: m.assignee ?? null,
       }
     })
     // Newest first — self reminders and tickets interleaved by creation time.
@@ -285,6 +320,44 @@ export function InboxProvider({ children }: { children: ReactNode }) {
   const setNote = useCallback((id: string, note: string) => patch(id, { note }), [patch])
   const setFolder = useCallback((id: string, folder: string | null) => patch(id, { folder }), [patch])
   const setNotify = useCallback((id: string, notify: InboxNotify | null) => patch(id, { notify }), [patch])
+  // IB14: assign the card to a roster id (or clear). Assignment is user-system state, not a verdict —
+  // it rides the same per-item overlay as flag/priority/column so it persists + survives a re-fetch.
+  const setAssignee = useCallback((id: string, assignee: string | null) => patch(id, { assignee }), [patch])
+
+  // IB14: append a comment authored by the ACTING operator. Mentions are resolved from the body here
+  // (single source of truth) against the demo roster; an @token that isn't a real account is ignored.
+  const addComment = useCallback(
+    (id: string, body: string) => {
+      const text = body.trim()
+      if (!text) return
+      const mentions = [...new Set([...text.matchAll(/@([a-z0-9._-]+)/gi)].map((mm) => mm[1]))].filter((h) =>
+        DEMO_ACCOUNTS.some((a) => a.id === h),
+      )
+      const acct = DEMO_ACCOUNTS.find((a) => a.id === actorId)
+      const comment: InboxComment = {
+        id: `c:${crypto.randomUUID()}`,
+        authorId: actorId,
+        authorName: acct?.name ?? actorId,
+        body: text,
+        createdAt: new Date().toISOString(),
+        mentions,
+      }
+      setComments((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), comment] }))
+    },
+    [actorId],
+  )
+  const deleteComment = useCallback((id: string, commentId: string) => {
+    setComments((prev) => {
+      const list = prev[id]
+      if (!list) return prev
+      const next = list.filter((c) => c.id !== commentId)
+      const copy = { ...prev }
+      // Drop the key entirely when the last comment goes, so the store doesn't accrete empty arrays.
+      if (next.length) copy[id] = next
+      else delete copy[id]
+      return copy
+    })
+  }, [])
 
   const addSelfItem = useCallback(
     (title: string, opts?: { due?: string | null; note?: string; folder?: string | null }) => {
@@ -354,6 +427,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     items,
     unreadCount,
     folders,
+    comments,
     loading,
     error,
     refresh,
@@ -366,6 +440,9 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     setDue,
     setNote,
     setNotify,
+    setAssignee,
+    addComment,
+    deleteComment,
     addSelfItem,
     updateSelfItem,
     deleteSelfItem,

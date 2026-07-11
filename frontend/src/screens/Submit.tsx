@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
+  AlertTriangle,
   ArrowRight,
   CircleCheck,
   ClipboardList,
   FileCheck,
+  History,
   Info,
   Paperclip,
   Plus,
   RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
   Trash2,
   Upload,
   X,
@@ -16,17 +20,29 @@ import {
 import { api } from '../api'
 import { useConfirm } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
+import { Pager, type PerPage } from '../components/Pager'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { useToast } from '../components/Toast'
-import { clearHandoff, readHandoff } from '../lib/accession'
+import { useRole } from '../context/RoleContext'
+import { useRangeSelect } from '../hooks/useRangeSelect'
+import {
+  type JoinStatus,
+  type SubmitAuditEntry,
+  appendSubmitAudit,
+  clearHandoff,
+  computeIdentityJoin,
+  joinSignature,
+  readHandoff,
+  readSubmitAudit,
+} from '../lib/accession'
 import { colIndex, splitCsv } from '../lib/csv'
 import type { SampleRow, SubmitRunIn } from '../types'
 
 // Submit samplesheet (§5.1) — the pipeline's front door: registers a run + its samples BEFORE
 // processing. Compose ≠ execute: this screen only records run/sample metadata and hands off to
-// the preflight gate; it never starts a tool. There is no backend endpoint that registers a run
-// from a samplesheet (POST /api/pipelines is for pipeline graphs), so per the design this is a
-// local-state mock — Save draft / Submit are client-only, faithful to "registration only."
+// the preflight gate; it never starts a tool. Submit now TRIGGERS the real POST /api/runs boundary
+// (the API drives the pipeline; the core still never runs a tool). Its gate: sample_metadata is
+// REQUIRED and the samplesheet ⋈ metadata identity join must be human-approved first (UIC-11).
 
 type RunMeta = { runName: string; study: string; assay: string; platform: string }
 
@@ -39,8 +55,22 @@ const SEED_SAMPLES: SampleRow[] = [
 ]
 const SEED_META: RunMeta = { runName: 'RUN-2026-07-09-A', study: 'GIAB-QC', assay: 'WES', platform: 'NovaSeq X' }
 
-// Sample type cycles this fixed set on each chip click (design invariant: a controlled vocabulary,
-// not free text).
+// Per-sample metadata parsed from a sample_metadata.csv (the LIMS/subject sheet, distinct from the
+// samplesheet). subject_id is intake identity — kept CLIENT-SIDE for now (POST /api/runs has no
+// subject field yet; a labelled seam), tissue is the corroborating column for the identity join.
+type SampleMeta = { subject_id?: string; tissue?: string }
+type ParsedSheet = { meta: Partial<RunMeta>; samples: SampleRow[] }
+
+// Demo seed metadata paired with SEED_SAMPLES so the out-of-box join is clean + approvable (each
+// tissue corroborates the sample's type). Clearly labelled as seeded — a real run attaches its own.
+const SEED_SAMPLE_META: Record<string, SampleMeta> = {
+  HG002: { subject_id: 'SUBJ-24001', tissue: 'Whole blood' },
+  HG003: { subject_id: 'SUBJ-24002', tissue: 'Whole blood' },
+  HG004: { subject_id: 'SUBJ-24003', tissue: 'Saliva' },
+  NA12878: { subject_id: 'SUBJ-24004', tissue: 'Whole blood' },
+}
+
+// Sample type controlled vocabulary (design invariant: a controlled vocab, not free text).
 const SAMPLE_TYPES = ['Whole blood', 'Saliva', 'FFPE', 'Buccal swab']
 
 const BASE_REGIONS = ['US · bh.basespace.illumina.com', 'EU · euw2.sh.basespace.illumina.com']
@@ -63,13 +93,18 @@ const RUN_FIELDS: { key: keyof RunMeta; label: string; hint: string }[] = [
 const INPUT_CLS =
   'w-full rounded-[7px] border border-line bg-card px-[9px] py-[7px] font-mono text-[12px] text-text outline-none focus:border-accent'
 
-// Per-sample metadata parsed from a sample_metadata.csv (the LIMS/subject sheet, distinct from the
-// samplesheet). subject_id is intake identity — kept CLIENT-SIDE for now (POST /api/runs has no
-// subject field yet; a labelled seam), tissue merges into the sample's type column.
-type SampleMeta = { subject_id?: string; tissue?: string }
-type ParsedSheet = { meta: Partial<RunMeta>; samples: SampleRow[] }
+// Identity-join status → token styles (verdict/gate palette; never a hardcoded hex). Matched reads
+// proceed, weak reads hold, everything ambiguous reads escalate so a mixup is impossible to miss.
+const JOIN_STATUS_META: Record<JoinStatus, { label: string; cls: string; dot: string }> = {
+  matched: { label: 'Matched', cls: 'border-proceed-bd bg-proceed-bg text-proceed-fg', dot: 'bg-proceed' },
+  conflict: { label: 'Conflict', cls: 'border-escalate-bd bg-escalate-bg text-escalate-fg', dot: 'bg-escalate' },
+  duplicate: { label: 'Duplicate', cls: 'border-escalate-bd bg-escalate-bg text-escalate-fg', dot: 'bg-escalate' },
+  unmatched: { label: 'Unmatched', cls: 'border-escalate-bd bg-escalate-bg text-escalate-fg', dot: 'bg-escalate' },
+  weak: { label: 'Weak match', cls: 'border-hold-bd bg-hold-bg text-hold-fg', dot: 'bg-hold' },
+}
+const JOIN_STATUS_ORDER: JoinStatus[] = ['matched', 'conflict', 'duplicate', 'unmatched', 'weak']
 
-// splitCsv / colIndex now live in lib/csv.ts, shared with the Accession screen (one tolerant parser
+// splitCsv / colIndex live in lib/csv.ts, shared with the Accession screen (one tolerant parser
 // instead of a private copy per screen). parseSamplesheet / parseMetadata below use the imports.
 
 // Parse an Illumina v2 SampleSheet ([Header] key-values + a [*_Data] section) OR a plain CSV
@@ -163,23 +198,22 @@ export function Submit() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const confirm = useConfirm()
+  const { session, actor } = useRole()
   const [submitting, setSubmitting] = useState(false)
   const [method, setMethod] = useState<'upload' | 'basespace'>('upload')
   const [meta, setMeta] = useState<RunMeta>(SEED_META)
   const [samples, setSamples] = useState<SampleRow[]>(SEED_SAMPLES)
-  // Real file parsing (was a hardcoded mock): the parsed samplesheet name + the sample_metadata
-  // sheet (subject/tissue) keyed by sample id. Sample-table pagination scales past a demo handful.
+  // Real file parsing: the parsed samplesheet name + the sample_metadata sheet (subject/tissue)
+  // keyed by sample id. Seeded metadata pairs the seeded samples so the default join is clean.
   const [uploadName, setUploadName] = useState<string | null>(null)
-  const [sampleMeta, setSampleMeta] = useState<Record<string, SampleMeta>>({})
-  const [metaName, setMetaName] = useState<string | null>(null)
+  const [sampleMeta, setSampleMeta] = useState<Record<string, SampleMeta>>(SEED_SAMPLE_META)
+  const [metaName, setMetaName] = useState<string | null>('seeded demo metadata · 4 subjects')
   const [dragging, setDragging] = useState(false)
   const [page, setPage] = useState(1)
-  // Sample multi-select (S2) keyed by global row index, and the bulk-add count (S3).
-  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [perPage, setPerPage] = useState<PerPage>('25') // UIC-11a: real 25/50/100 per-page control
   const [addCount, setAddCount] = useState('1')
   const sheetInput = useRef<HTMLInputElement>(null)
   const metaInput = useRef<HTMLInputElement>(null)
-  const PER = 25 // sample rows per page (scale-aware — a mixed flowcell is routinely 100+ samples)
 
   // BaseSpace connect flow. `imported` gates whether run details + samples are populated in
   // BaseSpace mode — blank until Import, per the design. Upload mode is always populated.
@@ -188,6 +222,60 @@ export function Submit() {
   const [baseToken, setBaseToken] = useState('')
   const [selectedRun, setSelectedRun] = useState(BASE_RUNS[0].id)
   const [imported, setImported] = useState(false)
+
+  const loaded = method === 'upload' || imported
+  const count = loaded ? samples.length : 0
+  // Paginate the sample table so a 100+ sample flowcell stays navigable (scale-aware UI rule).
+  const per = Number(perPage)
+  const pages = Math.max(1, Math.ceil(samples.length / per))
+  const curPage = Math.min(page, pages)
+  const pageStart = (curPage - 1) * per
+  const pagedSamples = samples.slice(pageStart, pageStart + per)
+
+  // Sample multi-select via the shared range-select model (UIC-3): ids are the flat render-order
+  // index strings; a plain click toggles one, a shift-click extends a contiguous range.
+  const allIds = useMemo(() => samples.map((_, i) => String(i)), [samples])
+  const sel = useRangeSelect(allIds)
+  const pageIds = pagedSamples.map((_, li) => String(pageStart + li))
+  const pageSelCount = pageIds.filter((id) => sel.isSelected(id)).length
+
+  // Client-side identity audit (localStorage) — the join, its edits, and the human approval land
+  // here, shaped like the Admin Activity feed. A labelled seam (no backend subject field).
+  const [audit, setAudit] = useState<SubmitAuditEntry[]>(() => readSubmitAudit())
+  const [auditOpen, setAuditOpen] = useState(false)
+  const actorId = session?.id ?? actor.id
+  const logAudit = useCallback(
+    (action: string, detail: string) => {
+      setAudit(appendSubmitAudit({ at: new Date().toISOString(), actor: actorId, action, detail }))
+    },
+    [actorId],
+  )
+
+  // Sample identity join (UIC-11): samplesheet ⋈ sample_metadata, corroborated on Sample_ID + tissue.
+  const join = useMemo(() => computeIdentityJoin(samples, sampleMeta), [samples, sampleMeta])
+  const sig = useMemo(() => joinSignature(join), [join])
+  // Approval is bound to the join SIGNATURE, so any edit (a sample type, a re-attached metadata sheet,
+  // an added/removed row) auto-invalidates it — a human re-confirms identity after any change.
+  const [approvedSig, setApprovedSig] = useState<string | null>(null)
+  const joinApproved = approvedSig !== null && approvedSig === sig
+  const [joinFilter, setJoinFilter] = useState<'attention' | 'all'>('attention')
+  const [joinPage, setJoinPage] = useState(1)
+  const [joinPer, setJoinPer] = useState<PerPage>('25')
+  useEffect(() => setJoinPage(1), [joinFilter])
+  const joinRows = joinFilter === 'attention' ? join.rows.filter((r) => r.status !== 'matched') : join.rows
+  const joinPerN = Number(joinPer)
+  const joinPages = Math.max(1, Math.ceil(joinRows.length / joinPerN))
+  const joinCurPage = Math.min(joinPage, joinPages)
+  const joinPageRows = joinRows.slice((joinCurPage - 1) * joinPerN, (joinCurPage - 1) * joinPerN + joinPerN)
+
+  const canSubmit = count > 0 && join.metadataPresent && joinApproved
+  const submitBlockedReason = !join.metadataPresent
+    ? 'Attach sample metadata first'
+    : join.blocking > 0
+      ? `Resolve ${join.blocking} identity issue${join.blocking === 1 ? '' : 's'}`
+      : !joinApproved
+        ? 'Approve the identity join'
+        : ''
 
   // Accession → Submit handoff: if the Sample accessioning screen sent subject/tissue metadata,
   // pre-attach it here (the same client-side merge an uploaded sample_metadata.csv gets) and clear
@@ -201,16 +289,9 @@ export function Submit() {
     setMetaName(`from Sample accessioning · ${n} subjects`)
     setSamples((rows) => rows.map((r) => (handoff[r.sample]?.tissue ? { ...r, type: handoff[r.sample].tissue as string } : r)))
     clearHandoff()
+    logAudit('attach-metadata', `Loaded ${n} subjects from Sample accessioning (client-side)`)
     toast(`Loaded ${n} subjects from Sample accessioning — subject ids held client-side.`, 'info')
-  }, [toast])
-
-  const loaded = method === 'upload' || imported
-  const count = loaded ? samples.length : 0
-  // Paginate the sample table so a 100+ sample flowcell stays navigable (scale-aware UI rule).
-  const pages = Math.max(1, Math.ceil(samples.length / PER))
-  const curPage = Math.min(page, pages)
-  const pageStart = (curPage - 1) * PER
-  const pagedSamples = samples.slice(pageStart, pageStart + PER)
+  }, [toast, logAudit])
 
   function setField(key: keyof RunMeta, value: string) {
     setMeta((m) => ({ ...m, [key]: value }))
@@ -218,7 +299,7 @@ export function Submit() {
   function patchSample(i: number, patch: Partial<SampleRow>) {
     setSamples((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
   }
-  // S3: append N blank rows in one action (a 100-sample plate shouldn't be 100 clicks). Bounded so a
+  // Append N blank rows in one action (a 100-sample plate shouldn't be 100 clicks). Bounded so a
   // fat-fingered count can't lock the tab.
   function addSamples(n: number) {
     const k = Math.max(1, Math.min(500, Math.floor(n) || 1))
@@ -227,20 +308,9 @@ export function Submit() {
       ...Array.from({ length: k }, () => ({ sample: '', type: SAMPLE_TYPES[0], i7: '', i5: '', study: meta.study })),
     ])
   }
-  // S2: checkbox multi-select + select-all, replacing per-row trashing.
-  function toggleSampleSel(i: number) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(i)) next.delete(i)
-      else next.add(i)
-      return next
-    })
-  }
-  function toggleAllSel() {
-    setSelected((prev) => (prev.size === samples.length ? new Set() : new Set(samples.map((_, i) => i))))
-  }
   async function removeSelected() {
-    const n = selected.size
+    const idxs = [...sel.selected].map(Number).filter((n) => Number.isInteger(n))
+    const n = idxs.length
     if (n === 0) return
     const ok = await confirm({
       title: `Remove ${n} sample${n === 1 ? '' : 's'} from this draft?`,
@@ -249,12 +319,21 @@ export function Submit() {
       tone: 'danger',
     })
     if (!ok) return
-    setSamples((rows) => rows.filter((_, j) => !selected.has(j)))
-    setSelected(new Set())
+    const drop = new Set(idxs)
+    setSamples((rows) => rows.filter((_, j) => !drop.has(j)))
+    sel.clear()
   }
 
-  // Parse a dropped/selected samplesheet for real (replaces the old hardcoded "Parsed 4 samples"
-  // mock). Merges any already-loaded sample_metadata tissue onto the fresh rows.
+  // Adopt the metadata tissue onto the samplesheet type — the one-click resolution for a tissue
+  // CONFLICT. Recomputes the join (auto-invalidating any stale approval) and is audited.
+  function adoptMetadataTissue(sample: string, tissue: string) {
+    setSamples((rows) => rows.map((r) => (r.sample === sample ? { ...r, type: tissue } : r)))
+    logAudit('edit-join', `Set ${sample} sample type → "${tissue}" (adopt metadata tissue)`)
+    toast(`${sample} sample type set to "${tissue}" from metadata.`, 'success')
+  }
+
+  // Parse a dropped/selected samplesheet for real. Merges any already-loaded sample_metadata tissue
+  // onto the fresh rows so the identity join reflects the attached metadata immediately.
   async function onSheetFile(file: File) {
     try {
       const parsed = parseSamplesheet(await file.text())
@@ -270,7 +349,7 @@ export function Submit() {
       setMeta((prev) => ({ ...prev, ...parsed.meta }))
       setUploadName(file.name)
       setPage(1)
-      setSelected(new Set())
+      sel.clear()
       toast(`Parsed ${parsed.samples.length} samples from ${file.name}.`, 'success')
     } catch (e) {
       toast(`Couldn't read ${file.name} — ${e instanceof Error ? e.message : String(e)}`, 'error')
@@ -290,6 +369,7 @@ export function Submit() {
       setSampleMeta(map)
       setMetaName(file.name)
       setSamples((rows) => rows.map((r) => (map[r.sample]?.tissue ? { ...r, type: map[r.sample].tissue as string } : r)))
+      logAudit('attach-metadata', `Attached ${file.name} · ${n} subjects`)
       toast(`Attached metadata for ${n} samples from ${file.name}.`, 'success')
     } catch (e) {
       toast(`Couldn't read ${file.name} — ${e instanceof Error ? e.message : String(e)}`, 'error')
@@ -299,6 +379,22 @@ export function Submit() {
   function clearMetadata() {
     setSampleMeta({})
     setMetaName(null)
+    logAudit('detach-metadata', 'Removed attached sample_metadata (identity join re-opened)')
+  }
+
+  // Approve the identity join — the explicit human confirmation gate before a run proceeds. Only
+  // reachable when the join is clean (no blocking rows); a confirm dialog names the consequence.
+  async function approveJoin() {
+    if (join.blocking > 0 || joinApproved) return
+    const ok = await confirm({
+      title: 'Approve the sample-identity join?',
+      body: `Confirms all ${join.rows.length} sample${join.rows.length === 1 ? '' : 's'} match sample_metadata on Sample_ID plus a corroborating column (tissue). Submit stays disabled until you approve; any later edit re-opens this gate. Recorded in the identity audit.`,
+      confirmLabel: 'Approve join',
+    })
+    if (!ok) return
+    setApprovedSig(sig)
+    logAudit('approve-join', `Approved identity join · ${join.rows.length} samples · run ${meta.runName || '—'}`)
+    toast('Sample-identity join approved — submit is now enabled.', 'success')
   }
 
   function connectBase() {
@@ -315,13 +411,14 @@ export function Submit() {
     setSamples(SEED_SAMPLES)
     setMeta(SEED_META)
     setImported(true)
-    setSelected(new Set())
+    sel.clear()
   }
 
   // Submit registers the run, then hands off to the execution boundary (POST /api/runs) — the
-  // API triggers the pipeline driver (the core still never runs a tool). We poll intake-status and
-  // navigate to the run once processing completes. Only samples with reads on disk are processed.
+  // API triggers the pipeline driver (the core still never runs a tool). Gated on an approved
+  // identity join. We poll intake-status and navigate to the run once processing completes.
   async function submit() {
+    if (!canSubmit) return
     setSubmitting(true)
     const body: SubmitRunIn = {
       run_name: meta.runName,
@@ -332,8 +429,8 @@ export function Submit() {
     }
     try {
       const ack = await api.submitRun(body)
-      // Scale-aware summary: a 100-sample flowcell can't dump every name into a toast (surfaced by
-      // the 100-sample test) — list up to 5, else summarize the count.
+      logAudit('submit', `Submitted run ${ack.run_id} · ${body.samples.length} samples (identity join approved)`)
+      // Scale-aware summary: a 100-sample flowcell can't dump every name into a toast — list up to 5.
       const summarize = (arr: string[]) => (arr.length <= 5 ? arr.join(', ') : `${arr.length} samples`)
       const procMsg = ack.processed_samples.length
         ? `Processing ${summarize(ack.processed_samples)}`
@@ -361,16 +458,9 @@ export function Submit() {
 
   return (
     <div className="mx-auto max-w-[1080px]">
-      <PageHeader
-        eyebrow="Intake"
-        title="New submission"
-        subtitle={
-          <>
-            Register a run and its samples <strong className="text-text">before processing</strong>. This drives
-            sample names, run name, sample type, barcodes, and study for every downstream stage and gate.
-          </>
-        }
-      />
+      {/* UIC-1: the left-nav names this page — no eyebrow/subtitle prose. The identity-required and
+          guardrail notes below are explicit safety warnings and stay. */}
+      <PageHeader title="New submission" />
 
       {/* method toggle */}
       <div className="mt-[18px]">
@@ -400,10 +490,10 @@ export function Submit() {
         />
       </div>
 
-      {/* UPLOAD panel — real file parse (samplesheet + optional sample_metadata.csv) */}
+      {/* UPLOAD panel — real samplesheet parse (sample_metadata attaches in the identity section) */}
       {method === 'upload' && (
         <>
-          {/* Hidden real inputs; the drop zone / buttons trigger them. Reset value on change so the
+          {/* Hidden real input; the drop zone / buttons trigger it. Reset value on change so the
               same file can be re-selected. */}
           <input
             ref={sheetInput}
@@ -413,17 +503,6 @@ export function Submit() {
             onChange={(e) => {
               const f = e.target.files?.[0]
               if (f) void onSheetFile(f)
-              e.target.value = ''
-            }}
-          />
-          <input
-            ref={metaInput}
-            type="file"
-            accept=".csv,.txt"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void onMetaFile(f)
               e.target.value = ''
             }}
           />
@@ -491,55 +570,6 @@ export function Submit() {
               </div>
             </div>
           )}
-          {/* sample_metadata.csv (LIMS/subject sheet) — distinct from the samplesheet (G2). */}
-          <div className="mt-[10px] flex flex-wrap items-center gap-[11px] rounded-[11px] border border-line bg-card px-[14px] py-[11px]">
-            <Paperclip size={16} strokeWidth={1.9} className="shrink-0 text-text-3" />
-            <div className="min-w-0 flex-1">
-              {metaName ? (
-                <>
-                  <div className="font-mono text-[12px] font-semibold text-text">{metaName}</div>
-                  <div className="text-[11px] text-text-2">
-                    {Object.keys(sampleMeta).length} subjects mapped · tissue merged into Sample type.{' '}
-                    <span className="text-text-3">Subject ids held client-side (not yet sent — a labelled seam).</span>
-                  </div>
-                </>
-              ) : (
-                <div className="text-[12px] text-text-2">
-                  <strong className="text-text">Sample metadata</strong> (optional) — a{' '}
-                  <span className="font-mono">sample_metadata.csv</span> (Sample_ID, Subject_ID, Tissue) enriches
-                  subject &amp; tissue.
-                </div>
-              )}
-            </div>
-            {metaName ? (
-              <button
-                type="button"
-                onClick={clearMetadata}
-                className="inline-flex items-center gap-1 rounded-[8px] border border-line-strong bg-card px-3 py-1.5 text-[12px] text-text-2 hover:border-line"
-              >
-                <X size={12} /> Remove
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => metaInput.current?.click()}
-                className="whitespace-nowrap rounded-[8px] border border-line-strong bg-card px-3 py-1.5 text-[12px] font-medium text-accent-strong"
-              >
-                Attach metadata
-              </button>
-            )}
-          </div>
-          {/* Cross-link: subject metadata is authored upstream in the CRM/accessioning screen. */}
-          <div className="mt-1.5 flex items-center gap-1.5 px-1 text-[11px] text-text-3">
-            <ClipboardList size={12} strokeWidth={1.9} className="shrink-0" />
-            <span>
-              Subject metadata is authored in{' '}
-              <Link to="/accession" className="font-medium text-accent-strong hover:underline">
-                Sample accessioning
-              </Link>{' '}
-              — send it here to pre-attach subject &amp; tissue.
-            </span>
-          </div>
         </>
       )}
 
@@ -716,18 +746,18 @@ export function Submit() {
           </div>
           {method === 'upload' && (
             <div className="flex items-center gap-2">
-              {/* S2: bulk-remove the checkbox selection (confirmed), replacing per-row trashing. */}
-              {selected.size > 0 && (
+              {/* Bulk-remove the checkbox selection (confirmed). */}
+              {sel.selected.size > 0 && (
                 <button
                   type="button"
                   onClick={() => void removeSelected()}
                   className="inline-flex items-center gap-[6px] rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-[7px] text-[12.5px] font-medium text-escalate-fg transition-[filter] hover:brightness-95"
                 >
                   <Trash2 size={14} strokeWidth={1.9} />
-                  Remove {selected.size}
+                  Remove {sel.selected.size}
                 </button>
               )}
-              {/* S3: add N samples at once. */}
+              {/* Add N samples at once. */}
               <div className="flex items-center gap-1 rounded-lg border border-line-strong bg-card px-1.5 py-1">
                 <input
                   type="number"
@@ -756,12 +786,12 @@ export function Submit() {
               <input
                 type="checkbox"
                 className="h-3.5 w-3.5 accent-accent"
-                aria-label="Select all samples"
-                checked={samples.length > 0 && selected.size === samples.length}
+                aria-label="Select all samples on this page"
+                checked={pageIds.length > 0 && pageSelCount === pageIds.length}
                 ref={(el) => {
-                  if (el) el.indeterminate = selected.size > 0 && selected.size < samples.length
+                  if (el) el.indeterminate = pageSelCount > 0 && pageSelCount < pageIds.length
                 }}
-                onChange={toggleAllSel}
+                onChange={() => sel.setMany(pageIds, pageSelCount !== pageIds.length)}
               />
             )}
           </div>
@@ -781,15 +811,17 @@ export function Submit() {
           </div>
         ) : (
           // Render only the current page; the global index `i` (not the page-local one) drives
-          // patch/remove/cycle so edits land on the right row across pages.
+          // patch/remove/select so edits land on the right row across pages.
           pagedSamples.map((s, li) => {
             const i = pageStart + li
+            const id = String(i)
             const subject = sampleMeta[s.sample]?.subject_id
+            const rowStatus = join.rows[i]?.status
             return (
               <div
                 key={i}
                 className={`grid grid-cols-[26px_30px_1.4fr_1.2fr_1fr_1fr_1.1fr] items-center gap-[9px] border-b border-line px-4 py-[9px] transition-colors ${
-                  selected.has(i) ? 'bg-accent-weak/40' : ''
+                  sel.isSelected(id) ? 'bg-accent-weak/40' : ''
                 }`}
               >
                 <div className="flex items-center">
@@ -797,21 +829,35 @@ export function Submit() {
                     type="checkbox"
                     className="h-3.5 w-3.5 accent-accent"
                     aria-label={`Select ${s.sample || `sample ${i + 1}`}`}
-                    checked={selected.has(i)}
-                    onChange={() => toggleSampleSel(i)}
+                    checked={sel.isSelected(id)}
+                    onChange={() => {}}
+                    onClick={(e) => sel.toggle(id, e.shiftKey)}
                   />
                 </div>
                 <div className="font-mono text-[11.5px] text-text-3">{i + 1}</div>
                 <div className="min-w-0">
                   <input value={s.sample} onChange={(e) => patchSample(i, { sample: e.target.value })} className={INPUT_CLS} />
-                  {subject && (
-                    <div className="mt-0.5 truncate font-mono text-[9.5px] text-text-3" title={`Subject ${subject}`}>
-                      subject {subject}
-                    </div>
-                  )}
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                    {subject && (
+                      <span className="truncate font-mono text-[9.5px] text-text-3" title={`Subject ${subject}`}>
+                        subject {subject}
+                      </span>
+                    )}
+                    {/* Per-row identity flag — surfaced inline for non-clean rows so a mixup is
+                        impossible to miss even from the barcode table. */}
+                    {rowStatus && rowStatus !== 'matched' && (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[9.5px] font-semibold ${JOIN_STATUS_META[rowStatus].cls}`}
+                        title={join.rows[i]?.reason}
+                      >
+                        <span className={`h-1 w-1 rounded-full ${JOIN_STATUS_META[rowStatus].dot}`} />
+                        {JOIN_STATUS_META[rowStatus].label}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                {/* S1: a real dropdown (was a cycle-on-click button that read as a Next control). The
-                    current value is always an option even if a parsed tissue is outside the vocab. */}
+                {/* A real dropdown; the current value is always an option even if a parsed tissue is
+                    outside the vocab. */}
                 <select
                   value={s.type}
                   onChange={(e) => patchSample(i, { type: e.target.value })}
@@ -830,54 +876,324 @@ export function Submit() {
             )
           })
         )}
-        {count > PER && (
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-[11px] text-[11.5px] text-text-2">
-            <span>
-              Showing {pageStart + 1}–{Math.min(pageStart + PER, count)} of {count} samples
-            </span>
-            {pages > 1 && (
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setPage(Math.max(1, curPage - 1))}
-                  className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 hover:border-line-strong"
-                  aria-label="Previous page"
-                >
-                  ‹
-                </button>
-                {Array.from({ length: pages }, (_, k) => k + 1).map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setPage(n)}
-                    className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] ${
-                      n === curPage ? 'bg-accent font-semibold text-white' : 'border border-line bg-card text-text-2 hover:border-line-strong'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setPage(Math.min(pages, curPage + 1))}
-                  className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 hover:border-line-strong"
-                  aria-label="Next page"
-                >
-                  ›
-                </button>
-              </div>
-            )}
+        {count > 0 && (
+          <div className="px-4 pb-3">
+            <Pager total={count} page={curPage} perPage={perPage} onPage={setPage} onPerPage={setPerPage} noun="samples" />
           </div>
         )}
       </div>
 
-      {/* FOOTER — guardrail note + inert Save draft + Submit (registration/navigation only) */}
+      {/* SAMPLE IDENTITY — the join gate (UIC-11). sample_metadata is REQUIRED and the samplesheet ⋈
+          metadata identity join must be human-approved before submit. Sample-identity mixups are the
+          highest-consequence error here, so every non-clean row blocks approval and is surfaced loudly. */}
+      {count > 0 && (
+        <div className="mt-[14px] overflow-hidden rounded-[14px] border border-line bg-card shadow-card">
+          <div className="flex items-center gap-[10px] border-b border-line px-[18px] py-[14px]">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-weak">
+              <ShieldCheck size={17} strokeWidth={1.8} className="text-accent-strong" />
+            </div>
+            <div className="flex-1">
+              <div className="text-[14.5px] font-semibold text-text">Sample identity</div>
+              <div className="mt-0.5 text-[12px] text-text-2">
+                The samplesheet is joined to <span className="font-mono">sample_metadata</span> on{' '}
+                <strong className="text-text">Sample_ID + a corroborating column</strong> (tissue) — never a
+                single-column match. A human approves the join before the run proceeds.
+              </div>
+            </div>
+          </div>
+
+          {/* Hidden metadata file input, co-located with its Attach button (identity section only). */}
+          <input
+            ref={metaInput}
+            type="file"
+            accept=".csv,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void onMetaFile(f)
+              e.target.value = ''
+            }}
+          />
+
+          {/* metadata attach status / required prompt */}
+          <div className="px-[18px] py-[14px]">
+            {metaName ? (
+              <div className="flex flex-wrap items-center gap-[11px] rounded-[11px] border border-line bg-card-2 px-[14px] py-[11px]">
+                <Paperclip size={16} strokeWidth={1.9} className="shrink-0 text-text-3" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-[12px] font-semibold text-text">{metaName}</div>
+                  <div className="text-[11px] text-text-2">
+                    {Object.keys(sampleMeta).length} subjects mapped · tissue corroborates identity.{' '}
+                    <span className="text-text-3">Subject ids held client-side (not sent — a labelled seam).</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => metaInput.current?.click()}
+                  className="whitespace-nowrap rounded-[8px] border border-line-strong bg-card px-3 py-1.5 text-[12px] font-medium text-accent-strong"
+                >
+                  Replace
+                </button>
+                <button
+                  type="button"
+                  onClick={clearMetadata}
+                  className="inline-flex items-center gap-1 rounded-[8px] border border-line-strong bg-card px-3 py-1.5 text-[12px] text-text-2 hover:border-line"
+                >
+                  <X size={12} /> Remove
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-[11px] rounded-[11px] border border-hold-bd bg-hold-bg px-[14px] py-[11px] text-hold-fg">
+                <ShieldAlert size={17} strokeWidth={1.9} className="shrink-0" />
+                <div className="min-w-0 flex-1 text-[12px] leading-relaxed">
+                  <strong>Sample metadata is required.</strong> A <span className="font-mono">sample_metadata.csv</span>{' '}
+                  (Sample_ID, Subject_ID, Tissue) identifies each library to a subject — the run cannot proceed until it
+                  is attached and the identity join is approved.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => metaInput.current?.click()}
+                  className="whitespace-nowrap rounded-[8px] border border-hold-bd bg-card px-3 py-1.5 text-[12px] font-semibold text-hold-fg"
+                >
+                  Attach metadata
+                </button>
+              </div>
+            )}
+            {/* Cross-link: subject metadata is authored upstream in the accessioning screen. */}
+            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-text-3">
+              <ClipboardList size={12} strokeWidth={1.9} className="shrink-0" />
+              <span>
+                Subject metadata is authored in{' '}
+                <Link to="/accession" className="font-medium text-accent-strong hover:underline">
+                  Sample accessioning
+                </Link>{' '}
+                — send it here to pre-attach subject &amp; tissue.
+              </span>
+            </div>
+          </div>
+
+          {/* join review — only meaningful once metadata is attached */}
+          {metaName && (
+            <>
+              {/* summary counts */}
+              <div className="flex flex-wrap items-center gap-2 border-t border-line px-[18px] py-3">
+                <span className="text-[11px] font-semibold uppercase tracking-[.4px] text-text-3">Join</span>
+                {JOIN_STATUS_ORDER.filter((st) => join.counts[st] > 0).map((st) => (
+                  <span
+                    key={st}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium ${JOIN_STATUS_META[st].cls}`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${JOIN_STATUS_META[st].dot}`} />
+                    {JOIN_STATUS_META[st].label} · {join.counts[st]}
+                  </span>
+                ))}
+                {join.orphans.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-card-2 px-2.5 py-1 text-[11.5px] font-medium text-text-2">
+                    <Info size={12} /> {join.orphans.length} not on this flowcell
+                  </span>
+                )}
+              </div>
+
+              {/* approval banner */}
+              <div className="px-[18px]">
+                {join.blocking > 0 ? (
+                  <div className="flex items-start gap-2.5 rounded-[11px] border border-escalate-bd bg-escalate-bg px-[14px] py-3 text-[12.5px] leading-relaxed text-escalate-fg">
+                    <AlertTriangle size={17} className="mt-px shrink-0" />
+                    <div>
+                      <strong>
+                        {join.blocking} of {join.rows.length} sample{join.rows.length === 1 ? '' : 's'} need identity
+                        resolution.
+                      </strong>{' '}
+                      Fix each flagged row (adopt the metadata tissue, correct the sample type, or attach the right
+                      metadata) before this run can proceed. Mismatches cannot be approved past.
+                    </div>
+                  </div>
+                ) : joinApproved ? (
+                  <div className="flex items-start gap-2.5 rounded-[11px] border border-proceed-bd bg-proceed-bg px-[14px] py-3 text-[12.5px] leading-relaxed text-proceed-fg">
+                    <ShieldCheck size={17} className="mt-px shrink-0" />
+                    <div>
+                      <strong>Identity join approved.</strong> All {join.rows.length} samples match on Sample_ID +
+                      tissue. Submit is enabled; any edit re-opens this gate.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2.5 rounded-[11px] border border-accent bg-accent-weak px-[14px] py-3 text-[12.5px] leading-relaxed text-accent-strong">
+                    <Info size={17} className="mt-px shrink-0" />
+                    <div>
+                      <strong>All {join.rows.length} samples cleanly matched.</strong> Review the join, then approve to
+                      confirm identity before submit.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* filter + join table */}
+              <div className="mt-3 flex items-center gap-2 px-[18px]">
+                <SegmentedControl<'attention' | 'all'>
+                  value={joinFilter}
+                  onChange={setJoinFilter}
+                  options={[
+                    { value: 'attention', label: `Needs attention · ${join.blocking}` },
+                    { value: 'all', label: `All · ${join.rows.length}` },
+                  ]}
+                />
+              </div>
+              <div className="mt-2 overflow-x-auto px-[18px]">
+                <div className="min-w-[720px] overflow-hidden rounded-[10px] border border-line">
+                  <div className="grid grid-cols-[110px_1.2fr_1fr_1fr_1.6fr_96px] gap-[9px] border-b border-line bg-card-2 px-3 py-[8px] text-[9.5px] font-bold uppercase tracking-[.4px] text-text-3">
+                    <div>Status</div>
+                    <div>Sample</div>
+                    <div>Sheet type</div>
+                    <div>Meta tissue</div>
+                    <div>Why</div>
+                    <div>Resolve</div>
+                  </div>
+                  {joinRows.length === 0 ? (
+                    <div className="px-3 py-[22px] text-center text-[12px] text-text-2">
+                      No rows need attention — every sample is a clean Sample_ID + tissue match.
+                    </div>
+                  ) : (
+                    joinPageRows.map((r, li) => {
+                      const sMeta = JOIN_STATUS_META[r.status]
+                      return (
+                        <div
+                          key={`${r.sample}-${(joinCurPage - 1) * joinPerN + li}`}
+                          className="grid grid-cols-[110px_1.2fr_1fr_1fr_1.6fr_96px] items-center gap-[9px] border-b border-line px-3 py-[9px] last:border-b-0"
+                        >
+                          <div>
+                            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${sMeta.cls}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${sMeta.dot}`} />
+                              {sMeta.label}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate font-mono text-[12px] text-text">{r.sample || '—'}</div>
+                            {r.subjectId && (
+                              <div className="truncate font-mono text-[9.5px] text-text-3" title={`Subject ${r.subjectId}`}>
+                                subject {r.subjectId}
+                              </div>
+                            )}
+                          </div>
+                          <div className="truncate font-mono text-[11.5px] text-text-2">{r.sheetType || '—'}</div>
+                          <div className="truncate font-mono text-[11.5px] text-text-2">{r.metaTissue || '—'}</div>
+                          <div className="text-[11px] leading-snug text-text-2">{r.reason}</div>
+                          <div>
+                            {r.status === 'conflict' && r.metaTissue && (
+                              <button
+                                type="button"
+                                onClick={() => adoptMetadataTissue(r.sample, r.metaTissue as string)}
+                                className="whitespace-nowrap rounded-[7px] border border-line-strong bg-card px-2 py-1 text-[11px] font-medium text-accent-strong hover:border-accent"
+                                title={`Set the samplesheet type to "${r.metaTissue}" to match the metadata`}
+                              >
+                                Use metadata
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+                {joinRows.length > 0 && (
+                  <Pager
+                    total={joinRows.length}
+                    page={joinCurPage}
+                    perPage={joinPer}
+                    onPage={setJoinPage}
+                    onPerPage={setJoinPer}
+                    noun="rows"
+                  />
+                )}
+              </div>
+
+              {/* orphans — metadata subjects not on this flowcell (loud info, never a hard block) */}
+              {join.orphans.length > 0 && (
+                <div className="mx-[18px] mt-2 rounded-[10px] border border-line bg-card-2 px-3 py-2.5 text-[11px] text-text-2">
+                  <span className="font-semibold text-text-3">Not on this flowcell:</span>{' '}
+                  {join.orphans.slice(0, 8).map((o) => o.sample).join(', ')}
+                  {join.orphans.length > 8 ? ` +${join.orphans.length - 8} more` : ''} — metadata subjects with no
+                  matching library here. Common when a metadata sheet spans several runs; surfaced, not blocked.
+                </div>
+              )}
+
+              {/* approve action */}
+              <div className="flex flex-wrap items-center gap-3 border-t border-line px-[18px] py-[14px]">
+                <div className="flex-1 text-[12px] text-text-2">
+                  {joinApproved
+                    ? 'Identity confirmed by a human — recorded in the audit below.'
+                    : join.blocking > 0
+                      ? 'Resolve the flagged rows to enable approval.'
+                      : 'Approve to confirm subject identity before the run proceeds.'}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void approveJoin()}
+                  disabled={join.blocking > 0 || joinApproved}
+                  className={`inline-flex items-center gap-2 rounded-[9px] px-4 py-2 text-[13px] font-semibold transition-opacity ${
+                    joinApproved
+                      ? 'border border-proceed-bd bg-proceed-bg text-proceed-fg'
+                      : 'bg-accent text-white disabled:opacity-50'
+                  }`}
+                >
+                  <ShieldCheck size={15} strokeWidth={2} />
+                  {joinApproved ? 'Join approved' : 'Approve join'}
+                </button>
+              </div>
+
+              {/* identity audit (client-side, this browser) */}
+              <div className="border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => setAuditOpen((v) => !v)}
+                  className="flex w-full items-center gap-2 px-[18px] py-2.5 text-left text-[12px] font-medium text-text-2 hover:bg-card-2"
+                >
+                  <History size={14} strokeWidth={1.9} className="text-text-3" />
+                  Identity audit (this browser) · {audit.length}
+                  <span className="ml-auto text-[11px] text-text-3">{auditOpen ? 'Hide' : 'Show'}</span>
+                </button>
+                {auditOpen && (
+                  <div className="px-[18px] pb-3">
+                    {audit.length === 0 ? (
+                      <div className="rounded-[10px] border border-line bg-card-2 px-3 py-3 text-[11.5px] text-text-2">
+                        No identity actions yet. Attaching metadata, adopting a tissue, and approving the join are
+                        logged here (client-side only — a labelled seam).
+                      </div>
+                    ) : (
+                      <div className="overflow-hidden rounded-[10px] border border-line">
+                        {audit.slice(0, 25).map((a, k) => (
+                          <div
+                            key={`${a.at}-${k}`}
+                            className="grid grid-cols-[130px_1fr] items-baseline gap-2 border-b border-line px-3 py-2 text-[11px] last:border-b-0"
+                          >
+                            <div className="font-mono text-text-3">{new Date(a.at).toLocaleString()}</div>
+                            <div className="text-text-2">
+                              <span className="font-semibold text-text">{a.action}</span>
+                              {' — '}
+                              {a.detail}
+                              <span className="text-text-3"> · {a.actor}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* FOOTER — guardrail note + inert Save draft + Submit (gated on the approved identity join) */}
       <div className="mt-4 flex flex-wrap items-center gap-[14px]">
         <div className="flex items-center gap-2 text-[12px] text-text-2">
           <Info size={15} strokeWidth={1.9} className="text-info" />
           Barcodes are checked for collisions at the preflight gate — not here.
         </div>
         <div className="flex-1" />
+        {!canSubmit && count > 0 && submitBlockedReason && (
+          <span className="text-[12px] font-medium text-text-3">{submitBlockedReason}</span>
+        )}
         <button
           type="button"
           className="rounded-[9px] border border-line-strong bg-card px-4 py-[9px] text-[13px] font-medium text-text-2"
@@ -886,8 +1202,8 @@ export function Submit() {
         </button>
         <button
           type="button"
-          onClick={submit}
-          disabled={submitting || count === 0}
+          onClick={() => void submit()}
+          disabled={submitting || !canSubmit}
           className="inline-flex items-center gap-2 rounded-[9px] bg-accent px-[18px] py-2.5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-60"
         >
           <ArrowRight size={15} strokeWidth={2} />

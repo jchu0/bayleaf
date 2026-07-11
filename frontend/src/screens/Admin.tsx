@@ -1,4 +1,4 @@
-import { Activity, BarChart3, CheckCircle2, ChevronRight, Database, ExternalLink, KeyRound, LineChart, ShieldCheck, UserCog } from 'lucide-react'
+import { Activity, BarChart3, CheckCircle2, ChevronLeft, ChevronRight, Database, ExternalLink, KeyRound, LineChart, ShieldAlert, ShieldCheck, UserCog } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { AccessEditor } from '../components/AccessEditor'
@@ -6,8 +6,7 @@ import { Tabs } from '../components/Tabs'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { useToast } from '../components/Toast'
-import { useConfirm } from '../components/ConfirmDialog'
-import { DEMO_ACCOUNTS } from '../auth'
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '../auth'
 import { useAccess } from '../context/AccessContext'
 import { useRole } from '../context/RoleContext'
 import type {
@@ -56,138 +55,366 @@ function DemoBanner({ text }: { text: string }) {
   )
 }
 
-// ── Users & roles (client-mock) ──────────────────────────────────────────────
-function UsersTab() {
-  const { actor, setActor } = useRole()
-  const { toast } = useToast()
-  const confirm = useConfirm()
-  const [users, setUsers] = useState(SEED_USERS)
-  // Password/email reset is a production seam — no live mail in the demo. The admin action toasts
-  // what would happen (a signed, expiring reset link emailed to the user).
-  const resetPassword = (u: (typeof users)[number]) =>
-    toast(`A password-reset link would be emailed to ${u.email} — production seam (no live mail here).`, 'info')
-  // Role edits STAGE into a draft (id → role) and only take effect on Save — a role change is a
-  // deliberate governance action, not a stray click on a toggle. `dirty` gates the Save/Discard bar.
-  const [draft, setDraft] = useState<Record<string, Role>>({})
-  const roleOf = (id: string, saved: Role) => draft[id] ?? saved
-  const dirty = users.some((u) => draft[u.id] !== undefined && draft[u.id] !== u.role)
+// ── Act-as immutable audit (append-only, localStorage) ───────────────────────
+// UIC-13a: acting as another user is a high-trust action, so each occurrence is written to an
+// append-only log the UI never edits or deletes — it only appends + reads. PRODUCTION SEAM: a real
+// build records this server-side in a tamper-evident audit store, and re-auth is an IdP step-up
+// (OAuth/OIDC) or a credential-request tool — never the plaintext demo password compared below.
+type ActAsEntry = { at: string; actor: string; targetUser: string; targetRole: Role }
+const ACTAS_KEY = 'pipeguard.actas-audit'
 
-  const stage = (id: string, role: Role) =>
-    setDraft((d) => {
-      const saved = users.find((u) => u.id === id)?.role
-      const next = { ...d }
-      if (role === saved) delete next[id]
-      else next[id] = role
-      return next
-    })
-  const save = () => {
-    setUsers((us) => us.map((u) => (draft[u.id] ? { ...u, role: draft[u.id] } : u)))
-    // Keep the live actor in lockstep if its own role was just changed.
-    if (draft[actor.id] && draft[actor.id] !== actor.role) setActor({ id: actor.id, role: draft[actor.id] })
-    setDraft({})
+function loadActAsAudit(): ActAsEntry[] {
+  try {
+    const raw = localStorage.getItem(ACTAS_KEY)
+    return raw ? (JSON.parse(raw) as ActAsEntry[]) : []
+  } catch {
+    return []
   }
-  // Act-as impersonation is already admin-gated (the whole panel is isAdmin-only); confirm it so it
-  // is a deliberate, audited switch rather than a stray click.
-  const actAs = async (u: (typeof users)[number]) => {
-    if (u.id === actor.id) return
-    const ok = await confirm({
-      title: `Act as ${u.name}?`,
-      body: `Subsequent off-gate writes (approvals, tickets) are attributed to ${u.name} (${u.role}) and recorded in the audit log.`,
-      confirmLabel: 'Act as',
-    })
-    if (ok) setActor({ id: u.id, role: u.role })
+}
+function appendActAsAudit(entry: ActAsEntry): void {
+  try {
+    // Append-only: read → prepend → persist. No code path removes or mutates an existing entry.
+    localStorage.setItem(ACTAS_KEY, JSON.stringify([entry, ...loadActAsAudit()]))
+  } catch {
+    // localStorage unavailable (private mode) — the switch still proceeds; only the durable record is lost.
   }
+}
+
+// UIC-13a: a re-authentication gate for "Act as". useConfirm() is boolean-only, so this local modal
+// adds the credential entry the boolean confirm cannot capture — it mirrors ConfirmDialog's shell/idiom
+// rather than reinventing it. PRODUCTION SEAM: real re-auth is an IdP step-up or a credential-request
+// tool; a plaintext password field is a demo-only stand-in and never ships long-term (security guardrail).
+function ReAuthModal({
+  user,
+  onCancel,
+  onConfirm,
+}: {
+  user: { name: string; role: Role }
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const [pw, setPw] = useState('')
+  const [err, setErr] = useState(false)
+  const submit = () => {
+    if (pw !== DEMO_PASSWORD) {
+      setErr(true)
+      return
+    }
+    onConfirm()
+  }
+  // Escape cancels — a deliberate dismissal, never an accidental impersonation.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(16,24,40,.4)] p-6"
+      onClick={onCancel}
+    >
+      <div
+        className="w-[440px] max-w-full overflow-hidden rounded-2xl border border-line-strong bg-card shadow-pop"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-4">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-escalate-bg text-escalate-fg">
+              <ShieldAlert size={16} />
+            </span>
+            <div className="min-w-0">
+              <div className="text-[15px] font-semibold text-text">Re-authenticate to act as {user.name}</div>
+              <p className="mt-1 text-[12.5px] leading-relaxed text-text-2">
+                Impersonation is a high-trust action. Subsequent off-gate writes are attributed to{' '}
+                {user.name} ({user.role}) and this switch is recorded in an append-only audit entry.
+              </p>
+            </div>
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              submit()
+            }}
+          >
+            <label className="mt-3 block text-[11px] font-semibold uppercase tracking-[0.4px] text-text-3">
+              Confirm your password
+            </label>
+            <input
+              type="password"
+              autoFocus
+              value={pw}
+              onChange={(e) => {
+                setPw(e.target.value)
+                setErr(false)
+              }}
+              placeholder="Demo password"
+              className={`mt-1 w-full rounded-lg border bg-card px-3 py-2 text-[13px] text-text outline-none focus:border-accent ${
+                err ? 'border-escalate-bd' : 'border-line'
+              }`}
+            />
+            {err && <div className="mt-1 text-[11.5px] text-escalate-fg">Incorrect password. Try again.</div>}
+          </form>
+          <div className="mt-3 rounded-lg border border-hold-bd bg-hold-bg px-3 py-2 text-[11px] leading-relaxed text-hold-fg">
+            <strong>Production seam.</strong> Real re-auth is an identity-provider step-up (OAuth/OIDC)
+            or a credential-request tool — never a plaintext password field. The demo compares a shared
+            demo password client-side only.
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-line bg-card px-3.5 py-1.5 text-[13px] font-medium text-text-2 hover:bg-page"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!pw}
+            className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-white hover:bg-accent-strong disabled:opacity-40"
+          >
+            Re-authenticate &amp; act as
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Per-user edit view (UIC-13b) ─────────────────────────────────────────────
+// Role allocation + password recovery moved OFF the inline roster table into this dedicated detail
+// view — LOCAL view state in UsersTab, NOT an App.tsx route — so future user-management features have
+// a home. Role edits stage behind an explicit Save (UIC-4): the dropdown shows state but only mutates
+// the roster on Save. Keyed by user id at the call site, so its draft resets cleanly per user.
+function UserDetail({
+  user,
+  isSelf,
+  onBack,
+  onSaveRole,
+  onResetPassword,
+}: {
+  user: (typeof SEED_USERS)[number]
+  isSelf: boolean
+  onBack: () => void
+  onSaveRole: (role: Role) => void
+  onResetPassword: () => void
+}) {
+  const [draftRole, setDraftRole] = useState<Role>(user.role)
+  const dirty = draftRole !== user.role
 
   return (
     <div>
-      <DemoBanner text="Demo · dev auth shim, not an identity system. Role assignment gates only off-gate writes (approvals, tickets) — never a verdict." />
-      <div className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
-        <div className="grid grid-cols-[1fr_180px_120px] gap-3 border-b border-line px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.4px] text-text-3">
-          <span>User</span>
-          <span>Role</span>
-          <span className="text-right">Act as</span>
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-3 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-2 hover:text-text"
+      >
+        <ChevronLeft size={15} /> All users
+      </button>
+
+      <div className="mb-4 flex items-center gap-3 rounded-xl border border-line bg-card p-4 shadow-card">
+        <Avatar name={user.name} />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[15px] font-semibold text-text">
+            {user.name}
+            {isSelf && <span className="rounded-full bg-accent px-2 py-px text-[10px] font-semibold text-white">you</span>}
+            {user.admin && (
+              <span className="rounded-full bg-card-2 px-2 py-px text-[10px] font-semibold text-text-2">admin</span>
+            )}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 font-mono text-[11.5px] text-text-2">
+            <span>{user.id}</span>
+            <span className="text-text-3">·</span>
+            <span>{user.email}</span>
+          </div>
         </div>
-        {users.map((u) => {
-          const isCurrent = u.id === actor.id
-          const staged = draft[u.id] !== undefined && draft[u.id] !== u.role
-          return (
-            <div
-              key={u.id}
-              className={`grid grid-cols-[1fr_180px_120px] items-center gap-3 border-b border-line px-4 py-3 last:border-0 ${
-                isCurrent ? 'bg-accent-weak/40' : ''
-              }`}
+      </div>
+
+      {/* Role allocation — staged behind an explicit Save (UIC-4). Client-mock: api/auth.py is a header
+          shim, so this updates local roster state only, never a backend user store. */}
+      <div className="mb-4 rounded-xl border border-line bg-card p-4 shadow-card">
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.4px] text-text-3">
+          <UserCog size={13} /> Role allocation
+        </div>
+        <p className="mb-3 text-[12px] leading-relaxed text-text-2">
+          Gates only off-gate writes (approvals, tickets). A role change never sets or overrides a verdict.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={draftRole}
+            onChange={(e) => setDraftRole(e.target.value as Role)}
+            className={`rounded-lg border bg-card px-2.5 py-1.5 text-[13px] text-text outline-none focus:border-accent ${
+              dirty ? 'border-hold-bd' : 'border-line'
+            }`}
+          >
+            {ROLE_OPTS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {dirty && <span className="text-[10px] font-semibold uppercase tracking-[0.3px] text-hold-fg">unsaved</span>}
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDraftRole(user.role)}
+              disabled={!dirty}
+              className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-line-strong disabled:opacity-40"
             >
-              <div className="flex min-w-0 items-center gap-2.5">
-                <Avatar name={u.name} />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-[13.5px] font-semibold text-text">
-                    {u.name}
-                    {isCurrent && (
-                      <span className="rounded-full bg-accent px-2 py-px text-[10px] font-semibold text-white">you</span>
-                    )}
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={() => onSaveRole(draftRole)}
+              disabled={!dirty}
+              className="rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:bg-accent-strong disabled:opacity-40"
+            >
+              Save role
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Password & recovery — a labelled production seam (no live mail in the demo). */}
+      <div className="rounded-xl border border-line bg-card p-4 shadow-card">
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.4px] text-text-3">
+          <KeyRound size={13} /> Password &amp; recovery
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={onResetPassword}
+            className="rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
+          >
+            Send password-reset link
+          </button>
+          <span className="text-[11.5px] text-text-3">
+            Production seam — emails a signed, expiring reset link to {user.email}. No live mail here.
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Users & roles (client-mock) ──────────────────────────────────────────────
+function UsersTab() {
+  const { actor, session, setActor } = useRole()
+  const { toast } = useToast()
+  const [users, setUsers] = useState(SEED_USERS)
+  // Per-user edit detail (UIC-13b) + the Act-as re-auth gate (UIC-13a) are local view state — no route.
+  const [editing, setEditing] = useState<string | null>(null)
+  const [reauth, setReauth] = useState<(typeof SEED_USERS)[number] | null>(null)
+
+  // Password/email reset is a production seam — no live mail in the demo. The action toasts what would
+  // happen (a signed, expiring reset link emailed to the user).
+  const resetPassword = (u: (typeof users)[number]) =>
+    toast(`A password-reset link would be emailed to ${u.email} — production seam (no live mail here).`, 'info')
+
+  const saveRole = (id: string, role: Role) => {
+    setUsers((us) => us.map((u) => (u.id === id ? { ...u, role } : u)))
+    // Keep the live actor in lockstep if its own role was just changed.
+    if (id === actor.id && role !== actor.role) setActor({ id, role })
+    toast('Role updated (client-mock — dev auth shim).', 'success')
+  }
+
+  // Act-as, gated by re-auth (UIC-13a). On success: write the append-only audit entry — attributed to
+  // the logged-in admin (session), captured BEFORE the actor switches — then switch the acting actor.
+  const confirmActAs = () => {
+    const u = reauth
+    if (!u) return
+    appendActAsAudit({ at: new Date().toISOString(), actor: session?.id ?? actor.id, targetUser: u.id, targetRole: u.role })
+    setActor({ id: u.id, role: u.role })
+    toast(`Now acting as ${u.name} (${u.role}). Recorded in the audit log.`, 'success')
+    setReauth(null)
+  }
+
+  const editingUser = editing ? users.find((u) => u.id === editing) ?? null : null
+
+  return (
+    <div>
+      {editingUser ? (
+        <UserDetail
+          key={editingUser.id}
+          user={editingUser}
+          isSelf={editingUser.id === actor.id}
+          onBack={() => setEditing(null)}
+          onSaveRole={(role) => saveRole(editingUser.id, role)}
+          onResetPassword={() => resetPassword(editingUser)}
+        />
+      ) : (
+        <>
+          <DemoBanner text="Demo · dev auth shim, not an identity system. Role assignment gates only off-gate writes (approvals, tickets) — never a verdict." />
+          <div className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
+            <div className="grid grid-cols-[1fr_150px_170px] gap-3 border-b border-line px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.4px] text-text-3">
+              <span>User</span>
+              <span>Role</span>
+              <span className="text-right">Manage</span>
+            </div>
+            {users.map((u) => {
+              const isCurrent = u.id === actor.id
+              return (
+                <div
+                  key={u.id}
+                  className={`grid grid-cols-[1fr_150px_170px] items-center gap-3 border-b border-line px-4 py-3 last:border-0 ${
+                    isCurrent ? 'bg-accent-weak/40' : ''
+                  }`}
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Avatar name={u.name} />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-[13.5px] font-semibold text-text">
+                        {u.name}
+                        {isCurrent && (
+                          <span className="rounded-full bg-accent px-2 py-px text-[10px] font-semibold text-white">you</span>
+                        )}
+                      </div>
+                      <div className="font-mono text-[11.5px] text-text-2">{u.id}</div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 font-mono text-[11.5px] text-text-2">
-                    {u.id}
+                  <div className="min-w-0">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-line bg-card-2 px-2.5 py-0.5 text-[11.5px] font-medium capitalize text-text-2">
+                      {u.role}
+                      {u.admin && <span className="text-text-3">· admin</span>}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
                     <button
-                      onClick={() => resetPassword(u)}
-                      title={`Reset password for ${u.email}`}
-                      className="font-sans text-[11px] font-medium text-accent-strong hover:underline"
+                      type="button"
+                      onClick={() => setEditing(u.id)}
+                      className="rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12px] font-medium text-accent-strong hover:border-line"
                     >
-                      Reset password
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReauth(u)}
+                      disabled={isCurrent}
+                      className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                        isCurrent
+                          ? 'cursor-default border-line bg-card-2 text-text-3'
+                          : 'border-line-strong bg-card text-text hover:border-line'
+                      }`}
+                    >
+                      {isCurrent ? 'Active' : 'Act as'}
                     </button>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={roleOf(u.id, u.role)}
-                  onChange={(e) => stage(u.id, e.target.value as Role)}
-                  className={`rounded-lg border bg-card px-2.5 py-1.5 text-[13px] text-text outline-none focus:border-accent ${
-                    staged ? 'border-hold-bd' : 'border-line'
-                  }`}
-                >
-                  {ROLE_OPTS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-                {staged && <span className="text-[10px] font-semibold uppercase tracking-[0.3px] text-hold-fg">unsaved</span>}
-              </div>
-              <div className="text-right">
-                <button
-                  onClick={() => void actAs(u)}
-                  disabled={isCurrent}
-                  className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                    isCurrent
-                      ? 'cursor-default border-line bg-card-2 text-text-3'
-                      : 'border-line-strong bg-card text-text hover:border-line'
-                  }`}
-                >
-                  {isCurrent ? 'Active' : 'Act as'}
-                </button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-      {dirty && (
-        <div className="mt-3 flex items-center justify-end gap-2">
-          <span className="mr-auto text-[12px] text-text-2">Unsaved role changes.</span>
-          <button
-            onClick={() => setDraft({})}
-            className="rounded-lg border border-line bg-card px-3.5 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-line-strong"
-          >
-            Discard
-          </button>
-          <button
-            onClick={save}
-            className="rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:bg-accent-strong"
-          >
-            Save role changes
-          </button>
-        </div>
+              )
+            })}
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-text-3">
+            Role allocation and password recovery live in each user&apos;s{' '}
+            <span className="font-medium text-text-2">Edit</span> view. Acting as another user requires
+            re-authentication and is written to an append-only audit entry.
+          </p>
+        </>
       )}
+      {reauth && <ReAuthModal user={reauth} onCancel={() => setReauth(null)} onConfirm={confirmActAs} />}
     </div>
   )
 }
@@ -195,7 +422,9 @@ function UsersTab() {
 // ── Activity log (real endpoints + client-side access feed) ──────────────────
 // threshold/pipeline/ticket are backend-persisted; `access` is the client-side page-access
 // governance store (localStorage, no backend) merged in and clearly badged — an honest seam.
-type FeedKind = 'threshold' | 'pipeline' | 'ticket' | 'access'
+// `actas` is the client-side, append-only Act-as impersonation log (UIC-13a) merged in alongside the
+// page-access feed and clearly badged — a labelled seam, distinct from the backend-persisted kinds.
+type FeedKind = 'threshold' | 'pipeline' | 'ticket' | 'access' | 'actas'
 type FeedRow = { when: string; actor: string; kind: FeedKind; target: string; detail: string; clientSide?: boolean }
 
 const KIND_STYLE: Record<FeedKind, string> = {
@@ -203,6 +432,15 @@ const KIND_STYLE: Record<FeedKind, string> = {
   pipeline: 'bg-variant/10 text-variant',
   ticket: 'bg-preflight/10 text-preflight',
   access: 'bg-hold/10 text-hold-fg',
+  actas: 'bg-escalate/10 text-escalate-fg',
+}
+// Display labels for the kind chip (so `actas` reads as "act-as", not a jammed token).
+const KIND_LABEL: Record<FeedKind, string> = {
+  threshold: 'threshold',
+  pipeline: 'pipeline',
+  ticket: 'ticket',
+  access: 'access',
+  actas: 'act-as',
 }
 
 type ActPerPage = '25' | '50' | '100'
@@ -216,6 +454,9 @@ const rowKey = (r: FeedRow) => `${r.when}|${r.kind}|${r.target}|${r.detail}`
 function ActivityTab() {
   const { audit } = useAccess()
   const [backendRows, setBackendRows] = useState<FeedRow[] | null>(null)
+  // Read the append-only Act-as log once on mount (localStorage). Switching to this tab remounts the
+  // component, so a just-recorded impersonation is picked up without shared state.
+  const [actAsRows] = useState<ActAsEntry[]>(() => loadActAsAudit())
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | FeedKind>('all')
   const [perPage, setPerPage] = useState<ActPerPage>('25')
@@ -286,13 +527,26 @@ function ActivityTab() {
       })),
     [audit],
   )
+  // The client-side Act-as impersonation trail (localStorage), merged in as a labelled `actas` feed.
+  const actasFeed = useMemo<FeedRow[]>(
+    () =>
+      actAsRows.map((e) => ({
+        when: e.at,
+        actor: e.actor,
+        kind: 'actas' as const,
+        target: e.targetUser,
+        detail: `Acted as ${e.targetUser} (${e.targetRole})`,
+        clientSide: true,
+      })),
+    [actAsRows],
+  )
   const rows = useMemo<FeedRow[] | null>(() => {
     if (backendRows == null) return null
-    return [...backendRows, ...accessRows].sort((a, b) => (a.when < b.when ? 1 : -1))
-  }, [backendRows, accessRows])
+    return [...backendRows, ...accessRows, ...actasFeed].sort((a, b) => (a.when < b.when ? 1 : -1))
+  }, [backendRows, accessRows, actasFeed])
 
   const counts = useMemo(() => {
-    const c = { threshold: 0, pipeline: 0, ticket: 0, access: 0 }
+    const c = { threshold: 0, pipeline: 0, ticket: 0, access: 0, actas: 0 }
     for (const r of rows ?? []) c[r.kind]++
     return c
   }, [rows])
@@ -311,8 +565,8 @@ function ActivityTab() {
     <div>
       <p className="mb-3 text-[12.5px] text-text-2">
         Append-only audit trail of off-gate governance — threshold overrides, pipeline versions,
-        and review tickets (backend-persisted), plus page-access changes (a client-side store,
-        badged as such). Read-only; a rules-decided verdict never appears here.
+        and review tickets (backend-persisted), plus page-access changes and act-as impersonations
+        (client-side stores, badged as such). Read-only; a rules-decided verdict never appears here.
       </p>
       <div className="mb-3">
         <Tabs<'all' | FeedKind>
@@ -322,6 +576,7 @@ function ActivityTab() {
             { value: 'pipeline', label: 'Pipelines', count: counts.pipeline },
             { value: 'ticket', label: 'Tickets', count: counts.ticket },
             { value: 'access', label: 'Access', count: counts.access },
+            { value: 'actas', label: 'Act-as', count: counts.actas },
           ]}
           value={filter}
           onChange={setFilter}
@@ -347,7 +602,7 @@ function ActivityTab() {
                   >
                     <ChevronRight size={13} className={`shrink-0 text-text-3 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                     <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10.5px] font-semibold uppercase ${KIND_STYLE[r.kind]}`}>
-                      {r.kind}
+                      {KIND_LABEL[r.kind]}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-[13px] text-text">{r.detail}</span>
                     {r.clientSide && (
@@ -540,12 +795,9 @@ export function Admin() {
   ]
   return (
     <div className="mx-auto max-w-4xl">
-      <PageHeader
-        eyebrow="Governance"
-        title="Admin"
-        subtitle="Manage users and their RBAC roles, assign page access, review the off-gate audit trail, and read system posture. Admin never sets or overrides a verdict."
-        actions={<ShieldCheck size={20} className="text-text-3" />}
-      />
+      {/* UIC-1: no eyebrow/subtitle flavor — the nav names the page. The "never a verdict" limitation
+          it used to carry lives in each tab's DemoBanner / posture note. */}
+      <PageHeader title="Admin" actions={<ShieldCheck size={20} className="text-text-3" />} />
       <div className="mb-5">
         <SegmentedControl<Tab> options={tabOptions} value={tab} onChange={setTab} />
       </div>
