@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md) |
 
 ## Overview
 
@@ -246,18 +246,33 @@ node-authoring agent).
    success/failure via the new `Toast` system), no longer fire-and-forget. **Dry-run/Diff wired
    to the real endpoints (2026-07-10, T-096, commit `4208f0b`, "Item E"):** once the graph is
    Saved (exists in the pipeline store), the console's Dry-run tab calls `POST
-   /api/pipelines/{name}/dry-run?run_id=…` (REQ-F-061) — via a plain run-id text input, not yet
-   a searchable run-selector ([tasks T-070](../planning/tasks.md) stays open) — rendering the
+   /api/pipelines/{name}/dry-run?run_id=…` (REQ-F-061) — via a plain run-id text input —
+   rendering the
    real per-locator matched/ambiguous/missing/invalid resolution + summary, and the Diff tab
    calls `GET /api/pipelines/{name}/diff` (REQ-F-061), rendering added/changed/removed vs the
    approved baseline (or "no baseline yet"); both fall back to the earlier client-side preview
    before Save. This closes the previous "known, labelled limitation" (Dry-run/Diff existed in
    `api.ts` but the Builder screen never called them — not a fabricated success, since the
-   console rendered from local state and never claimed a server round trip). **Still open**
-   ([tasks T-069](../planning/tasks.md)): the "Author a tool node" /
-   "Pipeline-repair" / "Archivist" modals inside the Builder are **static UI previews**
-   labelled `phase-2` in-app — they do not call the live advisory-agent endpoints (those are
-   wired elsewhere: REQ-F-041). **Editable template fix (2026-07-09, commit `01ba673`,
+   console rendered from local state and never claimed a server round trip). **Run-selector +
+   advisory-modal wiring + saved-profiles (2026-07-10, commits `34bca5d`→`adfd7aa`, T-069/T-070,
+   closing both):** the Dry-run run-id text box is now a reusable, searchable `RunSelector`
+   (`frontend/src/components/RunSelector.tsx`, T-070 — an 8-row-capped combobox sharing the
+   top-bar switcher idiom, real `RUN_STATUS_META` status dot per F17, self-fetching `api.runs()`
+   lazily with an honest "Couldn't load runs" on failure). The "Pipeline-repair" / "Archivist"
+   modals — previously **static UI previews** labelled `phase-2` in-app — now call the live
+   advisory-agent endpoints (T-069, REQ-F-041): `PipelineRepairModal` → `GET /api/monitoring`
+   (a recurring-signature picker) + `GET /api/monitoring/signatures/{sig}/repair` → the real
+   `RepairProposal`, each corpus citation labelled with a **"heuristic" score, never
+   "confidence"** ("Send to review queue" navigates to `/queue`, never fabricates a ticket);
+   `ArchivistModal` → `GET /api/archive/index` → the real cross-run `ArchiveDigest` ("Queue
+   archive" stays inert — no write endpoint exists). The `RunHandoffModal` now shows the real
+   composed `run_layout.yaml`, and a new toolbar **"Open"** action lists `GET /api/pipelines` and
+   hydrates the canvas from a chosen saved graph (closing the earlier "saved-profiles has no
+   backend seam" gap) — approved graphs open read-only, re-saving mints a new draft, and a
+   foreign/topology-less envelope loads empty with a labelled toast rather than fabricated nodes.
+   **Only the "Author a tool node" modal remains a static `phase-2` preview** — see
+   [tasks T-046](../planning/tasks.md), a proposed-not-built design note, unaffected by this
+   batch. **Editable template fix (2026-07-09, commit `01ba673`,
    [tasks T-075](../planning/tasks.md)):** "New → From template" previously re-showed the
    read-only seeded DAG, so the demo's own pipeline couldn't be modified in Edit;
    `germlineTemplate()` now instantiates the same fastp→…→MultiQC chain as real, editable
@@ -279,7 +294,8 @@ node-authoring agent).
    [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md),
    [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md),
    [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md),
-   [tasks T-044/T-049/T-062/T-085/T-086/T-096](../planning/tasks.md).
+   [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md),
+   [tasks T-044/T-049/T-062/T-069/T-070/T-085/T-086/T-096](../planning/tasks.md).
 7. **REQ-F-046 — Honest run lifecycle status + run metadata.** `RunSummary` carries a real
    `status` — `running` (no completion event yet) / `needs_review` (completed, actionable
    samples) / `released` (completed, none) — derived from the provenance ledger, **not** inferred
@@ -301,10 +317,15 @@ node-authoring agent).
    count/page/limit on response headers). **Signatures-list pagination (2026-07-09, commit
    `e5d5043`, [tasks T-076](../planning/tasks.md)):** `Monitoring.tsx` now paginates the
    recurring-signatures grid client-side (25/50/100 + pager), mirroring the Runs-list pattern —
-   distinct from [tasks T-072](../planning/tasks.md), the still-open gap where the *per-run*
-   `rows: list[MonitoringRunRow]` on the same response has no analogous cap. *Trace:*
+   distinct from [tasks T-072](../planning/tasks.md), the *per-run* `rows: list[MonitoringRunRow]`
+   on the same response. **Per-run pagination, frontend half (2026-07-10, commit `34bca5d`,
+   [tasks T-072](../planning/tasks.md)):** the throughput card's per-run columns now paginate the
+   same way (25/50/100 + pager, "Showing X–Y of N runs," independent state, reset on
+   window/date-range/per-page change) — **this closes only the frontend half**; the `rows[]`
+   payload itself is still returned uncapped by `get_monitoring`, so T-072 stays open for the
+   backend cap. *Trace:*
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
-   [architecture.md](../design/architecture.md), [tasks T-048](../planning/tasks.md).
+   [architecture.md](../design/architecture.md), [tasks T-048/T-072](../planning/tasks.md).
 
 ## AI configurability (ADR-0006)
 

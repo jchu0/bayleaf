@@ -199,6 +199,13 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
 - **Shipped 2026-07-10 (T-080, commit `eb7d016`):** the throughput bars are now a **constant
   width** (28px) inside a scrollable viewport, so they no longer stretch/squish as the run
   count or date range grows.
+- **Shipped 2026-07-10 (T-072 frontend half, commit `34bca5d`):** the throughput card's per-run
+  columns now paginate client-side too (25/50/100 + numbered pager, "Showing X–Y of N runs"),
+  ported from the recurring-signatures pager pattern with independent state (its own per-page +
+  page, reset on window/date-range/per-page change); `maxSamples` stays computed over the full
+  filtered set so the y-axis doesn't jump between pages. **Frontend-only** — `GET
+  /api/monitoring`'s `runs[]` payload itself stays uncapped server-side ([tasks
+  T-072](../../planning/tasks.md) is still open for the backend half).
 
 ### 5.9 Pipeline builder  (`view: 'builder'`)  — see §6 for the full model
 Node-graph editor that **emits `run_layout.yaml`**. Defaults to **View**; **Edit** unlocks
@@ -285,6 +292,12 @@ View.
 
 **Profile control.** Searchable **combobox** — built-in (`default`/`giab_panel`/`sarek`) +
 **saved** profiles (versioned, w/ status) + **New profile from current graph**.
+- **Open a saved pipeline (Shipped 2026-07-10, T-069, commit `adfd7aa`).** A toolbar **"Open"**
+  action lists `GET /api/pipelines` (latest version per name) and hydrates the canvas
+  (nodes/edges/locators/reference locators/profile/version/status) from a chosen graph. An
+  **approved** graph opens **read-only**; re-saving mints a new draft rather than mutating it.
+  Honest loading/empty/error states; a foreign envelope with no restorable builder topology
+  (a different `schema_version`) loads empty with a labelled toast — never fabricated nodes.
 
 **Save · version · approval.** Toolbar shows graph version + status pill
 (**draft → pending approval → approved**), **Save**, approver-only **Approve**, and the RBAC
@@ -299,27 +312,49 @@ resolves paths only, reads no bytes). **Emit / Copy / Download** produce the rea
   client-side-only preview (Diff vs last **Emit** snapshot; Dry-run vs a mock run dir). Once
   Saved (the graph exists in the pipeline store), **Dry-run** gains a run-id input +
   "Resolve against run" → `POST /api/pipelines/{name}/dry-run?run_id=…`, rendering the REAL
-  per-locator matched/ambiguous/missing/invalid resolution + summary (the run-id field is a
-  plain text box, not yet a searchable picker — [tasks T-070](../../planning/tasks.md) stays
-  open); **Diff** gains "Diff vs approved baseline" → `GET /api/pipelines/{name}/diff`,
-  rendering added/changed/removed vs the approved baseline (or "no baseline yet"). Save stamps
-  `savedName` (+ clears prior results); New/Cancel reset it. **Compose ≠ execute still holds** —
-  a dry-run globs paths, reads no bytes, runs nothing. **Still open** ([tasks
-  T-069](../../planning/tasks.md)): the Run hand-off / pipeline-repair / archivist modals below
-  remain static previews, and saved-profiles has no backend seam yet.
+  per-locator matched/ambiguous/missing/invalid resolution + summary; **Diff** gains "Diff vs
+  approved baseline" → `GET /api/pipelines/{name}/diff`, rendering added/changed/removed vs the
+  approved baseline (or "no baseline yet"). Save stamps `savedName` (+ clears prior results);
+  New/Cancel reset it. **Compose ≠ execute still holds** — a dry-run globs paths, reads no
+  bytes, runs nothing.
+- **Dry-run's run-id field is now the reusable `RunSelector` (Shipped 2026-07-10, T-070, commit
+  `3c6455e`)** — a searchable (id/platform), 8-row-capped combobox sharing the top-bar switcher
+  idiom (real status dot via `RUN_STATUS_META`, F17, never `n_attention`), replacing the earlier
+  plain text box. Self-fetches `api.runs()` lazily on first open; an honest "Couldn't load runs"
+  on fetch failure, never a fabricated row. Its props leave it ready for other run-identity
+  pickers (e.g. the Run hand-off modal below) as future consumers.
 
 **Run.** A **hand-off** modal (composes ≠ executes): Emit `run_layout.yaml` → Nextflow/bioconda
 runs (outside PipeGuard) → deterministic ingest writes `run/` → `run_gate` gates + records the
 ledger → Decision cards. Primary action hands off to the engine; the UI never runs tools.
+**Shipped 2026-07-10 (T-069, commit `adfd7aa`):** the modal now renders the REAL composed
+`run_layout.yaml` the builder emits (`yamlFor`, labelled by profile + locator count), and its
+button **copies** that YAML (+ fires the compose-only Emit) instead of the earlier fake "Hand
+off to Nextflow" button — no network call, compose ≠ execute unchanged.
 
 **Node-authoring agent** ("Author a tool node"). Drop tool docs (`--help` /
 `nextflow_schema.json`) → an advisory agent proposes a typed `ToolNode`: editable **name**, an
 **icon picker**, and a **scrollable flag checklist** (tickable CLI flags + editable default
 values). Unknown artifact-kinds are **flagged, never invented**; the human reviews and accepts.
+**Still a static `phase-2`-labelled preview** — unlike the two advisory-agent modals below, this
+one is not wired to a backend endpoint (design note only, [tasks T-046](../../planning/tasks.md)).
 
 **Advisory agents.** **Pipeline-repair** (proposes fixes for recurring signatures) and
 **Archivist** (proposes cold-storage of released `run/` dirs) — both stub-first, human-approved,
-off the critical path; never edit the pipeline or a verdict.
+off the critical path; never edit the pipeline or a verdict. **Wired to real data (Shipped
+2026-07-10, T-069, commit `adfd7aa`) — both were static previews before this.**
+`PipelineRepairModal` now loads `GET /api/monitoring` for a recurring-signature picker (default:
+top-ranked) and `GET /api/monitoring/signatures/{sig}/repair` for the REAL `RepairProposal`
+(summary/rationale/`attach_to`/`scope`/`signature_count`, cited corpus refs each labelled with a
+**"heuristic" score, never "confidence"**); "Send to review queue" **navigates** to `/queue`
+rather than creating a fabricated ticket (a signature-level fix has no `sample_id`/verdict to
+attach one to); a fetch failure shows the shared honest fallback ("the agent is unavailable...");
+zero recurring signatures shows "nothing to propose." `ArchivistModal` now loads `GET
+/api/archive/index` for the REAL cross-run `ArchiveDigest` — n_runs/archive-ready counts, runs
+held from archival (running/in-review), origins rendered verbatim (never relabelled), size,
+recurring signatures, the proposed action, and the backend's own advisory disclaimer verbatim;
+"Queue archive" stays an inert button (no write endpoint exists yet); a fetch failure shows an
+honest "archivist agent is unavailable" state, never a fabricated digest.
 
 ---
 

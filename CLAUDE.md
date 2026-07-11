@@ -287,10 +287,33 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    pipeline-repair / archivist Builder modals (`RunHandoffModal`/`PipelineRepairModal`/
    `ArchivistModal`, still static `phase-2` previews; `api.archiveDigest`/`api.archiveIndex`
    still uncalled) and saved-profiles.
+   **Batch 7 (2026-07-10, commits `34bca5d`→`adfd7aa`, T-069/T-070/T-072), closes the last of
+   the Builder deferrals — also re-presentation/wiring-only, no verdict/gate/ADR-0001 boundary
+   changed.** Monitoring's per-run throughput columns (`data.runs`) now paginate client-side too
+   (25/50/100 + pager, independent state from the signatures pager) — **closes T-072's frontend
+   half; the backend `GET /api/monitoring` `runs[]` payload stays uncapped server-side, so T-072
+   itself stays open** (commit `34bca5d`). A new reusable `RunSelector`
+   (`frontend/src/components/RunSelector.tsx`) — a searchable, 8-row-capped combobox sharing the
+   top-bar switcher idiom (real `RUN_STATUS_META` status dot, F17, never `n_attention`) —
+   replaces the Dry-run tab's plain run-id text box in `BuilderConsole.tsx`; self-fetches
+   `api.runs()` lazily, honest "Couldn't load runs" on failure (**closes T-070**, commit
+   `3c6455e`). The three remaining static Builder-modal previews are now wired to real data
+   (**closes T-069**, commit `adfd7aa`): `PipelineRepairModal` → `GET /api/monitoring` (a
+   signature picker) + `GET /api/monitoring/signatures/{sig}/repair` → the real `RepairProposal`
+   (summary/rationale/attachTo/scope, cited corpus refs with a **"heuristic" score label, never
+   "confidence"**; "Send to review queue" navigates to `/queue`, no fabricated ticket);
+   `ArchivistModal` → `GET /api/archive/index` → the real cross-run `ArchiveDigest`
+   (archive-ready counts, origins verbatim, proposed action, disclaimer; "Queue archive" stays
+   inert, no write endpoint); `RunHandoffModal` now shows the real composed `run_layout.yaml`
+   (copy-not-execute, no network call). **Saved-profiles** ships too: a new toolbar "Open" action
+   lists `GET /api/pipelines` and hydrates the canvas from a chosen saved graph (approved graphs
+   open read-only; re-saving mints a new draft; a foreign envelope with no restorable topology
+   loads empty with a labelled toast, never fabricated nodes). Frontend-only for all three
+   commits (`git diff --stat a728cb7..adfd7aa -- src/ api/ tests/` empty).
    Honest deferrals: Median-review KPI (no backend field), Submit now hands off to the real
-   `POST /api/runs` execution boundary but still has no BaseSpace connector (T-057), the Builder's
-   Run-hand-off / pipeline-repair / archivist modals + saved-profiles remain unwired previews
-   (T-069) and there is still no reusable run-selector (T-070).
+   `POST /api/runs` execution boundary but still has no BaseSpace connector (T-057), and
+   `GET /api/monitoring`'s per-run `rows[]` stays uncapped server-side — T-072's backend half,
+   the one Builder/Monitoring frontend gap still open after this batch.
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
 

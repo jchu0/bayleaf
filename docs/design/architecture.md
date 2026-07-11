@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md) |
 
 ## Overview
 
@@ -244,14 +244,47 @@ Every finding and verdict is labelled with the gate it came from:
      "`dryRunPipeline`/`pipelineDiff` exist but aren't called yet" limitation this doc previously
      flagged; **narrows** [tasks T-069](../planning/tasks.md) to the remaining Run-hand-off /
      pipeline-repair / archivist Builder modals (still static `phase-2` previews) + saved-profiles.
+   - **Frontend fixes batch 7 (2026-07-10, commits `34bca5d`→`adfd7aa`, T-069/T-070/T-072,
+     [journal](../journal/2026-07-10-builder-modals-and-run-selector.md)), closes the last of the
+     Builder/Monitoring deferrals this doc had been carrying — also re-presentation/wiring-only,
+     no verdict/gate/ADR-0001 boundary changed.** (1) **Monitoring per-run pagination** (`34bca5d`):
+     the "Verdicts over time" throughput columns (`data.runs`) now paginate client-side too
+     (25/50/100 + numbered pager, "Showing X–Y of N runs"), ported verbatim from the signatures
+     pager with independent state and a reset-to-page-1 effect on window/date-range/per-page
+     change; `maxSamples` stays computed over the full filtered set. **This closes only the
+     frontend half of [tasks T-072](../planning/tasks.md) — the backend `GET /api/monitoring`
+     `runs[]` payload stays uncapped server-side, so T-072 itself is still open.** (2) **Reusable
+     `RunSelector`** (`3c6455e`, **closes** [tasks T-070](../planning/tasks.md)): a new
+     `frontend/src/components/RunSelector.tsx` — a searchable (id/platform), 8-row-capped
+     combobox sharing the top-bar switcher idiom (real `RUN_STATUS_META` status dot, F17, never
+     `n_attention`), self-fetching `api.runs()` lazily with an honest "Couldn't load runs" on
+     failure — replaces `BuilderConsole`'s plain run-id text input for Dry-run; its props leave it
+     ready for the archivist/run-handoff surfaces as future consumers (not yet wired there). (3)
+     **Builder advisory-modal wiring + saved-profiles** (`adfd7aa`, **closes** [tasks
+     T-069](../planning/tasks.md)): `PipelineRepairModal` now calls `GET /api/monitoring` (a
+     signature picker) + `GET /api/monitoring/signatures/{sig}/repair` and renders the real
+     `RepairProposal` (a **"heuristic" score label, never "confidence"**; "Send to review queue"
+     navigates to `/queue` rather than fabricating a ticket — a signature-level fix has no
+     sample_id/verdict to attach one to); `ArchivistModal` calls `GET /api/archive/index` and
+     renders the real cross-run `ArchiveDigest` (archive-ready counts, origins verbatim, proposed
+     action, the backend disclaimer; "Queue archive" stays inert — no write endpoint exists);
+     `RunHandoffModal` now shows the real composed `run_layout.yaml` and its button copies it
+     (compose ≠ execute holds, no network call, no more fake "Hand off to Nextflow"). A new
+     toolbar **"Open" action** lists `GET /api/pipelines` and hydrates the canvas from a chosen
+     saved graph — the saved-profiles gap this doc flagged — with approved graphs opening
+     read-only (re-saving mints a new draft) and a foreign/topology-less envelope loading empty
+     with a labelled toast rather than fabricated nodes. All three commits verified frontend-only
+     (`git diff --stat a728cb7..adfd7aa -- src/ api/ tests/` empty).
    **Honest, labelled frontend deferrals (no fabrication):** the Monitoring **Median-review KPI**
    (no backend field yet — the signature-level `first_seen`/`last_seen`/`trend`/`affected_run_ids`
    fields below ARE shipped); Submit now
    hands off to a real execution boundary (`POST /api/runs`, T-057 — see below) but still has
    **no BaseSpace connector** and no conversational multi-turn triage chat (both still wishlist);
-   the Builder's Run-hand-off / pipeline-repair / archivist modals + saved-profiles remain
-   unwired previews (T-069; Dry-run/Diff themselves are wired as of T-096 above), and there is
-   still no reusable run-selector (T-070). Of the 10 operator screens: 8 (Runs, Intake, Decision cards, Review queue,
+   and `GET /api/monitoring`'s per-run `rows[]` stays uncapped server-side ([tasks
+   T-072](../planning/tasks.md)'s backend half — the frontend now pages it, batch 7 above). The
+   Builder's Run-hand-off / pipeline-repair / archivist modals + saved-profiles (T-069) and the
+   reusable run-selector (T-070) are **both now closed** (batch 7 above) — this paragraph no
+   longer carries them as open gaps. Of the 10 operator screens: 8 (Runs, Intake, Decision cards, Review queue,
    Provenance, Agent triage, Monitoring, Settings) trace to the pre-refresh [T-022b](../planning/tasks.md)
    1:1 fidelity pass, Pipeline Builder to [T-044](../planning/tasks.md), and Submit was new in the
    T-062 rebuild; Admin (governance, not counted among the 10) is new in this batch.
