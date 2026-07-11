@@ -371,9 +371,14 @@ export function BuilderCanvas(props: CanvasProps) {
       const b = anchorForEdge(ed.to.node, 'in', ed.to.idx, i)
       if (!a || !b) return null
       const { d, mid } = routeEdge(a, b)
-      return { i, d, mid }
+      // Kind-COLOUR each editable wire by its SOURCE port's data kind — the SAME --k-* family the seeded
+      // wires + port borders use (fastq violet, bam blue, vcf teal, ref, QC gold), not a flat accent blue.
+      // (Advisory agent→tool edges are drawn separately and stay dotted-accent — ADR-0001 distinct.)
+      const srcKind = nodesById.get(ed.from.node)?.outs[ed.from.idx]
+      const color = srcKind ? kindColor(srcKind) : 'var(--color-text-3)'
+      return { i, d, mid, color }
     })
-    .filter((e): e is { i: number; d: string; mid: { x: number; y: number } } => e != null)
+    .filter((e): e is { i: number; d: string; mid: { x: number; y: number }; color: string } => e != null)
 
   // Seeded-DAG edges, COMPUTED from the tool card geometry + typed four-sided ports via the shared
   // layoutPorts (not hardcoded SVG paths, which detached whenever a card's port count changed — the
@@ -603,7 +608,7 @@ export function BuilderCanvas(props: CanvasProps) {
               const active = e.i === selEdge || e.i === hoverEdge
               return (
                 <g key={`u${e.i}`}>
-                  <path d={e.d} fill="none" stroke="var(--color-accent)" strokeWidth={e.i === selEdge ? 2.6 : 1.8} opacity={e.i === selEdge ? 1 : 0.9} />
+                  <path d={e.d} fill="none" stroke={e.color} strokeWidth={e.i === selEdge ? 2.6 : 1.8} opacity={e.i === selEdge ? 1 : 0.9} />
                   {!isView && (
                     <path
                       d={e.d}

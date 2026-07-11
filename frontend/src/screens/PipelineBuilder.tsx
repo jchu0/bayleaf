@@ -14,6 +14,7 @@ import {
   GitBranch,
   LayoutGrid,
   Loader2,
+  MoreHorizontal,
   Pencil,
   Play,
   Plus,
@@ -205,6 +206,7 @@ export function PipelineBuilder() {
 
   const [runOpen, setRunOpen] = useState(false)
   const [nfOpen, setNfOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false) // toolbar overflow "⋯ More" menu (PASS-3 consolidation)
   const [authorOpen, setAuthorOpen] = useState(false)
   const [repairOpen, setRepairOpen] = useState(false)
   const [archivistOpen, setArchivistOpen] = useState(false)
@@ -1066,46 +1068,41 @@ export function PipelineBuilder() {
           </button>
         )}
         <span className="max-w-[200px] truncate font-mono text-[11.5px] font-semibold text-text">{docName}</span>
+        {/* Status pill — lock/draft STATE only. The linked-run IDENTITY (id) lives once, in the row-2
+            context strip below (PASS-3 dedup): the pill no longer repeats the run id. */}
         <span
           className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
             linkedView ? 'border-[#cfe0fb] bg-accent-weak text-accent-strong' : 'border-line-strong bg-card-2 text-text-2'
           }`}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${linkedView ? 'bg-accent' : 'bg-text-3'}`} />
-          {linkedView ? `Linked · ${LINKED_RUN} · ${runLocked ? '🔒 run active' : 'run complete · editable'}` : 'Draft — not run'}
+          {linkedView ? (runLocked ? '🔒 run active' : 'run complete · editable') : 'Draft — not run'}
         </span>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* save · version · approval (RBAC) */}
-          <button
-            onClick={onSave}
-            title="Save a new version"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong"
-          >
-            <Save size={13} />
-            Save
-          </button>
-          <span className="font-mono text-[11px] text-text-3">v{version}</span>
-          <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${SAVE_ST[saveStatus].cls}`}>
-            {SAVE_ST[saveStatus].label}
-          </span>
-          {saveStatus === 'pending' && isApprover && (
+          {/* version + governance metadata, clustered compactly (v · status · Approve · role) + profile */}
+          <div className="flex items-center gap-1.5 rounded-lg border border-line bg-card-2 px-2 py-1">
+            <span className="font-mono text-[11px] text-text-3">v{version}</span>
+            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${SAVE_ST[saveStatus].cls}`}>
+              {SAVE_ST[saveStatus].label}
+            </span>
+            {saveStatus === 'pending' && isApprover && (
+              <button
+                onClick={onApprove}
+                className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-card px-2 py-0.5 text-[11.5px] font-medium text-text hover:border-line"
+              >
+                <Check size={12} />
+                Approve
+              </button>
+            )}
             <button
-              onClick={onApprove}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
+              onClick={toggleRole}
+              title="Toggle RBAC role (demo)"
+              className="rounded-md border border-line px-1.5 py-0.5 text-[10.5px] text-text-3 hover:text-text-2"
             >
-              <Check size={13} />
-              Approve
+              as {role}
             </button>
-          )}
-          <button
-            onClick={toggleRole}
-            title="Toggle RBAC role (demo)"
-            className="rounded-md border border-line px-2 py-1 text-[10.5px] text-text-3 hover:text-text-2"
-          >
-            as {role}
-          </button>
-
+          </div>
           <BuilderProfileCombobox
             profile={profile}
             open={profMenu}
@@ -1122,6 +1119,17 @@ export function PipelineBuilder() {
             }}
           />
 
+          <div className="h-5 w-px bg-line" />
+
+          {/* PRIMARY compose flow — Save · Validate · Emit (Emit = accent primary) */}
+          <button
+            onClick={onSave}
+            title="Save a new version"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong"
+          >
+            <Save size={13} />
+            Save
+          </button>
           <button
             onClick={onValidate}
             className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
@@ -1136,57 +1144,97 @@ export function PipelineBuilder() {
             <Download size={14} />
             Emit
           </button>
-          <button
-            onClick={() => setNfOpen(true)}
-            title="Compile these cards into a runnable Nextflow (DSL2) pipeline"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
-          >
-            <FileCode size={14} />
-            Nextflow
-          </button>
-          <button
-            onClick={() => setRunOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
-          >
-            <Play size={14} />
-            Run
-          </button>
+
+          {/* Overflow "⋯ More" — OCCASIONAL actions (same handlers/destinations, just relocated). */}
+          <div className="relative">
+            <button
+              onClick={() => setMoreOpen((o) => !o)}
+              title="More actions"
+              aria-label="More actions"
+              aria-expanded={moreOpen}
+              className={`inline-flex items-center rounded-lg border px-2 py-1.5 ${moreOpen ? 'border-accent bg-accent-weak text-accent-strong' : 'border-line-strong bg-card text-text-2 hover:border-line'}`}
+            >
+              <MoreHorizontal size={16} />
+            </button>
+            {moreOpen && (
+              <>
+                <div className="fixed inset-0 z-[40]" onClick={() => setMoreOpen(false)} />
+                <div className="absolute right-0 top-full z-[41] mt-1 w-56 rounded-lg border border-line-strong bg-card py-1 shadow-pop">
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false)
+                      setNfOpen(true)
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-page"
+                  >
+                    <FileCode size={14} className="shrink-0 text-text-3" />
+                    Export to Nextflow
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false)
+                      setRunOpen(true)
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-page"
+                  >
+                    <Play size={14} className="shrink-0 text-text-3" />
+                    Run hand-off
+                  </button>
+                  {linkedView && (
+                    <>
+                      <div className="my-1 border-t border-line" />
+                      <button
+                        onClick={() => {
+                          setMoreOpen(false)
+                          newPipeline('germline', `${GRAPH_ID}-fork`)
+                        }}
+                        title="Copy the linked pipeline into an editable draft"
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-page"
+                      >
+                        <GitBranch size={14} className="shrink-0 text-text-3" />
+                        Fork to new draft
+                      </button>
+                      <Link
+                        to={`/runs/${LINKED_RUN}/provenance`}
+                        onClick={() => setMoreOpen(false)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-page"
+                      >
+                        <Search size={14} className="shrink-0 text-text-3" />
+                        Open Provenance
+                      </Link>
+                      <Link
+                        to={`/runs/${LINKED_RUN}`}
+                        onClick={() => setMoreOpen(false)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-page"
+                      >
+                        <LayoutGrid size={14} className="shrink-0 text-text-3" />
+                        Open Decision cards
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── linked-run strip (the seeded linked pipeline, View only) ── */}
+      {/* ── linked-run context strip (View only) — the SINGLE home of the linked-run identity + verdict.
+          Run id + lock + the gate verdict bar + proceed/hold/escalate counts (the ONLY verdict-palette
+          use, ADR-0001). Occasional actions (Provenance / Decision / Fork) moved to the ⋯ More menu. ── */}
       {linkedView && (
-        <div className="flex h-12 shrink-0 items-center gap-3.5 border-b border-line bg-card px-4">
+        <div className="flex h-11 shrink-0 items-center gap-3.5 border-b border-line bg-card px-4">
           <span className="whitespace-nowrap text-[12px] text-text-2">
             Linked to <span className="font-mono font-semibold text-text">{LINKED_RUN}</span>
           </span>
+          <div className="mx-1 h-4 w-px bg-line" />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.3px] text-text-3">gate verdict</span>
           <div className="flex h-2 w-[170px] overflow-hidden rounded-[5px] bg-card-3">
             {gateSegs().map((s, i) => (
               <div key={i} style={{ width: s.w, background: s.c }} />
             ))}
           </div>
           <span className="text-[11.5px] text-text-3">proceed 3 · hold 1 · escalate 1</span>
-          <div className="flex-1" />
-          <Link
-            to={`/runs/${LINKED_RUN}/provenance`}
-            className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong"
-          >
-            Open Provenance
-          </Link>
-          <Link
-            to={`/runs/${LINKED_RUN}`}
-            className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong"
-          >
-            Open Decision cards
-          </Link>
-          <button
-            onClick={() => newPipeline('germline', `${GRAPH_ID}-fork`)}
-            title="Copy the linked pipeline into an editable draft"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
-          >
-            <GitBranch size={13} />
-            Fork to new draft
-          </button>
         </div>
       )}
 
