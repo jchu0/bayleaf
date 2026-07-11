@@ -55,7 +55,7 @@ from .routers.pipelines_lifecycle import router as pipelines_lifecycle_router
 from .routers.review_queue import router as review_router
 from .routers.settings import router as settings_router
 from .safe_harbor import HIPAA_SAFE_HARBOR_CLASSES, SAFE_HARBOR_POLICY_ID, redact_record
-from .share_ledger import record_share_event, share_events
+from .share_store import get_share_store
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
@@ -493,12 +493,12 @@ def get_run(run_id: str) -> RunDetail:
     """One run: summary + every decision card + the full provenance trail.
 
     The gate events come from the cached, deterministic `_evaluate`; the append-only
-    `DATA_EXPORTED` share events (ADR-0018 D3) are merged in live from `share_ledger` so a
-    just-recorded egress shows in the trail without invalidating the gate cache. Merged by
+    `DATA_EXPORTED` share events (ADR-0018 D3) are merged in live from the pluggable share store
+    so a just-recorded egress shows in the trail without invalidating the gate cache. Merged by
     `created_at`, so the share (always newer) lands after the run's decision events.
     """
     base = _evaluate(run_id)
-    shares = share_events(run_id)
+    shares = get_share_store().for_run(run_id)
     if not shares:
         return base
     merged = sorted([*base.events, *shares], key=lambda e: e.created_at)
@@ -992,7 +992,7 @@ def share_run(
             "disclaimer": _SHARE_DISCLAIMER,
         },
     )
-    record_share_event(event)  # append-only; get_run merges it into the trail (cache stays pure)
+    get_share_store().append(event)  # append-only; get_run merges it into the trail (cache pure)
     manifest = ShareManifest(
         run_id=run_id,
         policy_id=SAFE_HARBOR_POLICY_ID,

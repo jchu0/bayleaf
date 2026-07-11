@@ -24,6 +24,7 @@ Bring one up and run it against it::
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -33,6 +34,7 @@ import pytest
 pytest.importorskip("psycopg")
 
 from api.feedback_store import PostgresFeedbackStore
+from api.share_store import PostgresShareStore
 from pipeguard import (
     EventLedger,
     SqliteRepository,
@@ -43,6 +45,7 @@ from pipeguard import (
 )
 from pipeguard.persistence.postgres import PostgresRepository
 from pipeguard.persistence.repository import Repository
+from pipeguard.provenance import EntityRef, EventType, ProvenanceEvent
 from pipeguard.synthesis import StubSynthesizer
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
@@ -248,3 +251,56 @@ def test_postgres_feedback_round_trips(pg_dsn: str) -> None:
     assert store.read_all() == [decision, product]
 
     _truncate_feedback(pg_dsn)  # leave the table clean for the next run
+
+
+# --- share egress audit: a real Postgres round-trip (ADR-0018 D3) ----------------------------
+
+
+def _truncate_share(dsn: str) -> None:
+    """Empty the share_events table so a rerun starts clean (the table name is a fixed literal)."""
+    import psycopg
+
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute("TRUNCATE share_events")
+
+
+def _share_event(run_id: str, n: int) -> ProvenanceEvent:
+    """A DATA_EXPORTED event shaped like the one ``api.main.share_run`` records."""
+    h = f"hash{n}"
+    return ProvenanceEvent(
+        event_type=EventType.DATA_EXPORTED,
+        run_id=run_id,
+        actor="human:b.chen",
+        created_at=datetime(2026, 7, 11, 12, n, 0, tzinfo=timezone.utc),
+        outputs=[EntityRef(entity_type="share_bundle", id=h, content_hash=h)],
+        payload={"policy_id": "safe-harbor-style-v1", "n_rows": n, "origin": "contrived"},
+    )
+
+
+def test_postgres_share_store_round_trips(pg_dsn: str) -> None:
+    """Append DATA_EXPORTED events, then read them back per-run faithfully.
+
+    Exercises the real JSONB + TIMESTAMPTZ round-trip: the full ProvenanceEvent rides in the
+    ``record`` column and must come back ``==`` the event that went in (a dialect bug — wrong
+    ON CONFLICT target, a TZ that reads back in the server's zone — would fail this, where the
+    offline suite can't). ``for_run`` filters by run_id and orders oldest-first; the id is the
+    idempotency key (ON CONFLICT DO NOTHING)."""
+    # Construct FIRST so __init__ creates share_events (CREATE TABLE IF NOT EXISTS) before TRUNCATE.
+    store = PostgresShareStore(pg_dsn)
+    _truncate_share(pg_dsn)
+
+    a1, b1, a2 = _share_event("RUN-A", 1), _share_event("RUN-B", 2), _share_event("RUN-A", 3)
+    store.append(a1)
+    store.append(b1)
+    store.append(a2)
+
+    got = [e.model_dump(mode="json") for e in store.for_run("RUN-A")]
+    assert got == [a1.model_dump(mode="json"), a2.model_dump(mode="json")]  # oldest-first, filtered
+    assert len(store.for_run("RUN-B")) == 1
+    assert store.for_run("RUN-NONE") == []
+
+    # Idempotent by id: re-appending the same event adds no row.
+    store.append(a1)
+    assert len(store.for_run("RUN-A")) == 2
+
+    _truncate_share(pg_dsn)  # leave the table clean for the next run

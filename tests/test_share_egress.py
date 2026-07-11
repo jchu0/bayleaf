@@ -31,8 +31,9 @@ _APPROVER = {"X-PipeGuard-Role": "approver", "X-PipeGuard-Actor": "b.chen"}
 
 @pytest.fixture
 def client(tmp_path: Any, monkeypatch: Any) -> TestClient:
-    # Isolate the append-only share ledger to a tmp file so tests never touch the repo default.
-    monkeypatch.setenv("PIPEGUARD_SHARE_LEDGER", str(tmp_path / "share.events.jsonl"))
+    # Isolate the append-only share store to a tmp JSONL so tests never touch the repo default.
+    monkeypatch.delenv("PIPEGUARD_SHARE_STORE", raising=False)  # default (jsonl), whatever the env
+    monkeypatch.setenv("PIPEGUARD_SHARE_PATH", str(tmp_path / "share.events.jsonl"))
     return TestClient(app)
 
 
