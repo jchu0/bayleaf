@@ -550,6 +550,92 @@ export function nodeBBox(n: UserNode): { x1: number; y1: number; x2: number; y2:
   return { x1: n.x, y1: n.y, x2: n.x + NODE_W, y2: n.y + nodeHeight(n) }
 }
 
+// ── Dynamic NEAREST-SIDE port placement (supersedes the fixed left/right balance for RENDERING) ──
+// A port's SIDE + position is driven by WHERE its connected node sits: each edge endpoint anchors to the
+// point on its card's perimeter nearest the node it connects to, so every wire takes the shortest natural
+// path (a card feeding a node below it puts that output near its bottom edge; a node to the right → right
+// edge; etc.). Ports can sit on ANY of the four sides. What DOESN'T change: the port NUMBER (cidx) — it is
+// still the stable layoutCardPorts numbering, so the three gray boxes reference every port by the SAME
+// number and the number↔port↔box-row mapping is untouched; only positions move. A port with NO edge falls
+// back to its kind's conventional CATALOG side (a reference-log bay stays on top, a metric byproduct on the
+// bottom). Ports that land on the same side are spread evenly (ordered by their desired position) so they
+// never overlap. Render (UserCard) AND wire anchors (anchorFull) read this SAME map → the render↔wiring
+// invariant holds: a wire meets its port exactly, wherever the dynamic side puts it.
+type Vec2 = { x: number; y: number }
+const PORT_EDGE_MARGIN = 44 // keep top/bottom ports off the corners (and clear of the 3px left spine)
+function sideToVec(s: PortSide): Vec2 {
+  return s === 'left' ? { x: -1, y: 0 } : s === 'right' ? { x: 1, y: 0 } : s === 'top' ? { x: 0, y: -1 } : { x: 0, y: 1 }
+}
+// Which card edge a ray from the centre exits, + the coordinate along that edge (used ONLY to order the
+// ports that share a side — the final position is re-spread evenly across the edge).
+function sideAndAlong(dir: Vec2, w: number, h: number): { side: PortSide; along: number } {
+  const adx = Math.abs(dir.x)
+  const ady = Math.abs(dir.y)
+  const tx = adx > 1e-6 ? w / 2 / adx : Infinity
+  const ty = ady > 1e-6 ? h / 2 / ady : Infinity
+  if (tx <= ty) return { side: dir.x >= 0 ? 'right' : 'left', along: h / 2 + dir.y * tx }
+  return { side: dir.y >= 0 ? 'bottom' : 'top', along: w / 2 + dir.x * ty }
+}
+export function computeGraphPortLayout(nodes: UserNode[], edges: UserEdge[]): Map<string, LaidPort[]> {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const centerOf = (n: UserNode): Vec2 => ({ x: n.x + NODE_W / 2, y: n.y + nodeHeight(n) / 2 })
+  const result = new Map<string, LaidPort[]>()
+  for (const n of nodes) {
+    const h = nodeHeight(n)
+    // Stable identity + NUMBER for every port (side here is the balance placeholder — recomputed below).
+    const stable = layoutCardPorts(n.name, n.ins, n.outs, NODE_W, h)
+    const catalog = cardPortList(n.name, n.ins, n.outs) // conventional side per port (pidx order), for the unconnected fallback
+    const nc = centerOf(n)
+    // 1. Each port's DESIRED side, aimed at its connected node(s) (centroid for a multi-edge port),
+    //    or its conventional catalog side when it has no edge.
+    const want = stable.map((p) => {
+      const conn =
+        p.idx >= 0
+          ? edges.filter(
+              (e) =>
+                (p.dir === 'out' && e.from.node === n.id && e.from.idx === p.idx) ||
+                (p.dir === 'in' && e.to.node === n.id && e.to.idx === p.idx),
+            )
+          : []
+      let dir: Vec2
+      if (conn.length) {
+        let sx = 0
+        let sy = 0
+        for (const e of conn) {
+          const t = byId.get(p.dir === 'out' ? e.to.node : e.from.node)
+          if (t) {
+            const tc = centerOf(t)
+            sx += tc.x - nc.x
+            sy += tc.y - nc.y
+          }
+        }
+        dir = sx === 0 && sy === 0 ? sideToVec(portSide(p.kind, p.dir)) : { x: sx, y: sy }
+      } else {
+        dir = sideToVec(catalog[p.pidx - 1]?.side ?? portSide(p.kind, p.dir))
+      }
+      return { p, ...sideAndAlong(dir, NODE_W, h) }
+    })
+    // 2. Spread each side's ports evenly (ordered by desired position) so they never overlap. Left/right
+    //    ports occupy the body band (below header, above footer); top/bottom ports span the width, inset.
+    const laid: LaidPort[] = []
+    for (const side of ['left', 'right', 'top', 'bottom'] as PortSide[]) {
+      const grp = want.filter((q) => q.side === side).sort((a, b) => a.along - b.along)
+      const vert = side === 'left' || side === 'right'
+      const lo = vert ? CARD_HEADER_H + 4 : PORT_EDGE_MARGIN
+      const hi = vert ? h - CARD_FOOTER_H - 4 : NODE_W - PORT_EDGE_MARGIN
+      const span = Math.max(0, hi - lo)
+      grp.forEach((q, i) => {
+        const t = lo + (span * (i + 1)) / (grp.length + 1)
+        const lx = side === 'left' ? 0 : side === 'right' ? NODE_W : t
+        const ly = side === 'top' ? 0 : side === 'bottom' ? h : t
+        laid.push({ ...q.p, side, lx, ly })
+      })
+    }
+    result.set(n.id, laid)
+  }
+  return result
+}
+
 export function renameNode(ns: UserNode[], id: string, name: string): UserNode[] {
   return ns.map((n) => (n.id === id ? { ...n, name } : n))
 }

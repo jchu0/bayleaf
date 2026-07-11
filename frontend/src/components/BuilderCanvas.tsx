@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, Cable, Lock, Minus, Plus, Redo2, Undo2, Wand2, X } from 'lucide-react'
 import { SelectionActionBar, type AlignKind, type DistributeAxis } from './SelectionActionBar'
 import { BuilderLegend } from './BuilderLegend'
@@ -18,6 +18,7 @@ import {
   boxCols,
   boxPorts,
   cardHeight,
+  computeGraphPortLayout,
   gateSegs,
   isRefKind,
   kindColor,
@@ -312,18 +313,21 @@ export function BuilderCanvas(props: CanvasProps) {
 
   const segs = gateSegs()
 
-  // User-edge geometry: anchor a wire to the EXACT half-circle port on its real side, computed from
-  // the same layoutPorts() the card renders with — so an endpoint and its port are one point at any
-  // zoom. Returns the port's content-space (x, y) + which edge it faces (drives the elbow routing).
+  // DYNAMIC NEAREST-SIDE port placement for the whole editable graph, recomputed whenever a node moves or
+  // an edge changes (so ports re-aim live during a drag). This ONE map drives BOTH the card render (each
+  // UserCard's `laid`) AND the wire anchors (anchorFull) — the render↔wiring shared-layout invariant: a
+  // wire endpoint and its half-circle are computed from the same laid port, so they can never diverge.
+  const nodesById = useMemo(() => new Map(userNodes.map((n) => [n.id, n])), [userNodes])
+  const portLayout = useMemo(() => computeGraphPortLayout(userNodes, userEdges), [userNodes, userEdges])
+
+  // User-edge geometry: anchor a wire to the EXACT half-circle port on its (now dynamic) side, from the
+  // shared portLayout the card renders with — so an endpoint and its port are one point at any zoom.
+  // Wire-to-tip: offset outward by PORT_R along the port's side normal so the wire meets the half-circle's
+  // outer edge (portBoxStyle keeps the flat side on the card edge; only the WIRE anchor moves outward).
   const anchorFull = (id: string, dir: 'out' | 'in', idx: number): { x: number; y: number; side: PortSide } | null => {
-    const n = userNodes.find((u) => u.id === id)
-    if (!n) return null
-    // Resolve the EXACT laid port (position + side) from the SAME layout the card renders with, so a
-    // wire endpoint and its half-circle are one point — even with reserved ports present. Wire-to-tip:
-    // offset the endpoint outward by PORT_R along the port's side normal so it meets the outer edge of
-    // the half-circle (portBoxStyle keeps the flat side on the card edge; only the WIRE anchor moves).
-    const p = layoutCardPorts(n.name, n.ins, n.outs, UW, nodeHeight(n)).find((q) => q.dir === dir && q.idx === idx)
-    if (!p) return null
+    const n = nodesById.get(id)
+    const p = portLayout.get(id)?.find((q) => q.dir === dir && q.idx === idx)
+    if (!n || !p) return null
     const [nx, ny] = sideVec(p.side)
     return { x: n.x + p.lx + nx * PORT_R, y: n.y + p.ly + ny * PORT_R, side: p.side }
   }
@@ -650,6 +654,7 @@ export function BuilderCanvas(props: CanvasProps) {
             <UserCard
               key={n.id}
               n={n}
+              laid={portLayout.get(n.id) ?? []}
               isView={isView}
               selected={selNodes.has(n.id)}
               renaming={renamingId === n.id}
@@ -881,7 +886,18 @@ function StaticPort({ p }: { p: LaidPort }) {
 // y. Moving them out frees the interior for the three boxes. Digit centred (leading-none); a solid
 // card bg + shadow so a wired port's number reads over the wire it sits on.
 function PortIndexChip({ p, w }: { p: LaidPort; w: number }) {
-  const pos = p.side === 'left' ? { left: -26, top: p.ly - BORD_Y - 7 } : { left: w + 6, top: p.ly - BORD_Y - 7 }
+  // The number sits just OUTSIDE the port's half-circle, on whichever of the four dynamic sides it landed:
+  // left/right → beside it (keyed to p.ly), top/bottom → above/below it (keyed to p.lx). Number is p.cidx —
+  // the STABLE box number, unchanged by where the port moved.
+  const R = PORT_R
+  const pos: React.CSSProperties =
+    p.side === 'left'
+      ? { left: -26, top: p.ly - BORD_Y - R }
+      : p.side === 'right'
+        ? { left: w + 6, top: p.ly - BORD_Y - R }
+        : p.side === 'top'
+          ? { left: p.lx - BORD_X - R, top: -22 }
+          : { left: p.lx - BORD_X - R, top: p.ly + 8 }
   return (
     <span
       className="pointer-events-none absolute z-[6] grid h-3.5 w-3.5 place-items-center rounded-full bg-card text-[8px] font-bold leading-none text-text-2 shadow-card"
@@ -1198,6 +1214,7 @@ function ShieldCheckSmall() {
 // into an inline rename. Selection (from the drag/click handler in the screen) shows an accent ring.
 function UserCard({
   n,
+  laid,
   isView,
   selected,
   renaming,
@@ -1213,6 +1230,7 @@ function UserCard({
   onContextMenu,
 }: {
   n: UserNode
+  laid: LaidPort[]
   isView: boolean
   selected: boolean
   renaming: boolean
@@ -1233,9 +1251,8 @@ function UserCard({
   const highlight = armedNode || selected
   const Icon = ICONS[n.icon]
   const H = nodeHeight(n)
-  // Same catalog-resolved layout as the seeded cards, so a template/forked node reuses the full
-  // typed-port card (panels + reserved slots); a hand-composed node with no catalog stays all-required.
-  const laid = layoutCardPorts(n.name, n.ins, n.outs, UW, H)
+  // `laid` is the DYNAMIC nearest-side port placement, computed once for the whole graph in the parent
+  // (computeGraphPortLayout) and passed in — so the card render and the wire anchors share one layout.
   // Left spine carries the bound run's per-step status (passed/attention/blocked) exactly like the seeded
   // ToolCard; neutral when the node has no bound run — a hand-composed node, or Edit mode (ADR-0019).
   const rail = n.vstatus ? RUN_STATUS[runStatusOf(isView, n.vstatus)].rail : RUN_STATUS.notrun.rail

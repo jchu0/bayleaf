@@ -763,7 +763,10 @@ export function PipelineBuilder() {
         return
       }
       setUserNodes((ns) =>
-        ns.map((n) => (group.includes(n.id) ? { ...n, x: Math.max(0, Math.round(n.x / 20) * 20), y: Math.max(0, Math.round(n.y / 20) * 20) } : n)),
+        // Clamp to the FULL visible canvas: the inner plane PLUS its margins are placeable, so the floor is
+        // the negative margin (BuilderCanvas PAD_X 360 / PAD_Y 480), not 0 — cards can enter the top/left
+        // margins instead of being walled out of the shown-but-unusable band.
+        ns.map((n) => (group.includes(n.id) ? { ...n, x: Math.max(-360, Math.round(n.x / 20) * 20), y: Math.max(-480, Math.round(n.y / 20) * 20) } : n)),
       )
     }
     document.addEventListener('mousemove', move)
@@ -903,7 +906,8 @@ export function PipelineBuilder() {
       e.preventDefault()
       hist.record()
       const ids = selNodes
-      setUserNodes((ns) => ns.map((n) => (ids.has(n.id) ? { ...n, x: Math.max(0, n.x + dx), y: Math.max(0, n.y + dy) } : n)))
+      // Same full-canvas floor as the drag clamp: the margins (PAD_X 360 / PAD_Y 480) are placeable too.
+      setUserNodes((ns) => ns.map((n) => (ids.has(n.id) ? { ...n, x: Math.max(-360, n.x + dx), y: Math.max(-480, n.y + dy) } : n)))
       return
     }
     if (e.key === 'c' || e.key === 'C') {
