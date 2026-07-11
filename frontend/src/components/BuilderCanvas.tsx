@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Activity, Cable, Lock, Minus, Plus, Wand2 } from 'lucide-react'
 import {
   GATE_CHECKPOINTS,
@@ -84,6 +84,7 @@ export function BuilderCanvas(props: CanvasProps) {
   const isView = mode === 'view'
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const centered = useRef(false)
+  const updateVpRef = useRef<() => void>(() => {}) // set to updateVp below; used by the mount-centering + Fit rAFs
 
   // Center the viewport on the pipeline once on mount (README §6: "loads centered").
   useEffect(() => {
@@ -93,6 +94,7 @@ export function BuilderCanvas(props: CanvasProps) {
     requestAnimationFrame(() => {
       el.scrollLeft = Math.max(0, 1685 - el.clientWidth / 2)
       el.scrollTop = Math.max(0, 713 - el.clientHeight / 2)
+      updateVpRef.current()
     })
   }, [])
 
@@ -115,6 +117,28 @@ export function BuilderCanvas(props: CanvasProps) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  // Minimap viewport rectangle — mirrors WHERE the scroll viewport currently sits on the canvas, so
+  // the minimap moves in concordance with the pipeline (fixed 2026-07-10). Content coords carry the
+  // 360/480 margin + the `zoom` factor (see fitToDag), so map viewport → inner → minimap accordingly.
+  const [vp, setVp] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+  const updateVp = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const z = zoomRef.current || 1
+    const ix = el.scrollLeft / z - 360
+    const iy = el.scrollTop / z - 480
+    setVp({
+      left: ix * MM_SCALE,
+      top: MM_VPAD + iy * MM_SCALE,
+      width: (el.clientWidth / z) * MM_SCALE,
+      height: (el.clientHeight / z) * MM_SCALE,
+    })
+  }, [])
+  updateVpRef.current = updateVp
+  useEffect(() => {
+    updateVp()
+  }, [updateVp, zoom, userNodes.length])
+
   // Fit: reset zoom + scroll so the pipeline is centered — the seeded DAG, or the user nodes' bbox
   // when composing a draft. Content coords include the 360/480 margin the inner div carries.
   const fitToDag = () => {
@@ -132,6 +156,7 @@ export function BuilderCanvas(props: CanvasProps) {
     requestAnimationFrame(() => {
       el.scrollLeft = Math.max(0, tx - el.clientWidth / 2)
       el.scrollTop = Math.max(0, ty - el.clientHeight / 2)
+      updateVpRef.current()
     })
   }
 
@@ -187,13 +212,7 @@ export function BuilderCanvas(props: CanvasProps) {
         ref={scrollRef}
         className="absolute inset-0 overflow-auto bg-card-2"
         onClick={() => props.onSelect(null)}
-        style={{
-          // Dot grid on the scroll surface so it spans the ENTIRE canvas (incl. the margin gutters),
-          // not just the content plane. Theme-aware via --canvas-dot: warm+subtle in light, dim in dark.
-          backgroundImage: 'radial-gradient(var(--canvas-dot) 1px, transparent 1px)',
-          backgroundSize: '20px 20px',
-          backgroundPosition: '12px 12px',
-        }}
+        onScroll={updateVp}
       >
         <div
           className="relative"
@@ -202,6 +221,10 @@ export function BuilderCanvas(props: CanvasProps) {
             height: INNER_H,
             margin: '480px 360px',
             zoom,
+            // A SINGLE dot grid, on the content plane only, so it pans/zooms WITH the pipeline (the
+            // dots are the canvas, not a fixed overlay). A second grid on the scroll surface produced
+            // a static layer sliding over a moving one (regression, fixed 2026-07-10). Theme-aware
+            // via --canvas-dot (cool+subtle light, dim in dark).
             backgroundImage: 'radial-gradient(var(--canvas-dot) 1px, transparent 1px)',
             backgroundSize: '20px 20px',
             backgroundPosition: '12px 12px',
@@ -316,6 +339,19 @@ export function BuilderCanvas(props: CanvasProps) {
             style={{ left: n.x * MM_SCALE, top: MM_VPAD + n.y * MM_SCALE, width: UW * MM_SCALE, height: 46 * MM_SCALE }}
           />
         ))}
+        {/* Viewport rectangle — where the scroll viewport currently sits, so the minimap tracks the
+            canvas position. Clamped into the box so a partly-off-canvas viewport still reads. */}
+        {vp && (
+          <span
+            className="pointer-events-none absolute rounded-[2px] border-[1.5px] border-accent bg-accent/10"
+            style={{
+              left: Math.max(0, Math.min(vp.left, MM_W)),
+              top: Math.max(0, Math.min(vp.top, MM_H)),
+              width: Math.max(6, Math.min(vp.width, MM_W - Math.max(0, vp.left))),
+              height: Math.max(6, Math.min(vp.height, MM_H - Math.max(0, vp.top))),
+            }}
+          />
+        )}
       </div>
 
       {/* Zoom controls */}
