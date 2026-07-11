@@ -17,6 +17,14 @@ export type InboxSource = 'escalate' | 'rerun' | 'hold' | 'self'
 export type InboxColumn = 'inbox' | 'todo' | 'doing' | 'done'
 export type InboxPriority = 'high' | 'med' | 'low' | 'none'
 
+// IB4 — per-reminder notification config. Channels reuse the names the backend notify port already
+// speaks (Slack/Teams via ADR-0010) + email; the actual per-reminder ping is a labelled demo seam.
+// `leads` are how-far-ahead reminders fire, capped at 3 instances.
+export type NotifyChannel = 'slack' | 'teams' | 'discord' | 'email'
+export type NotifyCadence = 'once' | 'daily' | 'weekdays'
+export type InboxNotify = { channels: NotifyChannel[]; cadence: NotifyCadence; leads: string[] }
+export const MAX_LEADS = 3
+
 // The user-owned mutable state for a single item (both derived tickets and self-authored items).
 // Every field is optional — an absent overlay means "untouched", so defaults come from the base.
 type ItemMeta = {
@@ -27,6 +35,7 @@ type ItemMeta = {
   due?: string | null // yyyy-mm-dd, or null
   note?: string
   folder?: string | null // IB8 — the notes folder this item is filed under
+  notify?: InboxNotify | null // IB4 — per-reminder notification config
 }
 
 // A self-authored reminder — the immutable creation record; its mutable state lives in the overlay
@@ -54,6 +63,7 @@ export type InboxItem = {
   due: string | null
   note: string
   folder: string | null
+  notify: InboxNotify | null
 }
 
 type InboxState = {
@@ -71,6 +81,7 @@ type InboxState = {
   setColumn: (id: string, c: InboxColumn) => void
   setDue: (id: string, due: string | null) => void
   setNote: (id: string, note: string) => void
+  setNotify: (id: string, notify: InboxNotify | null) => void
   addSelfItem: (title: string, opts?: { due?: string | null; note?: string; folder?: string | null }) => void
   updateSelfItem: (id: string, patch: { title?: string; note?: string }) => void
   deleteSelfItem: (id: string) => void
@@ -202,6 +213,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
         due: m.due ?? null,
         note: m.note ?? '',
         folder: m.folder ?? null,
+        notify: m.notify ?? null,
       }
     })
     const selves: InboxItem[] = selfItems.map((s) => {
@@ -224,6 +236,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
         due: m.due ?? null,
         note: m.note ?? '',
         folder: m.folder ?? null,
+        notify: m.notify ?? null,
       }
     })
     // Newest first — self reminders and tickets interleaved by creation time.
@@ -271,6 +284,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
   const setDue = useCallback((id: string, due: string | null) => patch(id, { due }), [patch])
   const setNote = useCallback((id: string, note: string) => patch(id, { note }), [patch])
   const setFolder = useCallback((id: string, folder: string | null) => patch(id, { folder }), [patch])
+  const setNotify = useCallback((id: string, notify: InboxNotify | null) => patch(id, { notify }), [patch])
 
   const addSelfItem = useCallback(
     (title: string, opts?: { due?: string | null; note?: string; folder?: string | null }) => {
@@ -351,6 +365,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     setColumn,
     setDue,
     setNote,
+    setNotify,
     addSelfItem,
     updateSelfItem,
     deleteSelfItem,

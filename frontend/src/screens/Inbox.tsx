@@ -1,4 +1,5 @@
 import {
+  BellPlus,
   CalendarDays,
   Check,
   CheckCheck,
@@ -26,7 +27,16 @@ import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { useToast } from '../components/Toast'
-import { type InboxColumn, type InboxItem, type InboxPriority, useInbox } from '../context/InboxContext'
+import {
+  type InboxColumn,
+  type InboxItem,
+  type InboxNotify,
+  type InboxPriority,
+  MAX_LEADS,
+  type NotifyCadence,
+  type NotifyChannel,
+  useInbox,
+} from '../context/InboxContext'
 import {
   COLUMN_LABEL,
   COLUMNS,
@@ -64,6 +74,93 @@ function DueChip({ due }: { due: string | null }) {
     </span>
   )
 }
+// ── IB4: per-reminder notification config (Slack/Teams/Discord/email + cadence + ≤3 reminders) ──
+const NOTIFY_CHANNELS: { k: NotifyChannel; label: string }[] = [
+  { k: 'slack', label: 'Slack' },
+  { k: 'teams', label: 'Teams' },
+  { k: 'discord', label: 'Discord' },
+  { k: 'email', label: 'Email' },
+]
+const NOTIFY_CADENCES: NotifyCadence[] = ['once', 'daily', 'weekdays']
+const LEAD_OPTS = ['At time', '10 min before', '1 hour before', '1 day before']
+
+function NotifyEditor({ item }: { item: InboxItem }) {
+  const { setNotify } = useInbox()
+  const { toast } = useToast()
+  const n = item.notify
+  if (!n) {
+    return (
+      <button
+        onClick={() => setNotify(item.id, { channels: ['slack'], cadence: 'once', leads: ['At time'] })}
+        className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-[12px] text-text-2 hover:border-accent hover:text-accent-strong"
+      >
+        <BellPlus size={13} /> Notify me
+      </button>
+    )
+  }
+  const update = (patch: Partial<InboxNotify>) => setNotify(item.id, { ...n, ...patch })
+  const toggleChannel = (c: NotifyChannel) =>
+    update({ channels: n.channels.includes(c) ? n.channels.filter((x) => x !== c) : [...n.channels, c] })
+  const toggleLead = (l: string) => {
+    if (n.leads.includes(l)) update({ leads: n.leads.filter((x) => x !== l) })
+    else if (n.leads.length < MAX_LEADS) update({ leads: [...n.leads, l] })
+    else toast(`Up to ${MAX_LEADS} reminders per item.`, 'info')
+  }
+  return (
+    <div className="w-full rounded-md border border-line bg-card-2 p-2.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[10.5px] font-semibold uppercase tracking-[0.4px] text-text-3">
+          Notify · phase-2 seam (not yet wired to a live ping)
+        </span>
+        <button onClick={() => setNotify(item.id, null)} className="text-[11px] text-text-3 hover:text-escalate">
+          Remove
+        </button>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {NOTIFY_CHANNELS.map((c) => (
+          <button
+            key={c.k}
+            onClick={() => toggleChannel(c.k)}
+            className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+              n.channels.includes(c.k) ? 'border-accent bg-accent-weak text-accent-strong' : 'border-line text-text-3 hover:border-line-strong'
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+        <select
+          value={n.cadence}
+          onChange={(e) => update({ cadence: e.target.value as NotifyCadence })}
+          className="ml-1 rounded-md border border-line bg-card px-1.5 py-1 text-[11px] capitalize text-text-2"
+          aria-label="Notification cadence"
+        >
+          {NOTIFY_CADENCES.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <span className="text-[10.5px] text-text-3">
+          Reminders ({n.leads.length}/{MAX_LEADS}):
+        </span>
+        {LEAD_OPTS.map((l) => (
+          <button
+            key={l}
+            onClick={() => toggleLead(l)}
+            className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+              n.leads.includes(l) ? 'border-accent bg-accent-weak text-accent-strong' : 'border-line text-text-3 hover:border-line-strong'
+            }`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── INBOX tab: the triage stream ───────────────────────────────────────────────
 type InboxFilter = 'all' | 'unread' | 'flagged'
 
@@ -162,6 +259,8 @@ function InboxRow({ item }: { item: InboxItem }) {
               className="resize-y rounded-md border border-line bg-card-2 px-2 py-1 text-[12px] text-text placeholder:text-text-3"
             />
           </label>
+          {/* IB4: per-reminder notification config (channels + cadence + ≤3 reminders). */}
+          <NotifyEditor item={item} />
           <div className="flex items-center gap-2">
             {item.link && (
               <Link
