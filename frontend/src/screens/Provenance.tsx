@@ -20,7 +20,7 @@ const STAGES: { key: PipelineStage; n: number; title: string; tool: string; gate
   { key: 'gate', n: 6, title: 'Decision gate', tool: 'PipeGuard rules' },
 ]
 
-type Status = 'ok' | 'warn' | 'blocked' | 'skipped'
+type Status = 'ok' | 'warn' | 'blocked' | 'skipped' | 'partial'
 type Stage = (typeof STAGES)[number]
 const VERDICT_RANK: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
 
@@ -58,6 +58,15 @@ const STATUS_STYLE: Record<
     headBadge: 'bg-card-2 border-line text-text-3',
     pill: 'bg-card-2 border-line text-text-3',
     label: 'Not run in this build',
+  },
+  // The terminal gate DECIDED, but on partial lineage (upstream stages didn't run) — a muted,
+  // deliberately-not-green treatment so an incomplete sequence never ends in a confident "Completed".
+  partial: {
+    numBadge: 'bg-text-3 text-white',
+    dot: 'bg-text-3',
+    headBadge: 'bg-card-2 border-line-strong text-text-2',
+    pill: 'bg-card-2 border-line-strong text-text-2',
+    label: 'Decided on partial lineage',
   },
 }
 
@@ -116,6 +125,13 @@ export function Provenance() {
       if (stage.key === 'gate') {
         if (runWorst === 'escalate') return 'blocked'
         if (runWorst !== 'proceed') return 'warn'
+        // Proceed — but the DAG shows sequence, so a terminal green while upstream align/variant are
+        // gray (skipped, not run in this build) is misleading (P3). Read "partial lineage" instead of
+        // a clean green "Completed" whenever a stage upstream of the gate never ran.
+        const upstreamSkipped = STAGES.some(
+          (s) => (s.key === 'align' || s.key === 'variant') && (artifacts?.filter((a) => a.stage === s.key).length ?? 0) === 0,
+        )
+        if (upstreamSkipped) return 'partial'
       }
       return 'ok'
     }
@@ -162,8 +178,15 @@ export function Provenance() {
           ? `Per-sample QC ran across ${n} sample${plural}; none flagged.`
           : `Per-sample QC ran across ${n} sample${plural}; ${flagged} flagged.`
       }
-      case 'gate':
-        return `Aggregates the three gates → overall verdict ${VERDICT_LABEL[runWorst]}.`
+      case 'gate': {
+        const upstreamSkipped = STAGES.some(
+          (s) => (s.key === 'align' || s.key === 'variant') && artifacts.filter((a) => a.stage === s.key).length === 0,
+        )
+        const base = `Aggregates the gates that ran → overall verdict ${VERDICT_LABEL[runWorst]}.`
+        return upstreamSkipped
+          ? `${base} Decided on partial lineage — alignment/variant-calling didn't run in this build, so this isn't an end-to-end pass.`
+          : base
+      }
       default:
         return 'No stage note captured for this stage.'
     }
