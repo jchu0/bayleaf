@@ -350,14 +350,39 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    (Reference FASTA/Panel BED/Truth VCF — no-input source nodes emitting their reference
    artifact, typed-wired so a fasta can't land on a fastq port), fixing the earlier "no way to
    add bed/vcf/reference cards" gap, and its sections are now **collapsible** (chevron +
-   per-section count, overridden by an active search). *Trace:*
-   [pipeline-builder-brief.md](../design/frontend/pipeline-builder-brief.md),
+   per-section count, overridden by an active search). **Edge clarity + toolbar consolidation +
+   off-canvas decision boundary (2026-07-11, commits `a03704f`→`3d531de`, T-124,
+   [journal](../journal/2026-07-11-builder-boundary-and-edges.md)):** wired ports now split into
+   one sub-anchor per edge so no two wires share an endpoint, and an occlusion-aware reference
+   placement clears most wire-behind-card cases (layout-only; the graph model is untouched).
+   Editable wires now stroke by their source port's `kind` (matching the seeded-wire color
+   family), and the two-row toolbar collapsed into one compose bar (Save · Validate · Emit
+   primary) plus an "⋯ More" overflow for occasional actions, with the run identity shown once
+   (was duplicated). **This corrects a claim in this REQ's own opening paragraph above:** *"the
+   deterministic gate is a terminal locked node"* described the gate as an on-canvas node — as of
+   this pass **it no longer is**. The gate and its deterministic-ingest predecessor were removed
+   from `BuilderCanvas.tsx` entirely (an intermediate step first made them movable canvas cards,
+   commit `73b2a68`, before the maintainer's follow-up synthesis removed them, commit `3d531de`;
+   canvas node count 15→13) and replaced by a new read-only `DecisionBoundaryModal.tsx`
+   (Composed pipeline → Deterministic ingest → Decision gate → Verdict, opened from "⋯ More →
+   Decision boundary"), captioned "rules decide; not part of what you compose." Both remaining
+   gate-verdict color bars were also removed the same day — **the Builder now renders no verdict
+   palette anywhere**; agent attach/detach became edit-only, with View showing a read-only
+   indicator on already-attached tools. `Save`/`Emit`/`POST /api/pipelines/compile` are
+   unaffected — they always serialized only `{nodes: userNodes, edges: userEdges}`, and still do;
+   the gate/ingest/agent canvas state was never part of that payload. See
+   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) Realized §3 for why this is a UI
+   reinforcement of the existing decision, not a new one. *Trace:*
+   [pipeline-builder-brief.md](../design/frontend/pipeline-builder-brief.md) (the original design
+   brief — still describes an on-canvas gate/ingest band; superseded by the above, kept unedited
+   as a design deliverable),
    [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md),
    [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md),
    [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md),
    [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md),
    [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md),
-   [tasks T-044/T-049/T-062/T-069/T-070/T-085/T-086/T-096](../planning/tasks.md).
+   [journal 2026-07-11](../journal/2026-07-11-builder-boundary-and-edges.md),
+   [tasks T-044/T-049/T-062/T-069/T-070/T-085/T-086/T-096/T-124](../planning/tasks.md).
 7. **REQ-F-046 — Honest run lifecycle status + run metadata.** `RunSummary` carries a real
    `status` — `running` (no completion event yet) / `needs_review` (completed, actionable
    samples) / `released` (completed, none) — derived from the provenance ledger, **not** inferred

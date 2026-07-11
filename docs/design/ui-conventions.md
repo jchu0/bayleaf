@@ -231,6 +231,26 @@ documented tool ports (`fastp_html`, `samtools_stats`, the mosdepth `*_dist`/`pe
 unrendered — [builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
 item 4.
 
+### UIC-17 — Pipeline Builder: composable-only canvas + an "⋯ More" overflow toolbar · ✅
+Two related, maintainer-directed rules from the same 2026-07-11 session
+([journal](../journal/2026-07-11-builder-boundary-and-edges.md), commits `4df8f2e`→`3d531de`):
+1. **A canvas holds only what the operator composes.** A non-composable, non-editable system
+   element (nothing an operator can wire, duplicate, delete, or reconfigure) does not get a
+   canvas card, however "terminal"-styled — it gets a **named, always-reachable, read-only view**
+   opened from the toolbar instead. The Pipeline Builder's deterministic ingest + gate were the
+   first case: removed from `BuilderCanvas.tsx` entirely (canvas node count 15→13) and replaced by
+   `components/DecisionBoundaryModal.tsx`, opened via "⋯ More → Decision boundary."
+2. **A crowded toolbar consolidates to one primary compose row + an "⋯ More" overflow**, not two
+   stacked rows of flat controls. Keep the primary verbs (here: Save · Validate · Emit) directly
+   visible and accent-styled; relocate occasional/context actions (export, hand-off, fork,
+   cross-screen links) into the overflow, unchanged behavior, just regrouped. Any identity/state
+   shown twice (here: the run id, once in a status pill and once in the linked-run strip)
+   collapses to one place.
+**Shipped**: `PipelineBuilder.tsx`'s toolbar is now one row + a `MoreHorizontal` overflow menu;
+`BuilderCanvas.tsx` renders zero verdict palette and zero non-composable cards. Grounded in
+[frontend/README.md §6](frontend/README.md#6-pipeline-builder--full-model),
+[ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) Realized §3.
+
 ---
 
 ## Session feedback → convention map (2026-07-10 batch)

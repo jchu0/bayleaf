@@ -555,6 +555,36 @@ each only opens a read-only advisory modal/pill and never mutates the graph, let
 consult an agent without switching the whole canvas into Edit. Node-adding (tool/reference)
 tiles still require Edit.
 
+**Toolbar — consolidated into a compose bar + overflow (Shipped 2026-07-11, commits
+`4df8f2e`→`3d531de`, [journal](../../journal/2026-07-11-builder-boundary-and-edges.md)).** The
+prior two-row toolbar (~14 flat controls, plus a duplicated run-identity strip) is now one row:
+mode toggle · New · Open · Cancel (draft-only) · doc name · a **state-only** lock/draft pill (no
+longer repeats the run id) · a compact `v{version} · status · Approve (approver + pending-only) ·
+role toggle` cluster · the profile combobox · a divider · the **primary compose flow — Save ·
+Validate · Emit** (Emit stays the accent-primary action) · a new **"⋯ More"** overflow: Export to
+Nextflow and Run hand-off (always available), plus — **linked view only** — Fork to new draft,
+Open Provenance, Open Decision cards, and (2026-07-11, `3d531de`) **Decision boundary** (see
+Nodes below). Every handler/destination is byte-identical to before; only layout/grouping
+changed. The **linked-run strip** below is now the single home of the run identity (`Linked to
+{run}`, shown once, was duplicated with the status pill). Editable **wires now stroke by the
+source port's data `kind`** (`kindColor`, the same fastq-violet/bam-blue/vcf-teal/reference/
+QC-gold family the seeded wires and port borders already used) instead of a flat accent, so a
+composed edge's data type reads at a glance; the advisory agent→tool dotted edges stay a
+visually distinct dashed accent (never a data kind) — data vs advisory stays legible (ADR-0001).
+
+**Edge clarity (Shipped 2026-07-11, commit `a03704f`).** Two layout-only passes over the
+typed-port graph — the graph model (`ins`/`outs`/`idx`) and the save contract are untouched.
+(1) **Split multi-connection ports:** any port wired to N cards now splits into N laid sub-ports,
+one per edge, each independently nearest-side-anchored at its own target
+(`BuilderCanvas.anchorForEdge(id, dir, idx, eid)`), so two edges leaving/entering the same
+logical port never share an endpoint (verified in the live DOM: 18 wires → 36 unique endpoints);
+split halves still group back into one numbered box row (e.g. `bam · out · [4][5]`). (2) An
+offline occlusion scorer (coordinate descent over the real wire polyline) found one minimal
+move — the Panel BED reference card's x-position, 800→1150 — that cleared 3 of 7 wires-routed-
+behind-a-card occlusions; the residual 4 are inherent long-reach fan-in/fan-out wires
+(fastp→MultiQC, reference_fasta fan-out), left honest rather than force-routed (a real
+constraint router is future work, not attempted here).
+
 **Canvas.** Large, pannable in any direction; loads centered on the pipeline. Dot-grid = 20px
 snap grid — **theme-aware since 2026-07-10 (T-098, commit `5763be1`)** via a new `--canvas-dot`
 CSS var (cool+subtle in light — reverted from a warm japandi trial 2026-07-10, T-105, "Wave 7,"
@@ -615,10 +645,12 @@ untouched.
   `RunDetail.tsx` (§5.4) — but a broader sweep of the other truncated card strings remains
   explicitly **open**, not silently dropped; see [tasks.md T-116](../../planning/tasks.md).
 
-**Nodes.** Three kinds — `tool`, `agent`, `gate`:
+**Nodes.** Two kinds on canvas — `tool`, `agent` — **since `gate` was removed from the canvas
+2026-07-11** (see above; it is no longer a placeable/selectable node kind in the Builder, only
+content inside the read-only Decision-boundary view).
 - **Seeded germline chain** (fastp → bwa-mem2 → samtools markdup → {mosdepth, bcftools call →
   bcftools norm} → MultiQC) + reference nodes (genome / panel BED / truth VCF) + the QC-triage
-  agent + the terminal gate. **Tool I/O corrected 2026-07-10 (T-083, commit `d8c1625`)** against
+  agent. **Tool I/O corrected 2026-07-10 (T-083, commit `d8c1625`)** against
   the real pipeline (`scripts/run_giab_pipeline.py`): bcftools call gains a `panel_bed` input
   (`mpileup -R PANEL`), bcftools norm loses it (norm has no `-R`); samtools markdup now outputs
   `bam`·`bai`·`markdup_metrics` (was a phantom `samtools_stats` with no producer); bwa-mem2
@@ -659,8 +691,33 @@ untouched.
   for the one remaining gap. `PipelineBuilder.tsx`/`BuilderInspector.tsx` and the on-canvas
   editing (align/distribute/undo, §"On-canvas editing" above) are untouched — only card geometry
   and port placement changed, not connection semantics.
-- **Gate** is terminal / singular / non-removable; reads the frozen five `run/` CSVs, not raw
-  tool edges. **Agents are port-less** (off the critical path).
+- **Deterministic ingest + gate moved OFF the canvas (Shipped 2026-07-11, commit `3d531de`,
+  [journal](../../journal/2026-07-11-builder-boundary-and-edges.md), [ADR-0001](../../adr/ADR-0001-deterministic-gate-advisory-ai.md)
+  Realized §3).** An intermediate pass the same day (`73b2a68`) first made the ingest/gate cards
+  **movable** like tool cards (still canvas-local state, never the graph); the maintainer's
+  follow-up synthesis was that a fixed boundary card still implies a false peer relationship with
+  what an operator actually composes, and eats canvas real estate. Both cards — and the hardcoded
+  dotted terminal tethers that used to connect them (norm→ingest, MultiQC→ingest, ingest→gate) —
+  are now **removed from the canvas entirely** (node count 15→13). The deterministic
+  ingest→gate→verdict handoff is instead a new read-only view,
+  **`components/DecisionBoundaryModal.tsx`** (Composed pipeline → Deterministic ingest →
+  Decision gate → Verdict, with the three preflight/qc/variant checkpoint dots — category
+  colors, never the verdict palette — and copy stating "rules decide; not part of what you
+  compose"), opened from the toolbar's **"⋯ More" → Decision boundary** item (always available,
+  not linked-view-gated, since it is static explanatory content). It still reads the frozen five
+  `run/` CSVs, not raw tool edges — that fact didn't change, only where it's shown. Both
+  remaining gate-verdict bars (the linked-run strip's color bar + counts, and the old gate
+  card's own segment bar) were removed the same day (`4d4823d`) — **the Builder now shows no
+  verdict palette anywhere**; only the rule engine's own surfaces (Decision cards, Provenance)
+  render a verdict. `Save`/`Emit`/`POST /api/pipelines/compile` still serialize only
+  `{nodes: userNodes, edges: userEdges}` — the gate/ingest/agent canvas positions were never
+  part of that payload, before or after this change.
+- The **advisory agent stays on the canvas** — movable (canvas-local position, never the graph)
+  and, since `4d4823d`, its tool-attach/detach is **edit-only**: in Edit every eligible tool
+  shows a corner attach badge (filled when attached, dashed when available); in View the badge
+  becomes a read-only indicator, rendered **only** for already-attached tools (no handler; a
+  press falls through to card-select) — so a View operator sees the wiring without an inert
+  clickable badge on every card. **Agents are port-less** (off the critical path).
 
 **Inspector (right panel).** Tabs **Params · Locators · I/O · Agents**:
 - **Params** — schema-driven form (from bundled `nextflow_schema.json`).

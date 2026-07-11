@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | draft (§§1–3 now mostly REALIZED — see §5) |
-| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST) |
+| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST, card geometry) · updated 2026-07-11 (MST, edge clarity + off-canvas boundary) |
 | **Audience** | frontend / design / bioinformatics |
 | **Related** | [frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model) (Pipeline Builder — full node model) · [design/ui-conventions.md UIC-16](../ui-conventions.md) · [data/nf-core-conventions.md](../../data/nf-core-conventions.md) (tool I/O → `ArtifactRef` / `MetricValue`) · [data/qc_metrics-sources.md](../../data/qc_metrics-sources.md) (metric provenance) · [frontend `BuilderShared.tsx`](../../../frontend/src/components/BuilderShared.tsx) (`BTOOLSPEC` · `TOOLS` · `GIAB_LOC` · `germlineTemplate()` · `portSide()` · `layoutPorts()` · `cardHeight()`) · [frontend `BuilderCanvas.tsx`](../../../frontend/src/components/BuilderCanvas.tsx) (current render + wiring) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) (the real germline commands the cards abstract) |
 
@@ -116,3 +116,28 @@ Verified by reading `frontend/src/components/BuilderShared.tsx` / `BuilderCanvas
 
 Only item 4 remains a **frontend follow-up** now. Each per-tool doc stays the authority on *what
 ports a node should host*; this section is the (now much smaller) honest gap between spec and code.
+
+## 6. Edge clarity + the off-canvas decision boundary (2026-07-11, commits `a03704f`→`3d531de`)
+
+Same day, a separate pass (not §5's card-geometry work) improved how the wires between cards read
+and, on a maintainer synthesis, moved the deterministic gate/ingest off the canvas entirely.
+Full detail: [journal 2026-07-11](../../journal/2026-07-11-builder-boundary-and-edges.md),
+[frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model),
+[ADR-0001](../../adr/ADR-0001-deterministic-gate-advisory-ai.md) Realized §3. In short:
+
+1. **Split multi-connection ports (`a03704f`).** A port wired to N cards now splits into N laid
+   sub-ports, one per edge, each independently anchored at its own target — no two edges share an
+   endpoint. This is orthogonal to §2's placement convention (which side a port lives on) and §5's
+   card-geometry closure (`portSide()`/`layoutPorts()`); it only changes how many laid points one
+   logical port yields when it fans out, not where the port sits.
+2. **Occlusion-aware reference placement (`a03704f`).** The Panel BED reference card's x-position
+   moved (800→1150) after an offline occlusion scorer found it cleared 3 of 7 wires routed behind
+   a non-endpoint card. Purely a layout coordinate; no card, port, or kind changed.
+3. **The gate + deterministic ingest are no longer cards on this canvas at all (`3d531de`).** This
+   doc's card-design convention (§§1–4) is scoped to **tool** cards — it never specified an
+   on-canvas gate/ingest card design, so §§1–4 are unaffected. What changed is structural: the
+   canvas now renders only composable content (tool/reference/input/output cards) plus the movable
+   advisory agent; the deterministic ingest→gate→verdict handoff is a new read-only
+   `DecisionBoundaryModal.tsx`, reachable from the toolbar's "⋯ More" menu. If a future card design
+   pass revisits how to represent the boundary, it should start from that modal, not the removed
+   `IngestBand`/`GateCard` components.

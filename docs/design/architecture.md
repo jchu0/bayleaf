@@ -719,6 +719,30 @@ Every finding and verdict is labelled with the gate it came from:
      uncatalogued tool compiles to a labelled placeholder, never a fabricated command) in
      [design/nextflow-codegen.md](nextflow-codegen.md). Grounded in
      [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md).
+   - **Wave 12 (2026-07-11, commits `a03704f`→`3d531de`, T-124,
+     [journal](../journal/2026-07-11-builder-boundary-and-edges.md)).** Six frontend-only passes
+     over the Pipeline Builder, later the same day as Wave 11 (`git diff --stat` scoped to
+     `frontend/src/components/BuilderCanvas.tsx`/`BuilderShared.tsx`,
+     `frontend/src/screens/PipelineBuilder.tsx`, and a new `DecisionBoundaryModal.tsx`; no
+     `src/`/`api/`/`tests/` change). **Edge clarity:** wired ports split into one sub-anchor per
+     edge so two wires never share an endpoint (18 wires → 36 unique DOM anchors, verified), and
+     an occlusion-aware reference-card placement clears most wire-behind-card cases. **Toolbar
+     consolidation:** the two-row toolbar (~14 flat controls, a duplicated run-identity strip)
+     collapses to one compose bar (Save · Validate · Emit primary) + an "⋯ More" overflow; edges
+     stroke by data `kind` (was flat accent). **THE KEY MOVE:** the deterministic ingest + gate —
+     never composable nodes, no data edge feeds them, nothing about them is editable — are
+     **removed from the canvas entirely** (an intermediate pass first made them movable canvas
+     cards, before a maintainer synthesis removed them outright; canvas node count 15→13) and
+     replaced by a new read-only `DecisionBoundaryModal.tsx` (Composed pipeline → Deterministic
+     ingest → Decision gate → Verdict), reachable from the toolbar's "⋯ More" menu. Both
+     remaining gate-verdict color bars were dropped the same day — the Builder now renders **no
+     verdict palette anywhere**; the advisory agent stays on canvas (movable, port-less), and its
+     tool attach/detach became edit-only (View shows a read-only indicator on attached tools
+     only). `Save`/`Emit`/`POST /api/pipelines/compile` are unaffected — always serialized only
+     `{nodes: userNodes, edges: userEdges}`, unchanged. This is a UI-level reinforcement of
+     [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (Realized §3, new) — the
+     gate/ingest not wearing tool-card affordances at all is the cleanest expression yet of
+     "rules decide; the canvas is what you compose, not where the decision lives."
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
