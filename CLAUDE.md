@@ -338,8 +338,30 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    gain a unique stable id (`SIG-<first 8 chars of the signature hash>`) and a REVERSIBLE,
    `localStorage`-persisted clear-from-view/restore (never a DB purge — cleared signatures stay
    searchable in a collapsible "Cleared · N" section).
+   **Wave 4 (2026-07-10, commits `f8d9ea0`→`1bb79b8`, T-101), closes two long-standing
+   limitations — frontend-only, no verdict/gate/ADR-0001 boundary changed** (`git diff --stat
+   e39bb4e 1bb79b8 -- src/ api/ tests/` empty). **API-client error detail** (`f8d9ea0`): every
+   failed `get`/`write`/`fetchRunsPage` in `api.ts` used to throw a bare `${status} ${statusText}`;
+   a new `httpError()` helper reads FastAPI's real error body — a 4xx `HTTPException`'s `detail`
+   string, or a 422's `detail: [{msg}]` array — so every off-gate write's error toast now shows the
+   backend's actual reason, app-wide (no wire-contract change). **Submit: real parsing, closes the
+   "visual mock" limitation** (`1bb79b8`): the "Upload samplesheet" panel had no `<input
+   type=file>` and a hardcoded "Parsed 4 samples" chip; `Submit.tsx` now does real CSV parsing on
+   drop/browse, tolerant of both an **Illumina v2 SampleSheet** (`[Header]` + a `[*_Data]` section,
+   auto-detecting run name/assay/platform) and a **plain CSV**
+   (`Sample_ID,Sample_Type,index,index2,Study`) — a missing/renamed column degrades to an empty
+   cell, never a crash. It also adds a **`sample_metadata.csv`** attach (the LIMS/subject sheet,
+   the code's own inline label "G2" — previously no path existed for it at all): parses
+   `Sample_ID,Subject_ID,Tissue`, merges tissue into the sample-type column, and shows the subject
+   id under each sample name — **`subject_id` stays client-side only** (a labelled seam;
+   `api/routers/intake.py`'s `SubmitRunIn`/`SampleIn` carry no subject field and `extra="forbid"`
+   would reject one, backend unchanged). Sample-table pagination (25/page) and a scale-aware submit
+   toast (summarize past 5 names, don't `join()` them) keep a 100+ sample mixed flowcell navigable.
    Honest deferrals: Median-review KPI (no backend field), Submit now hands off to the real
-   `POST /api/runs` execution boundary but still has no BaseSpace connector (T-057), and
+   `POST /api/runs` execution boundary and does real client-side samplesheet + sample_metadata.csv
+   parsing, but `subject_id`/`tissue` is parsed + shown, not yet **persisted server-side** (the
+   next Submit step — needs the data-platform design's "widen `sample.registered`" slice first,
+   gated by its own G-PII/G-DEID guardrails) and there is still no BaseSpace connector (T-057), and
    `GET /api/monitoring`'s per-run `rows[]` stays uncapped server-side — T-072's backend half is
    the one open item, and as of batch 8 there is no longer a frontend render-cap either (the
    maintainer's own call; the scrolling chart degrades more gracefully than an uncapped table

@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md) |
 
 ## Overview
 
@@ -642,6 +642,32 @@ had reserved or listed as *not-yet-built*.
     or the provenance ledger. *Trace:* [design/frontend/README.md](../design/frontend/README.md)
     §4, [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md)
     (commit `08a42ad`), [tasks T-091](../planning/tasks.md).
+15. **REQ-F-074 — Submit: real samplesheet + `sample_metadata.csv` parsing (closes the
+    registration-only-mock limitation).** `Submit.tsx`'s Upload panel previously had no `<input
+    type=file>` and a hardcoded "Parsed 4 samples" chip; it now parses **for real** on drop or
+    Browse, tolerant of a missing/renamed column (a signal, not a crash — CLAUDE.md Data-handling
+    2). Two formats: an **Illumina v2 SampleSheet** (`[Header]` key-values + a `[*_Data]` section,
+    auto-detecting run name/study/assay/platform) and a **plain CSV**
+    (`Sample_ID,Sample_Type,index,index2,Study`). A new **`sample_metadata.csv`** attach (the
+    LIMS/subject sheet — previously no upload path existed for it at all) parses
+    `Sample_ID,Subject_ID,Tissue`, merges tissue into the sample's type column, and shows the
+    subject id under each sample name. **`subject_id`/`tissue` are held client-side only** — a
+    labelled seam, not persisted: `POST /api/runs`'s `SubmitRunIn`/`SampleIn`
+    (`api/routers/intake.py`) carry no subject field and `extra="forbid"` would reject one; server-
+    side persistence is the next Submit step, gated by the data-platform design's G-PII/G-DEID
+    guardrails ([data-platform-and-archivist.md](../design/data-platform-and-archivist.md)) which
+    are unaffected by this change. Sample-table pagination (25/page) and a scale-aware submit
+    toast (summarize past 5 names, never `join()` 100 of them) keep a large mixed flowcell
+    navigable. A companion fix (`api.ts`'s `httpError()`) surfaces the backend's real FastAPI
+    `detail` — string or 422 `[{msg}]` array — in every failed write's toast instead of a bare
+    status line, app-wide; no wire-contract change. `POST /api/runs`'s execution boundary
+    (REQ-F-067), its `HG002`-only fixture scoping, and honest sample-skip behavior are all
+    **unchanged** — only the input to that boundary is now real. Verified live with a generated
+    100-sample mixed DNA/RNA sheet + a 100-row metadata sheet (parse, auto-detect, subject/tissue
+    merge, 4-page pager) and an honest 422 (shown with the backend's real message) for a
+    no-fixture sample. *Trace:* REQ-F-067, [architecture.md](../design/architecture.md) §4,
+    [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md)
+    (commits `f8d9ea0`, `1bb79b8`), [tasks T-101](../planning/tasks.md).
 
 ## Notes / deferred
 

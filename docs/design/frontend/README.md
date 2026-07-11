@@ -74,6 +74,14 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
   shadows), so every existing Tailwind utility retargets with no per-component change. Density
   is now **one** setting shared by the dialog and the Decision-cards Layout control (§5.4) —
   it survives across runs and a refresh.
+- **Error toasts carry the real reason (Shipped 2026-07-10, Wave 4, T-101, commit `f8d9ea0`).**
+  Every failed write/read used to throw a bare `${status} ${statusText}` (e.g. a flat "422
+  Unprocessable Content"), so every error toast app-wide was equally uninformative. `api.ts`
+  gained an `httpError()` helper that reads FastAPI's real error body — a 4xx `HTTPException`'s
+  `detail` string, or a 422's `detail: [{msg}]` validation-error array — and includes it in the
+  thrown `Error`, so every screen's write toast (Submit, Settings, Pipeline Builder, Review
+  queue, Admin) now shows the backend's actual reason. No wire-contract change; pure
+  client-side error surfacing.
 
 ---
 
@@ -98,6 +106,31 @@ The pipeline's front door — registers a run + its samples **before processing*
   *skipped*, never fabricated. **Compose ≠ execute still holds at the core** — `src/pipeguard/`
   itself never runs a tool; only the API layer triggers the external driver (see §8). A
   BaseSpace connector remains wishlist (T-057).
+- **Real file parsing, closes the "visual mock" limitation (2026-07-10, Wave 4, T-101, commit
+  `1bb79b8`).** The Upload panel previously had no `<input type=file>` and a hardcoded "Parsed 4
+  samples" chip — it now parses for real, on drop or Browse. Two formats, tolerantly: an
+  **Illumina v2 SampleSheet** (`[Header]` key-values + a `[*_Data]` section — run name/study/
+  assay/platform auto-detect from the header) and a **plain CSV**
+  (`Sample_ID,Sample_Type,index,index2,Study`); a missing/renamed column degrades to an empty
+  cell rather than crashing. The parsed chip only appears after a real parse and shows the actual
+  filename, sample count, and detected run/study.
+- **`sample_metadata.csv` attach — the LIMS/subject sheet, closes the "no way to submit
+  sample_metadata.csv" gap (same commit).** A second "Attach metadata" slot parses
+  `Sample_ID,Subject_ID,Tissue`, merges the tissue value into the sample's Sample-type column, and
+  shows the subject id under each sample name. **`subject_id` is held client-side only** — a
+  labelled seam, not yet sent anywhere: `POST /api/runs`'s `SubmitRunIn`/`SampleIn`
+  (`api/routers/intake.py`) carry no subject field and reject unknown ones
+  (`extra="forbid"`), so persisting it server-side is the next Submit step, gated by the
+  data-platform design's G-PII/G-DEID guardrails
+  ([data-platform-and-archivist.md](../data-platform-and-archivist.md)).
+- **Scale-aware UI (same commit).** The samples table now paginates 25/page (numbered pager) so
+  a 100+ sample mixed flowcell stays navigable, and the submit toast summarizes
+  processed/skipped counts (lists up to 5 names, else "N samples") instead of `join()`-ing every
+  name into one string. Verified live with a generated 100-sample mixed DNA/RNA sheet + a
+  100-row metadata sheet: "Parsed 100 samples," run/study/assay auto-detected, "100 subjects
+  mapped" with tissue merged, a 4-page pager, and a no-fixture-sample submission honestly 422s
+  with the backend's real message (surfaced by the same commit's `api.ts` `httpError()` fix,
+  §4).
 
 ### 5.2 Runs  (`view: 'overview'`)
 Scale-kit list surface:

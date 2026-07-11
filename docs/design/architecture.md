@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md) |
 
 ## Overview
 
@@ -183,7 +183,12 @@ Every finding and verdict is labelled with the gate it came from:
      the wire roles, distinct from "any approver" — not the earlier any-approver framing.
    - **Off-gate writes now round-trip, not just compose.** A new `Toast` system
      (`components/Toast.tsx`, `ToastProvider` mounted in `App.tsx`) surfaces the real backend
-     outcome (403/409/422/503/…) of every product write instead of silently diverging. Three
+     outcome (403/409/422/503/…) of every product write instead of silently diverging. **The toast
+     now carries the real reason, not just the status (2026-07-10, Wave 4, commit `f8d9ea0`):**
+     `api.ts` gained an `httpError()` helper that reads a failed response's FastAPI body — a 4xx
+     `HTTPException`'s `detail` string, or a 422's `detail: [{msg}]` array — instead of the bare
+     `${status} ${statusText}` every `get`/`write`/`fetchRunsPage` used to throw; no wire-contract
+     change, pure client-side error-surfacing. Three
      previously broken/optimistic write paths were fixed and now **await + reconcile local state
      from the response**: (a) Settings threshold save/approve — the frontend now **slugifies** the
      override name before POSTing (the display assay string's spaces/colon failed the backend's
