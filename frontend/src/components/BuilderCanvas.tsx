@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Activity, Cable, Lock, Minus, Plus, Wand2 } from 'lucide-react'
+import { Activity, Cable, Lock, Minus, Plus, Redo2, Undo2, Wand2, X } from 'lucide-react'
+import { SelectionActionBar, type AlignKind, type DistributeAxis } from './SelectionActionBar'
 import {
   GATE_CHECKPOINTS,
   ICONS,
@@ -8,6 +9,7 @@ import {
   TOOLS,
   V_COLOR,
   gateSegs,
+  nodeBBox,
   type Mode,
   type Port,
   type Tool,
@@ -19,6 +21,12 @@ import {
 // agent pill + deterministic-ingest band, plus the free-composition layer (user nodes, elbow
 // edges), a minimap, Connect/Tidy action cluster, and floating zoom. Pannable in any direction;
 // centers on the pipeline on mount. Compose ≠ execute: nothing here runs a tool.
+//
+// PB2 on-canvas editing layers over the user nodes/edges only (the seeded DAG + gate stay read-only,
+// non-deletable): node selection + inline rename, wire selection/deletion, marquee select, group
+// move + alignment guides, and drag-to-connect. Screen↔content coordinates are converted via the
+// inner plane's getBoundingClientRect() ÷ the CSS `zoom` factor, so every gesture stays true when
+// zoomed (the inner plane uses non-standard CSS `zoom`, not a transform — see §Q4 of the design).
 
 const INNER_W = 2560
 const INNER_H = 460
@@ -59,32 +67,78 @@ const REF_WIRES: [string, string, string][] = [
   ['r_bed', 'n_call', 'panel_bed'],
 ]
 
+// A right-click menu request the screen turns into an item set (node/edge/canvas).
+export type CanvasMenuReq = { x: number; y: number; kind: 'node' | 'edge' | 'canvas'; nodeId?: string; edgeIndex?: number }
+
 type CanvasProps = {
   mode: Mode
   // false for a blank/new pipeline: render only the terminal gate + ingest band + user nodes,
   // not the hardcoded seeded germline chain (so a "New → Blank" canvas is actually empty).
   showSeeded: boolean
   selected: string | null
+  selNodes: Set<string> // multi-selection (user nodes only)
+  selEdge: number | null // index into userEdges, or null
   zoom: number
   userNodes: UserNode[]
   userEdges: UserEdge[]
   connectMode: boolean
   connectFrom: string | null
-  onSelect: (id: string | null) => void
+  guides: { x?: number; y?: number } | null // live alignment guides during a single-node drag
+  renamingId: string | null // the user node whose name is being inline-edited
+  canUndo: boolean
+  canRedo: boolean
+  fitNonce: number // bump to re-center (keyboard 'f' / context menu Fit)
+  onSelect: (id: string | null) => void // seeded cards + background clear (null clears everything)
+  onSelectEdge: (i: number | null) => void
+  onDeleteEdge: (i: number) => void
+  onMarquee: (ids: string[]) => void
   onZoom: (z: number) => void
   onToggleConnect: () => void
   onTidy: () => void
+  onUndo: () => void
+  onRedo: () => void
   onNodeDrag: (id: string, e: React.MouseEvent) => void
   onPortTap: (id: string, side: 'in' | 'out', idx: number) => void
+  onDropConnect: (fromNode: string, fromIdx: number, toNode: string, toIdx: number) => void
   onRemoveNode: (id: string, e: React.MouseEvent) => void
+  onStartRename: (id: string) => void
+  onCommitRename: (id: string, name: string) => void
+  onCancelRename: () => void
+  onContextMenu: (m: CanvasMenuReq) => void
+  onAlign: (k: AlignKind) => void
+  onDistribute: (a: DistributeAxis) => void
+  onDuplicateSel: () => void
+  onDeleteSel: () => void
 }
 
 export function BuilderCanvas(props: CanvasProps) {
-  const { mode, showSeeded, selected, zoom, userNodes, userEdges, connectMode, connectFrom } = props
+  const {
+    mode,
+    showSeeded,
+    selected,
+    selNodes,
+    selEdge,
+    zoom,
+    userNodes,
+    userEdges,
+    connectMode,
+    connectFrom,
+    guides,
+    renamingId,
+  } = props
   const isView = mode === 'view'
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const innerRef = useRef<HTMLDivElement | null>(null) // the CSS-`zoom` content plane — the coord basis
   const centered = useRef(false)
   const updateVpRef = useRef<() => void>(() => {}) // set to updateVp below; used by the mount-centering + Fit rAFs
+
+  // Transient interaction state kept local to the canvas (the screen owns topology/selection):
+  //  - marquee: the live rubber-band rectangle in CONTENT coords
+  //  - wireDrag: an in-progress drag-to-connect from an output port to the cursor (content coords)
+  //  - hoverEdge: the edge under the cursor (surfaces its delete ×)
+  const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
+  const [wireDrag, setWireDrag] = useState<{ fromNode: string; fromIdx: number; cx: number; cy: number } | null>(null)
+  const [hoverEdge, setHoverEdge] = useState<number | null>(null)
 
   // Center the viewport on the pipeline once on mount (README §6: "loads centered").
   useEffect(() => {
@@ -141,7 +195,7 @@ export function BuilderCanvas(props: CanvasProps) {
 
   // Fit: reset zoom + scroll so the pipeline is centered — the seeded DAG, or the user nodes' bbox
   // when composing a draft. Content coords include the 360/480 margin the inner div carries.
-  const fitToDag = () => {
+  const fitToDag = useCallback(() => {
     props.onZoom(1)
     const el = scrollRef.current
     if (!el) return
@@ -158,7 +212,15 @@ export function BuilderCanvas(props: CanvasProps) {
       el.scrollTop = Math.max(0, ty - el.clientHeight / 2)
       updateVpRef.current()
     })
-  }
+    // props.onZoom + userNodes are the only inputs; both are read fresh each call.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userNodes])
+  // Re-fit on a bumped nonce (keyboard 'f' / context menu). fitToDag is stable per userNodes.
+  const fitRef = useRef(fitToDag)
+  fitRef.current = fitToDag
+  useEffect(() => {
+    if (props.fitNonce > 0) fitRef.current()
+  }, [props.fitNonce])
 
   const segs = gateSegs()
 
@@ -168,15 +230,17 @@ export function BuilderCanvas(props: CanvasProps) {
     if (!n) return null
     return { x: n.x + (side === 'out' ? UW : 0), y: n.y + UPT + idx * UROW }
   }
+  // Keep the ORIGINAL userEdges index on each drawn edge so selection/delete address the right wire
+  // (a filtered array would renumber and mis-target).
   const edgePaths = userEdges
-    .map((ed) => {
+    .map((ed, i) => {
       const a = anchor(ed.from.node, 'out', ed.from.idx)
       const b = anchor(ed.to.node, 'in', ed.to.idx)
       if (!a || !b) return null
       const mx = Math.round((a.x + b.x) / 2)
-      return `M${a.x} ${a.y} H${mx} V${b.y} H${b.x}`
+      return { i, d: `M${a.x} ${a.y} H${mx} V${b.y} H${b.x}`, mid: { x: mx, y: Math.round((a.y + b.y) / 2) } }
     })
-    .filter((d): d is string => d != null)
+    .filter((e): e is { i: number; d: string; mid: { x: number; y: number } } => e != null)
 
   // Seeded-DAG edges, COMPUTED from the tool/ref card geometry + typed ports (not the old hardcoded
   // SVG paths, which detached from the ports whenever a card's port count changed — the "broken
@@ -205,17 +269,103 @@ export function BuilderCanvas(props: CanvasProps) {
     return `M${ax} 372 V${Math.round((372 + b.y) / 2)} H${b.x} V${b.y}`
   }).filter((d): d is string => d != null)
 
+  // Convert a viewport point to CONTENT coords: subtract the inner plane's on-screen origin and
+  // divide by the CSS `zoom` factor. This is the ONLY correct transform for the zoomed plane —
+  // scroll-math drifts when zoomed (design §Q4).
+  const toContent = (clientX: number, clientY: number): { x: number; y: number } | null => {
+    const el = innerRef.current
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    const z = zoomRef.current || 1
+    return { x: (clientX - r.left) / z, y: (clientY - r.top) / z }
+  }
+
+  // ── Marquee select (Edit) ── begins only on a true background press (target IS the plane, never a
+  // card/port/edge). Live-intersects each user node's bbox; a <4px press is a background click → clear.
+  const onPlaneMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return
+    if (e.target !== innerRef.current) return // a card/port/edge press is handled by that element
+    if (isView) {
+      props.onSelect(null)
+      return
+    }
+    const start = toContent(e.clientX, e.clientY)
+    if (!start) return
+    const sx0 = e.clientX
+    const sy0 = e.clientY
+    setMarquee({ x1: start.x, y1: start.y, x2: start.x, y2: start.y })
+    const move = (ev: MouseEvent) => {
+      const c = toContent(ev.clientX, ev.clientY)
+      if (!c) return
+      const rect = { x1: Math.min(start.x, c.x), y1: Math.min(start.y, c.y), x2: Math.max(start.x, c.x), y2: Math.max(start.y, c.y) }
+      setMarquee(rect)
+      const ids = userNodes
+        .filter((n) => {
+          const b = nodeBBox(n)
+          return b.x1 < rect.x2 && b.x2 > rect.x1 && b.y1 < rect.y2 && b.y2 > rect.y1
+        })
+        .map((n) => n.id)
+      props.onMarquee(ids)
+    }
+    const up = (ev: MouseEvent) => {
+      document.removeEventListener('mousemove', move)
+      document.removeEventListener('mouseup', up)
+      if (Math.hypot(ev.clientX - sx0, ev.clientY - sy0) < 4) props.onSelect(null) // background click → clear
+      setMarquee(null)
+    }
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', up)
+  }
+
+  // ── Drag-to-connect (Edit) ── press an OUTPUT dot, drag a rubber-band to an INPUT dot. The drop is
+  // resolved by elementFromPoint reading the target dot's data-*; the screen re-runs the typed/dedup
+  // validation (same as click-arm-click). A press with no valid drop just cancels (the click-arm-click
+  // flow still fires for a plain click, so both gestures coexist).
+  const startWireDrag = (fromNode: string, fromIdx: number, e: React.MouseEvent) => {
+    if (isView) return
+    e.preventDefault()
+    e.stopPropagation()
+    const c = toContent(e.clientX, e.clientY)
+    if (!c) return
+    setWireDrag({ fromNode, fromIdx, cx: c.x, cy: c.y })
+    const move = (ev: MouseEvent) => {
+      const p = toContent(ev.clientX, ev.clientY)
+      if (p) setWireDrag((w) => (w ? { ...w, cx: p.x, cy: p.y } : w))
+    }
+    const up = (ev: MouseEvent) => {
+      document.removeEventListener('mousemove', move)
+      document.removeEventListener('mouseup', up)
+      const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null
+      const dot = el?.closest('[data-port]') as HTMLElement | null
+      if (dot && dot.dataset.side === 'in' && dot.dataset.node) {
+        props.onDropConnect(fromNode, fromIdx, dot.dataset.node, Number(dot.dataset.idx))
+      }
+      setWireDrag(null)
+    }
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', up)
+  }
 
   return (
     <div className="relative min-w-0 flex-1">
       <div
         ref={scrollRef}
         className="absolute inset-0 overflow-auto bg-card-2"
-        onClick={() => props.onSelect(null)}
+        onMouseDown={(e) => {
+          // A press on the scroll gutter (outside the plane) also clears selection.
+          if (e.target === scrollRef.current) props.onSelect(null)
+        }}
         onScroll={updateVp}
       >
         <div
+          ref={innerRef}
           className="relative"
+          onMouseDown={onPlaneMouseDown}
+          onContextMenu={(e) => {
+            if (e.target !== innerRef.current) return
+            e.preventDefault()
+            props.onContextMenu({ x: e.clientX, y: e.clientY, kind: 'canvas' })
+          }}
           style={{
             width: INNER_W,
             height: INNER_H,
@@ -239,10 +389,75 @@ export function BuilderCanvas(props: CanvasProps) {
               refPaths.map((d, i) => (
                 <path key={`r${i}`} d={d} fill="none" stroke="#d3dae1" strokeWidth={1.25} strokeDasharray="5 4" />
               ))}
-            {edgePaths.map((d, i) => (
-              <path key={`u${i}`} d={d} fill="none" stroke="var(--color-accent)" strokeWidth={1.8} />
-            ))}
+            {/* Live alignment guides (single-node drag) — full-extent dashed accent lines. */}
+            {guides?.x != null && (
+              <line x1={guides.x} y1={-1000} x2={guides.x} y2={INNER_H + 2000} stroke="var(--color-accent)" strokeWidth={1} strokeDasharray="4 3" />
+            )}
+            {guides?.y != null && (
+              <line x1={-1000} y1={guides.y} x2={INNER_W + 2000} y2={guides.y} stroke="var(--color-accent)" strokeWidth={1} strokeDasharray="4 3" />
+            )}
+            {/* User edges: a visible line + an invisible fat hit-path (pointer-events re-enabled only
+                on the stroke) so a wire can be selected/deleted without a node. */}
+            {edgePaths.map((e) => {
+              const active = e.i === selEdge || e.i === hoverEdge
+              return (
+                <g key={`u${e.i}`}>
+                  <path d={e.d} fill="none" stroke="var(--color-accent)" strokeWidth={e.i === selEdge ? 2.6 : 1.8} opacity={e.i === selEdge ? 1 : 0.9} />
+                  {!isView && (
+                    <path
+                      d={e.d}
+                      fill="none"
+                      stroke="transparent"
+                      strokeWidth={12}
+                      style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                      onClick={(ev) => {
+                        ev.stopPropagation()
+                        props.onSelectEdge(e.i)
+                      }}
+                      onMouseEnter={() => setHoverEdge(e.i)}
+                      onMouseLeave={() => setHoverEdge((h) => (h === e.i ? null : h))}
+                      onContextMenu={(ev) => {
+                        ev.preventDefault()
+                        ev.stopPropagation()
+                        props.onContextMenu({ x: ev.clientX, y: ev.clientY, kind: 'edge', edgeIndex: e.i })
+                      }}
+                    />
+                  )}
+                  {active && <circle cx={e.mid.x} cy={e.mid.y} r={3} fill="var(--color-accent)" />}
+                </g>
+              )
+            })}
+            {/* Drag-to-connect rubber band. */}
+            {wireDrag &&
+              (() => {
+                const a = anchor(wireDrag.fromNode, 'out', wireDrag.fromIdx)
+                if (!a) return null
+                return <path d={`M${a.x} ${a.y} L${wireDrag.cx} ${wireDrag.cy}`} fill="none" stroke="var(--color-accent)" strokeWidth={1.8} strokeDasharray="5 4" />
+              })()}
           </svg>
+
+          {/* Wire delete ×: an HTML button in the content plane at the edge midpoint (shown for the
+              selected/hovered wire). One-click, undoable — a single wire is a direct object, not a cascade. */}
+          {!isView &&
+            edgePaths
+              .filter((e) => e.i === selEdge || e.i === hoverEdge)
+              .map((e) => (
+                <button
+                  key={`x${e.i}`}
+                  type="button"
+                  title="Delete wire"
+                  onClick={(ev) => {
+                    ev.stopPropagation()
+                    props.onDeleteEdge(e.i)
+                  }}
+                  onMouseEnter={() => setHoverEdge(e.i)}
+                  onMouseLeave={() => setHoverEdge((h) => (h === e.i ? null : h))}
+                  className="absolute z-[6] grid h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-escalate-bd bg-escalate-bg text-escalate-fg shadow-card hover:opacity-90"
+                  style={{ left: e.mid.x, top: e.mid.y }}
+                >
+                  <X size={11} />
+                </button>
+              ))}
 
           <span className="absolute left-10 top-[140px] text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">
             Composed tool nodes
@@ -265,17 +480,37 @@ export function BuilderCanvas(props: CanvasProps) {
             <UserCard
               key={n.id}
               n={n}
+              isView={isView}
+              selected={selNodes.has(n.id)}
+              renaming={renamingId === n.id}
               connectMode={connectMode}
               connectFrom={connectFrom}
               onDown={props.onNodeDrag}
               onPortTap={props.onPortTap}
+              onStartWireDrag={startWireDrag}
               onRemove={props.onRemoveNode}
+              onStartRename={props.onStartRename}
+              onCommitRename={props.onCommitRename}
+              onCancelRename={props.onCancelRename}
+              onContextMenu={(ev) => {
+                ev.preventDefault()
+                ev.stopPropagation()
+                props.onContextMenu({ x: ev.clientX, y: ev.clientY, kind: 'node', nodeId: n.id })
+              }}
             />
           ))}
+
+          {/* Marquee rectangle (content plane, so it scales with zoom). */}
+          {marquee && (
+            <div
+              className="pointer-events-none absolute z-[6] rounded-[2px] border border-dashed border-accent bg-accent/10"
+              style={{ left: marquee.x1, top: marquee.y1, width: marquee.x2 - marquee.x1, height: marquee.y2 - marquee.y1 }}
+            />
+          )}
         </div>
       </div>
 
-      {/* Canvas action cluster (Edit): Connect + Tidy (auto-layout) */}
+      {/* Canvas action cluster (Edit): Connect + Tidy (auto-layout) + Undo/Redo */}
       {!isView && (
         <div className="absolute left-3.5 top-3.5 z-[6] flex gap-1.5">
           <button
@@ -294,6 +529,25 @@ export function BuilderCanvas(props: CanvasProps) {
             <Wand2 size={14} />
             Tidy
           </button>
+          <div className="flex items-center rounded-lg border border-line-strong bg-card">
+            <button
+              onClick={props.onUndo}
+              disabled={!props.canUndo}
+              title="Undo (⌘Z)"
+              className={`grid h-[31px] w-8 place-items-center rounded-l-lg ${props.canUndo ? 'text-text-2 hover:bg-page' : 'cursor-not-allowed text-text-3'}`}
+            >
+              <Undo2 size={14} />
+            </button>
+            <div className="h-[18px] w-px bg-line" />
+            <button
+              onClick={props.onRedo}
+              disabled={!props.canRedo}
+              title="Redo (⌘⇧Z)"
+              className={`grid h-[31px] w-8 place-items-center rounded-r-lg ${props.canRedo ? 'text-text-2 hover:bg-page' : 'cursor-not-allowed text-text-3'}`}
+            >
+              <Redo2 size={14} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -335,7 +589,7 @@ export function BuilderCanvas(props: CanvasProps) {
         {userNodes.map((n) => (
           <span
             key={n.id}
-            className="absolute rounded-[1px] bg-accent"
+            className={`absolute rounded-[1px] ${selNodes.has(n.id) ? 'bg-accent-strong' : 'bg-accent'}`}
             style={{ left: n.x * MM_SCALE, top: MM_VPAD + n.y * MM_SCALE, width: UW * MM_SCALE, height: 46 * MM_SCALE }}
           />
         ))}
@@ -374,6 +628,17 @@ export function BuilderCanvas(props: CanvasProps) {
           Fit
         </button>
       </div>
+
+      {/* Multi-selection action bar (align / distribute / duplicate / delete). */}
+      {!isView && selNodes.size > 1 && (
+        <SelectionActionBar
+          count={selNodes.size}
+          onAlign={props.onAlign}
+          onDistribute={props.onDistribute}
+          onDuplicate={props.onDuplicateSel}
+          onDelete={props.onDeleteSel}
+        />
+      )}
     </div>
   )
 }
@@ -591,32 +856,52 @@ function ShieldCheckSmall() {
   )
 }
 
-// User-composed node: identical language to the seeded cards, but draggable + wireable. Ports
-// become full connect-circles in Connect mode; the armed source port fills accent.
+// User-composed node: identical language to the seeded cards, but draggable + wireable + selectable.
+// Ports carry data-* so drag-to-connect can resolve a drop via elementFromPoint; the name double-clicks
+// into an inline rename. Selection (from the drag/click handler in the screen) shows an accent ring.
 function UserCard({
   n,
+  isView,
+  selected,
+  renaming,
   connectMode,
   connectFrom,
   onDown,
   onPortTap,
+  onStartWireDrag,
   onRemove,
+  onStartRename,
+  onCommitRename,
+  onCancelRename,
+  onContextMenu,
 }: {
   n: UserNode
+  isView: boolean
+  selected: boolean
+  renaming: boolean
   connectMode: boolean
   connectFrom: string | null
   onDown: (id: string, e: React.MouseEvent) => void
   onPortTap: (id: string, side: 'in' | 'out', idx: number) => void
+  onStartWireDrag: (fromNode: string, fromIdx: number, e: React.MouseEvent) => void
   onRemove: (id: string, e: React.MouseEvent) => void
+  onStartRename: (id: string) => void
+  onCommitRename: (id: string, name: string) => void
+  onCancelRename: () => void
+  onContextMenu: (e: React.MouseEvent) => void
 }) {
-  const sel = connectFrom != null && connectFrom.split('|')[0] === n.id
+  // Armed = this node is the connect-mode source; highlight = armed OR multi-selected (both read as an
+  // accent ring, one visual language for "acted-on").
+  const armed = connectFrom != null && connectFrom.split('|')[0] === n.id
+  const highlight = armed || selected
   const Icon = ICONS[n.icon]
-  const dotStyle = (armed: boolean): React.CSSProperties => ({
+  const dotStyle = (isArmed: boolean): React.CSSProperties => ({
     width: 12,
     height: 12,
     borderRadius: '50%',
     boxSizing: 'border-box',
     border: '2px solid var(--color-accent)',
-    background: armed ? 'var(--color-accent)' : 'var(--color-card)',
+    background: isArmed ? 'var(--color-accent)' : 'var(--color-card)',
     flexShrink: 0,
     cursor: connectMode ? 'pointer' : 'default',
     zIndex: 7,
@@ -624,19 +909,20 @@ function UserCard({
   return (
     <div
       onMouseDown={(e) => onDown(n.id, e)}
+      onContextMenu={onContextMenu}
       className="absolute select-none"
       style={{
         left: n.x,
         top: n.y,
         width: UW,
         background: 'var(--color-card)',
-        border: `1px solid ${sel ? 'var(--color-accent)' : 'var(--color-line-strong)'}`,
-        borderLeft: `3px solid ${sel ? 'var(--color-accent)' : '#c6ced7'}`,
+        border: `1px solid ${highlight ? 'var(--color-accent)' : 'var(--color-line-strong)'}`,
+        borderLeft: `3px solid ${highlight ? 'var(--color-accent)' : '#c6ced7'}`,
         borderRadius: 11,
-        boxShadow: sel ? '0 0 0 3px var(--color-accent-weak)' : '0 2px 8px rgba(16,24,40,.1)',
+        boxShadow: highlight ? '0 0 0 3px var(--color-accent-weak)' : '0 2px 8px rgba(16,24,40,.1)',
         cursor: connectMode ? 'default' : 'grab',
-        overflow: connectMode ? 'visible' : 'hidden',
-        zIndex: 5,
+        overflow: connectMode || renaming ? 'visible' : 'hidden',
+        zIndex: selected ? 6 : 5,
       }}
     >
       <div className="flex items-center gap-1.5 px-2.5 pb-1.5 pt-2">
@@ -644,24 +930,70 @@ function UserCard({
           <Icon size={13} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[11.5px] font-semibold text-text">{n.name}</span>
+          {renaming ? (
+            <input
+              autoFocus
+              defaultValue={n.name}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              onFocus={(e) => e.target.select()}
+              onBlur={(e) => onCommitRename(n.id, e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  onCommitRename(n.id, (e.target as HTMLInputElement).value)
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  onCancelRename()
+                }
+              }}
+              className="block w-full rounded border border-accent bg-card px-1 py-0.5 text-[11.5px] font-semibold text-text outline-none"
+            />
+          ) : (
+            <span
+              onDoubleClick={(e) => {
+                if (isView) return
+                e.stopPropagation()
+                onStartRename(n.id)
+              }}
+              className="block truncate text-[11.5px] font-semibold text-text"
+              title={isView ? undefined : 'Double-click to rename'}
+            >
+              {n.name}
+            </span>
+          )}
           <span className="block truncate font-mono text-[9px] text-text-3">{n.version}</span>
         </span>
-        <button
-          onClick={(e) => onRemove(n.id, e)}
-          onMouseDown={(e) => e.stopPropagation()}
-          className="grid h-[18px] w-[18px] shrink-0 place-items-center text-text-3 hover:text-escalate-fg"
-        >
-          <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
+        {!isView && (
+          <button
+            onClick={(e) => onRemove(n.id, e)}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="grid h-[18px] w-[18px] shrink-0 place-items-center text-text-3 hover:text-escalate-fg"
+            title="Delete node"
+          >
+            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
       <div className="flex gap-1.5 px-2.5 pb-2 pt-0.5">
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           {n.ins.map((k, idx) => (
             <div key={idx} className="-ml-4 flex items-center gap-1.5">
-              <span style={dotStyle(connectFrom === `${n.id}|in|${idx}`)} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onPortTap(n.id, 'in', idx) }} />
+              <span
+                data-port="1"
+                data-node={n.id}
+                data-side="in"
+                data-idx={idx}
+                data-kind={k}
+                style={dotStyle(connectFrom === `${n.id}|in|${idx}`)}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onPortTap(n.id, 'in', idx)
+                }}
+              />
               <span className="truncate font-mono text-[9.5px] text-text-2">{k}</span>
             </div>
           ))}
@@ -670,7 +1002,19 @@ function UserCard({
           {n.outs.map((k, idx) => (
             <div key={idx} className="-mr-4 flex max-w-full items-center gap-1.5">
               <span className="truncate font-mono text-[9.5px] text-text-2">{k}</span>
-              <span style={dotStyle(connectFrom === `${n.id}|out|${idx}`)} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onPortTap(n.id, 'out', idx) }} />
+              <span
+                data-port="1"
+                data-node={n.id}
+                data-side="out"
+                data-idx={idx}
+                data-kind={k}
+                style={dotStyle(connectFrom === `${n.id}|out|${idx}`)}
+                onMouseDown={(e) => onStartWireDrag(n.id, idx, e)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onPortTap(n.id, 'out', idx)
+                }}
+              />
             </div>
           ))}
         </div>

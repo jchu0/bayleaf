@@ -1,43 +1,60 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  BoxSelect,
   Check,
   ChevronLeft,
   ChevronRight,
+  CopyPlus,
   Download,
   FolderOpen,
+  Frame,
   GitBranch,
   LayoutGrid,
   Loader2,
+  Pencil,
   Play,
   Plus,
   Save,
   Search,
   ShieldCheck,
+  Trash2,
+  Unlink,
+  Wand2,
   X,
 } from 'lucide-react'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import type { SegmentOption } from '../components/SegmentedControl'
 import { BuilderCanvas } from '../components/BuilderCanvas'
+import type { CanvasMenuReq } from '../components/BuilderCanvas'
 import { BuilderConsole } from '../components/BuilderConsole'
 import { BuilderInspector } from '../components/BuilderInspector'
 import { BuilderProfileCombobox } from '../components/BuilderProfileCombobox'
+import { BuilderContextMenu, type MenuItem } from '../components/BuilderContextMenu'
+import type { AlignKind, DistributeAxis } from '../components/SelectionActionBar'
 import { ArchivistModal, AuthorToolNodeModal, PipelineRepairModal, RunHandoffModal } from '../components/BuilderModals'
 import {
   GRAPH_ID,
   ICONS,
   LINKED_RUN,
+  NODE_W,
   ON_CYCLE,
   REFS,
   TOOLS,
   curLocMap,
+  duplicateNode,
   gateSegs,
   germlineTemplate,
   isEditableProfile,
   makeUserNode,
   mergedLoc,
+  nodeHeight,
+  reconcileEdges,
+  renameNode,
   savedLocators,
+  setNodeIcon,
   yamlFor,
   type BuilderGraphPayload,
   type ConsoleTab,
@@ -49,9 +66,54 @@ import {
   type UserEdge,
   type UserNode,
 } from '../components/BuilderShared'
+import { useTopologyHistory } from '../hooks/useTopologyHistory'
 import { useRole } from '../context/RoleContext'
 import { api } from '../api'
 import type { DiffResult, DryRunResult, PipelineGraph } from '../types'
+
+// Live alignment-guide snap threshold (content px) + a small module helper: for a dragged node's
+// {left, centerX, right}/{top, middle, bottom} anchors, find the nearest other-node anchor within
+// the threshold and report the guide line + the snapped node position. Zoom-safe because it operates
+// entirely in CONTENT coordinates (the caller converts the pointer via getBoundingClientRect ÷ zoom).
+const GUIDE_SNAP = 6
+function alignGuides(
+  nx: number,
+  ny: number,
+  dragged: UserNode,
+  others: UserNode[],
+): { x?: number; y?: number; snapx?: number; snapy?: number } {
+  const dh = nodeHeight(dragged)
+  const myX = [nx, nx + NODE_W / 2, nx + NODE_W]
+  const myY = [ny, ny + dh / 2, ny + dh]
+  let bestXd = GUIDE_SNAP
+  let bestYd = GUIDE_SNAP
+  let gx: number | undefined
+  let gy: number | undefined
+  let snapx: number | undefined
+  let snapy: number | undefined
+  for (const o of others) {
+    const oh = nodeHeight(o)
+    const oX = [o.x, o.x + NODE_W / 2, o.x + NODE_W]
+    const oY = [o.y, o.y + oh / 2, o.y + oh]
+    for (let a = 0; a < 3; a++) {
+      for (let b = 0; b < 3; b++) {
+        const dxv = Math.abs(myX[a] - oX[b])
+        if (dxv < bestXd) {
+          bestXd = dxv
+          gx = oX[b]
+          snapx = nx + (oX[b] - myX[a])
+        }
+        const dyv = Math.abs(myY[a] - oY[b])
+        if (dyv < bestYd) {
+          bestYd = dyv
+          gy = oY[b]
+          snapy = ny + (oY[b] - myY[a])
+        }
+      }
+    }
+  }
+  return { x: gx, y: gy, snapx, snapy }
+}
 
 // The Pipeline Builder (#11) — the editable superset of the Provenance canvas: a left→right DAG
 // the operator *configures* (nodes, locators, the advisory agent), whose sole grounded output is
@@ -96,6 +158,23 @@ export function PipelineBuilder() {
   const [userEdges, setUserEdges] = useState<UserEdge[]>([])
   const [connectMode, setConnectMode] = useState(false)
   const [connectFrom, setConnectFrom] = useState<string | null>(null)
+
+  // ── PB2 on-canvas editing state ──
+  // `selected` (above) stays the inspector subject (seeded OR user node); these are orthogonal:
+  //  - selNodes: the multi-selection, USER NODES ONLY (never a seeded/gate id) — drives group move,
+  //    bulk delete, align/distribute, and every node ring.
+  //  - selEdge: a selected user edge (index into userEdges) for deletion; null when none.
+  const [selNodes, setSelNodes] = useState<Set<string>>(new Set())
+  const [selEdge, setSelEdge] = useState<number | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null) // node under inline rename
+  const [guides, setGuides] = useState<{ x?: number; y?: number } | null>(null) // live drag guides
+  const [menu, setMenu] = useState<CanvasMenuReq | null>(null) // right-click menu request
+  const [fitNonce, setFitNonce] = useState(0) // bump to re-center (keyboard 'f' / menu Fit)
+
+  const confirm = useConfirm()
+  // Undo/redo over the canvas topology (nodes/edges). record() BEFORE each discrete mutation; reset()
+  // on New/Cancel/Load. This is the safety net that keeps an edge-severing delete reversible.
+  const hist = useTopologyHistory(userNodes, userEdges, setUserNodes, setUserEdges)
 
   const [locEdits, setLocEdits] = useState<LocEdits>({})
   const [refLoc, setRefLoc] = useState<Record<string, string>>({})
@@ -144,6 +223,7 @@ export function PipelineBuilder() {
     setLocEdits({})
     setRefLoc({})
     setSelected(null)
+    resetEditing()
     setVersion(1)
     setSaveStatus('draft')
     setEmitted(false)
@@ -172,6 +252,7 @@ export function PipelineBuilder() {
     setLocEdits(g.locator_edits ?? {})
     setRefLoc(g.reference_locators ?? {})
     setSelected(null)
+    resetEditing()
     setConnectMode(false)
     setConnectFrom(null)
     setProfile(pg.profile ?? 'default')
@@ -200,6 +281,7 @@ export function PipelineBuilder() {
     setLocEdits({})
     setRefLoc({})
     setSelected(null)
+    resetEditing()
     setConnectMode(false)
     setConnectFrom(null)
     setVersion(3)
@@ -212,11 +294,65 @@ export function PipelineBuilder() {
     setProfile('giab_panel')
     setMode('view')
   }
-  const selTool = useMemo(() => TOOLS.find((t) => t.id === selected) ?? null, [selected])
-  const selRef = useMemo(() => REFS.find((r) => r.id === selected) ?? null, [selected])
-  const isGate = selected === 'g_gate'
-  const isAgent = selected === 'a_qc_triage'
-  const inspectorOn = !!(selTool || selRef || isGate || isAgent)
+  // A composed user node WINS over any seeded subject: a template/forked draft reuses seeded ids
+  // (n_fastp, …) but must resolve to the EDITABLE inspector, never the read-only seeded card (§3.1).
+  const selUserNode = useMemo(() => userNodes.find((n) => n.id === selected) ?? null, [userNodes, selected])
+  const selTool = useMemo(() => (selUserNode ? null : (TOOLS.find((t) => t.id === selected) ?? null)), [selUserNode, selected])
+  const selRef = useMemo(() => (selUserNode ? null : (REFS.find((r) => r.id === selected) ?? null)), [selUserNode, selected])
+  const isGate = !selUserNode && selected === 'g_gate'
+  const isAgent = !selUserNode && selected === 'a_qc_triage'
+  const inspectorOn = !!(selUserNode || selTool || selRef || isGate || isAgent)
+
+  // ── selection model ──
+  // selectNode: seeded/gate ids set only `selected` (inspectable, never delete-eligible); a user node
+  // sets both `selected` + `selNodes` (additive shift/cmd toggles it into the set).
+  const selectNode = (id: string, additive: boolean) => {
+    const isUser = userNodes.some((n) => n.id === id)
+    if (additive && isUser) {
+      setSelNodes((s) => {
+        const next = new Set(s)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      })
+      setSelected(id)
+    } else {
+      setSelected(id)
+      setSelNodes(isUser ? new Set([id]) : new Set())
+    }
+    setSelEdge(null)
+  }
+  const clearSelection = () => {
+    setSelected(null)
+    setSelNodes(new Set())
+    setSelEdge(null)
+  }
+  const selectEdge = (i: number | null) => {
+    setSelEdge(i)
+    if (i != null) {
+      setSelected(null)
+      setSelNodes(new Set())
+    }
+  }
+  // Canvas onSelect: null clears everything; a non-null id (seeded card or user node) selects it.
+  const handleSelect = (id: string | null) => {
+    if (id == null) clearSelection()
+    else selectNode(id, false)
+  }
+  const onMarquee = (ids: string[]) => {
+    setSelNodes(new Set(ids))
+    setSelected(ids.length ? ids[ids.length - 1] : null)
+    setSelEdge(null)
+  }
+  // Reset all selection + history — shared by New / Cancel / Load.
+  const resetEditing = () => {
+    setSelNodes(new Set())
+    setSelEdge(null)
+    setRenamingId(null)
+    setGuides(null)
+    setMenu(null)
+    hist.reset()
+  }
 
   const locEditable = isEditableProfile(profile) && !isView
   const yaml = yamlFor(profile, locEdits)
@@ -338,17 +474,187 @@ export function PipelineBuilder() {
   // ── free composition ──
   const addNode = (name: string, kind: string) => {
     if (isView) return
+    hist.record()
     setUserNodes((arr) => [...arr, makeUserNode(name, kind, arr.length)])
+  }
+
+  // ── delete policy (the maintainer's "no accidental cascade" rule) ──
+  // A delete that severs ≥1 wire, or a multi-node delete, is a cascade → confirm first (danger tone).
+  // An isolated single node (no wires) is a one-click delete. EVERY delete is undoable (⌘Z), and the
+  // toast says so — undo is the standing safety net. The card × and inspector Delete both route here.
+  const deleteNodes = async (ids: string[]) => {
+    if (isView) return
+    const nodeIds = ids.filter((id) => userNodes.some((n) => n.id === id))
+    if (!nodeIds.length) return
+    const severed = userEdges.filter((e) => nodeIds.includes(e.from.node) || nodeIds.includes(e.to.node)).length
+    if (nodeIds.length > 1 || severed >= 1) {
+      const ok = await confirm({
+        tone: 'danger',
+        title: nodeIds.length > 1 ? `Delete ${nodeIds.length} nodes?` : 'Delete node?',
+        body:
+          severed > 0
+            ? `This also removes ${severed} connected wire${severed === 1 ? '' : 's'}. You can undo (⌘Z).`
+            : 'You can undo (⌘Z).',
+        confirmLabel: 'Delete',
+      })
+      if (!ok) return
+    }
+    hist.record()
+    setUserNodes((ns) => ns.filter((n) => !nodeIds.includes(n.id)))
+    setUserEdges((es) => es.filter((e) => !nodeIds.includes(e.from.node) && !nodeIds.includes(e.to.node)))
+    clearSelection()
+    toast(
+      `Deleted ${nodeIds.length} node${nodeIds.length === 1 ? '' : 's'}${severed ? ` · ${severed} wire${severed === 1 ? '' : 's'} removed` : ''} — ⌘Z to undo`,
+      'info',
+    )
   }
   const removeNode = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    setUserNodes((ns) => ns.filter((n) => n.id !== id))
-    setUserEdges((es) => es.filter((ed) => ed.from.node !== id && ed.to.node !== id))
+    void deleteNodes([id])
   }
+  // A single wire is a directly-targeted object (its own × / hit-path), not a cascade → one-click, undoable.
+  const deleteEdge = (i: number) => {
+    if (isView) return
+    if (!userEdges[i]) return
+    hist.record()
+    setUserEdges((es) => es.filter((_, idx) => idx !== i))
+    setSelEdge(null)
+    toast('Wire removed — ⌘Z to undo', 'info')
+  }
+  const deleteSelection = () => {
+    if (isView) return
+    if (selNodes.size) void deleteNodes([...selNodes])
+    else if (selEdge != null) deleteEdge(selEdge)
+    else if (selUserNode) void deleteNodes([selUserNode.id])
+  }
+  const disconnectNode = (id: string) => {
+    const incident = userEdges.filter((e) => e.from.node === id || e.to.node === id).length
+    if (!incident) return
+    hist.record()
+    setUserEdges((es) => es.filter((e) => e.from.node !== id && e.to.node !== id))
+    toast(`Disconnected ${incident} wire${incident === 1 ? '' : 's'} — ⌘Z to undo`, 'info')
+  }
+
+  // ── node authoring (rename / icon / typed ports) ── each a discrete, undoable draft mutation. Port
+  // edits reconcile edges so no dangling/mistyped wire survives (honest typed graph).
+  const renameNodeTo = (id: string, name: string) => {
+    const cur = userNodes.find((n) => n.id === id)
+    if (!cur) return
+    const nm = name.trim()
+    if (!nm) {
+      toast('Node name can’t be empty', 'error')
+      return
+    }
+    if (nm === cur.name) return
+    hist.record()
+    setUserNodes((ns) => renameNode(ns, id, nm))
+  }
+  const setNodeIconTo = (id: string, icon: IconKey) => {
+    hist.record()
+    setUserNodes((ns) => setNodeIcon(ns, id, icon))
+  }
+  const addPort = (id: string, dir: 'ins' | 'outs', kind: string) => {
+    hist.record()
+    setUserNodes((ns) => ns.map((n) => (n.id === id ? { ...n, [dir]: [...n[dir], kind] } : n)))
+  }
+  const removePort = (id: string, dir: 'ins' | 'outs', idx: number) => {
+    hist.record()
+    const side = dir === 'ins' ? 'to' : 'from'
+    const nextNodes = userNodes.map((n) => (n.id === id ? { ...n, [dir]: n[dir].filter((_, i) => i !== idx) } : n))
+    // Drop wires on the removed port; re-index wires on later ports of this node (shift down by one).
+    const nextEdges = userEdges
+      .filter((e) => !(e[side].node === id && e[side].idx === idx))
+      .map((e) => (e[side].node === id && e[side].idx > idx ? { ...e, [side]: { node: id, idx: e[side].idx - 1 } } : e))
+    setUserNodes(nextNodes)
+    setUserEdges(reconcileEdges(nextNodes, nextEdges))
+  }
+  const setPortKind = (id: string, dir: 'ins' | 'outs', idx: number, kind: string) => {
+    hist.record()
+    const nextNodes = userNodes.map((n) => (n.id === id ? { ...n, [dir]: n[dir].map((k, i) => (i === idx ? kind : k)) } : n))
+    setUserNodes(nextNodes)
+    const reconciled = reconcileEdges(nextNodes, userEdges)
+    if (reconciled.length !== userEdges.length) {
+      setUserEdges(reconciled)
+      const dropped = userEdges.length - reconciled.length
+      toast(`Retyped port — ${dropped} wire${dropped === 1 ? '' : 's'} removed`, 'info')
+    }
+  }
+  const duplicateById = (id: string) => {
+    const n = userNodes.find((x) => x.id === id)
+    if (!n) return
+    hist.record()
+    const copy = duplicateNode(n)
+    setUserNodes((ns) => [...ns, copy])
+    setSelNodes(new Set([copy.id]))
+    setSelected(copy.id)
+    setSelEdge(null)
+  }
+  const duplicateSelection = () => {
+    if (isView) return
+    const ids = [...selNodes].filter((id) => userNodes.some((n) => n.id === id))
+    const src = ids.length ? userNodes.filter((n) => ids.includes(n.id)) : selUserNode ? [selUserNode] : []
+    if (!src.length) return
+    hist.record()
+    const copies = src.map((n, i) => duplicateNode(n, i))
+    setUserNodes((ns) => [...ns, ...copies])
+    setSelNodes(new Set(copies.map((c) => c.id)))
+    setSelected(copies[0].id)
+    setSelEdge(null)
+  }
+  const selectAll = () => {
+    if (!userNodes.length) return
+    const ids = userNodes.map((n) => n.id)
+    setSelNodes(new Set(ids))
+    setSelected(ids[ids.length - 1])
+    setSelEdge(null)
+  }
+
+  // ── align / distribute (multi-selection) ──
+  const alignSelection = (kind: AlignKind) => {
+    const ids = [...selNodes].filter((id) => userNodes.some((n) => n.id === id))
+    if (ids.length < 2) return
+    const sel = userNodes.filter((n) => ids.includes(n.id))
+    const left = Math.min(...sel.map((n) => n.x))
+    const right = Math.max(...sel.map((n) => n.x + NODE_W))
+    const top = Math.min(...sel.map((n) => n.y))
+    const bottom = Math.max(...sel.map((n) => n.y + nodeHeight(n)))
+    hist.record()
+    setUserNodes((ns) =>
+      ns.map((n) => {
+        if (!ids.includes(n.id)) return n
+        const h = nodeHeight(n)
+        let x = n.x
+        let y = n.y
+        if (kind === 'left') x = left
+        else if (kind === 'right') x = right - NODE_W
+        else if (kind === 'hcenter') x = (left + right) / 2 - NODE_W / 2
+        else if (kind === 'top') y = top
+        else if (kind === 'bottom') y = bottom - h
+        else if (kind === 'vmiddle') y = (top + bottom) / 2 - h / 2
+        return { ...n, x: Math.round(x), y: Math.round(y) }
+      }),
+    )
+  }
+  const distributeSelection = (axis: DistributeAxis) => {
+    const ids = [...selNodes].filter((id) => userNodes.some((n) => n.id === id))
+    if (ids.length < 3) return
+    const sel = userNodes.filter((n) => ids.includes(n.id))
+    const key = axis === 'h' ? 'x' : 'y'
+    const sorted = [...sel].sort((a, b) => a[key] - b[key])
+    const min = sorted[0][key]
+    const max = sorted[sorted.length - 1][key]
+    const step = (max - min) / (sorted.length - 1)
+    const pos = new Map(sorted.map((n, i) => [n.id, Math.round(min + i * step)]))
+    hist.record()
+    setUserNodes((ns) => ns.map((n) => (pos.has(n.id) ? { ...n, [key]: pos.get(n.id)! } : n)))
+  }
+
   // Tidy = a flow-preserving auto-layout: place each node in the column of its longest-path depth
   // from a source (so upstream→downstream reads left→right), and stack parallel nodes in a column.
   // This keeps the connection structure legible instead of dropping every card into one row.
-  const tidy = () =>
+  const tidy = () => {
+    if (!userNodes.length) return
+    hist.record()
     setUserNodes((ns) => {
       if (!ns.length) return ns
       const depth = new Map(ns.map((n) => [n.id, 0]))
@@ -362,7 +668,7 @@ export function PipelineBuilder() {
       const rowOf = new Map<number, number>() // next free row per column
       const pos = new Map<string, { x: number; y: number }>()
       // Deterministic order: by depth, then original x, so a re-tidy is stable.
-      for (const n of [...ns].sort((a, b) => (depth.get(a.id)! - depth.get(b.id)!) || a.x - b.x)) {
+      for (const n of [...ns].sort((a, b) => depth.get(a.id)! - depth.get(b.id)! || a.x - b.x)) {
         const col = depth.get(n.id) ?? 0
         const row = rowOf.get(col) ?? 0
         rowOf.set(col, row + 1)
@@ -370,33 +676,99 @@ export function PipelineBuilder() {
       }
       return ns.map((n) => ({ ...n, ...(pos.get(n.id) ?? { x: n.x, y: n.y }) }))
     })
+  }
 
+  // Node drag — click-vs-drag threshold decides select vs move; a multi-selection moves as a group.
+  // Deltas divide by `zoom` (content units). Single-node drags snap to alignment guides live; all
+  // moved nodes grid-snap + clamp ≥0 on release.
   const nodeDrag = (id: string, e: React.MouseEvent) => {
     if (connectMode) return
+    if (isView) {
+      selectNode(id, false) // View: click selects for inspection, never drags
+      return
+    }
     e.preventDefault()
-    const n0 = userNodes.find((n) => n.id === id)
-    if (!n0) return
+    const additive = e.shiftKey || e.metaKey || e.ctrlKey
+    const inGroup = selNodes.has(id) && selNodes.size > 1
+    if (!inGroup) selectNode(id, additive) // show the ring immediately during a fresh drag
+    const dragged = userNodes.find((n) => n.id === id)
+    if (!dragged) return
+    const group = inGroup ? [...selNodes].filter((gid) => userNodes.some((n) => n.id === gid)) : [id]
+    const baselines = new Map(group.map((gid) => [gid, { x: userNodes.find((n) => n.id === gid)!.x, y: userNodes.find((n) => n.id === gid)!.y }]))
+    const others = userNodes.filter((n) => !group.includes(n.id))
     const z = zoom
     const ox = e.clientX
     const oy = e.clientY
-    const sx = n0.x
-    const sy = n0.y
-    const move = (ev: MouseEvent) =>
-      setUserNodes((ns) => ns.map((n) => (n.id === id ? { ...n, x: sx + (ev.clientX - ox) / z, y: sy + (ev.clientY - oy) / z } : n)))
+    let moved = false
+    let recorded = false
+    const move = (ev: MouseEvent) => {
+      if (!moved && Math.hypot(ev.clientX - ox, ev.clientY - oy) < 3) return
+      moved = true
+      if (!recorded) {
+        hist.record()
+        recorded = true
+      }
+      const dx = (ev.clientX - ox) / z
+      const dy = (ev.clientY - oy) / z
+      if (group.length === 1) {
+        const base = baselines.get(id)!
+        let nx = base.x + dx
+        let ny = base.y + dy
+        const g = alignGuides(nx, ny, dragged, others)
+        if (g.snapx != null) nx = g.snapx
+        if (g.snapy != null) ny = g.snapy
+        setGuides(g.x != null || g.y != null ? { x: g.x, y: g.y } : null)
+        setUserNodes((ns) => ns.map((n) => (n.id === id ? { ...n, x: nx, y: ny } : n)))
+      } else {
+        setUserNodes((ns) => ns.map((n) => (group.includes(n.id) ? { ...n, x: baselines.get(n.id)!.x + dx, y: baselines.get(n.id)!.y + dy } : n)))
+      }
+    }
     const up = () => {
       document.removeEventListener('mousemove', move)
       document.removeEventListener('mouseup', up)
-      // Snap to the 20px grid + clamp on release.
+      setGuides(null)
+      if (!moved) {
+        if (inGroup) selectNode(id, additive) // a click inside a group collapses to just this node
+        return
+      }
       setUserNodes((ns) =>
-        ns.map((n) => (n.id === id ? { ...n, x: Math.max(0, Math.round(n.x / 20) * 20), y: Math.max(0, Math.round(n.y / 20) * 20) } : n)),
+        ns.map((n) => (group.includes(n.id) ? { ...n, x: Math.max(0, Math.round(n.x / 20) * 20), y: Math.max(0, Math.round(n.y / 20) * 20) } : n)),
       )
     }
     document.addEventListener('mousemove', move)
     document.addEventListener('mouseup', up)
   }
 
-  // Port-to-port wiring. ENFORCE typed-port kind-matching (INV-e): an output kind connects only
-  // to a matching input kind — free composition can never silently forge an invalid edge.
+  // Add a typed edge if valid (out→in, kind-matched, deduped). Shared by click-arm-click + drag-to-connect.
+  const addEdgeIfValid = (fromNode: string, fromIdx: number, toNode: string, toIdx: number): boolean => {
+    if (fromNode === toNode) return false
+    const f = userNodes.find((n) => n.id === fromNode)
+    const t = userNodes.find((n) => n.id === toNode)
+    if (!f || !t || f.outs[fromIdx] == null || t.ins[toIdx] == null) return false
+    if (f.outs[fromIdx] !== t.ins[toIdx]) return false
+    const edge: UserEdge = { from: { node: fromNode, idx: fromIdx }, to: { node: toNode, idx: toIdx } }
+    const exists = userEdges.some(
+      (x) => x.from.node === edge.from.node && x.from.idx === edge.from.idx && x.to.node === edge.to.node && x.to.idx === edge.to.idx,
+    )
+    if (exists) return false
+    hist.record()
+    setUserEdges((es) => [...es, edge])
+    return true
+  }
+  // Drag-to-connect drop: resolve + report an honest kind-mismatch (the canonical node-editor gesture,
+  // layered over the same typed validation as click-arm-click).
+  const onDropConnect = (fromNode: string, fromIdx: number, toNode: string, toIdx: number) => {
+    const f = userNodes.find((n) => n.id === fromNode)
+    const t = userNodes.find((n) => n.id === toNode)
+    if (f && t && f.outs[fromIdx] != null && t.ins[toIdx] != null && f.outs[fromIdx] !== t.ins[toIdx]) {
+      toast(`Can’t wire ${f.outs[fromIdx]} → ${t.ins[toIdx]} — port kinds must match`, 'error')
+      return
+    }
+    addEdgeIfValid(fromNode, fromIdx, toNode, toIdx)
+  }
+
+  // Port-to-port wiring (click-arm-click). ENFORCE typed-port kind-matching (INV-e): an output kind
+  // connects only to a matching input kind — free composition can never silently forge an invalid edge.
   const portTap = (id: string, side: 'in' | 'out', idx: number) => {
     if (!connectMode) return
     const key = `${id}|${side}|${idx}`
@@ -418,28 +790,135 @@ export function PipelineBuilder() {
       setConnectFrom(key)
       return
     }
-    const fromNode = userNodes.find((n) => n.id === fid)
-    const toNode = userNodes.find((n) => n.id === id)
-    if (!fromNode || !toNode) {
-      setConnectFrom(null)
-      return
-    }
-    if (fromNode.outs[fidx] !== toNode.ins[idx]) {
-      // Kind mismatch — reject the edge, keep the graph honest, re-arm from scratch.
-      setConnectFrom(null)
-      return
-    }
-    const edge: UserEdge = { from: { node: fid, idx: fidx }, to: { node: id, idx } }
-    const exists = userEdges.some(
-      (x) => x.from.node === edge.from.node && x.from.idx === edge.from.idx && x.to.node === edge.to.node && x.to.idx === edge.to.idx,
-    )
-    setUserEdges(exists ? userEdges : [...userEdges, edge])
+    addEdgeIfValid(fid, fidx, id, idx) // typed/dedup + history handled here
     setConnectFrom(null)
   }
 
   const toggleConnect = () => {
     setConnectMode((c) => !c)
     setConnectFrom(null)
+  }
+
+  // Undo/redo also clear selection — a restored topology may not contain the selected ids, and edge
+  // indices shift, so keeping a stale selection would dangle (wrong × / off-by-one action-bar count).
+  const doUndo = () => {
+    hist.undo()
+    clearSelection()
+  }
+  const doRedo = () => {
+    hist.redo()
+    clearSelection()
+  }
+
+  // ── inline rename (double-click a node name, or the context-menu / inspector) ──
+  const startRename = (id: string) => setRenamingId(id)
+  const commitRename = (id: string, name: string) => {
+    setRenamingId(null)
+    renameNodeTo(id, name)
+  }
+  const cancelRename = () => setRenamingId(null)
+
+  // ── keyboard ── one window listener via a ref so the handler always sees fresh closures without
+  // re-subscribing. Never hijack typing (input/textarea/select/contentEditable); mutating keys are
+  // Edit-only. Delete/Escape/undo-redo/arrows/duplicate/select-all + 'c' (Connect) / 'f' (Fit).
+  const keyHandler = useRef<(e: KeyboardEvent) => void>(() => {})
+  keyHandler.current = (e: KeyboardEvent) => {
+    const t = e.target as HTMLElement | null
+    if (t && (/^(input|textarea|select)$/i.test(t.tagName) || t.isContentEditable)) return
+    const meta = e.metaKey || e.ctrlKey
+    if (meta && (e.key === 'z' || e.key === 'Z')) {
+      if (isView) return
+      e.preventDefault()
+      if (e.shiftKey) doRedo()
+      else doUndo()
+      return
+    }
+    if (meta && (e.key === 'y' || e.key === 'Y')) {
+      if (isView) return
+      e.preventDefault()
+      doRedo()
+      return
+    }
+    if (e.key === 'Escape') {
+      clearSelection()
+      setConnectMode(false)
+      setConnectFrom(null)
+      setMenu(null)
+      setRenamingId(null)
+      return
+    }
+    if (isView) return
+    if (meta && (e.key === 'a' || e.key === 'A')) {
+      e.preventDefault()
+      selectAll()
+      return
+    }
+    if (meta && (e.key === 'd' || e.key === 'D')) {
+      e.preventDefault()
+      duplicateSelection()
+      return
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault()
+      deleteSelection()
+      return
+    }
+    if (e.key.startsWith('Arrow')) {
+      if (!selNodes.size) return
+      const step = e.shiftKey ? 1 : 20
+      const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0
+      const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0
+      if (!dx && !dy) return
+      e.preventDefault()
+      hist.record()
+      const ids = selNodes
+      setUserNodes((ns) => ns.map((n) => (ids.has(n.id) ? { ...n, x: Math.max(0, n.x + dx), y: Math.max(0, n.y + dy) } : n)))
+      return
+    }
+    if (e.key === 'c' || e.key === 'C') {
+      toggleConnect()
+      return
+    }
+    if (e.key === 'f' || e.key === 'F') {
+      setFitNonce((v) => v + 1)
+      return
+    }
+  }
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => keyHandler.current(e)
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [])
+
+  // Right-click menu item sets (node / edge / canvas). Bounded, contextual (Disconnect disabled when
+  // the node has no wires; Select-all/Tidy disabled on an empty canvas).
+  const menuItems = (m: CanvasMenuReq): MenuItem[] => {
+    if (m.kind === 'node' && m.nodeId) {
+      const id = m.nodeId
+      const incident = userEdges.some((e) => e.from.node === id || e.to.node === id)
+      return [
+        {
+          label: 'Rename',
+          icon: Pencil,
+          onClick: () => {
+            selectNode(id, false)
+            setRenamingId(id)
+          },
+        },
+        { label: 'Duplicate', icon: CopyPlus, onClick: () => duplicateById(id) },
+        { label: 'Disconnect all wires', icon: Unlink, disabled: !incident, onClick: () => disconnectNode(id) },
+        { label: 'Delete', icon: Trash2, danger: true, onClick: () => void deleteNodes([id]) },
+      ]
+    }
+    if (m.kind === 'edge' && m.edgeIndex != null) {
+      const i = m.edgeIndex
+      return [{ label: 'Delete wire', icon: Trash2, danger: true, onClick: () => deleteEdge(i) }]
+    }
+    return [
+      { label: 'Select all', icon: BoxSelect, disabled: !userNodes.length, onClick: selectAll },
+      { label: 'Fit', icon: Frame, onClick: () => setFitNonce((v) => v + 1) },
+      { label: 'Tidy', icon: Wand2, disabled: !userNodes.length, onClick: tidy },
+    ]
   }
 
   // ── palette model ──
@@ -661,24 +1140,46 @@ export function PipelineBuilder() {
           // shows its editable composed nodes (germlineTemplate) instead, so the chain is modifiable.
           showSeeded={isLinked}
           selected={selected}
+          selNodes={selNodes}
+          selEdge={selEdge}
           zoom={zoom}
           userNodes={userNodes}
           userEdges={userEdges}
           connectMode={connectMode}
           connectFrom={connectFrom}
-          onSelect={setSelected}
+          guides={guides}
+          renamingId={renamingId}
+          canUndo={hist.canUndo}
+          canRedo={hist.canRedo}
+          fitNonce={fitNonce}
+          onSelect={handleSelect}
+          onSelectEdge={selectEdge}
+          onDeleteEdge={deleteEdge}
+          onMarquee={onMarquee}
           onZoom={setZoom}
           onToggleConnect={toggleConnect}
           onTidy={tidy}
+          onUndo={doUndo}
+          onRedo={doRedo}
           onNodeDrag={nodeDrag}
           onPortTap={portTap}
+          onDropConnect={onDropConnect}
           onRemoveNode={removeNode}
+          onStartRename={startRename}
+          onCommitRename={commitRename}
+          onCancelRename={cancelRename}
+          onContextMenu={setMenu}
+          onAlign={alignSelection}
+          onDistribute={distributeSelection}
+          onDuplicateSel={duplicateSelection}
+          onDeleteSel={deleteSelection}
         />
 
         {inspectorOn && (
           <BuilderInspector
             tool={selTool}
             reference={selRef}
+            userNode={selUserNode}
             isGate={isGate}
             isAgent={isAgent}
             isView={isView}
@@ -691,7 +1192,13 @@ export function PipelineBuilder() {
             onToggleRequired={toggleRequired}
             onCycleOnMultiple={cycleOnMultiple}
             onSetRefLoc={(id, value) => setRefLoc((m) => ({ ...m, [id]: value }))}
-            onClose={() => setSelected(null)}
+            onRenameNode={renameNodeTo}
+            onSetNodeIcon={setNodeIconTo}
+            onAddPort={addPort}
+            onRemovePort={removePort}
+            onSetPortKind={setPortKind}
+            onDeleteNode={(id) => void deleteNodes([id])}
+            onClose={clearSelection}
           />
         )}
       </div>
@@ -741,6 +1248,7 @@ export function PipelineBuilder() {
       {archivistOpen && <ArchivistModal onClose={() => setArchivistOpen(false)} />}
       {newOpen && <NewPipelineModal onClose={() => setNewOpen(false)} onCreate={newPipeline} />}
       {loadOpen && <LoadSavedModal onClose={() => setLoadOpen(false)} onLoad={loadSavedPipeline} />}
+      {menu && <BuilderContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}
     </div>
   )
 }

@@ -1,22 +1,27 @@
 import { Link } from 'react-router-dom'
-import { Activity, BarChart3, Lock, X } from 'lucide-react'
+import { Activity, BarChart3, Lock, Plus, Trash2, X } from 'lucide-react'
 import {
+  ARTIFACT_KINDS,
   GIAB_LOC,
+  ICON_CHOICES,
   ICONS,
   ON_CYCLE,
   RUNBOOK_ROWS,
   mergedLoc,
+  type IconKey,
   type LocEdits,
   type OnMultiple,
   type Ref,
   type Tab,
   type Tool,
+  type UserNode,
 } from './BuilderShared'
 
-// The 360px inspector. One panel, four subjects: a tool node (Params · Locators · I/O · Agents),
-// the terminal gate (read-only runbook thresholds), the advisory agent (port-less), and a
-// reference card. Locators is the load-bearing authoring surface — editable path/parser/
-// on_multiple/required — while Params is a read-only schema display. Origin is never authored.
+// The 360px inspector. One panel, five subjects: a COMPOSED user node (name/icon/ports/locators/
+// delete — the PB2 editable branch, which wins whenever a user node is selected), a seeded tool node
+// (Params · Locators · I/O · Agents), the terminal gate (read-only runbook thresholds), the advisory
+// agent (port-less), and a reference card. Locators is the load-bearing authoring surface — editable
+// path/parser/on_multiple/required — while Params is a read-only schema display. Origin is never authored.
 
 const IN_ORIGIN = (
   <div className="flex items-center gap-1.5 rounded-md border border-line bg-card-2 px-2 py-1.5">
@@ -30,6 +35,7 @@ const IN_ORIGIN = (
 type InspectorProps = {
   tool: Tool | null
   reference: Ref | null
+  userNode: UserNode | null
   isGate: boolean
   isAgent: boolean
   isView: boolean
@@ -42,13 +48,25 @@ type InspectorProps = {
   onToggleRequired: (kind: string) => void
   onCycleOnMultiple: (kind: string) => void
   onSetRefLoc: (id: string, value: string) => void
+  // User-node authoring callbacks (PB2). Every one is a local draft mutation; the screen records
+  // history + reconciles edges. Compose ≠ execute.
+  onRenameNode: (id: string, name: string) => void
+  onSetNodeIcon: (id: string, icon: IconKey) => void
+  onAddPort: (id: string, dir: 'ins' | 'outs', kind: string) => void
+  onRemovePort: (id: string, dir: 'ins' | 'outs', idx: number) => void
+  onSetPortKind: (id: string, dir: 'ins' | 'outs', idx: number, kind: string) => void
+  onDeleteNode: (id: string) => void
   onClose: () => void
 }
 
 export function BuilderInspector(props: InspectorProps) {
-  const { tool, reference, isGate, isAgent } = props
+  const { tool, reference, userNode, isGate, isAgent } = props
 
   const header = ((): { title: string; sub: string; icon: React.ReactNode } => {
+    if (userNode) {
+      const Icon = ICONS[userNode.icon]
+      return { title: userNode.name, sub: `${userNode.version} · composed node`, icon: <Icon size={16} /> }
+    }
     if (tool) {
       const Icon = ICONS[tool.icon]
       return { title: tool.tool, sub: `${tool.version} · ${tool.stageLabel}`, icon: <Icon size={16} /> }
@@ -72,7 +90,25 @@ export function BuilderInspector(props: InspectorProps) {
         </button>
       </div>
 
-      {reference ? (
+      {userNode ? (
+        // A composed user node wins over every seeded subject (its id can collide with a seeded id
+        // in a template draft — see the selUserNode-wins rule in the screen).
+        <UserNodeInspector
+          node={userNode}
+          isView={props.isView}
+          locEdits={props.locEdits}
+          locEditable={props.locEditable}
+          onRename={props.onRenameNode}
+          onSetIcon={props.onSetNodeIcon}
+          onAddPort={props.onAddPort}
+          onRemovePort={props.onRemovePort}
+          onSetPortKind={props.onSetPortKind}
+          onDelete={props.onDeleteNode}
+          onSetLoc={props.onSetLoc}
+          onToggleRequired={props.onToggleRequired}
+          onCycleOnMultiple={props.onCycleOnMultiple}
+        />
+      ) : reference ? (
         <ReferenceView reference={reference} refLoc={props.refLoc} editable={!props.isView} onSetRefLoc={props.onSetRefLoc} />
       ) : isGate ? (
         <GateView />
@@ -92,6 +128,250 @@ export function BuilderInspector(props: InspectorProps) {
         />
       ) : null}
     </aside>
+  )
+}
+
+const inputCls = (editable: boolean) =>
+  `w-full rounded-md border px-2 py-1.5 font-mono text-[11px] text-text outline-none ${
+    editable ? 'border-line-strong bg-card focus:border-accent' : 'border-line bg-card-2'
+  }`
+
+// The locator-authoring list, keyed on a set of output kinds — shared by the seeded ToolView and the
+// composed UserNodeInspector so a hand-authored node gets the SAME run_layout authoring as a seeded
+// one. Repointing a path changes inputs, never thresholds (the config locates; it never judges).
+function LocatorList({
+  outKinds,
+  locEdits,
+  locEditable,
+  onSetLoc,
+  onToggleRequired,
+  onCycleOnMultiple,
+}: {
+  outKinds: string[]
+  locEdits: LocEdits
+  locEditable: boolean
+  onSetLoc: (kind: string, field: 'loc' | 'parser', value: string) => void
+  onToggleRequired: (kind: string) => void
+  onCycleOnMultiple: (kind: string) => void
+}) {
+  const locators = GIAB_LOC.filter((g) => outKinds.includes(g.k)).map((g) => mergedLoc(g.k, locEdits))
+  if (!locators.length) return <p className="text-[11px] text-text-3">No emitted locators for this node's output kinds.</p>
+  return (
+    <>
+      {locators.map((l) => (
+        <div key={l.k} className="mb-3 rounded-[10px] border border-line p-3">
+          <div className="mb-2.5 flex items-center justify-between gap-2">
+            <span className="font-mono text-[12px] font-semibold text-text">{l.k}</span>
+            <span className="rounded border border-line bg-card-2 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.3px] text-text-2">{l.role}</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            <div>
+              <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">{l.field}</div>
+              <input value={l.loc} readOnly={!locEditable} onChange={(e) => onSetLoc(l.k, 'loc', e.target.value)} className={inputCls(locEditable)} />
+            </div>
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">parser</div>
+                <input value={l.parser} readOnly={!locEditable} onChange={(e) => onSetLoc(l.k, 'parser', e.target.value)} className={inputCls(locEditable)} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">on_multiple</div>
+                <button
+                  onClick={() => locEditable && onCycleOnMultiple(l.k)}
+                  className={`w-full rounded-md border border-line bg-card-2 px-2 py-1.5 text-left font-mono text-[11px] text-text-2 ${
+                    locEditable ? 'cursor-pointer hover:border-line-strong' : 'cursor-default'
+                  }`}
+                  title={locEditable ? `→ ${ON_CYCLE[l.on as OnMultiple]}` : undefined}
+                >
+                  {l.on}
+                </button>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">required</div>
+                <button
+                  onClick={() => locEditable && onToggleRequired(l.k)}
+                  className={`w-full rounded-md border px-2 py-1.5 text-center font-mono text-[11px] ${
+                    l.required ? 'border-[#cfe0fb] bg-accent-weak text-accent-strong' : 'border-line bg-card-2 text-text-3'
+                  } ${locEditable ? 'cursor-pointer' : 'cursor-default'}`}
+                >
+                  {l.required ? 'required' : 'optional'}
+                </button>
+              </div>
+            </div>
+            {IN_ORIGIN}
+          </div>
+        </div>
+      ))}
+    </>
+  )
+}
+
+// The editable inspector for a COMPOSED user node (PB2 §4.3): rename, icon, typed port editing, the
+// shared locator authoring, and delete. Every port kind is chosen from the typed ARTIFACT_KINDS vocab
+// — never free-invented — so the wiring/locators always understand it.
+function UserNodeInspector({
+  node,
+  isView,
+  locEdits,
+  locEditable,
+  onRename,
+  onSetIcon,
+  onAddPort,
+  onRemovePort,
+  onSetPortKind,
+  onDelete,
+  onSetLoc,
+  onToggleRequired,
+  onCycleOnMultiple,
+}: {
+  node: UserNode
+  isView: boolean
+  locEdits: LocEdits
+  locEditable: boolean
+  onRename: (id: string, name: string) => void
+  onSetIcon: (id: string, icon: IconKey) => void
+  onAddPort: (id: string, dir: 'ins' | 'outs', kind: string) => void
+  onRemovePort: (id: string, dir: 'ins' | 'outs', idx: number) => void
+  onSetPortKind: (id: string, dir: 'ins' | 'outs', idx: number, kind: string) => void
+  onDelete: (id: string) => void
+  onSetLoc: (kind: string, field: 'loc' | 'parser', value: string) => void
+  onToggleRequired: (kind: string) => void
+  onCycleOnMultiple: (kind: string) => void
+}) {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      {/* Identity — name + icon. Name commits on blur/Enter (keyed to the node so it resets on reselect). */}
+      <div className="mb-4 rounded-[10px] border border-line p-3">
+        <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">name</div>
+        <input
+          key={node.id}
+          defaultValue={node.name}
+          readOnly={isView}
+          onBlur={(e) => !isView && onRename(node.id, e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          }}
+          className={`w-full rounded-md border px-2 py-1.5 text-[12.5px] font-semibold text-text outline-none ${
+            isView ? 'border-line bg-card-2' : 'border-line-strong bg-card focus:border-accent'
+          }`}
+        />
+        {!isView && (
+          <div className="mt-2.5">
+            <div className="mb-1 text-[9.5px] uppercase tracking-[0.3px] text-text-3">icon</div>
+            <div className="flex flex-wrap gap-1">
+              {ICON_CHOICES.map((k) => {
+                const I = ICONS[k]
+                const on = node.icon === k
+                return (
+                  <button
+                    key={k}
+                    onClick={() => onSetIcon(node.id, k)}
+                    title={k}
+                    className={`grid h-8 w-8 place-items-center rounded-md border ${
+                      on ? 'border-accent bg-accent-weak text-accent-strong' : 'border-line text-text-2 hover:border-line-strong'
+                    }`}
+                  >
+                    <I size={15} />
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Typed port editing. */}
+      <PortEditor node={node} dir="ins" label="Inputs" isView={isView} onAddPort={onAddPort} onRemovePort={onRemovePort} onSetPortKind={onSetPortKind} />
+      <PortEditor node={node} dir="outs" label="Outputs" isView={isView} onAddPort={onAddPort} onRemovePort={onRemovePort} onSetPortKind={onSetPortKind} />
+
+      {/* Locators for this node's output kinds — the same authoring surface as a seeded node. */}
+      <div className="mb-2 mt-1 text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">Locators</div>
+      <LocatorList
+        outKinds={node.outs}
+        locEdits={locEdits}
+        locEditable={locEditable}
+        onSetLoc={onSetLoc}
+        onToggleRequired={onToggleRequired}
+        onCycleOnMultiple={onCycleOnMultiple}
+      />
+
+      {!isView && (
+        <button
+          onClick={() => onDelete(node.id)}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-1.5 text-[12.5px] font-medium text-escalate-fg hover:opacity-90"
+        >
+          <Trash2 size={13} />
+          Delete node
+        </button>
+      )}
+    </div>
+  )
+}
+
+function PortEditor({
+  node,
+  dir,
+  label,
+  isView,
+  onAddPort,
+  onRemovePort,
+  onSetPortKind,
+}: {
+  node: UserNode
+  dir: 'ins' | 'outs'
+  label: string
+  isView: boolean
+  onAddPort: (id: string, dir: 'ins' | 'outs', kind: string) => void
+  onRemovePort: (id: string, dir: 'ins' | 'outs', idx: number) => void
+  onSetPortKind: (id: string, dir: 'ins' | 'outs', idx: number, kind: string) => void
+}) {
+  const ports = node[dir]
+  return (
+    <div className="mb-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">{label}</span>
+        {!isView && (
+          <button
+            onClick={() => onAddPort(node.id, dir, ARTIFACT_KINDS[0])}
+            className="inline-flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-[10.5px] font-medium text-text-2 hover:border-line-strong"
+          >
+            <Plus size={11} />
+            Add
+          </button>
+        )}
+      </div>
+      {ports.length === 0 && <p className="text-[10.5px] text-text-3">No {dir === 'ins' ? 'inputs' : 'outputs'}.</p>}
+      <div className="flex flex-col gap-1.5">
+        {ports.map((k, idx) => (
+          <div key={idx} className="flex items-center gap-1.5">
+            {isView ? (
+              <span className="flex-1 truncate rounded-md border border-line bg-card-2 px-2 py-1 font-mono text-[11px] text-text-2">{k}</span>
+            ) : (
+              <select
+                value={k}
+                onChange={(e) => onSetPortKind(node.id, dir, idx, e.target.value)}
+                className="min-w-0 flex-1 rounded-md border border-line-strong bg-card px-2 py-1 font-mono text-[11px] text-text outline-none focus:border-accent"
+              >
+                {ARTIFACT_KINDS.map((ak) => (
+                  <option key={ak} value={ak}>
+                    {ak}
+                  </option>
+                ))}
+              </select>
+            )}
+            {!isView && (
+              <button
+                onClick={() => onRemovePort(node.id, dir, idx)}
+                title="Remove port"
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-text-3 hover:text-escalate-fg"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -116,13 +396,7 @@ function ToolView({
   onToggleRequired: (kind: string) => void
   onCycleOnMultiple: (kind: string) => void
 }) {
-  const outKinds = tool.outputs.map((o) => o.kind)
-  const locators = GIAB_LOC.filter((g) => outKinds.includes(g.k)).map((g) => mergedLoc(g.k, locEdits))
   const tabs: Tab[] = ['params', 'locators', 'io', 'agents']
-  const inputCls = (editable: boolean) =>
-    `w-full rounded-md border px-2 py-1.5 font-mono text-[11px] text-text outline-none ${
-      editable ? 'border-line-strong bg-card focus:border-accent' : 'border-line bg-card-2'
-    }`
 
   return (
     <>
@@ -160,61 +434,14 @@ function ToolView({
             <div className="mb-3 rounded-lg border border-[#d5e2fb] bg-accent-weak px-3 py-2.5 text-[11px] leading-relaxed text-text-2">
               Repointing a path changes <strong>inputs</strong>, not thresholds. The config <strong>locates inputs; it never judges them.</strong>
             </div>
-            {locators.map((l) => (
-              <div key={l.k} className="mb-3 rounded-[10px] border border-line p-3">
-                <div className="mb-2.5 flex items-center justify-between gap-2">
-                  <span className="font-mono text-[12px] font-semibold text-text">{l.k}</span>
-                  <span className="rounded border border-line bg-card-2 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.3px] text-text-2">{l.role}</span>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <div>
-                    <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">{l.field}</div>
-                    <input
-                      value={l.loc}
-                      readOnly={!locEditable}
-                      onChange={(e) => onSetLoc(l.k, 'loc', e.target.value)}
-                      className={inputCls(locEditable)}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">parser</div>
-                      <input
-                        value={l.parser}
-                        readOnly={!locEditable}
-                        onChange={(e) => onSetLoc(l.k, 'parser', e.target.value)}
-                        className={inputCls(locEditable)}
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">on_multiple</div>
-                      <button
-                        onClick={() => locEditable && onCycleOnMultiple(l.k)}
-                        className={`w-full rounded-md border border-line bg-card-2 px-2 py-1.5 text-left font-mono text-[11px] text-text-2 ${
-                          locEditable ? 'cursor-pointer hover:border-line-strong' : 'cursor-default'
-                        }`}
-                        title={locEditable ? `→ ${ON_CYCLE[l.on as OnMultiple]}` : undefined}
-                      >
-                        {l.on}
-                      </button>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">required</div>
-                      <button
-                        onClick={() => locEditable && onToggleRequired(l.k)}
-                        className={`w-full rounded-md border px-2 py-1.5 text-center font-mono text-[11px] ${
-                          l.required ? 'border-[#cfe0fb] bg-accent-weak text-accent-strong' : 'border-line bg-card-2 text-text-3'
-                        } ${locEditable ? 'cursor-pointer' : 'cursor-default'}`}
-                      >
-                        {l.required ? 'required' : 'optional'}
-                      </button>
-                    </div>
-                  </div>
-                  {IN_ORIGIN}
-                </div>
-              </div>
-            ))}
-            {locators.length === 0 && <p className="text-[11px] text-text-3">No emitted locators for this node's output kinds.</p>}
+            <LocatorList
+              outKinds={tool.outputs.map((o) => o.kind)}
+              locEdits={locEdits}
+              locEditable={locEditable}
+              onSetLoc={onSetLoc}
+              onToggleRequired={onToggleRequired}
+              onCycleOnMultiple={onCycleOnMultiple}
+            />
           </div>
         )}
 

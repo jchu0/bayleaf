@@ -215,6 +215,61 @@ export function makeUserNode(name: string, kind: string, index: number): UserNod
   return { id: `u${Date.now().toString(36)}${index}`, name, kind, version: spec.version, icon: spec.icon, ins: spec.ins, outs: spec.outs, x, y }
 }
 
+// ── On-canvas editing helpers (PB2) ────────────────────────────────────────
+// Pure array rewrites + geometry, framework-thin so the screen owns the history/state and these
+// stay unit-testable. Every mutation is over the local draft (compose ≠ execute).
+
+// User-node width mirrors BuilderCanvas UW (the card is a fixed 168px); height is derived from the
+// port-row count so marquee-intersection and alignment-guide hit-testing track the rendered card.
+export const NODE_W = 168
+export function nodeHeight(n: UserNode): number {
+  // header (icon + name + ×) ≈ 42, per-port row ≈ 18, draft footer ≈ 26 — close enough for hit-testing.
+  const rows = Math.max(n.ins.length, n.outs.length, 1)
+  return 42 + rows * 18 + 26
+}
+export function nodeBBox(n: UserNode): { x1: number; y1: number; x2: number; y2: number } {
+  return { x1: n.x, y1: n.y, x2: n.x + NODE_W, y2: n.y + nodeHeight(n) }
+}
+
+export function renameNode(ns: UserNode[], id: string, name: string): UserNode[] {
+  return ns.map((n) => (n.id === id ? { ...n, name } : n))
+}
+export function setNodeIcon(ns: UserNode[], id: string, icon: IconKey): UserNode[] {
+  return ns.map((n) => (n.id === id ? { ...n, icon } : n))
+}
+
+// Copy a node with a fresh id, offset position, and no edges (the caller re-wires deliberately).
+// `index` disambiguates ids when duplicating a whole selection in one gesture.
+export function duplicateNode(n: UserNode, index = 0, offset = 24): UserNode {
+  return {
+    ...n,
+    id: `u${Date.now().toString(36)}${index}${Math.floor(Math.random() * 1296).toString(36)}`,
+    name: `${n.name} copy`,
+    ins: [...n.ins],
+    outs: [...n.outs],
+    x: n.x + offset,
+    y: n.y + offset,
+  }
+}
+
+// Drop any edge whose endpoint node/port-idx no longer exists or whose kinds no longer match — the
+// safety net after a port retype/remove so no dangling or mistyped wire survives (honest typed graph).
+export function reconcileEdges(ns: UserNode[], es: UserEdge[]): UserEdge[] {
+  return es.filter((e) => {
+    const f = ns.find((n) => n.id === e.from.node)
+    const t = ns.find((n) => n.id === e.to.node)
+    if (!f || !t) return false
+    const fk = f.outs[e.from.idx]
+    const tk = t.ins[e.to.idx]
+    return fk != null && tk != null && fk === tk
+  })
+}
+
+export function edgeMidpoint(a: { x: number; y: number }, b: { x: number; y: number }): { x: number; y: number } {
+  // The elbow path routes through mx = (a.x+b.x)/2; the visual midpoint sits there at the mean y.
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+}
+
 // The germline panel chain as EDITABLE user nodes + wired edges (the exact fastp → bwa-mem2 →
 // samtools markdup → {mosdepth, bcftools call → norm} → MultiQC pipeline the demo ran). Powers
 // "New → From template" and "Fork" so those open a MODIFIABLE draft instead of the read-only
@@ -278,6 +333,15 @@ export const GIAB_LOC: GiabLoc[] = [
   { k: 'truth_vcf', field: 'path', loc: 'reference/HG002_benchmark.vcf.gz', parser: 'null', required: false, role: 'reference', on: 'error' },
 ]
 export const ON_CYCLE: Record<OnMultiple, OnMultiple> = { first: 'all', all: 'error', error: 'first' }
+
+// The typed port-kind vocabulary the inspector offers — the UNION of every BTOOLSPEC in/out kind
+// and every emitted locator kind. Manual port editing is constrained to this set so a hand-authored
+// node can never invent a kind the wiring/locators don't understand (mirrors the "flagged, never
+// invented" ethos of the author-node flow). NOTE: declared AFTER GIAB_LOC — it reads GIAB_LOC at
+// module-init, so it must not be hoisted above that const (would be a temporal-dead-zone crash).
+export const ARTIFACT_KINDS: string[] = Array.from(
+  new Set([...Object.values(BTOOLSPEC).flatMap((s) => [...s.ins, ...s.outs]), ...GIAB_LOC.map((g) => g.k)]),
+).sort()
 
 // Per-kind locator edits (path/parser/on_multiple/required). Origin is NEVER editable — it is
 // locked 'unknown' at emit and stamped only at ingest (INV: origin never relabels up).
