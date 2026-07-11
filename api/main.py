@@ -38,7 +38,7 @@ from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_c
 from pipeguard.metrics import default_registry
 from pipeguard.models import DecisionCard, Gate, Sample, Verdict
 from pipeguard.pipeline_repair import RepairProposal, propose_repair, recurring_signature
-from pipeguard.provenance import EventType, ProvenanceEvent
+from pipeguard.provenance import EntityRef, EventType, ProvenanceEvent
 from pipeguard.runbook import RouteToHumanPolicy, Runbook
 from pipeguard.triage import TriageNote
 
@@ -54,6 +54,8 @@ from .routers.intake import router as intake_router
 from .routers.pipelines_lifecycle import router as pipelines_lifecycle_router
 from .routers.review_queue import router as review_router
 from .routers.settings import router as settings_router
+from .safe_harbor import HIPAA_SAFE_HARBOR_CLASSES, SAFE_HARBOR_POLICY_ID, redact_record
+from .share_ledger import record_share_event, share_events
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
@@ -488,8 +490,19 @@ def list_runs(
 
 @app.get("/api/runs/{run_id}")
 def get_run(run_id: str) -> RunDetail:
-    """One run: summary + every decision card + the full provenance trail."""
-    return _evaluate(run_id)
+    """One run: summary + every decision card + the full provenance trail.
+
+    The gate events come from the cached, deterministic `_evaluate`; the append-only
+    `DATA_EXPORTED` share events (ADR-0018 D3) are merged in live from `share_ledger` so a
+    just-recorded egress shows in the trail without invalidating the gate cache. Merged by
+    `created_at`, so the share (always newer) lands after the run's decision events.
+    """
+    base = _evaluate(run_id)
+    shares = share_events(run_id)
+    if not shares:
+        return base
+    merged = sorted([*base.events, *shares], key=lambda e: e.created_at)
+    return base.model_copy(update={"events": merged})
 
 
 @app.get("/api/runs/{run_id}/cards/{sample_id}")
@@ -886,6 +899,114 @@ def export(
             "X-PipeGuard-Deid-Policy": policy.policy_id,
         },
     )
+
+
+# --- De-identified share/report egress (ADR-0018 D3) ------------------------------------------
+
+# The maintainer's conservative default ("HIPAA compliance is so key here"): a share is scrubbed
+# by the Safe-Harbor-STYLE transform in `api/safe_harbor.py` — the strictest scrub we can honestly
+# offer, explicitly NOT a certified/attested de-identification and NOT a compliance claim. Every
+# share is recorded as a DATA_EXPORTED provenance event so data-out is auditable next to decisions.
+_SHARE_DISCLAIMER = (
+    "Conservative HIPAA Safe-Harbor-STYLE scrub (mechanical 45 CFR §164.514(b)(2) identifier "
+    "removal) — NOT certified/attested de-identification and NOT a compliance claim. Free-text "
+    "redaction is regex-mechanical and will miss prose identifiers; real patient data needs an "
+    "audited de-identification program before any external share."
+)
+
+
+class ShareManifest(BaseModel):
+    """The provenance + honesty manifest returned with (and recorded for) a de-identified share."""
+
+    run_id: str
+    policy_id: str  # safe-harbor-style-v1 — a scrub version, NOT a compliance attestation
+    grain: str
+    n_rows: int
+    origin: str  # the run's data origin (real-giab | synthetic | contrived | unknown)
+    exported_at: str  # ISO-8601 Z
+    exported_by: str  # the approver actor id
+    content_hash: str  # sha256 of the emitted rows — ties the recorded event to these exact bytes
+    event_id: str  # the DATA_EXPORTED provenance event this share recorded
+    safe_harbor_classes: list[str]  # the §164.514(b)(2) identifier classes the scrub covers
+    disclaimer: str
+
+
+class ShareBundle(BaseModel):
+    """A de-identified share/report egress: the scrubbed rows + the honesty/provenance manifest."""
+
+    manifest: ShareManifest
+    rows: list[dict[str, Any]]
+
+
+@app.post("/api/runs/{run_id}/share")
+def share_run(
+    run_id: str,
+    actor: Actor = Depends(require_role("approver")),
+) -> ShareBundle:
+    """De-identify one run's decision report for egress AND record it as a DATA_EXPORTED event.
+
+    The conservative default the maintainer asked for: every row is run through
+    `api.safe_harbor.redact_record` (Safe-Harbor-STYLE identifier removal) — the strictest scrub
+    we can honestly offer, NOT an attestation (see `manifest.disclaimer`). Approver-gated (the
+    frontend also confirms before firing). This is an **egress transform only**: it reads the
+    gate's already-computed decision cards + intake identity join, never a rule/verdict/gate input
+    (ADR-0001). The share is written to the append-only share ledger so every data-out is auditable
+    in the same provenance trail as the decisions — the recorded event carries a content hash of the
+    exact bytes emitted, so the trail entry can't drift from what actually left.
+    """
+    _run_dir(run_id)  # 404 if unknown
+    origin = _run_origin(run_id)
+    detail = _evaluate(run_id)
+    # Build the pre-scrub decision report joined with intake identity (subject_id/tissue/
+    # submitted_by) — i.e. the very columns the Safe-Harbor scrub then removes/generalizes, so the
+    # de-id is demonstrably doing work rather than passing an already-clean row through.
+    rows: list[dict[str, Any]] = []
+    for card in detail.cards:
+        raw: dict[str, Any] = {
+            "run_id": run_id,
+            "sample_id": card.sample_id,
+            "verdict": card.verdict.value,
+            "headline": card.headline,
+            "rationale": card.rationale,
+            "n_findings": len(card.findings),
+            **_identity_fields(run_id, card.sample_id),
+        }
+        rows.append(redact_record(raw, origin))
+
+    # Hash the exact emitted bytes so the recorded event is tamper-evident and pins the egress.
+    payload = json.dumps(rows, sort_keys=True)
+    content_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    event = ProvenanceEvent(
+        event_type=EventType.DATA_EXPORTED,
+        run_id=run_id,
+        actor=f"human:{actor.id}",
+        outputs=[EntityRef(entity_type="share_bundle", id=content_hash, content_hash=content_hash)],
+        payload={
+            "policy_id": SAFE_HARBOR_POLICY_ID,
+            "grain": "decision",
+            "n_rows": len(rows),
+            "origin": origin,
+            "content_hash": content_hash,
+            "exported_at": stamp,
+            "disclaimer": _SHARE_DISCLAIMER,
+        },
+    )
+    record_share_event(event)  # append-only; get_run merges it into the trail (cache stays pure)
+    manifest = ShareManifest(
+        run_id=run_id,
+        policy_id=SAFE_HARBOR_POLICY_ID,
+        grain="decision",
+        n_rows=len(rows),
+        origin=origin,
+        exported_at=stamp,
+        exported_by=actor.id,
+        content_hash=content_hash,
+        event_id=event.id,
+        safe_harbor_classes=[label for label, _ in HIPAA_SAFE_HARBOR_CLASSES],
+        disclaimer=_SHARE_DISCLAIMER,
+    )
+    return ShareBundle(manifest=manifest, rows=rows)
 
 
 @app.get("/api/runbook")

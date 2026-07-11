@@ -77,6 +77,10 @@ settings_overrides.jsonl
 settings_overrides.jsonl.tmp
 settings_overrides.sqlite
 
+# De-identified share/report egress events (ADR-0018 D3) — append-only audit sink of DATA_EXPORTED
+# provenance events; carries run ids + who exported, so it is local-only and never committed.
+share.events.jsonl
+
 # Node (in case of a web frontend)
 node_modules/
 .next/

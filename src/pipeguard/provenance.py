@@ -36,6 +36,10 @@ class EventType(str, Enum):
     NOTIFICATION_EMITTED = "notification.emitted"
     TICKET_ACTIONED = "ticket.actioned"
     RESOLUTION_RECORDED = "resolution.recorded"
+    # A de-identified share/report egress left the boundary (ADR-0018 D3). Recorded so every
+    # data-out is auditable in the same append-only trail as the decisions — it never reads,
+    # sets, or overrides a verdict (an egress transform only; ADR-0001 holds).
+    DATA_EXPORTED = "data.exported"
 
 
 class EntityRef(BaseModel):
