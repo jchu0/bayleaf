@@ -21,7 +21,6 @@ import {
   cardHeight,
   computeGraphPortLayout,
   fanPortsToTargets,
-  gateSegs,
   isRefKind,
   kindColor,
   layoutCardPorts,
@@ -67,7 +66,7 @@ const INGEST_H = 118
 const GATE_X = 2320
 const GATE_Y = 360
 const GATE_W = 208
-const GATE_H = 156
+const GATE_H = 116 // header + the three checkpoints (the verdict-readout footer was removed — PASS-5 item 3)
 // The advisory agent is OFF-gate (ADR-0001): it sits with the QC tools it observes (below the branch),
 // NOT clustered with the data terminals (gate/ingest) — its dotted links fan UP to its attached tools.
 const AGENT_X = 1180
@@ -349,8 +348,6 @@ export function BuilderCanvas(props: CanvasProps) {
   useEffect(() => {
     if (props.fitNonce > 0) fitRef.current()
   }, [props.fitNonce])
-
-  const segs = gateSegs()
 
   // DYNAMIC NEAREST-SIDE port placement for the whole editable graph, recomputed whenever a node moves or
   // an edge changes (so ports re-aim live during a drag). This ONE map drives BOTH the card render (each
@@ -731,7 +728,6 @@ export function BuilderCanvas(props: CanvasProps) {
             y={termPos.gate.y}
             isView={isView}
             selected={selected === 'g_gate'}
-            segs={segs}
             draggable={draggableTerm}
             onPointerDown={(e) => startTermDrag('gate', e)}
           />
@@ -763,7 +759,8 @@ export function BuilderCanvas(props: CanvasProps) {
               renaming={renamingId === n.id}
               connectMode={connectMode}
               connectFrom={connectFrom}
-              advisoryShown={showTerminals && n.ins.length > 0 && n.outs.length > 0}
+              advisoryShown={showTerminals && n.ins.length > 0 && n.outs.length > 0 && (!isView || advisoryAttach.has(n.id))}
+              advisoryEditable={!isView}
               advisoryOn={advisoryAttach.has(n.id)}
               onAdvisoryToggle={() => toggleAdvisory(n.id)}
               onDown={props.onNodeDrag}
@@ -1349,7 +1346,7 @@ function AgentCard({ x, y, selected, attachCount, draggable, onPointerDown }: { 
 
 // Decision gate — the non-composable TERMINAL: escalate spine, a Lock (non-removable), the three checkpoints,
 // and the verdict readout footer. Movable (PASS-4 B); the run/ half-circle input was removed (PASS-4 A).
-function GateCard({ x, y, isView, selected, segs, draggable, onPointerDown }: { x: number; y: number; isView: boolean; selected: boolean; segs: { c: string; w: string }[]; draggable: boolean; onPointerDown: (e: React.MouseEvent) => void }) {
+function GateCard({ x, y, isView, selected, draggable, onPointerDown }: { x: number; y: number; isView: boolean; selected: boolean; draggable: boolean; onPointerDown: (e: React.MouseEvent) => void }) {
   return (
     <CanvasCardFrame
       x={x}
@@ -1367,6 +1364,8 @@ function GateCard({ x, y, isView, selected, segs, draggable, onPointerDown }: { 
       subtitle="terminal · reads run/"
       right={<Lock size={13} className="shrink-0 text-text-3" aria-label="non-removable" />}
     >
+      {/* Checkpoints only — the verdict readout bar + proceed/hold/escalate counts are removed (PASS-5 item
+          3): the builder carries NO verdict palette (rules decide, ADR-0001). The gate stays a terminal. */}
       <div className="flex flex-col gap-1 px-3 pt-1">
         {GATE_CHECKPOINTS.map((c) => (
           <div key={c.label} className="flex items-center gap-1.5">
@@ -1374,18 +1373,6 @@ function GateCard({ x, y, isView, selected, segs, draggable, onPointerDown }: { 
             <span className="text-[11px] font-medium text-text-2">{c.label}</span>
           </div>
         ))}
-      </div>
-      <div className="absolute inset-x-0 bottom-0 overflow-hidden rounded-b-[10px] border-t border-line bg-card-2 px-3 py-2">
-        {isView && (
-          <div className="mb-1.5 flex h-[7px] overflow-hidden rounded bg-card-3">
-            {segs.map((s, i) => (
-              <div key={i} style={{ width: s.w, background: s.c }} />
-            ))}
-          </div>
-        )}
-        <div className="text-[10px] font-semibold uppercase tracking-[0.3px] text-text-2">
-          {isView ? 'proceed 3 · hold 1 · escalate 1' : 'pending — no verdict'}
-        </div>
       </div>
     </CanvasCardFrame>
   )
@@ -1434,6 +1421,7 @@ function UserCard({
   connectMode,
   connectFrom,
   advisoryShown,
+  advisoryEditable,
   advisoryOn,
   onAdvisoryToggle,
   onDown,
@@ -1453,6 +1441,7 @@ function UserCard({
   connectMode: boolean
   connectFrom: string | null
   advisoryShown: boolean
+  advisoryEditable: boolean
   advisoryOn: boolean
   onAdvisoryToggle: () => void
   onDown: (id: string, e: React.MouseEvent) => void
@@ -1598,18 +1587,29 @@ function UserCard({
       {laid.map((p, i) => (
         <PortIndexChip key={`c${i}`} p={p} w={UW} />
       ))}
-      {/* ADVISORY agent-attach point (item 2) — a small dashed-accent badge hugging the top-right corner,
-          DISTINCT from the half-circle data ports (an advisory link, not a data edge). Click toggles the
-          agent's attachment to THIS tool; when attached it fills accent. Off-gate: never a data/verdict edge. */}
+      {/* ADVISORY agent-attach point — a small dashed-accent badge hugging the top-right corner, DISTINCT
+          from the half-circle data ports (an advisory link, not a data edge). Toggling attach/detach is
+          EDIT-ONLY (PASS-5 item 1); in View the badge is a read-only indicator (only rendered for ATTACHED
+          tools) — no onClick, no card-drag suppression, so a View press falls through to select the card. */}
       {advisoryShown && (
         <button
           type="button"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            onAdvisoryToggle()
-          }}
-          title={advisoryOn ? 'Advisory agent attached — click to detach' : 'Attach advisory agent (off-gate)'}
+          onMouseDown={advisoryEditable ? (e) => e.stopPropagation() : undefined}
+          onClick={
+            advisoryEditable
+              ? (e) => {
+                  e.stopPropagation()
+                  onAdvisoryToggle()
+                }
+              : undefined
+          }
+          title={
+            advisoryEditable
+              ? advisoryOn
+                ? 'Advisory agent attached — click to detach'
+                : 'Attach advisory agent (off-gate)'
+              : 'Advisory agent attached (switch to Edit to change)'
+          }
           className="absolute z-[7] grid place-items-center rounded-full"
           style={{
             left: ADV_BADGE_DX - ADV_BADGE_R,
@@ -1617,6 +1617,7 @@ function UserCard({
             width: 2 * ADV_BADGE_R,
             height: 2 * ADV_BADGE_R,
             boxSizing: 'border-box',
+            cursor: advisoryEditable ? 'pointer' : 'default',
             background: advisoryOn ? 'var(--color-accent)' : 'var(--color-card)',
             border: `1.5px ${advisoryOn ? 'solid' : 'dashed'} var(--color-accent)`,
             color: advisoryOn ? '#fff' : 'var(--color-accent-strong)',

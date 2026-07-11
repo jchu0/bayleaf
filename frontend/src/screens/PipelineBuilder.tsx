@@ -54,7 +54,6 @@ import {
   TOOLS,
   curLocMap,
   duplicateNode,
-  gateSegs,
   germlineTemplate,
   isEditableProfile,
   makeUserNode,
@@ -1219,22 +1218,16 @@ export function PipelineBuilder() {
         </div>
       </div>
 
-      {/* ── linked-run context strip (View only) — the SINGLE home of the linked-run identity + verdict.
-          Run id + lock + the gate verdict bar + proceed/hold/escalate counts (the ONLY verdict-palette
-          use, ADR-0001). Occasional actions (Provenance / Decision / Fork) moved to the ⋯ More menu. ── */}
+      {/* ── linked-run context strip (View only) — the SINGLE home of the linked-run IDENTITY. The gate
+          verdict bar + proceed/hold/escalate counts are removed (PASS-5 item 3): the builder carries NO
+          verdict palette (rules decide, ADR-0001). Occasional actions (Provenance / Decision / Fork) live
+          in the ⋯ More menu. ── */}
       {linkedView && (
-        <div className="flex h-11 shrink-0 items-center gap-3.5 border-b border-line bg-card px-4">
+        <div className="flex h-11 shrink-0 items-center gap-3 border-b border-line bg-card px-4">
           <span className="whitespace-nowrap text-[12px] text-text-2">
             Linked to <span className="font-mono font-semibold text-text">{LINKED_RUN}</span>
           </span>
-          <div className="mx-1 h-4 w-px bg-line" />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.3px] text-text-3">gate verdict</span>
-          <div className="flex h-2 w-[170px] overflow-hidden rounded-[5px] bg-card-3">
-            {gateSegs().map((s, i) => (
-              <div key={i} style={{ width: s.w, background: s.c }} />
-            ))}
-          </div>
-          <span className="text-[11.5px] text-text-3">proceed 3 · hold 1 · escalate 1</span>
+          <span className="text-[11px] text-text-3">committed run · view-only (fork to edit)</span>
         </div>
       )}
 
