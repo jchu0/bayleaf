@@ -34,7 +34,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal, NamedTuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from api.auth import Actor, Role, require_role
@@ -48,7 +48,14 @@ REVIEW_SCHEMA_VERSION = 1
 # re-reading — but they are *data on the ticket*, never re-fed to a rule.
 TicketStatus = Literal["open", "in_review", "resolved"]
 TicketPriority = Literal["high", "medium", "low"]
-ReviewActionName = Literal["acknowledge", "resolve", "escalate", "suppress", "reopen"]
+# The full audit vocabulary recorded in a ``TicketAction.action``. ``assign`` is an audit event
+# (who now owns the ticket), NOT a status transition — see ``TransitionAction``.
+ReviewActionName = Literal["acknowledge", "resolve", "escalate", "suppress", "reopen", "assign"]
+# The status-transition subset — the ONLY actions ``POST /tickets/{id}/action`` accepts. ``assign``
+# is deliberately EXCLUDED: it has its own endpoint and is absent from :data:`_ACTION_RULES`, so
+# ``act_on_ticket`` (which indexes that table by the request action) can never receive it — a stray
+# ``{"action": "assign"}`` on the action endpoint is a 422, never a KeyError/500.
+TransitionAction = Literal["acknowledge", "resolve", "escalate", "suppress", "reopen"]
 _Gate = Literal["preflight", "qc", "variant"]
 _Verdict = Literal["proceed", "hold", "rerun", "escalate"]
 
@@ -74,7 +81,7 @@ class _ActionRule(NamedTuple):
 # ticket). ``suppress`` is keyed by the ticket's ``rule_id`` — it resolves this ticket AND marks the
 # issue-class handled; class-wide muting of *future* tickets of that rule_id is a documented,
 # not-built seam (would live in create()). An action from an illegal status is a 409.
-_ACTION_RULES: dict[ReviewActionName, _ActionRule] = {
+_ACTION_RULES: dict[TransitionAction, _ActionRule] = {
     "acknowledge": _ActionRule(("reviewer", "approver"), ("open", "in_review"), "in_review"),
     "escalate": _ActionRule(("reviewer", "approver"), ("open", "in_review"), "in_review"),
     "resolve": _ActionRule(("reviewer", "approver"), ("open", "in_review"), "resolved"),
@@ -101,9 +108,11 @@ class Ticket(BaseModel):
     Snapshots the decided sample's context (``run_id``/``sample_id``/``gate``/``verdict``/
     ``rule_id``) at open-time so the queue is self-contained, then tracks its own review
     lifecycle. ``opened_by`` and every ``actions[].actor`` are server-authored from the
-    authenticated principal — no identity/PII enters through a request body. ``created_at`` +
-    ``actions[].at`` are the timestamps a median-review-time KPI reads. This is product state and
-    never a verdict input (ADR-0001).
+    authenticated principal — no identity/PII enters through a request body. ``assignee`` is the
+    current owner (a user id, or ``None`` when unassigned) set via the ``/assign`` endpoint — the
+    review↔kanban link. ``created_at`` + ``actions[].at`` are the timestamps a median-review-time
+    KPI reads. This is product state and never a verdict input (ADR-0001). ``assignee`` defaults to
+    ``None`` so a ticket stored before the field existed round-trips cleanly (no migration).
     """
 
     id: str
@@ -118,6 +127,7 @@ class Ticket(BaseModel):
     priority: TicketPriority
     status: TicketStatus
     opened_by: str
+    assignee: str | None = None
     actions: list[TicketAction] = Field(default_factory=list)
 
 
@@ -156,12 +166,29 @@ class ActionIn(BaseModel):
     """The ``POST /api/review/tickets/{id}/action`` body — just the action to apply.
 
     ``extra="forbid"`` so a caller can't smuggle an ``actor``/``at`` (both server-authored). The
-    action's RBAC + legal-from status come from :data:`_ACTION_RULES`, not the request.
+    action's RBAC + legal-from status come from :data:`_ACTION_RULES`, not the request. ``action``
+    is typed :data:`TransitionAction` (NOT :data:`ReviewActionName`), so ``assign`` — an audit event
+    with its own endpoint, not a status transition — is rejected here with a 422 and can never reach
+    ``act_on_ticket``'s :data:`_ACTION_RULES` lookup.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    action: ReviewActionName
+    action: TransitionAction
+
+
+class AssignIn(BaseModel):
+    """The ``POST /api/review/tickets/{id}/assign`` body — the ticket's new owner (or ``None``).
+
+    ``extra="forbid"`` blocks any smuggled server-authored field (``actor``/``at`` on the audit
+    entry are the server's). ``assignee`` is a bounded, charset-locked user id — the SAME shape as
+    an ``opened_by`` / ``actor.id``, so it can never forge a JSONL line — not an identity/PII
+    payload (a user-id string is fine under the no-PII-in-a-body guardrail). ``None`` unassigns.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assignee: str | None = Field(default=None, max_length=64, pattern=_ID_PATTERN)
 
 
 router = APIRouter(prefix="/api/review", tags=["review-queue"])
@@ -201,25 +228,47 @@ def create_ticket(
 
 @router.get("/tickets")
 def list_tickets(
+    response: Response,
     status: str | None = Query(None),
     run_id: str | None = Query(None),
     rule_id: str | None = Query(None),
+    since: str | None = Query(None),
 ) -> list[Ticket]:
-    """The review queue, newest-context first, filterable by status / run_id / rule_id.
+    """The review queue, newest-context first, filterable by status / run_id / rule_id / since.
 
     Read-only over product state (any role, including viewer). ``status`` is validated against the
     closed vocabulary (unknown → 400, the same closed-enum idiom the run-list uses); ``run_id`` /
-    ``rule_id`` are exact-match filters. A store failure maps to a generic 503 without leaking the
-    path/DSN.
+    ``rule_id`` are exact-match filters. ``since`` (an ISO-8601 date/datetime) is a recency window:
+    only tickets with ``created_at >= since`` are returned, so a client can load just the recent
+    tail instead of every ticket ever. The ``X-PipeGuard-Ticket-Total`` response header carries the
+    count for the status/run/rule filter set IGNORING ``since`` — mirroring the run-list's
+    ``X-PipeGuard-Total-Count`` idiom — so a windowed view can still show "N resolved total". A
+    store failure maps to a generic 503 without leaking the path/DSN.
     """
     if status is not None and status not in ("open", "in_review", "resolved"):
         raise HTTPException(
             status_code=400, detail="status must be one of open, in_review, resolved"
         )
+    if since is not None:
+        # Reject a garbage window the same way an unknown status is rejected (a closed contract),
+        # never a silent empty result. fromisoformat accepts a bare date ("2026-06-11") too.
+        try:
+            datetime.fromisoformat(since)
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail="since must be an ISO-8601 date or datetime"
+            ) from None
     try:
         records = get_review_store().list(status=status, run_id=run_id, rule_id=rule_id)
     except Exception:
         raise HTTPException(status_code=503, detail="review store unavailable") from None
+    # Total for this status/run/rule set BEFORE the recency window, so the resolved tab can show a
+    # true total even when it only loaded the last ~30 days.
+    response.headers["X-PipeGuard-Ticket-Total"] = str(len(records))
+    if since is not None:
+        # Lexicographic compare is correct for zero-padded ISO-8601: a created_at datetime string
+        # sorts against the ISO `since` prefix exactly as the timestamps order (UTC throughout).
+        records = [r for r in records if str(r.get("created_at") or "") >= since]
     return [Ticket.model_validate(r) for r in records]
 
 
@@ -247,7 +296,9 @@ def act_on_ticket(
     if record is None:
         raise HTTPException(status_code=404, detail=f"Unknown ticket '{ticket_id}'")
 
-    rule = _ACTION_RULES[body.action]  # body.action is a closed Literal, so this can't KeyError
+    # body.action is a TransitionAction (assign is excluded by ActionIn's type), and _ACTION_RULES
+    # has a row for every TransitionAction, so this lookup can never KeyError.
+    rule = _ACTION_RULES[body.action]
     if actor.role not in rule.roles:
         # Name the required roles (not secret) so the caller can self-correct; never echo the
         # caller's id into the error (it would land in shared logs / client-visible bodies).
@@ -275,6 +326,46 @@ def act_on_ticket(
     updated: dict[str, Any] = {
         **record,
         "status": rule.to_status,
+        "actions": [*record.get("actions", []), action_entry],
+    }
+    try:
+        stored = store.update(updated)
+    except Exception:
+        raise HTTPException(status_code=503, detail="review store unavailable") from None
+    return Ticket.model_validate(stored)
+
+
+@router.post("/tickets/{ticket_id}/assign")
+def assign_ticket(
+    ticket_id: str,
+    body: AssignIn,
+    actor: Actor = Depends(require_role("reviewer", "approver")),
+) -> Ticket:
+    """Assign (or unassign) a ticket's owner — a PRODUCT write, OFF the deterministic gate.
+
+    Requires reviewer or approver (a viewer is 403ed by the dependency). Sets ``assignee`` (``None``
+    unassigns — the review↔kanban link that says who owns the ticket) and appends an ``assign``
+    audit entry ``{action, actor.id, at}``. Assigning is deliberately NOT a status transition: it is
+    absent from :data:`_ACTION_RULES` and reachable only here, so it never moves the ticket through
+    its lifecycle, never re-runs the gate, and never touches a verdict (ADR-0001). Order of checks:
+    unknown ticket → 404. A store failure is a generic 503 that never leaks the path/DSN.
+    """
+    store = get_review_store()
+    try:
+        record = store.get(ticket_id)
+    except Exception:
+        raise HTTPException(status_code=503, detail="review store unavailable") from None
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Unknown ticket '{ticket_id}'")
+
+    action_entry = {
+        "action": "assign",
+        "actor": actor.id,
+        "at": datetime.now(timezone.utc).isoformat(),
+    }
+    updated: dict[str, Any] = {
+        **record,
+        "assignee": body.assignee,
         "actions": [*record.get("actions", []), action_entry],
     }
     try:

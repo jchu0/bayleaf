@@ -21,6 +21,7 @@ import type {
   MonitoringWindow,
   NextflowGraphBody,
   PipelineGraph,
+  PipelineRunStatus,
   PipelineGraphAck,
   PipelineGraphIn,
   ReviewActionName,
@@ -28,6 +29,9 @@ import type {
   RunDetail,
   Runbook,
   RunbookPolicy,
+  RunInputsCatalog,
+  RunPipelineAck,
+  RunPipelineBody,
   RunStatus,
   RunSummary,
   RunsPage,
@@ -146,6 +150,34 @@ async function fetchRunsPage(opts: RunsQuery = {}): Promise<RunsPage> {
   }
 }
 
+// ── review-queue tickets query ───────────────────────────────────────────────
+export type TicketsQuery = {
+  status?: TicketStatus
+  run_id?: string
+  rule_id?: string
+  // ISO date/datetime recency window: only tickets with created_at >= since. The total header
+  // still reports the count IGNORING since, so a windowed view can show the true total.
+  since?: string
+}
+function ticketsQs(opts: TicketsQuery = {}): string {
+  const p = new URLSearchParams()
+  if (opts.status) p.set('status', opts.status)
+  if (opts.run_id) p.set('run_id', opts.run_id)
+  if (opts.rule_id) p.set('rule_id', opts.rule_id)
+  if (opts.since) p.set('since', opts.since)
+  const s = p.toString()
+  return s ? `?${s}` : ''
+}
+export type TicketsPage = { data: Ticket[]; total: number | null }
+// Header-aware tickets fetch: the status-scoped total (ignoring `since`) rides a response header.
+async function fetchTicketsPage(opts: TicketsQuery = {}): Promise<TicketsPage> {
+  const res = await fetch(`/api/review/tickets${ticketsQs(opts)}`)
+  if (!res.ok) throw await httpError(res)
+  const data = (await res.json()) as Ticket[]
+  const totalHeader = res.headers.get('X-PipeGuard-Ticket-Total')
+  return { data, total: totalHeader ? Number(totalHeader) : null }
+}
+
 const enc = encodeURIComponent
 
 export const api = {
@@ -206,18 +238,26 @@ export const api = {
     return res.blob()
   },
 
+  // ── operator-driven execution of a composed pipeline (ADR-0003; reviewer/approver-gated) ──
+  runInputs: () => get<RunInputsCatalog>('/api/pipelines/run/inputs'),
+  runPipeline: (body: RunPipelineBody) =>
+    write<RunPipelineAck>('/api/pipelines/run', 'POST', body),
+  runStatus: (runId: string) =>
+    get<PipelineRunStatus>(`/api/pipelines/run/${enc(runId)}`),
+
   // ── review-queue tickets ──
   createTicket: (body: TicketIn) => write<Ticket>('/api/review/tickets', 'POST', body),
-  listTickets: (opts: { status?: TicketStatus; run_id?: string; rule_id?: string } = {}) => {
-    const p = new URLSearchParams()
-    if (opts.status) p.set('status', opts.status)
-    if (opts.run_id) p.set('run_id', opts.run_id)
-    if (opts.rule_id) p.set('rule_id', opts.rule_id)
-    const qs = p.toString()
-    return get<Ticket[]>(`/api/review/tickets${qs ? `?${qs}` : ''}`)
-  },
+  listTickets: (opts: TicketsQuery = {}) => get<Ticket[]>(`/api/review/tickets${ticketsQs(opts)}`),
+  // Header-aware variant: the body is Ticket[], but the status-scoped total (ignoring `since`) rides
+  // the X-PipeGuard-Ticket-Total header a plain get<T> would drop — mirrors fetchRunsPage. Used by
+  // the Review queue's Resolved tab to show "N resolved total" while it loads only a recent window.
+  listTicketsPage: (opts: TicketsQuery = {}) => fetchTicketsPage(opts),
   ticketAction: (id: string, action: ReviewActionName) =>
     write<Ticket>(`/api/review/tickets/${enc(id)}/action`, 'POST', { action }),
+  // Assign (or unassign, with assignee=null) a ticket's owner — the review↔kanban link. A backend
+  // write (reviewer/approver-gated); never a status transition, never a verdict (ADR-0001).
+  assignTicket: (id: string, assignee: string | null) =>
+    write<Ticket>(`/api/review/tickets/${enc(id)}/assign`, 'POST', { assignee }),
 
   // ── pipeline graph store + lifecycle ──
   savePipeline: (body: PipelineGraphIn) => write<PipelineGraphAck>('/api/pipelines', 'POST', body),

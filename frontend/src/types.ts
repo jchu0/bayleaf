@@ -181,6 +181,25 @@ export type CompiledNextflow = {
   steps: string[]
 }
 
+// Operator-driven EXECUTION of a composed pipeline (ADR-0003). The operator picks inputs by KEY
+// from a server-side catalog; the backend runs the compiled pipeline via Nextflow → a gate-able run.
+export type RunInputOption = { key: string; label: string; origin: string }
+export type RunInputsCatalog = {
+  reads: RunInputOption[]
+  reference: RunInputOption[]
+  panel_bed: RunInputOption[]
+}
+export type RunPipelineBody = {
+  graph: NextflowGraphBody
+  run_id: string
+  sample?: string
+  platform?: string
+  inputs: { reads?: string; reference?: string; panel_bed?: string }
+}
+export type RunPipelineAck = { run_id: string; status: string; steps: string[] }
+// Named PipelineRunStatus to avoid clashing with the run-lifecycle `RunStatus`.
+export type PipelineRunStatus = { run_id: string; status: string; error: string | null }
+
 export type TriageCitation = {
   source_kind: 'knowledge' | 'finding'
   ref: string
@@ -496,8 +515,13 @@ export type DiffResult = {
 // ─────────────────────────────────────────────────────────────────────────────
 export type TicketStatus = 'open' | 'in_review' | 'resolved'
 export type TicketPriority = 'high' | 'medium' | 'low'
+// The status-transition actions POST /tickets/{id}/action accepts (what `ticketAction` sends).
 export type ReviewActionName = 'acknowledge' | 'resolve' | 'escalate' | 'suppress' | 'reopen'
-export type TicketAction = { action: ReviewActionName; actor: string; at: string }
+// The full audit vocabulary that can appear in a stored action trail. `assign` is an audit event
+// (who now owns the ticket) with its OWN endpoint — never a status transition, so it is not a
+// ReviewActionName and never reaches POST /action.
+export type ReviewAuditAction = ReviewActionName | 'assign'
+export type TicketAction = { action: ReviewAuditAction; actor: string; at: string }
 export type Ticket = {
   id: string
   schema_version: number
@@ -511,6 +535,8 @@ export type Ticket = {
   priority: TicketPriority
   status: TicketStatus
   opened_by: string
+  // Current owner (a user id), or null when unassigned — set via POST /tickets/{id}/assign.
+  assignee: string | null
   actions: TicketAction[]
 }
 export type TicketIn = {

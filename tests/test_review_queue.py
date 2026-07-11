@@ -9,10 +9,13 @@ explicit viewer/reviewer/approver headers to pin the RBAC.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from api.review_store import get_review_store
 from api.routers import review_queue
 
 # Explicit principals via the dev-shim auth headers (api/auth.py). No headers == approver.
@@ -59,6 +62,34 @@ def _act(client, tid, action, headers=None):
     return client.post(
         f"/api/review/tickets/{tid}/action", json={"action": action}, headers=headers or {}
     )
+
+
+def _assign(client, tid, assignee, headers=None):
+    """POST an assignment (assignee=None unassigns), defaulting to the dev principal (approver)."""
+    return client.post(
+        f"/api/review/tickets/{tid}/assign", json={"assignee": assignee}, headers=headers or {}
+    )
+
+
+def _seed(created_at, *, status="open", **over):
+    """Write a ticket straight to the store with a controlled ``created_at``/``status``.
+
+    The ``created_at`` is server-authored at open-time, so it can't be set through the API — the
+    ``since`` window + total-header tests seed the store directly (the fixture's monkeypatched
+    ``PIPEGUARD_REVIEW_PATH`` is already active because the test requests the ``client`` fixture).
+    """
+    record = {
+        **_ticket(**over),
+        "id": uuid.uuid4().hex,
+        "schema_version": review_queue.REVIEW_SCHEMA_VERSION,
+        "created_at": created_at,
+        "status": status,
+        "opened_by": "seed",
+        "assignee": None,
+        "actions": [],
+    }
+    get_review_store().create(record)
+    return record
 
 
 # --- create / read ---------------------------------------------------------------------------
@@ -208,6 +239,108 @@ def test_reviewer_can_resolve_and_suppress(client):
 def test_viewer_cannot_act(client):
     tid = _create(client)["id"]
     assert _act(client, tid, "acknowledge", headers=VIEWER).status_code == 403
+
+
+# --- assign (the review↔kanban owner link) ---------------------------------------------------
+
+
+def test_create_ticket_is_unassigned_by_default(client):
+    # A freshly opened ticket has no owner until it is assigned.
+    assert _create(client, headers=REVIEWER)["assignee"] is None
+
+
+def test_assign_sets_assignee_records_audit_and_unassigns(client):
+    t = _create(client, headers=REVIEWER)
+    tid = t["id"]
+
+    # Reviewer assigns to a user id.
+    res = _assign(client, tid, "m.chen", headers=REVIEWER)
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["assignee"] == "m.chen"
+    assert body["status"] == "open"  # assigning is NOT a status transition
+    assert body["actions"][-1]["action"] == "assign"
+    assert body["actions"][-1]["actor"] == "a.rivera"  # server-captured actor, not the body
+    assert body["actions"][-1]["at"]
+
+    # Reassigning appends another audit entry and overwrites the owner.
+    res = _assign(client, tid, "b.chen", headers=APPROVER)
+    assert res.json()["assignee"] == "b.chen"
+
+    # Unassign via null.
+    res = _assign(client, tid, None, headers=REVIEWER)
+    assert res.json()["assignee"] is None
+    assert [a["action"] for a in res.json()["actions"]] == ["assign", "assign", "assign"]
+
+
+def test_assign_rbac_validation_and_unknown_ticket(client):
+    tid = _create(client, headers=REVIEWER)["id"]
+    # A viewer cannot assign (write boundary), though it may still read the queue.
+    assert _assign(client, tid, "m.chen", headers=VIEWER).status_code == 403
+    # A charset-violating assignee is a 422 (can't forge a JSONL line / carry a control char).
+    assert _assign(client, tid, "bad id", headers=REVIEWER).status_code == 422
+    # extra="forbid": a caller can't smuggle the server-authored audit actor.
+    assert (
+        client.post(
+            f"/api/review/tickets/{tid}/assign",
+            json={"assignee": "m.chen", "actor": "root"},
+            headers=REVIEWER,
+        ).status_code
+        == 422
+    )
+    # Unknown ticket -> 404.
+    assert _assign(client, "deadbeef", "m.chen", headers=REVIEWER).status_code == 404
+
+
+def test_assign_is_not_a_transition_action(client):
+    # 'assign' is an audit event, not a status transition: it is absent from _ACTION_RULES and the
+    # /action endpoint rejects it (422), so act_on_ticket never indexes the table with it.
+    assert "assign" not in review_queue._ACTION_RULES
+    tid = _create(client, headers=REVIEWER)["id"]
+    assert _act(client, tid, "assign").status_code == 422
+
+
+# --- recency window (`since`) + total-count header -------------------------------------------
+
+
+def test_since_window_and_total_header(client):
+    # Two tickets on a known timeline (seeded straight to the store to control created_at).
+    _seed("2026-01-01T00:00:00+00:00", rule_id="OLD-1")
+    _seed("2026-07-01T00:00:00+00:00", rule_id="NEW-1")
+
+    # No `since`: both returned (created_at-ascending), header total == full count.
+    r = client.get("/api/review/tickets")
+    assert r.status_code == 200
+    assert [t["rule_id"] for t in r.json()] == ["OLD-1", "NEW-1"]
+    assert r.headers["X-PipeGuard-Ticket-Total"] == "2"
+
+    # `since` mid-window: only the newer ticket, but the header still reports the FULL total.
+    r = client.get("/api/review/tickets", params={"since": "2026-06-01"})
+    assert [t["rule_id"] for t in r.json()] == ["NEW-1"]
+    assert r.headers["X-PipeGuard-Ticket-Total"] == "2"
+
+    # `since` boundary is inclusive (created_at on the since date passes).
+    assert len(client.get("/api/review/tickets", params={"since": "2026-07-01"}).json()) == 1
+
+    # `since` after everything: empty body, header total unchanged.
+    r = client.get("/api/review/tickets", params={"since": "2027-01-01"})
+    assert r.json() == []
+    assert r.headers["X-PipeGuard-Ticket-Total"] == "2"
+
+    # Garbage `since` -> 400 (closed contract), never a silent empty result.
+    assert client.get("/api/review/tickets", params={"since": "not-a-date"}).status_code == 400
+
+
+def test_total_header_scopes_to_status_and_ignores_since(client):
+    _seed("2026-01-01T00:00:00+00:00", status="resolved", rule_id="R-OLD")
+    _seed("2026-07-01T00:00:00+00:00", status="resolved", rule_id="R-NEW")
+    _seed("2026-07-01T00:00:00+00:00", status="open", rule_id="O-NEW")
+
+    r = client.get("/api/review/tickets", params={"status": "resolved", "since": "2026-06-01"})
+    # Only the recent resolved ticket is returned...
+    assert [t["rule_id"] for t in r.json()] == ["R-NEW"]
+    # ...but the header counts ALL resolved (ignores `since`), not open, not the recent slice.
+    assert r.headers["X-PipeGuard-Ticket-Total"] == "2"
 
 
 # --- resilience + off-gate -------------------------------------------------------------------

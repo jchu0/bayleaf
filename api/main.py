@@ -78,6 +78,9 @@ app.add_middleware(
         "X-PipeGuard-Page",
         "X-PipeGuard-Limit",
         "X-PipeGuard-Status-Counts",
+        # Review-queue total (resolved count while only a recent window is loaded) — a browser fetch
+        # can only read it cross-origin if it's exposed (same reason as the run-list headers above).
+        "X-PipeGuard-Ticket-Total",
     ],
 )
 
