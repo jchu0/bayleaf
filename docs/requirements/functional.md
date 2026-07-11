@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md) |
 
 ## Overview
 
@@ -690,6 +690,27 @@ had reserved or listed as *not-yet-built*.
     [risks.md](../quality/risks.md) RISK-035,
     [journal 2026-07-10](../journal/2026-07-10-confirm-dialog-audit-gate.md),
     [tasks T-102](../planning/tasks.md).
+17. **REQ-F-076 — Settings: agent roster as a scale-aware table with explicit edit.** The
+    Settings model-tiering card (REQ-F-042) is now `SettingsModelTier.tsx`'s table of the full
+    advisory-agent roster — **Agent · Purpose · Model · Status · Edit**, capped 10 rows/page —
+    replacing the earlier 3-item dropdown-applies-on-change card. Rows: synthesizer, QC-triage,
+    pipeline-repair, archivist, feedback-categorizer, node-author (roster #5, still
+    design-note-only per [agents.md](../design/agents.md)), and a new **metrics-expansion agent**
+    row — a proposed **phase-2** idea (ST2: propose new QC metrics to track + wiring) with **no
+    backend agent module or env var** (confirmed: `PIPEGUARD_METRICS_AGENT` appears nowhere under
+    `src/`/`api/`), explicitly not to be read as a shipped roster addition. Each row edits behind
+    a pencil into a staged draft (model + live toggle); **nothing applies until an explicit
+    Save** (Cancel discards) — the same deliberateness principle REQ-F-075 established for
+    stakes-y writes, applied here even though this table has no backend write at all (Save only
+    updates local React state; the T-045 "UI-only, not wired to `PIPEGUARD_*_MODEL`" gap is
+    unchanged). A "New agent" button links to the Pipeline Builder (`/builder`), the closest
+    existing agent-authoring surface. Verdicts stay rule-derived — this is an operator *view* of
+    config, never a control that can move a gate (ADR-0001). `git diff --stat c79f62c 7b579bb --
+    src/ api/ tests/` empty (frontend-only). *Trace:* REQ-F-042, REQ-F-075,
+    [design/agents.md](../design/agents.md),
+    [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md),
+    [tasks T-103](../planning/tasks.md),
+    [journal 2026-07-10](../journal/2026-07-10-settings-agent-table.md).
 
 ## Notes / deferred
 

@@ -381,6 +381,21 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    (T-092) for the same branded dialog. No new endpoint, no wire change — every confirmed
    action still calls the exact backend write it always did, landing in the Admin Activity
    audit feed unchanged; a reusable primitive for the Settings/variant authoring work ahead.
+   **Settings agent table (2026-07-10, commit `7b579bb`, "Wave 5," ST1/ST2) — frontend-only,
+   no verdict/gate/ADR-0001 boundary changed** (`git diff --stat c79f62c 7b579bb -- src/ api/
+   tests/` empty). `SettingsModelTier.tsx`'s old 3-item model-tiering card (dropdowns applied on
+   change) is now a scale-aware TABLE of the full seven-row advisory-agent roster — synthesizer,
+   QC-triage, pipeline-repair, archivist, feedback-categorizer, node-author, and a **new
+   metrics-expansion agent row** (ST2 — proposes new QC metrics + wiring; labelled `phase-2`; no
+   such backend agent or `PIPEGUARD_*` env var exists yet, same non-status as node-author) —
+   capped 10 rows/page. Each row shows its real `PIPEGUARD_*_MODEL` env var + model/cost + a
+   Stub·$0/Live status, and edits behind a pencil into a staged draft (model + live toggle) with
+   explicit Save/Cancel — nothing applies until Save (Cancel discards, verified no leak). A "New
+   agent" button links to `/builder` (the node-author agent's home). **Still purely client-side
+   state** — Save only updates local React state, no backend call exists — so the T-045 "UI-only,
+   not wired to `PIPEGUARD_*_MODEL`" gap stays open; this is a presentation rebuild, not a
+   persistence fix. ST2 part 1 (runbook thresholds bound to assay × sample type) was verified
+   already correct in `SettingsAssayTable.tsx` — no change needed there.
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
 

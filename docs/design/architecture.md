@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md) |
 
 ## Overview
 
@@ -317,6 +317,22 @@ Every finding and verdict is labelled with the gate it came from:
      a REVERSIBLE, `localStorage`-persisted clear-from-view/restore (never a DB purge, never
      touches `api/`) — a cleared signature moves into a collapsible "Cleared · N" section, stays
      searchable, and restores in one click.
+   - **Settings agent table (2026-07-10, commit `7b579bb`, T-103, "Wave 5," ST1/ST2,
+     [journal](../journal/2026-07-10-settings-agent-table.md)), frontend-only, no verdict/gate/
+     ADR-0001 boundary changed** (`git diff --stat c79f62c 7b579bb -- src/ api/ tests/` empty).
+     `SettingsModelTier.tsx`'s 3-item model-tiering card (dropdowns applied on change) becomes a
+     TABLE of the full advisory-agent roster (Agent · Purpose · Model · Status · Edit), a sixth
+     instance of the scale-kit pagination pattern (§4.10 crosslink below, capped 10 rows/page).
+     Rows: synthesizer, QC-triage, pipeline-repair, archivist, feedback-categorizer, node-author,
+     and a new **metrics-expansion agent** row (ST2 — proposes new QC metrics + wiring, labelled
+     **phase-2**; no backend agent module or `PIPEGUARD_*` env var exists for it, same non-status
+     as node-author — a UI placeholder, not a shipped roster addition). Each row edits behind a
+     pencil into a staged draft (model + live toggle) with explicit Save/Cancel; a "New agent"
+     button links to `/builder`. **Still purely client-side** — Save only sets local React state,
+     no `api.ts` call exists — so this does not close the earlier "UI-only, not wired to
+     `PIPEGUARD_*_MODEL`" gap ([tasks T-045](../planning/tasks.md)), it only re-presents it more
+     scalably. ST2 part 1 (runbook thresholds bound to assay × sample type) was verified already
+     correct in `SettingsAssayTable.tsx` — no code change needed.
    **Honest, labelled frontend deferrals (no fabrication):** the Monitoring **Median-review KPI**
    (no backend field yet — the signature-level `first_seen`/`last_seen`/`trend`/`affected_run_ids`
    fields below ARE shipped); Submit now

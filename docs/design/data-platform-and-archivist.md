@@ -5,7 +5,7 @@
 | **Status** | Draft — for maintainer review |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [design/architecture.md](architecture.md) · [design/agents.md](agents.md) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) · [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md) · [ADR-0015](../adr/ADR-0015-layered-data-contract.md) · [data/provenance.md](../data/provenance.md) · [data/schemas.md](../data/schemas.md) · [data/metric_registry.md](../data/metric_registry.md) · [data/strategy.md](../data/strategy.md) · [planning/tasks.md](../planning/tasks.md) · [journal/2026-07-09-giab-e2e-pipeline.md](../journal/2026-07-09-giab-e2e-pipeline.md) · [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md) · [journal/2026-07-10-admin-settings-builder-wiring.md](../journal/2026-07-10-admin-settings-builder-wiring.md) · [journal/2026-07-10-builder-modals-and-run-selector.md](../journal/2026-07-10-builder-modals-and-run-selector.md) · [journal/2026-07-10-batch8-theme-monitoring-recharts.md](../journal/2026-07-10-batch8-theme-monitoring-recharts.md) |
+| **Related** | [design/architecture.md](architecture.md) · [design/agents.md](agents.md) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) · [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md) · [ADR-0015](../adr/ADR-0015-layered-data-contract.md) · [data/provenance.md](../data/provenance.md) · [data/schemas.md](../data/schemas.md) · [data/metric_registry.md](../data/metric_registry.md) · [data/strategy.md](../data/strategy.md) · [planning/tasks.md](../planning/tasks.md) · [journal/2026-07-09-giab-e2e-pipeline.md](../journal/2026-07-09-giab-e2e-pipeline.md) · [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md) · [journal/2026-07-10-admin-settings-builder-wiring.md](../journal/2026-07-10-admin-settings-builder-wiring.md) · [journal/2026-07-10-builder-modals-and-run-selector.md](../journal/2026-07-10-builder-modals-and-run-selector.md) · [journal/2026-07-10-batch8-theme-monitoring-recharts.md](../journal/2026-07-10-batch8-theme-monitoring-recharts.md) · [journal/2026-07-10-settings-agent-table.md](../journal/2026-07-10-settings-agent-table.md) |
 
 > **Draft for review.** Produced by a multi-agent design workflow (four design perspectives +
 > three adversarial critiques — scope-realism, guardrails, over-engineering — then synthesized)
@@ -416,6 +416,30 @@ The maintainer's very next feedback round replaced the whole §4.5–§4.8 hand-
 This is a real reversal, not a refinement, and it changes the honest accounting §4.8 gave: §4.8 closed "T-072's frontend half" by capping what the DOM *rendered* (a page at a time). The new scrolling chart renders **every** fetched run as a bar — there is no render cap anymore, just a different (arguably more usable, for a chart) UI idiom that doesn't need one. So as of this section, `runs[]` has **neither** a backend cap (`get_monitoring` still returns the full window, unchanged by this commit) **nor** a frontend one — [tasks T-072](../planning/tasks.md) stays the single accurate tracker of this open item, now describing a real (if currently low-volume, ~29–30 runs) gap in both directions rather than a "backend-only" one. The fix, when it's needed, is server-side (`page`/`limit` on `runs[]`, mirroring `GET /api/runs`) — no further frontend re-presentation closes it.
 
 Also in this commit (M4/M6, not a scale-kit pagination pattern but adjacent UX): recurring signatures gain a unique, stable display id (`SIG-<first 8 chars of the signature hash>`) disambiguating same-`rule_id` patterns, and a REVERSIBLE, `localStorage`-persisted clear-from-view/restore — a client-only view filter (never a DB purge, never an `api/` call) that moves a signature into a collapsible "Cleared · N" section without dropping it from search or escalation.
+
+### 4.10 (Shipped 2026-07-10, T-103, commit `7b579bb`) — Settings agent table: a fifth scale-kit surface, plus explicit edit
+
+A **fifth surface** to adopt the §4.5–§4.7 scale-kit pagination pattern (Runs, Monitoring
+signatures, Admin Activity, Monitoring per-run — Agent-triage's own 10-row pager,
+[architecture.md](architecture.md) batch 8/T-099, is a further instance not previously given its
+own subsection here): `SettingsModelTier.tsx`'s per-agent
+model-tiering card, previously a flat 3-item card stack, is now a TABLE of the full
+advisory-agent roster capped **10 rows/page** with a numbered pager — the same
+`SegmentedControl`/pager idiom as the other four instances, applied here because the roster now
+has 7 rows (synthesizer, QC-triage, pipeline-repair, archivist, feedback-categorizer, node-author,
+and a new **metrics-expansion agent** — ST2, phase-2, no backend module or env var) and is
+expected to keep growing. **New relative to §4.5–§4.9:** each row also gets an **explicit-edit**
+affordance — a pencil opens a staged draft (model + live-toggle) behind Save/Cancel, mirroring
+the staging pattern T-092 (Admin role edits) and T-095 established, so a stray dropdown change
+can no longer silently apply. This table is **entirely client-side state** — `saveEdit()` only
+calls `setRows` (no `api.ts` write exists in the diff) — so it does not touch the read-API's
+scale-kit endpoints (`GET /api/monitoring`, `GET /api/runs`) at all; it is a UI-only
+re-presentation of already-client-side config (`SettingsModelTier` never persisted before this
+commit either, per [T-045](../planning/tasks.md)). `git diff --stat c79f62c 7b579bb -- src/ api/
+tests/` is empty. A "New agent" button links to the Pipeline Builder (`/builder`), the closest
+existing agent-authoring surface — a full agent-designer stays a phase-2 seam. See
+[journal 2026-07-10](../journal/2026-07-10-settings-agent-table.md) and
+[tasks T-103](../planning/tasks.md).
 
 ---
 

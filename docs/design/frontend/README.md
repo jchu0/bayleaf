@@ -299,7 +299,26 @@ authoring.
 - **Read-only by default** → **Edit thresholds** unlocks fill-in inputs, swapping the bar to
   **Cancel · Save changes**; save is per-assay, **audited** (who · when), guarded (a gate
   can't cross its hard-fail; % clamp 0–100), and **approver-gated**.
-- **Per-agent model tiering** (dropdowns, full versioned model names; roster incl. Fable 5).
+- **Agents & model tiering — now a scale-aware table with explicit edit (Shipped 2026-07-10,
+  T-103, commit `7b579bb`, "Wave 5," ST1/ST2).** The old 3-item card (dropdowns applied on
+  change) is now a TABLE of the full advisory-agent roster — **Agent · Purpose · Model · Status ·
+  Edit** — capped 10 rows/page + a pager (the scale-kit pagination pattern, [data-platform-and-
+  archivist.md §4.10](../data-platform-and-archivist.md)). Rows: card synthesizer, QC-triage,
+  pipeline-repair, archivist, feedback-categorizer, node-author (§6, still design-note-only,
+  T-046), and a **new metrics-expansion agent** row (ST2 — proposes new QC metrics to track +
+  wiring; labelled **phase-2**, no backend agent or `PIPEGUARD_*` env var exists for it yet — this
+  is a UI-only placeholder for a proposed idea, **not** a shipped roster addition; see
+  [design/agents.md](../agents.md)). Each row shows its real `PIPEGUARD_*_MODEL` env var + model/
+  cost + a Stub·$0/Live status; a pencil opens a staged draft (model + live toggle) with explicit
+  Save/Cancel — nothing applies until Save (verified: Cancel discards, no leak), one row edits at
+  a time. A **"New agent"** button crosslinks to `/builder` (the node-author agent's home) — the
+  closest existing authoring surface; a full agent-designer stays a phase-2 seam. **Still
+  client-only** — Save updates local React state only, not wired to any backend env or endpoint
+  (the T-045 "UI-only" gap stays open; this is a presentation rebuild, not a persistence fix).
+  Model tiering remains narration/advice only — verdicts stay rule-derived (ADR-0001). **ST2 part
+  1** (runbook thresholds bound to assay × sample type) was independently verified **already
+  correct** in `SettingsAssayTable.tsx` — per-assay rows, per-sample-type columns, save keyed by
+  the assay slug; no change needed.
 - **Sample-type dropdown (Shipped 2026-07-10, T-095, commit `869cf55`).** The threshold matrix
   showed Whole-blood and Saliva as two side-by-side columns; a Sample-type dropdown beside the
   Assay selector now picks one tissue at a time and the table shows a single value column,
