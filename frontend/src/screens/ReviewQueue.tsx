@@ -567,7 +567,7 @@ export function ReviewQueue() {
   const collapseAll = () => setOpen({})
 
   return (
-    <div className="mx-auto max-w-[940px]">
+    <div className="mx-auto max-w-[1080px]">
       {/* UIC-1: nav names the page — no eyebrow/subtitle prose. */}
       <PageHeader title="Review queue" />
 

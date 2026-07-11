@@ -794,7 +794,7 @@ export function Admin() {
     { value: 'system' as const, label: <TabLabel icon={<CheckCircle2 size={13} />} text="System" /> },
   ]
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-[1080px]">
       {/* UIC-1: no eyebrow/subtitle flavor — the nav names the page. The "never a verdict" limitation
           it used to carry lives in each tab's DemoBanner / posture note. */}
       <PageHeader title="Admin" actions={<ShieldCheck size={20} className="text-text-3" />} />

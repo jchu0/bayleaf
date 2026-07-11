@@ -140,7 +140,7 @@ export function Accession() {
   }
 
   return (
-    <div className="mx-auto max-w-[1160px]">
+    <div className="mx-auto max-w-[1080px]">
       {/* UIC-1: the left-nav names this page — no eyebrow/subtitle prose. The PII seam banner below
           is an explicit safety/limitation warning and stays. */}
       <PageHeader title="Sample accessioning" />

@@ -99,7 +99,7 @@ export function AgentTriage() {
   if (!detail) return <Loading label="Loading triage…" />
 
   return (
-    <div className="pg-fade mx-auto max-w-[800px]">
+    <div className="pg-fade mx-auto max-w-[1080px]">
       <PageHeader
         title="Agent triage"
         subtitle="The agent advises; the human decides."

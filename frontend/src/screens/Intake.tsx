@@ -119,7 +119,7 @@ export function Intake() {
   const hasIntake = run.cards.length > 0
 
   return (
-    <div className="pg-fade mx-auto max-w-[1000px]">
+    <div className="pg-fade mx-auto max-w-[1080px]">
       <PageHeader
         title="Intake gate"
         actions={<IntakeHeaderActions updatedLabel={updatedLabel} spinning={spinning} onRefresh={refresh} />}

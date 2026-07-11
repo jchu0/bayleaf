@@ -1512,7 +1512,7 @@ export function Inbox() {
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-[1080px]">
       <PageHeader
         title="Inbox"
         actions={

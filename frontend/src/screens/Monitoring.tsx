@@ -227,8 +227,8 @@ export function Monitoring() {
 
   const header = <PageHeader title="Monitoring" actions={control} />
 
-  if (error) return <div className="mx-auto max-w-[1040px]">{header}<ErrorBox message={error} onRetry={() => refresh().catch((e) => setError(String(e)))} /></div>
-  if (!data) return <div className="mx-auto max-w-[1040px]">{header}<Loading label="Loading monitoring…" /></div>
+  if (error) return <div className="mx-auto max-w-[1080px]">{header}<ErrorBox message={error} onRetry={() => refresh().catch((e) => setError(String(e)))} /></div>
+  if (!data) return <div className="mx-auto max-w-[1080px]">{header}<Loading label="Loading monitoring…" /></div>
 
   const o = data.overall
   // The date range refines ONLY the throughput chart. api.monitoring(window) has no date params, so
@@ -280,7 +280,7 @@ export function Monitoring() {
   ]
 
   return (
-    <div className="mx-auto max-w-[1040px]">
+    <div className="mx-auto max-w-[1080px]">
       {header}
 
       {/* KPI row — border-only tiles (no shadow), value mono 24px */}

@@ -39,7 +39,7 @@ export function Settings() {
   const granular = profile === 'granular'
 
   return (
-    <div className="mx-auto max-w-[720px]">
+    <div className="mx-auto max-w-[1080px]">
       {/* UIC-1: no page eyebrow/subtitle — the left-nav already names the page. Explicit
           safety/limitation notes (the Metric-catalog disclaimer below) are kept verbatim. */}
       <PageHeader title="Settings" />
