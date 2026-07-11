@@ -62,6 +62,7 @@ where = ["src"]
 pipeguard = [
     "triage/knowledge/*.jsonl",
     "pipeline_repair/knowledge/*.jsonl",
+    "node_author/knowledge/*.jsonl",
     "metrics/*.yaml",
 ]
 
