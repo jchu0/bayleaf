@@ -225,6 +225,11 @@ export function Submit() {
 
   const loaded = method === 'upload' || imported
   const count = loaded ? samples.length : 0
+  // The rows shown before any real samplesheet is parsed are the demo seed (SEED_SAMPLES), not
+  // parsed data — flag it so the Samples header can label the count "seeded demo" instead of
+  // passing it off as a parsed count (mirrors the seeded metadata label). A real parse
+  // (onSheetFile) sets uploadName, which clears the flag.
+  const seeded = method === 'upload' && uploadName == null
   // Paginate the sample table so a 100+ sample flowcell stays navigable (scale-aware UI rule).
   const per = Number(perPage)
   const pages = Math.max(1, Math.ceil(samples.length / per))
@@ -438,15 +443,26 @@ export function Submit() {
       const skip = ack.skipped_samples.length ? ` · skipped ${summarize(ack.skipped_samples)} (no reads on disk for this demo)` : ''
       toast(`${procMsg} through the pipeline…${skip}`, 'info')
       const poll = async (): Promise<void> => {
-        const st = await api.intakeStatus(ack.run_id)
-        if (st.status === 'complete') {
-          toast(`Run ${ack.run_id} processed — opening decision cards.`, 'success')
-          navigate(`/runs/${ack.run_id}`)
-        } else if (st.status === 'failed') {
-          toast(`Pipeline failed — ${st.error ?? 'unknown error'}`, 'error')
+        try {
+          const st = await api.intakeStatus(ack.run_id)
+          if (st.status === 'complete') {
+            toast(`Run ${ack.run_id} processed — opening decision cards.`, 'success')
+            navigate(`/runs/${ack.run_id}`)
+          } else if (st.status === 'failed') {
+            toast(`Pipeline failed — ${st.error ?? 'unknown error'}`, 'error')
+            setSubmitting(false)
+          } else {
+            setTimeout(() => void poll(), 2500)
+          }
+        } catch (e) {
+          // A 404 (the in-memory job registry lost the run — e.g. an API restart) or a network
+          // blip is terminal for this poller: without this catch the recursion rejects silently and
+          // the button spins "Processing…" forever. Stop, clear the state, and surface it honestly.
+          toast(
+            `Lost track of run ${ack.run_id} — ${e instanceof Error ? e.message : String(e)}. Check the Runs list.`,
+            'error',
+          )
           setSubmitting(false)
-        } else {
-          setTimeout(() => void poll(), 2500)
         }
       }
       void poll()
@@ -739,7 +755,14 @@ export function Submit() {
       <div className="mt-[14px] overflow-hidden rounded-[14px] border border-line bg-card shadow-card">
         <div className="flex items-center gap-[10px] border-b border-line px-[18px] py-[14px]">
           <div className="flex-1">
-            <div className="text-[14.5px] font-semibold text-text">Samples · {count}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[14.5px] font-semibold text-text">Samples · {count}</span>
+              {seeded && (
+                <span className="inline-flex items-center rounded-full border border-line-strong bg-card-2 px-2 py-0.5 text-[10.5px] font-medium text-text-3">
+                  seeded demo — replace by uploading
+                </span>
+              )}
+            </div>
             <div className="mt-0.5 text-[12px] text-text-2">
               Sample name, type, and dual barcodes resolve each library at demux and intake.
             </div>

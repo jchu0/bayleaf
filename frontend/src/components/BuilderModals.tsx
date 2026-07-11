@@ -845,8 +845,22 @@ const _CAT_LABEL: Record<string, string> = {
   panel_bed: 'Panel BED',
 }
 
-export function RunPipelineModal({ graph, onClose }: { graph: NextflowGraphBody; onClose: () => void }) {
+export function RunPipelineModal({
+  graph,
+  name,
+  version,
+  onClose,
+}: {
+  // `graph` (the live canvas) drives the input picker only; the run itself executes the APPROVED
+  // stored baseline named by `name` (+ optional pinned `version`), resolved server-side — the run
+  // affordance is gated to `approved`, so the live graph IS the approved one (ADR-0014).
+  graph: NextflowGraphBody
+  name: string
+  version?: number
+  onClose: () => void
+}) {
   const nav = useNavigate()
+  const { toast } = useToast()
   const [cat, setCat] = useState<RunInputsCatalog | null>(null)
   const [choice, setChoice] = useState<Record<string, string>>({})
   const [runId, setRunId] = useState('')
@@ -886,7 +900,15 @@ export function RunPipelineModal({ graph, onClose }: { graph: NextflowGraphBody;
             setPhase('failed')
           } else window.setTimeout(tick, 2500)
         })
-        .catch(() => window.setTimeout(tick, 3000))
+        .catch((e) => {
+          // A 404 / network drop is TERMINAL, not a retry: the in-memory job registry lost this run
+          // (a backend restart or blip), so polling forever would spin "Running…" with no honest
+          // failure (P1-5). Stop, surface it, and point the operator at the durable Runs list.
+          const detail = e instanceof Error ? e.message : String(e)
+          setErr(`Lost track of this run — check the Runs list. (${detail})`)
+          setPhase('failed')
+          toast('Lost track of the run — check the Runs list', 'error')
+        })
     tick()
   }
 
@@ -894,8 +916,11 @@ export function RunPipelineModal({ graph, onClose }: { graph: NextflowGraphBody;
     setPhase('running')
     setErr(null)
     try {
+      // Run the APPROVED baseline by name (+ pinned version) — the backend resolves + compiles the
+      // stored approved graph, never this posted one (the approval gate, ADR-0014).
       const ack = await api.runPipeline({
-        graph: { ...graph, name: graph.name || 'pipeline' },
+        name,
+        ...(version != null ? { version } : {}),
         run_id: runId.trim(),
         sample: sample.trim() || 'HG002',
         inputs: choice,
@@ -916,9 +941,10 @@ export function RunPipelineModal({ graph, onClose }: { graph: NextflowGraphBody;
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-semibold text-text">Run pipeline</div>
           <div className="mt-0.5 text-[12px] leading-relaxed text-text-2">
-            Compiles these cards to Nextflow and <strong>runs</strong> them against your chosen
-            inputs → a gate-able run. PipeGuard composes; <strong>Nextflow executes</strong> (only AI
-            agents stay off the tools — operators run pipelines).
+            Runs the <strong>approved version</strong> of this pipeline (the current canvas graph,
+            once approved) against your chosen inputs → a gate-able run. PipeGuard composes;{' '}
+            <strong>Nextflow executes</strong> (only AI agents stay off the tools — operators run
+            pipelines).
           </div>
         </div>
         <CloseBtn onClose={onClose} />

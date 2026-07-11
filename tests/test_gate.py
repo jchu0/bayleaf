@@ -109,6 +109,26 @@ def test_missing_metric_flagged():
     assert finding is not None and finding.severity.value == "warn"
 
 
+def test_fraction_metric_display_is_not_100x_too_small():
+    """SCI-01 regression. A fraction-raw metric (raw_unit 'fraction', display '%') must render in
+    percent, not 100x too small. A failing breadth_20x=0.85 reads '85%' with gate '≥ 90%', never
+    '0.85%' / '≥ 0.9%'. Display-only: the verdict still gates on the canonical value (0.85 misses
+    the 0.90 gate but clears the 0.80 hard-fail, so it is a WARN — unchanged by the display fix).
+    These strings flow into Finding.content_hash/signature, so this pins them."""
+    threshold = DEFAULT_RUNBOOK.threshold_for("breadth_20x")
+    mv = default_registry().observe(
+        metric_key="qc.breadth_20x", raw_value=0.85, raw_unit="fraction", sample_id="SX"
+    )
+    finding = _evaluate_metric("SX", threshold, mv)
+    assert finding is not None
+    assert finding.severity is Severity.WARN
+    assert finding.detail == "Breadth ≥20x for SX is 85%; runbook gate is ≥ 90% (hard-fail 80%)."
+    ev = finding.evidence[0]
+    assert ev.value == "85%"
+    assert ev.expected == "≥ 90%"
+    assert ev.threshold == "hard-fail ≥ 80%"
+
+
 def test_run_gate_orders_urgent_first():
     cards = run_gate(load_run(DATA), synthesizer=StubSynthesizer())
     verdicts = [c.verdict for c in cards]

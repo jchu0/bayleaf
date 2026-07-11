@@ -36,7 +36,8 @@ npm --prefix frontend run dev                  # React UI (proxies /api -> :8010
    Point out: every number traces to a source file + a rule.
 3. **Ask the triage agent** — click **"Ask the triage agent"** on S4. The advisory
    `TriageNote` appears (likely cause, suggested action, **corpus citations**). Note the
-   `ADVISORY · STUB` badge — it never sets the verdict.
+   **Advisory** badge and the **Rule-derived triage (offline)** source label — it never
+   sets the verdict.
 4. **Provenance** — the append-only event trail (analysis_run.started → per-sample
    findings/verdict → completed) with content-hashed card refs. "The event log is
    authoritative."

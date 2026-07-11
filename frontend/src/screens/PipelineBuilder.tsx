@@ -1176,7 +1176,13 @@ export function PipelineBuilder() {
                       setMoreOpen(false)
                       setRunOpen(true)
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-page"
+                    disabled={saveStatus !== 'approved'}
+                    title={
+                      saveStatus === 'approved'
+                        ? 'Run the approved version of this pipeline'
+                        : 'Approve this version to run it'
+                    }
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-page disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
                   >
                     <Play size={14} className="shrink-0 text-text-3" />
                     Run hand-off
@@ -1379,6 +1385,10 @@ export function PipelineBuilder() {
                 nodes: src.nodes.map((n) => ({ id: n.id, name: n.name, ins: n.ins, outs: n.outs })),
                 edges: src.edges.map((e) => ({ from: e.from, to: e.to })),
               }}
+              // Run the APPROVED stored baseline by slug name + the approved (emitted) version —
+              // the Run affordance is gated to `approved`, so `version` is the emitted revision.
+              name={pipelineName()}
+              version={version}
               onClose={() => setRunOpen(false)}
             />
           )

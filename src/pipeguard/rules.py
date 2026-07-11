@@ -14,7 +14,7 @@ Rule families:
 
 from __future__ import annotations
 
-from .metrics import default_registry, metric_values_for
+from .metrics import MetricRegistry, default_registry, metric_values_for
 from .models import (
     Category,
     Evidence,
@@ -165,6 +165,32 @@ def _check_metadata(sid: str, meta: Sample | None, runbook: Runbook) -> Finding 
     )
 
 
+# The runbook `unit` is a display SYMBOL, but the metric registry's conversion table is keyed on
+# unit NAMES. Only "%" needs translating (→ "percent"); "x"/"ratio"/"" already match a registry
+# unit name or have no conversion (a passthrough). See `_to_display_unit`.
+_DISPLAY_UNIT_NAME: dict[str, str] = {"%": "percent"}
+
+
+def _to_display_unit(
+    reg: MetricRegistry, our_key: str, canonical_value: float, symbol: str
+) -> float:
+    """Render a CANONICAL (normalized) value into the number shown beside the runbook `symbol`.
+
+    Mirrors `api/card_readout._to_display` (normalized_value → threshold.unit) so the finding text
+    and the QC-readout side-channel can never disagree by a factor of 100 for a fraction-raw metric
+    (breadth/pct_mapped/on_target), whose raw_unit ("fraction") differs from its display symbol
+    ("%"). Bridges the display symbol to the registry unit NAME, then denormalizes over the
+    registry's OWN closed conversion table (never a hardcoded 100x). A symbol the registry has no
+    distinct unit for (e.g. "x", "") leaves the canonical value unchanged — the same conservative
+    passthrough card_readout uses rather than guessing a conversion.
+    """
+    to_unit = _DISPLAY_UNIT_NAME.get(symbol.strip(), symbol.strip())
+    try:
+        return reg.denormalize(our_key, canonical_value, to_unit)
+    except ValueError:
+        return canonical_value
+
+
 def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -> Finding | None:
     if mv is None:
         # Optional threshold + no observation → nothing to say (only a present-but-failing value
@@ -217,12 +243,15 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -
         verdict = Verdict.HOLD
         qualifier = "is borderline against" if borderline else "misses"
 
-    # DISPLAY in the operator-facing raw unit (option 2 / schemas.md units contract): the
-    # observed value as the tool reported it, and the canonical thresholds rendered back
-    # into that same unit so the message reads naturally (e.g. "84.1%; gate >= 85%").
+    # DISPLAY in the operator-facing unit (schemas.md units contract): the observed value and the
+    # canonical thresholds rendered into the runbook DISPLAY unit (`threshold.unit`) so the message
+    # reads naturally (e.g. "84.1%; gate >= 85%"). Converts from the CANONICAL value — not the raw
+    # value — via the same normalized→display path card_readout uses, so a fraction-raw metric
+    # (raw_unit "fraction", display "%") no longer renders 100x too small (0.85% -> 85%).
     reg = default_registry()
-    disp_gate = reg.denormalize(threshold.our_key, threshold.gate, mv.raw_unit)
-    disp_hard = reg.denormalize(threshold.our_key, threshold.hard_fail, mv.raw_unit)
+    disp_value = _to_display_unit(reg, threshold.our_key, mv.normalized_value, threshold.unit)
+    disp_gate = _to_display_unit(reg, threshold.our_key, threshold.gate, threshold.unit)
+    disp_hard = _to_display_unit(reg, threshold.our_key, threshold.hard_fail, threshold.unit)
     direction = "≥" if threshold.higher_is_better else "≤"
     return Finding(
         rule_id=f"QC-{threshold.metric.upper()}",
@@ -231,7 +260,7 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -
         severity=severity,
         title=f"{threshold.label} {qualifier} the QC gate",
         detail=(
-            f"{threshold.label} for {sid} is {mv.raw_value:g}{threshold.unit}; runbook gate is "
+            f"{threshold.label} for {sid} is {disp_value:g}{threshold.unit}; runbook gate is "
             f"{direction} {disp_gate:g}{threshold.unit} "
             f"(hard-fail {disp_hard:g}{threshold.unit})."
         ),
@@ -239,7 +268,7 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -
             Evidence(
                 source="qc_metrics.csv",
                 locator=f"{sid}.{threshold.metric}",
-                value=f"{mv.raw_value:g}{threshold.unit}",
+                value=f"{disp_value:g}{threshold.unit}",
                 expected=f"{direction} {disp_gate:g}{threshold.unit}",
                 source_kind=SourceKind.METRIC,
                 source_field=threshold.metric,

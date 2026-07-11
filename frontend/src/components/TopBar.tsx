@@ -1,34 +1,13 @@
 import { ArrowLeft, ChevronDown, Search } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { api } from '../api'
+import { useApiHealth, type Health } from '../hooks/useApiHealth'
 import type { RunSummary } from '../types'
 import { RUN_STATUS_META } from '../verdict'
 import { NotificationBell } from './NotificationBell'
 
-// Real system state: poll the read-API's health so the top-bar pill reflects actual reachability
-// instead of a hardcoded "Ready" (honest status, not a mock). Ready = API answered; Offline = it
-// didn't (the frontend can't reach the backend). Checked on mount + every 20s.
-type Health = 'checking' | 'ready' | 'offline'
-function useApiHealth(): Health {
-  const [state, setState] = useState<Health>('checking')
-  useEffect(() => {
-    let live = true
-    const check = () =>
-      api
-        .health()
-        .then((h) => live && setState(h.status === 'ok' ? 'ready' : 'offline'))
-        .catch(() => live && setState('offline'))
-    check()
-    const t = window.setInterval(check, 20_000)
-    return () => {
-      live = false
-      window.clearInterval(t)
-    }
-  }, [])
-  return state
-}
-
+// Top-bar reachability pill labels, driven by the shared real health poll (useApiHealth). Ready =
+// API answered ok; Offline = it didn't; Checking = first poll in flight.
 const HEALTH_META: Record<Health, { label: string; dot: string; tip: string }> = {
   checking: { label: 'Checking…', dot: 'bg-line-strong', tip: 'Checking the read-API…' },
   ready: { label: 'Ready', dot: 'bg-proceed', tip: 'The read-API is reachable.' },

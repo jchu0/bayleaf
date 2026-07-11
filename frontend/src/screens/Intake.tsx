@@ -349,7 +349,7 @@ function SampleAdmission({
           // analogue of the mock's pct/25 — real % reads-identified is already high and
           // consistent, so bars read at comparable lengths with room for status + action.
           const overrideNote = admitted
-            ? 'Admitted below the yield target by manual override — recorded on the run.'
+            ? 'Admitted below the yield target by manual override — recorded locally this session (not persisted).'
             : 'Below the yield target. Admit only if the low yield is expected for this sample.'
 
           return (

@@ -31,7 +31,6 @@ import type {
   RunbookPolicy,
   RunInputsCatalog,
   RunPipelineAck,
-  RunPipelineBody,
   RunStatus,
   RunSummary,
   RunsPage,
@@ -180,6 +179,18 @@ async function fetchTicketsPage(opts: TicketsQuery = {}): Promise<TicketsPage> {
 
 const enc = encodeURIComponent
 
+// The body POST /api/pipelines/run accepts: a run NAMES a saved pipeline (its APPROVED baseline is
+// resolved + compiled server-side), never a raw graph. `version` optionally pins an exact approved
+// revision. Defined here (not types.ts) so the client owns its request shape — mirrors TicketsQuery.
+export type RunPipelineArgs = {
+  name: string
+  version?: number
+  run_id: string
+  sample?: string
+  platform?: string
+  inputs: { reads?: string; reference?: string; panel_bed?: string }
+}
+
 export const api = {
   // ── intake: submit a run for processing (the execution boundary) ──
   submitRun: (body: SubmitRunIn) => write<SubmitRunAck>('/api/runs', 'POST', body),
@@ -240,7 +251,10 @@ export const api = {
 
   // ── operator-driven execution of a composed pipeline (ADR-0003; reviewer/approver-gated) ──
   runInputs: () => get<RunInputsCatalog>('/api/pipelines/run/inputs'),
-  runPipeline: (body: RunPipelineBody) =>
+  // The approval gate (ADR-0014): a run NAMES a saved pipeline; the backend compiles + runs that
+  // pipeline's APPROVED (emitted) baseline — never a raw client graph. `version` optionally pins an
+  // exact approved revision (omitted → latest approved). 409 if the pipeline has no approved version.
+  runPipeline: (body: RunPipelineArgs) =>
     write<RunPipelineAck>('/api/pipelines/run', 'POST', body),
   runStatus: (runId: string) =>
     get<PipelineRunStatus>(`/api/pipelines/run/${enc(runId)}`),

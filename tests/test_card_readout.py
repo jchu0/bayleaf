@@ -23,6 +23,7 @@ from api.card_readout import (
 )
 from pipeguard import DEFAULT_RUNBOOK, DecisionCard, run_gate_from_dir
 from pipeguard.models import CanonicalUnit, Gate, MetricValue, Verdict
+from pipeguard.rules import _evaluate_metric
 
 _RUN_DIR = "data/mock_run_01"
 
@@ -152,6 +153,25 @@ def test_hard_fail_status() -> None:
     assert row.flagged is True
     assert row.within_borderline_band is False
     assert row.observed_display == "60%"
+
+
+def test_fraction_metric_agrees_with_rules_finding_display() -> None:
+    """SCI-01 regression: the QC-readout side-channel and the rules.py finding text must render a
+    fraction-raw metric (breadth_20x, raw_unit 'fraction', display '%') the SAME way — as percent,
+    not 100x too small. Both surfaces convert normalized_value → the display unit, so a failing
+    breadth_20x=0.85 reads '85%' with gate '90%' on both, never '0.85%' / '0.9%'."""
+    mv = _metric("qc.breadth_20x", 0.85, CanonicalUnit.FRACTION)  # 0.85 < gate 0.90, > hard 0.80
+    row = build_qc_readout(_synthetic_card(mv), DEFAULT_RUNBOOK).gates[0].rows[0]
+    assert row.status is ReadoutStatus.BORDERLINE
+    assert row.observed_display == "85%"
+    assert row.threshold_display == ">= 90%"
+    assert row.hard_fail_display == "< 80%"
+
+    # The deterministic rule's finding text must agree with the readout, digit for digit.
+    finding = _evaluate_metric("SYN", DEFAULT_RUNBOOK.threshold_for("breadth_20x"), mv)
+    assert finding is not None
+    assert finding.evidence[0].value == row.observed_display  # both "85%"
+    assert "≥ 90%" in finding.detail and "hard-fail 80%" in finding.detail
 
 
 def test_ungated_metric_is_marked_not_gated_never_guessed() -> None:

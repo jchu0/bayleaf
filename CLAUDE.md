@@ -215,7 +215,16 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    tools on PATH, injected via `PIPEGUARD_BIOCONDA_BIN`. Also new: `POST /api/pipelines/compile`
    (`api/routers/nextflow.py`, stateless/off-gate) compiles the Builder's live graph → the same
    bundle as JSON (preview) or a `.zip`, surfaced by a Builder "Export to Nextflow" toolbar button
-   (`NextflowExportModal`) — a cycle/bad/empty graph 422s with the compiler's reason. `GET
+   (`NextflowExportModal`) — a cycle/bad/empty graph 422s with the compiler's reason. A
+   **second execution path** sits beside the intake boundary above: `POST /api/pipelines/run`
+   (`api/routers/pipeline_run.py`, mounted `api/main.py:98`, UI-wired `api.ts`→the Builder "Run"
+   action in `BuilderModals.tsx`) is the Pipeline-Builder **Run** endpoint
+   (`require_role("reviewer", "approver")`) — it compiles the operator's live canvas graph and
+   runs it via the same Nextflow driver (202 + `GET /api/pipelines/run/{id}` poll), distinct from
+   `pipelines_lifecycle.py`'s Save→Submit→Approve profile flow (which governs locators/dry-run/diff,
+   not this executable graph). It currently runs the submitted graph without an approved-status
+   check; a per-pipeline **approval gate** (W1) is being added so only an approved pipeline version
+   runs. `GET
    /api/runbook`'s `RunbookThreshold` now also carries `pipeline_gate` (the registry gate)
    distinct from the numeric `gate` value, powering the decision card's honest three-gate
    (preflight/qc/variant) readout with an empty-state note where a gate has no metric table —

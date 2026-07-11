@@ -9,7 +9,10 @@ Human operators absolutely CAN execute (that is the point). The guardrails this 
 decision **core** (``src/pipeguard/``) stays framework-agnostic (never shells out) — the execution
 is orchestrated by Nextflow from this API/driver layer, exactly like the intake endpoint.
 
-Inputs are chosen by KEY from a server-side catalog of what is actually present (never a raw
+Only an APPROVED pipeline version runs (the approval gate, ADR-0014): the body NAMES a saved
+pipeline, and the run compiles + executes that pipeline's approver-blessed (``emitted``) baseline
+resolved from the pipeline store — never a raw client-posted graph, so an unapproved draft can't
+run. Inputs are chosen by KEY from a server-side catalog of what is actually present (never a raw
 client path — traversal-safe by construction). The graph's required input kinds are validated
 against what the operator supplied, so a run can't start missing its reads/reference.
 """
@@ -24,11 +27,13 @@ import threading
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from api.auth import Actor, require_role
+from api.pipeline_store import PipelineGraphStore, get_pipeline_store, last_emitted
 from api.routers.nextflow import CompileRequest
 from pipeguard.nextflow import NfEdge, NfGraph, NfNode, compile_graph, required_inputs
 from pipeguard.nextflow.compiler import CompileError
@@ -130,7 +135,11 @@ class RunInputsChoice(BaseModel):
 
 class RunPipelineIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    graph: CompileRequest
+    # Run the APPROVED baseline of THIS saved pipeline (never a raw posted graph) — the approval
+    # gate: only an approver-blessed version may execute (ADR-0014/0001). `name` is the saved
+    # pipeline's slug; `version` optionally pins an exact approved revision (else latest approved).
+    name: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    version: int | None = Field(default=None, ge=1)
     run_id: str
     sample: str = "HG002"
     platform: str = "HiSeq 2500"
@@ -157,6 +166,40 @@ def _to_graph(req: CompileRequest) -> NfGraph:
     )
 
 
+def _resolve_approved(store: PipelineGraphStore, name: str, version: int | None) -> dict[str, Any]:
+    """Resolve the APPROVED (emitted) stored envelope for ``name`` — the run's execution contract.
+
+    The approval gate (ADR-0014): only an approver-blessed version may run. Approval stamps
+    ``emitted_at`` on that version (``record_emission``), so "approved baseline" = the emitted
+    snapshot. ``version`` pins an exact approved revision; omitted → the newest emitted one
+    (``last_emitted``). A name with no emitted version (never approved, or unknown) is a **409** —
+    the gate, not a silent bypass. A store backend hiccup degrades to a generic 503 (never leaks a
+    path/DSN — mirrors the save/lifecycle routers).
+    """
+    try:
+        if version is None:
+            record = last_emitted(store, name)
+        else:
+            record = next(
+                (
+                    r
+                    for r in store.get_versions(name)
+                    if int(r.get("version") or 0) == version and r.get("emitted_at")
+                ),
+                None,
+            )
+    except Exception:  # store backend hiccup → generic 503, never leak a path/DSN
+        raise HTTPException(status_code=503, detail="pipeline store unavailable") from None
+    if record is None:
+        detail = (
+            f"no approved version of pipeline '{name}' — submit and approve it before running"
+            if version is None
+            else f"version {version} of pipeline '{name}' is not approved"
+        )
+        raise HTTPException(status_code=409, detail=detail)
+    return record
+
+
 @router.get("/pipelines/run/inputs")
 def list_run_inputs() -> RunInputsCatalog:
     """The server-side inputs an operator can pick from (only what is present on disk)."""
@@ -175,20 +218,28 @@ def run_pipeline(
     body: RunPipelineIn,
     actor: Actor = Depends(require_role("reviewer", "approver")),
 ) -> RunPipelineAck:
-    """Compile the operator's graph and RUN it via Nextflow against their chosen inputs (202; poll
-    ``GET /api/pipelines/run/{run_id}``). Compose ≠ execute holds at the CORE — the driver, not
-    ``src/pipeguard/``, orchestrates Nextflow."""
+    """Run a saved pipeline's APPROVED baseline via Nextflow against the operator's chosen inputs
+    (202; poll ``GET /api/pipelines/run/{run_id}``). The approval gate (ADR-0014): the body NAMES a
+    saved pipeline — the run compiles + executes that pipeline's approver-blessed (``emitted``)
+    snapshot from the store, so an unapproved draft can never run (409 if none). Compose ≠ execute
+    holds at the CORE — the driver, not ``src/pipeguard/``, orchestrates Nextflow."""
     run_id = body.run_id.strip()
     if not _RUN_ID_RE.match(run_id):
         raise HTTPException(status_code=422, detail="run_id must be a slug (A-Za-z0-9._-)")
     if (_DATA / run_id).exists():
         raise HTTPException(status_code=409, detail=f"run '{run_id}' already exists")
 
-    graph = _to_graph(body.graph)
+    # The approval gate: resolve the approved (emitted) snapshot for this name and compile THAT
+    # graph — never a client-posted one (409 if the pipeline has no approved version, ADR-0014).
+    record = _resolve_approved(get_pipeline_store(), body.name, body.version)
+    graph_dict = record.get("graph") or {}
     try:
+        graph = _to_graph(CompileRequest.model_validate({**graph_dict, "name": body.name}))
         bundle = compile_graph(graph)
-    except CompileError as exc:
-        raise HTTPException(status_code=422, detail=f"cannot compile graph: {exc}") from exc
+    except (CompileError, ValidationError, ValueError) as exc:
+        raise HTTPException(
+            status_code=422, detail=f"cannot compile approved pipeline '{body.name}': {exc}"
+        ) from exc
 
     # Validate the operator supplied every input KIND the graph consumes, and resolve each choice to
     # a real server-side path by KEY (never a raw client path — traversal-safe).

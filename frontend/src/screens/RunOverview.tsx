@@ -7,6 +7,7 @@ import { DateRangePicker } from '../components/DateRangePicker'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { Tabs } from '../components/Tabs'
+import { useApiHealth, type Health } from '../hooks/useApiHealth'
 import type { RunStatus, RunSummary } from '../types'
 import { RUN_STATUS_META as STATUS_META, VERDICT_BAR, VERDICT_LABEL } from '../verdict'
 
@@ -124,17 +125,40 @@ function RunCard({ run }: { run: RunSummary }) {
   )
 }
 
+// The hero gate-health indicator: green ONLY when the read-API actually answers ok. It reads the
+// same real health poll as the TopBar pill (useApiHealth), so it can never show "online" while the
+// backend is down — the prior hardcoded green dot lied during an outage.
+const GATE_HEALTH_META: Record<Health, { label: string; dot: string; ring: string; tip: string }> = {
+  checking: { label: 'Checking gate…', dot: 'bg-line-strong', ring: '', tip: 'Checking the read-API…' },
+  ready: {
+    label: 'Gate online',
+    dot: 'bg-proceed',
+    ring: 'shadow-[0_0_0_3px_var(--color-proceed-bg)]',
+    tip: 'The read-API is reachable.',
+  },
+  offline: {
+    label: 'Gate offline',
+    dot: 'bg-escalate',
+    ring: 'shadow-[0_0_0_3px_var(--color-escalate-bg)]',
+    tip: 'The read-API is not reachable.',
+  },
+}
+
 // Static title block — renders during loading/error too, so the shell stays stable. The nav names
-// the page, so UIC-1 drops the eyebrow + descriptive subtitle; only the live "Gate online" status
-// (an operational health indicator, not flavor prose) stays in the actions slot.
+// the page, so UIC-1 drops the eyebrow + descriptive subtitle; only the gate-health status (a real
+// operational health indicator, not flavor prose) stays in the actions slot.
 function RunsHeader() {
+  const meta = GATE_HEALTH_META[useApiHealth()]
   return (
     <PageHeader
       title="Sequencing runs"
       actions={
-        <span className="flex items-center gap-2 whitespace-nowrap text-[12px] text-text-3">
-          <span className="h-[7px] w-[7px] rounded-full bg-proceed shadow-[0_0_0_3px_var(--color-proceed-bg)]" />
-          Gate online
+        <span
+          className="flex items-center gap-2 whitespace-nowrap text-[12px] text-text-3"
+          title={meta.tip}
+        >
+          <span className={`h-[7px] w-[7px] rounded-full ${meta.dot} ${meta.ring}`} />
+          {meta.label}
         </span>
       }
     />

@@ -1,11 +1,13 @@
-"""Operator-driven pipeline execution — POST /api/pipelines/run (ADR-0003).
+"""Operator-driven pipeline execution — POST /api/pipelines/run (ADR-0003/0014).
 
 Pins the guardrails that make operator execution safe WITHOUT running Nextflow in the offline
-suite: it is role-gated (a viewer is refused), the run id is a slug, the graph must compile, and
+suite. The APPROVAL GATE (ADR-0014) is the headline: a run NAMES a saved pipeline and executes that
+pipeline's approver-blessed (``emitted``) baseline resolved from the store — never a raw client
+graph, so an unapproved draft is a 409 and a posted ``graph`` is rejected outright. Beyond the gate
+it is role-gated (a viewer is refused), the run id is a slug, the approved graph must compile, and
 every input KIND the graph needs must be supplied by a KEY that resolves to a real server-side file
 (never a raw client path — traversal-safe). The happy path is tested with the background executor
-monkeypatched to a no-op (the real `nextflow run` is exercised live, out of band). A human operator
-absolutely CAN execute — this only checks they can't start a broken/underspecified run.
+monkeypatched to a no-op (the real ``nextflow run`` is exercised live, out of band).
 """
 
 from __future__ import annotations
@@ -21,20 +23,65 @@ client = TestClient(app)
 
 _REVIEWER = {"X-PipeGuard-Role": "reviewer", "X-PipeGuard-Actor": "a.rivera"}
 
-
-def _body(run_id: str = "RUN-TEST-EXEC", **inputs: str) -> dict[str, Any]:
-    nodes = [
+# A minimal compilable graph in the saved-envelope shape (fastp → bwa-mem2): needs reads + a
+# reference. Extra envelope keys a real save carries (locators, x/y on nodes, …) are ignored by the
+# compile path (CompileRequest tolerates extras) — the store round-trips them, the compiler skips.
+_GRAPH: dict[str, Any] = {
+    "nodes": [
         {"id": "n_fastp", "name": "fastp", "ins": ["fastq"], "outs": ["fastp_json", "fastq"]},
         {"id": "n_bwa", "name": "bwa-mem2", "ins": ["fastq", "reference_fasta"], "outs": ["bam"]},
-    ]
-    edges = [{"from": {"node": "n_fastp", "idx": 1}, "to": {"node": "n_bwa", "idx": 0}}]
-    chosen = inputs or {"reads": "hg002-panel", "reference": "grch38-chr20"}
-    return {
-        "graph": {"name": "exec-test", "nodes": nodes, "edges": edges},
-        "run_id": run_id,
-        "sample": "HG002",
-        "inputs": chosen,
+    ],
+    "edges": [{"from": {"node": "n_fastp", "idx": 1}, "to": {"node": "n_bwa", "idx": 0}}],
+}
+
+
+def _record(
+    name: str, version: int, *, approved: bool, graph: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """One stored pipeline envelope. ``approved`` stamps ``emitted_at`` (the approval marker)."""
+    rec: dict[str, Any] = {
+        "id": f"{name}-{version}",
+        "name": name,
+        "version": version,
+        "schema_version": "builder/0.1",
+        "created_at": "2026-07-11T00:00:00+00:00",
+        "graph": _GRAPH if graph is None else graph,
+        "status": "approved" if approved else "draft",
     }
+    if approved:
+        rec["emitted_at"] = "2026-07-11T00:00:00+00:00"
+    return rec
+
+
+class _FakeStore:
+    """In-memory PipelineGraphStore (only the methods the resolver / ``last_emitted`` reach)."""
+
+    def __init__(self, records: list[dict[str, Any]]) -> None:
+        self._records = records
+
+    def get_versions(self, name: str) -> list[dict[str, Any]]:
+        return sorted(
+            (r for r in self._records if r.get("name") == name),
+            key=lambda r: int(r.get("version") or 0),
+        )
+
+    def list(self, name: str | None = None) -> list[dict[str, Any]]:
+        return [r for r in self._records if name is None or r.get("name") == name]
+
+    def append(self, record: dict[str, Any]) -> dict[str, Any]:
+        self._records.append(record)
+        return record
+
+
+def _seed(monkeypatch: Any, *records: dict[str, Any]) -> None:
+    """Point the endpoint's store factory at a fake store holding ``records``."""
+    store = _FakeStore(list(records))
+    monkeypatch.setattr(pr, "get_pipeline_store", lambda: store)
+
+
+def _body(run_id: str = "RUN-TEST-EXEC", name: str = "exec-test", **inputs: str) -> dict[str, Any]:
+    chosen = inputs or {"reads": "hg002-panel", "reference": "grch38-chr20"}
+    return {"name": name, "run_id": run_id, "sample": "HG002", "inputs": chosen}
 
 
 def test_list_inputs_surfaces_present_server_side_inputs() -> None:
@@ -53,18 +100,55 @@ def test_run_requires_reviewer_or_approver() -> None:
     assert denied.status_code == 403
 
 
+def test_run_rejects_a_posted_graph_no_bypass() -> None:
+    # The approval gate closes the old bypass: a client can't smuggle a raw graph to run (forbid).
+    resp = client.post(
+        "/api/pipelines/run",
+        json={**_body(), "graph": {"name": "x", "nodes": [], "edges": []}},
+        headers=_REVIEWER,
+    )
+    assert resp.status_code == 422
+
+
 def test_run_rejects_a_bad_run_id() -> None:
     resp = client.post("/api/pipelines/run", json=_body(run_id="../etc"), headers=_REVIEWER)
     assert resp.status_code == 422 and "slug" in resp.json()["detail"]
 
 
-def test_run_requires_every_input_kind_the_graph_consumes() -> None:
-    # The graph needs reads + a reference; supply only reads → 422 naming the missing category.
+def test_run_409_when_pipeline_has_no_approved_version(monkeypatch: Any) -> None:
+    # A draft-only pipeline (never approved) can't run — the gate is a 409, not a silent bypass.
+    _seed(monkeypatch, _record("exec-test", 1, approved=False))
+    resp = client.post("/api/pipelines/run", json=_body(), headers=_REVIEWER)
+    assert resp.status_code == 409 and "no approved version" in resp.json()["detail"]
+
+
+def test_run_409_when_pipeline_is_unknown(monkeypatch: Any) -> None:
+    _seed(monkeypatch)  # empty store
+    resp = client.post("/api/pipelines/run", json=_body(name="never-saved"), headers=_REVIEWER)
+    assert resp.status_code == 409 and "no approved version" in resp.json()["detail"]
+
+
+def test_run_409_when_pinned_version_is_not_approved(monkeypatch: Any) -> None:
+    # v1 approved, but the client pins v2 (only pending) → 409 naming the version.
+    _seed(
+        monkeypatch,
+        _record("exec-test", 1, approved=True),
+        _record("exec-test", 2, approved=False),
+    )
+    body = {**_body(), "version": 2}
+    resp = client.post("/api/pipelines/run", json=body, headers=_REVIEWER)
+    assert resp.status_code == 409 and "version 2" in resp.json()["detail"]
+
+
+def test_run_requires_every_input_kind_the_approved_graph_consumes(monkeypatch: Any) -> None:
+    # The approved graph needs reads + a reference; supply only reads → 422 naming the missing cat.
+    _seed(monkeypatch, _record("exec-test", 1, approved=True))
     resp = client.post("/api/pipelines/run", json=_body(reads="hg002-panel"), headers=_REVIEWER)
     assert resp.status_code == 422 and "reference" in resp.json()["detail"]
 
 
-def test_run_rejects_an_unknown_input_key() -> None:
+def test_run_rejects_an_unknown_input_key(monkeypatch: Any) -> None:
+    _seed(monkeypatch, _record("exec-test", 1, approved=True))
     resp = client.post(
         "/api/pipelines/run",
         json=_body(reads="hg002-panel", reference="does-not-exist"),
@@ -73,9 +157,10 @@ def test_run_rejects_an_unknown_input_key() -> None:
     assert resp.status_code == 422 and "unknown reference" in resp.json()["detail"]
 
 
-def test_run_happy_path_compiles_materializes_and_queues(tmp_path: Any, monkeypatch: Any) -> None:
+def test_run_happy_path_compiles_the_approved_graph(tmp_path: Any, monkeypatch: Any) -> None:
     # Monkeypatch the background executor to a no-op so the offline test never runs Nextflow, and
     # redirect the scratch dir into tmp so nothing lands in the repo.
+    _seed(monkeypatch, _record("exec-test", 3, approved=True))
     monkeypatch.setattr(pr, "_NF_RUNS", tmp_path / ".nf-runs")
     called: dict[str, Any] = {}
 
@@ -85,18 +170,33 @@ def test_run_happy_path_compiles_materializes_and_queues(tmp_path: Any, monkeypa
 
     monkeypatch.setattr(pr, "_execute", _fake_execute)
 
-    body = _body(run_id="RUN-TEST-EXEC-OK")
-    resp = client.post("/api/pipelines/run", json=body, headers=_REVIEWER)
+    resp = client.post(
+        "/api/pipelines/run", json=_body(run_id="RUN-TEST-EXEC-OK"), headers=_REVIEWER
+    )
     assert resp.status_code == 202
     ack = resp.json()
     assert ack["status"] == "queued"
     assert ack["steps"][:2] == ["FASTP", "BWA_MEM2_MEM"]
-    # The compiled pipeline was materialized to the scratch dir before the job was handed off.
+    # The compiled APPROVED pipeline was materialized to scratch before the job was handed off.
     main_nf = tmp_path / ".nf-runs" / "RUN-TEST-EXEC-OK" / "pipeline" / "main.nf"
     assert main_nf.is_file() and "BWA_MEM2_MEM(FASTP.out.fastq" in main_nf.read_text()
     # Status is queryable.
     status = client.get("/api/pipelines/run/RUN-TEST-EXEC-OK").json()
     assert status["status"] in {"queued", "running", "complete", "failed"}
+
+
+def test_run_pins_an_exact_approved_version(tmp_path: Any, monkeypatch: Any) -> None:
+    # Two approved versions on file; pinning v2 runs that exact revision (not the latest).
+    _seed(
+        monkeypatch,
+        _record("exec-test", 2, approved=True),
+        _record("exec-test", 3, approved=True),
+    )
+    monkeypatch.setattr(pr, "_NF_RUNS", tmp_path / ".nf-runs")
+    monkeypatch.setattr(pr, "_execute", lambda *a, **k: None)
+    body = {**_body(run_id="RUN-TEST-PIN"), "version": 2}
+    resp = client.post("/api/pipelines/run", json=body, headers=_REVIEWER)
+    assert resp.status_code == 202 and resp.json()["status"] == "queued"
 
 
 def test_status_unknown_job_is_404() -> None:
