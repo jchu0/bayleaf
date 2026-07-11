@@ -1061,12 +1061,12 @@ function ConnBox({ cat, title, rows, top }: { cat: BoxCat; title: string; rows: 
         className="grid gap-x-2.5"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rowsPerCol}, ${LIST_ROW_H}px)`, gridAutoFlow: 'column' }}
       >
-        {rows.map((r) => (
-          <div key={r.pidx} className="flex items-center gap-1">
+        {rows.map((r, ri) => (
+          <div key={ri} className="flex items-center gap-1">
             <span className="flex shrink-0 items-center gap-0.5">
-              {r.cidxs.map((c) => (
+              {r.cidxs.map((c, ci) => (
                 <span
-                  key={c}
+                  key={ci}
                   className="inline-grid h-[13px] w-[13px] place-items-center rounded-full bg-card text-[7.5px] font-bold leading-none text-text-2"
                   style={{ border: `1px solid ${kindColor(r.kind)}` }}
                 >
@@ -1168,11 +1168,11 @@ function ToolCard({ t, isView, selected, onSelect }: { t: Tool; isView: boolean;
       </div>
       {/* Stage strip — a thin stage-coloured line under the header (mockup .strip). */}
       <span className="absolute left-[3px] right-0 h-1" style={{ top: CARD_HEADER_H, background: stageHex, borderRadius: '0 3px 0 0' }} />
-      {laid.map((p) => (
-        <StaticPort key={p.pidx} p={p} />
+      {laid.map((p, i) => (
+        <StaticPort key={i} p={p} />
       ))}
-      {laid.map((p) => (
-        <PortIndexChip key={`c${p.pidx}`} p={p} w={TW} />
+      {laid.map((p, i) => (
+        <PortIndexChip key={`c${i}`} p={p} w={TW} />
       ))}
       <CardBoxes laid={laid} />
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 border-t border-line px-3" style={{ height: CARD_FOOTER_H }}>
@@ -1554,11 +1554,11 @@ function UserCard({
           optional) carry data-* so drag-to-connect resolves a drop via elementFromPoint; out ports
           start a wire on mousedown, in/out both arm click-to-connect. RESERVED ports render but are
           NON-connectable — no data-* (elementFromPoint ignores them) and no handlers. */}
-      {laid.map((p) => {
+      {laid.map((p, i) => {
         if (p.state === 'reserved') {
           return (
             <span
-              key={p.cidx}
+              key={i}
               className="pointer-events-none absolute"
               title={`#${p.cidx} · ${p.kind} · ${p.dir} · reserved`}
               style={{ ...portBoxStyle(p), borderWidth: 1.5, borderStyle: 'solid', zIndex: 4, ...portVisualStyle(p) }}
@@ -1568,7 +1568,7 @@ function UserCard({
         const armed = connectFrom === `${n.id}|${p.dir}|${p.idx}`
         return (
           <span
-            key={p.cidx}
+            key={i}
             data-port="1"
             data-node={n.id}
             data-side={p.dir}
@@ -1595,8 +1595,8 @@ function UserCard({
           />
         )
       })}
-      {laid.map((p) => (
-        <PortIndexChip key={`c${p.cidx}`} p={p} w={UW} />
+      {laid.map((p, i) => (
+        <PortIndexChip key={`c${i}`} p={p} w={UW} />
       ))}
       {/* ADVISORY agent-attach point (item 2) — a small dashed-accent badge hugging the top-right corner,
           DISTINCT from the half-circle data ports (an advisory link, not a data edge). Click toggles the
