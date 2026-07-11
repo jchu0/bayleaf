@@ -74,7 +74,7 @@ const AGENT_X = 1180
 const AGENT_Y = 940
 const AGENT_W = 236
 const AGENT_H = 96
-const GATE_PORT_Y = GATE_Y + 36 // the gate's non-composable run/ input port (item 4 display connector)
+// (INGEST_X/Y, GATE_X/Y, AGENT_X/Y are the SEED positions for the movable terminal cards — PASS-4 B.)
 // Advisory attach badge — a small dashed-accent marker hugging each TOOL card's top-right corner (clear
 // of the typed data ports + the delete button), distinct from the half-circle data ports. Its centre is
 // the advisory-edge endpoint on the tool side.
@@ -257,6 +257,16 @@ export function BuilderCanvas(props: CanvasProps) {
       return next
     })
   }, [])
+  // (PASS-4 B) The three special cards — ingest / gate / agent — are now MOVABLE like tool cards, but their
+  // positions live in CANVAS-LOCAL state (like the advisory Set), NOT in the graph. They are NEVER added to
+  // userNodes/userEdges/the saved graph/the Nextflow compile input — movable ≠ composable (ADR-0001): the
+  // gate stays the deterministic terminal, the agent stays advisory, ingest stays the boundary. Seeded from
+  // the layout landmarks; a drag rewrites x/y; nothing here persists in the pipeline version.
+  const [termPos, setTermPos] = useState<{ ingest: { x: number; y: number }; gate: { x: number; y: number }; agent: { x: number; y: number } }>({
+    ingest: { x: INGEST_X, y: INGEST_Y },
+    gate: { x: GATE_X, y: GATE_Y },
+    agent: { x: AGENT_X, y: AGENT_Y },
+  })
 
   // Center the viewport on the pipeline once on mount (README §6: "loads centered").
   useEffect(() => {
@@ -417,30 +427,23 @@ export function BuilderCanvas(props: CanvasProps) {
     return { d: routeEdge(a, b).d, color: kindColor(tk) }
   }).filter((e): e is { d: string; color: string } => e != null)
 
-  // Item 4 — non-composable DISPLAY connectors for the terminal cluster (norm/MultiQC → ingest → gate).
-  // These are pure SVG, seeded-view only; they are NEVER UserEdges and never touch the wiring model.
-  // In the spine+branch layout the gate sits between the two rows: norm (spine, upper) enters the ingest
-  // left near its top; MultiQC (branch, lower) rises just left of the File-output sink then enters the
-  // ingest left lower down; ingest → gate lands on the gate's run/ port. No dip needed (MultiQC is no
-  // longer between norm and ingest).
-  const termConnectors: string[] = []
-  if (showTerminals) {
-    const normOut = toolAnchorFull('n_norm', 'out', 'filtered_vcf')
-    const mqOut = toolAnchorFull('n_multiqc', 'out', 'multiqc_json')
-    const ingY = INGEST_Y + INGEST_H / 2
-    if (normOut) termConnectors.push(`M${normOut.x} ${normOut.y} H${INGEST_X - 24} V${INGEST_Y + 38} H${INGEST_X}`)
-    if (mqOut) termConnectors.push(`M${mqOut.x} ${mqOut.y} V${INGEST_Y + INGEST_H - 38} H${INGEST_X}`)
-    termConnectors.push(`M${INGEST_X + INGEST_W} ${ingY} H${INGEST_X + INGEST_W + 16} V${GATE_PORT_Y} H${GATE_X - PORT_R}`)
-  }
-  // Advisory fan-out (replaces the old gate↔agent tether): the agent card links to EACH attached tool via
-  // a DISTINCT dotted accent line — visually + semantically apart from the solid kind-coloured DATA wires,
+  // (PASS-4 A) The hardcoded dotted TERMINAL connectors — norm/MultiQC → ingest → gate, drawn from fixed
+  // INGEST/GATE geometry — are REMOVED, along with the gate's fake run/ half-circle input. With the three
+  // terminal cards now free-floating + movable (PASS-4 B), those canvas-anchored tethers no longer made
+  // sense (they'd detach on a drag) and were pure decoration; the gate reads run/ via deterministic ingest,
+  // which is a boundary fact, not a drawn edge. The ADVISORY agent→tool links below are kept (real,
+  // position-tracking, ADR-0001) — they are NOT terminal tethers.
+
+  // Advisory fan-out (the ONLY dotted links that remain): the agent card links to EACH attached tool via a
+  // DISTINCT dotted accent line — visually + semantically apart from the solid kind-coloured DATA wires,
   // reflecting that the agent OBSERVES/advises but never carries data or sets a verdict (ADR-0001). ONE
   // agent → MANY tools: a fan-out port per attached tool, placed nearest that tool (like a multi-out ref).
+  // The fan reads the agent's CURRENT (movable) position, so the links track the agent card as it's dragged.
   const attachedTools = showTerminals
     ? userNodes.filter((n) => advisoryAttach.has(n.id) && n.ins.length > 0 && n.outs.length > 0)
     : []
   const toolBadgeOf = (n: UserNode) => ({ x: n.x + ADV_BADGE_DX, y: n.y + ADV_BADGE_DY })
-  const agentFan = fanPortsToTargets({ x: AGENT_X, y: AGENT_Y, w: AGENT_W, h: AGENT_H }, attachedTools.map(toolBadgeOf))
+  const agentFan = fanPortsToTargets({ x: termPos.agent.x, y: termPos.agent.y, w: AGENT_W, h: AGENT_H }, attachedTools.map(toolBadgeOf))
   const advisoryEdges = attachedTools.map((n, i) => ({ from: agentFan[i], to: toolBadgeOf(n) }))
 
   // Convert a viewport point to CONTENT coords: subtract the inner plane's on-screen origin and
@@ -520,6 +523,45 @@ export function BuilderCanvas(props: CanvasProps) {
     document.addEventListener('mouseup', up)
   }
 
+  // ── Terminal-card drag (PASS-4 B) ── ingest / gate / agent move like tool cards, but into canvas-local
+  // termPos (never the graph). Mirrors the user-node drag: a <3px press is a click → select (no move); a
+  // real drag moves it, snapped to 20px and clamped into the full canvas incl. margins. In View or connect
+  // mode it just selects (matching how tool cards behave in View).
+  const TERM_SELECT = { ingest: 'i_ingest', gate: 'g_gate', agent: ADVISORY_AGENT.id } as const
+  const startTermDrag = (which: 'ingest' | 'gate' | 'agent', e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (isView || connectMode) {
+      props.onSelect(TERM_SELECT[which])
+      return
+    }
+    e.preventDefault()
+    const base = termPos[which]
+    const z = zoomRef.current || 1
+    const ox = e.clientX
+    const oy = e.clientY
+    let moved = false
+    const move = (ev: MouseEvent) => {
+      if (!moved && Math.hypot(ev.clientX - ox, ev.clientY - oy) < 3) return
+      moved = true
+      const dx = (ev.clientX - ox) / z
+      const dy = (ev.clientY - oy) / z
+      setTermPos((tp) => ({ ...tp, [which]: { x: base.x + dx, y: base.y + dy } }))
+    }
+    const up = () => {
+      document.removeEventListener('mousemove', move)
+      document.removeEventListener('mouseup', up)
+      if (!moved) {
+        props.onSelect(TERM_SELECT[which])
+        return
+      }
+      setTermPos((tp) => ({ ...tp, [which]: { x: Math.max(-360, Math.round(tp[which].x / 20) * 20), y: Math.max(-480, Math.round(tp[which].y / 20) * 20) } }))
+    }
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', up)
+  }
+
+  const draggableTerm = !isView && !connectMode // terminals drag in Edit (else click selects), like tool cards
+
   return (
     <div className="relative min-w-0 flex-1">
       <div
@@ -575,11 +617,7 @@ export function BuilderCanvas(props: CanvasProps) {
               refPaths.map((p, i) => (
                 <path key={`r${i}`} d={p.d} fill="none" stroke={p.color} strokeWidth={1.5} strokeDasharray="5 4" />
               ))}
-            {/* Item 4 — non-composable terminal connectors (norm/MultiQC → ingest → gate), dotted neutral.
-                Display-only; not graph edges. */}
-            {termConnectors.map((d, i) => (
-              <path key={`term${i}`} d={d} fill="none" stroke="var(--color-text-3)" strokeWidth={1.6} strokeDasharray="2 4" />
-            ))}
+            {/* (PASS-4 A) The hardcoded norm/MultiQC → ingest → gate terminal connectors are removed. */}
             {/* ADVISORY edges (agent → each attached tool). DELIBERATELY distinct from the solid, kind-
                 coloured DATA wires: a thin DOTTED accent line, so an agent visibly never sits on a data
                 edge (ADR-0001). Straight (not the orthogonal data elbow) to read as a soft observe-link. */}
@@ -669,7 +707,14 @@ export function BuilderCanvas(props: CanvasProps) {
             Composed tool nodes
           </span>
 
-          <IngestBand />
+          {/* Deterministic ingest — now a FREE-FLOATING, MOVABLE card (PASS-4 B); non-composable boundary. */}
+          <IngestBand
+            x={termPos.ingest.x}
+            y={termPos.ingest.y}
+            selected={selected === 'i_ingest'}
+            draggable={draggableTerm}
+            onPointerDown={(e) => startTermDrag('ingest', e)}
+          />
 
           {showSeeded &&
             TOOLS.map((t) => (
@@ -679,42 +724,28 @@ export function BuilderCanvas(props: CanvasProps) {
             REFS.map((r) => (
               <RefCard key={r.id} r={r} selected={selected === r.id} onSelect={props.onSelect} />
             ))}
-          <GateCard isView={isView} selected={selected === 'g_gate'} segs={segs} onActivate={() => props.onSelect('g_gate')} />
-          {/* Item 4 — the gate's non-composable run/ INPUT: a dashed escalate half-circle on the gate's
-              left edge (a canvas-plane sibling, so the gate's overflow-hidden doesn't clip it) + label.
-              It reads run/ via deterministic ingest — not a typed data edge. */}
-          {showTerminals && (
-            <>
-              <span
-                className="pointer-events-none absolute z-[4]"
-                title="run/ · ingest input · not a typed data edge"
-                style={{
-                  left: GATE_X - PORT_R,
-                  top: GATE_PORT_Y - PORT_R,
-                  width: PORT_R,
-                  height: 2 * PORT_R,
-                  borderRadius: '999px 0 0 999px',
-                  background: 'var(--color-card)',
-                  border: '1.5px dashed var(--color-escalate)',
-                  boxSizing: 'border-box',
-                }}
-              />
-              <span
-                className="pointer-events-none absolute z-[4] font-mono text-[8px] font-bold"
-                style={{ left: GATE_X - 32, top: GATE_PORT_Y - 16, color: 'var(--color-escalate-fg)' }}
-              >
-                run/
-              </span>
-            </>
-          )}
-          {/* Advisory agent (off-gate) + its fan-out ports (one per attached tool). The dotted advisory
-              edges are drawn in the SVG layer above; these markers sit on the agent card's perimeter. */}
+          {/* Decision gate — movable (PASS-4 B); still the deterministic terminal (never wired). The run/
+              half-circle input + its tether are removed (PASS-4 A): ingest→run/→gate is a boundary, not an edge. */}
+          <GateCard
+            x={termPos.gate.x}
+            y={termPos.gate.y}
+            isView={isView}
+            selected={selected === 'g_gate'}
+            segs={segs}
+            draggable={draggableTerm}
+            onPointerDown={(e) => startTermDrag('gate', e)}
+          />
+          {/* Advisory agent (off-gate) — movable (PASS-4 B); its fan-out ports + dotted links track its
+              position. The dotted advisory edges are drawn in the SVG layer above. */}
           {showTerminals && (
             <>
               <AgentCard
+                x={termPos.agent.x}
+                y={termPos.agent.y}
                 selected={selected === ADVISORY_AGENT.id}
-                onActivate={() => props.onSelect(ADVISORY_AGENT.id)}
                 attachCount={attachedTools.length}
+                draggable={draggableTerm}
+                onPointerDown={(e) => startTermDrag('agent', e)}
               />
               {agentFan.map((p, i) => (
                 <AdvisoryPortMarker key={`ap${i}`} x={p.x} y={p.y} />
@@ -836,11 +867,22 @@ export function BuilderCanvas(props: CanvasProps) {
               style={{ left: r.x * MM_SCALE, top: MM_VPAD + REF_Y * MM_SCALE, width: 150 * MM_SCALE, height: 40 * MM_SCALE }}
             />
           ))}
-        {/* terminal gate */}
+        {/* movable terminal cards (PASS-4 B) — track their canvas-local positions: ingest + gate always,
+            the advisory agent when linked. */}
         <span
           className="absolute rounded-[1px] bg-text-3"
-          style={{ left: GATE_X * MM_SCALE, top: MM_VPAD + GATE_Y * MM_SCALE, width: Math.max(4, 208 * MM_SCALE), height: 64 * MM_SCALE }}
+          style={{ left: termPos.ingest.x * MM_SCALE, top: MM_VPAD + termPos.ingest.y * MM_SCALE, width: Math.max(4, INGEST_W * MM_SCALE), height: INGEST_H * MM_SCALE }}
         />
+        <span
+          className="absolute rounded-[1px] bg-text-3"
+          style={{ left: termPos.gate.x * MM_SCALE, top: MM_VPAD + termPos.gate.y * MM_SCALE, width: Math.max(4, GATE_W * MM_SCALE), height: GATE_H * MM_SCALE }}
+        />
+        {showTerminals && (
+          <span
+            className="absolute rounded-[1px] bg-accent/50"
+            style={{ left: termPos.agent.x * MM_SCALE, top: MM_VPAD + termPos.agent.y * MM_SCALE, width: Math.max(4, AGENT_W * MM_SCALE), height: AGENT_H * MM_SCALE }}
+          />
+        )}
         {userNodes.map((n) => (
           <span
             key={n.id}
@@ -1178,7 +1220,7 @@ function RefCard({ r, selected, onSelect }: { r: (typeof REFS)[number]; selected
 // left spine, an icon-tile + title + subtitle header, an optional right slot + child body. Callers keep
 // their SPECIAL semantics in the body; this only unifies the LOOK. overflow-visible so ports can poke out.
 function CanvasCardFrame({
-  x, y, w, h, selected, onActivate, railColor, railSolid = true, borderColor, dashedBorder, iconTone, icon, title, subtitle, right, children,
+  x, y, w, h, selected, onActivate, onPointerDown, draggable, railColor, railSolid = true, borderColor, dashedBorder, iconTone, icon, title, subtitle, right, children,
 }: {
   x: number
   y: number
@@ -1186,6 +1228,10 @@ function CanvasCardFrame({
   h?: number
   selected: boolean
   onActivate?: () => void
+  // (PASS-4 B) when provided, the card is MOVABLE: onPointerDown starts the drag AND owns selection (via the
+  // drag's no-move click), so the button's onClick-select is dropped to avoid double-firing.
+  onPointerDown?: (e: React.MouseEvent) => void
+  draggable?: boolean
   railColor: string
   railSolid?: boolean
   borderColor: string
@@ -1200,10 +1246,15 @@ function CanvasCardFrame({
   const sideBorder = `1px ${dashedBorder ? 'dashed' : 'solid'} ${selected ? 'var(--color-accent)' : borderColor}`
   return (
     <button
-      onClick={(e) => {
-        e.stopPropagation()
-        onActivate?.()
-      }}
+      onMouseDown={onPointerDown}
+      onClick={
+        onPointerDown
+          ? undefined
+          : (e) => {
+              e.stopPropagation()
+              onActivate?.()
+            }
+      }
       className={`pg-node absolute rounded-xl text-left${selected ? ' is-selected' : ''}`}
       style={{
         left: x,
@@ -1216,7 +1267,7 @@ function CanvasCardFrame({
         borderRight: sideBorder,
         borderBottom: sideBorder,
         borderLeft: `3px ${railSolid ? 'solid' : 'dashed'} ${selected ? 'var(--color-accent)' : railColor}`,
-        cursor: onActivate ? 'pointer' : 'default',
+        cursor: onPointerDown ? (draggable ? 'grab' : 'pointer') : onActivate ? 'pointer' : 'default',
       }}
     >
       <div className="flex items-center gap-2 px-3" style={{ height: CARD_HEADER_H }}>
@@ -1234,15 +1285,18 @@ function CanvasCardFrame({
   )
 }
 
-// Deterministic ingest (item 1) — non-composable (dashed frame + neutral spine): writes run/ for the gate.
-function IngestBand() {
+// Deterministic ingest — non-composable (dashed frame + neutral spine): writes run/ for the gate. Movable
+// (PASS-4 B): position + drag come from the canvas; it is NEVER a graph node.
+function IngestBand({ x, y, selected, draggable, onPointerDown }: { x: number; y: number; selected: boolean; draggable: boolean; onPointerDown: (e: React.MouseEvent) => void }) {
   return (
     <CanvasCardFrame
-      x={INGEST_X}
-      y={INGEST_Y}
+      x={x}
+      y={y}
       w={INGEST_W}
       h={INGEST_H}
-      selected={false}
+      selected={selected}
+      draggable={draggable}
+      onPointerDown={onPointerDown}
       railColor="#8b95a1"
       borderColor="var(--color-line-strong)"
       dashedBorder
@@ -1261,15 +1315,16 @@ function IngestBand() {
 
 // Advisory agent (item 1 + 3) — OFF-gate: dashed ACCENT frame/spine, no data ports, no verdict (ADR-0001).
 // `attachCount` = how many tools it currently observes (its fan-out ports render as canvas-plane siblings).
-function AgentCard({ selected, onActivate, attachCount }: { selected: boolean; onActivate?: () => void; attachCount: number }) {
+function AgentCard({ x, y, selected, attachCount, draggable, onPointerDown }: { x: number; y: number; selected: boolean; attachCount: number; draggable: boolean; onPointerDown: (e: React.MouseEvent) => void }) {
   return (
     <CanvasCardFrame
-      x={AGENT_X}
-      y={AGENT_Y}
+      x={x}
+      y={y}
       w={AGENT_W}
       h={AGENT_H}
       selected={selected}
-      onActivate={onActivate}
+      draggable={draggable}
+      onPointerDown={onPointerDown}
       railColor="var(--color-accent)"
       railSolid={false}
       borderColor="var(--color-accent)"
@@ -1292,17 +1347,18 @@ function AgentCard({ selected, onActivate, attachCount }: { selected: boolean; o
   )
 }
 
-// Decision gate (item 1) — the non-composable TERMINAL: escalate spine, a Lock (non-removable), the three
-// checkpoints, and the verdict readout footer. Its run/ INPUT port renders as a canvas-plane sibling.
-function GateCard({ isView, selected, segs, onActivate }: { isView: boolean; selected: boolean; segs: { c: string; w: string }[]; onActivate?: () => void }) {
+// Decision gate — the non-composable TERMINAL: escalate spine, a Lock (non-removable), the three checkpoints,
+// and the verdict readout footer. Movable (PASS-4 B); the run/ half-circle input was removed (PASS-4 A).
+function GateCard({ x, y, isView, selected, segs, draggable, onPointerDown }: { x: number; y: number; isView: boolean; selected: boolean; segs: { c: string; w: string }[]; draggable: boolean; onPointerDown: (e: React.MouseEvent) => void }) {
   return (
     <CanvasCardFrame
-      x={GATE_X}
-      y={GATE_Y}
+      x={x}
+      y={y}
       w={GATE_W}
       h={GATE_H}
       selected={selected}
-      onActivate={onActivate}
+      draggable={draggable}
+      onPointerDown={onPointerDown}
       railColor={isView ? 'var(--color-escalate)' : '#c6ced7'}
       borderColor="var(--color-line-strong)"
       iconTone={{ background: 'var(--color-escalate-bg)', color: 'var(--color-escalate-fg)' }}
