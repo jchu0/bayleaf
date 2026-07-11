@@ -96,7 +96,7 @@ export const V_COLOR: Record<VStatus, string> = { ok: '#1a854e', warn: '#b07714'
 export const TOOLS: Tool[] = [
   {
     id: 'n_fastp', tool: 'fastp', version: '0.23.4', stageLabel: 'Read QC + trim', pg: 'ours', icon: 'scissors',
-    x: 40, y: 260, vstatus: 'ok', inputs: [{ kind: 'fastq' }], outputs: [{ kind: 'fastp_json' }, { kind: 'fastq' }],
+    x: 40, y: 260, vstatus: 'ok', inputs: [{ kind: 'fastq' }], outputs: [{ kind: 'fastp_json' }, { kind: 'fastq' }, { kind: 'fastp_html' }],
     params: [
       { k: 'qualified_quality_phred', v: '15', help: 'Per-base quality floor' },
       { k: 'length_required', v: '50', help: 'Min read length after trim' },
@@ -121,7 +121,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_markdup', tool: 'samtools markdup', version: '1.20', stageLabel: 'Duplicate marking', pg: 'full', icon: 'copy',
-    x: 800, y: 260, vstatus: 'ok', inputs: [{ kind: 'bam' }], outputs: [{ kind: 'bam' }, { kind: 'bai' }, { kind: 'markdup_metrics' }],
+    x: 800, y: 260, vstatus: 'ok', inputs: [{ kind: 'bam' }], outputs: [{ kind: 'bam' }, { kind: 'bai' }, { kind: 'markdup_metrics' }, { kind: 'samtools_stats' }],
     params: [{ k: 'remove_duplicates', v: 'false', help: 'Mark, do not drop' }],
     io: [
       { name: 'HG002.md.bam', sha: 'sha256:7a11…4c2', size: '32 GB', origin: 'real-giab' },
@@ -164,7 +164,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_multiqc', tool: 'MultiQC', version: '1.21', stageLabel: 'QC aggregation', pg: 'full', icon: 'layers',
-    x: 1180, y: 600, vstatus: 'ok', inputs: [{ kind: 'fastp_json' }, { kind: 'markdup_metrics' }, { kind: 'mosdepth_summary' }], outputs: [{ kind: 'multiqc_json' }],
+    x: 1180, y: 600, vstatus: 'ok', inputs: [{ kind: 'fastp_json' }, { kind: 'markdup_metrics' }, { kind: 'samtools_stats' }, { kind: 'mosdepth_summary' }, { kind: 'mosdepth_thresholds' }], outputs: [{ kind: 'multiqc_json' }],
     params: [{ k: 'force', v: 'true', help: 'Overwrite existing report' }],
     io: [{ name: 'multiqc_data.json', sha: 'sha256:5be3…9c4', size: '2.1 MB', origin: 'real-giab' }],
   },
@@ -210,13 +210,16 @@ export function gateSegs(): { c: string; w: string }[] {
 // Palette → node spec. bwa-mem2 icon key is 'merge'; funnel = bcftools norm. Unknown tools
 // fall back to a merge icon + a single artifact kind (still typed, never invented).
 export const BTOOLSPEC: Record<string, { version: string; icon: IconKey; ins: string[]; outs: string[] }> = {
-  'fastp': { version: '0.23.4', icon: 'scissors', ins: ['fastq'], outs: ['fastp_json', 'fastq'] },
+  // fastp now also emits fastp_html (the report it already writes); markdup emits samtools_stats
+  // (a real `samtools stats` stream) — both were dangling reserved ports, now wired in the
+  // compiler catalog (W3 full-port-wiring). MultiQC ingests every QC stream (was only 3).
+  'fastp': { version: '0.23.4', icon: 'scissors', ins: ['fastq'], outs: ['fastp_json', 'fastq', 'fastp_html'] },
   'bwa-mem2': { version: '2.2.1', icon: 'merge', ins: ['fastq', 'reference_fasta'], outs: ['bam'] },
-  'samtools markdup': { version: '1.20', icon: 'copy', ins: ['bam'], outs: ['bam', 'bai', 'markdup_metrics'] },
+  'samtools markdup': { version: '1.20', icon: 'copy', ins: ['bam'], outs: ['bam', 'bai', 'markdup_metrics', 'samtools_stats'] },
   'mosdepth': { version: '0.3.8', icon: 'bars', ins: ['bam', 'panel_bed'], outs: ['mosdepth_summary', 'mosdepth_thresholds', 'mosdepth_regions', 'mosdepth_global_dist', 'mosdepth_region_dist'] },
   'bcftools call': { version: '1.20', icon: 'dna', ins: ['bam', 'reference_fasta', 'panel_bed'], outs: ['vcf'] },
   'bcftools norm': { version: '1.20', icon: 'funnel', ins: ['vcf', 'reference_fasta'], outs: ['filtered_vcf'] },
-  'MultiQC': { version: '1.21', icon: 'layers', ins: ['fastp_json', 'markdup_metrics', 'mosdepth_summary'], outs: ['multiqc_json'] },
+  'MultiQC': { version: '1.21', icon: 'layers', ins: ['fastp_json', 'markdup_metrics', 'samtools_stats', 'mosdepth_summary', 'mosdepth_thresholds'], outs: ['multiqc_json'] },
   'NGSCheckMate': { version: '1.0.1', icon: 'bars', ins: ['bam'], outs: ['ngscheckmate'] },
   // Reference SOURCES — no inputs; each emits ONE output port PER consumer (same kind, distinct idx)
   // so every consumer edge is a clean one-to-one wire instead of many edges branching off one port
@@ -320,7 +323,7 @@ export const CARD_PORTS: Record<string, CardPort[]> = {
     { kind: 'fastq', dir: 'out', side: 'right', state: 'required' },
     { kind: 'unpaired_fastq', dir: 'out', side: 'right', state: 'reserved' },
     { kind: 'fastp_json', dir: 'out', side: 'bottom', state: 'required' },
-    { kind: 'fastp_html', dir: 'out', side: 'bottom', state: 'reserved' },
+    { kind: 'fastp_html', dir: 'out', side: 'bottom', state: 'optional' }, // now a real published output (compiler catalog)
     { kind: 'failed_fastq', dir: 'out', side: 'bottom', state: 'reserved' },
   ],
   'bwa-mem2': [
@@ -335,7 +338,7 @@ export const CARD_PORTS: Record<string, CardPort[]> = {
     { kind: 'bam', dir: 'out', side: 'right', state: 'required' },
     { kind: 'bai', dir: 'out', side: 'right', state: 'required' },
     { kind: 'markdup_metrics', dir: 'out', side: 'bottom', state: 'optional' },
-    { kind: 'samtools_stats', dir: 'out', side: 'bottom', state: 'reserved' },
+    { kind: 'samtools_stats', dir: 'out', side: 'bottom', state: 'optional' }, // now a real `samtools stats` output → MultiQC
   ],
   mosdepth: [
     { kind: 'bam', dir: 'in', side: 'left', state: 'required' },
@@ -365,9 +368,10 @@ export const CARD_PORTS: Record<string, CardPort[]> = {
   MultiQC: [
     { kind: 'fastp_json', dir: 'in', side: 'left', state: 'required' },
     { kind: 'markdup_metrics', dir: 'in', side: 'left', state: 'optional' },
+    { kind: 'samtools_stats', dir: 'in', side: 'left', state: 'optional' }, // now wired from markdup (compiler catalog)
     { kind: 'mosdepth_summary', dir: 'in', side: 'left', state: 'required' },
+    { kind: 'mosdepth_thresholds', dir: 'in', side: 'left', state: 'optional' }, // now ingested (was dangling)
     { kind: 'fastqc_zip', dir: 'in', side: 'top', state: 'reserved' },
-    { kind: 'samtools_stats', dir: 'in', side: 'top', state: 'reserved' },
     { kind: 'bcftools_stats', dir: 'in', side: 'top', state: 'reserved' },
     { kind: 'picard_hsmetrics', dir: 'in', side: 'top', state: 'reserved' },
     { kind: 'ngscheckmate', dir: 'in', side: 'top', state: 'reserved' },
@@ -814,7 +818,9 @@ export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
     wire('n_call', 'vcf', 'n_norm', 'vcf'),
     wire('n_fastp', 'fastp_json', 'n_multiqc', 'fastp_json'),
     wire('n_markdup', 'markdup_metrics', 'n_multiqc', 'markdup_metrics'),
+    wire('n_markdup', 'samtools_stats', 'n_multiqc', 'samtools_stats'), // samtools stats → MultiQC (W3)
     wire('n_mosdepth', 'mosdepth_summary', 'n_multiqc', 'mosdepth_summary'),
+    wire('n_mosdepth', 'mosdepth_thresholds', 'n_multiqc', 'mosdepth_thresholds'), // thresholds → MultiQC (W3)
     // reference source → tool ref-input edges, each off a DISTINCT source output port (fasta out 0/1/2
     // → bwa/call/norm; bed out 0/1 → mosdepth/call; truth VCF unwired).
     wireOut('r_fasta', 0, 'n_bwa', 'reference_fasta'),

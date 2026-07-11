@@ -1,11 +1,12 @@
 // QC aggregation — MultiQC
 process MULTIQC {
-    tag "${params.sample}"
     conda 'bioconda::multiqc=1.21'
     container 'quay.io/biocontainers/multiqc:1.21--pyhdfd78af_0'
     publishDir "${params.outdir}/results", mode: 'copy'
 
     input:
+    path('*')
+    path('*')
     path('*')
     path('*')
     path('*')

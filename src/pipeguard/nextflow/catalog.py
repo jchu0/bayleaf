@@ -51,6 +51,12 @@ class ProcessSpec:
     stub: str  # `touch` the outputs so -stub-run validates wiring with no tools/data
     publish: str = "results"  # publishDir subdir
     label: str = ""  # a stage label for the process comment
+    # Per-sample by default: the process carries the nf-core `[meta, files]` map, runs once per
+    # samplesheet row, and names its outputs `${meta.id}.*` — so a multi-sample samplesheet fans
+    # out (each sample's chain runs independently) and a single sample is a fan-out of 1 (W4). Set
+    # False for a cross-sample AGGREGATOR (e.g. MultiQC): it drops the meta, `.collect()`s every
+    # sample's QC streams, and emits ONE report — the compiler wires it accordingly.
+    per_sample: bool = True
 
     def input_kinds(self) -> tuple[str, ...]:
         return tuple(p.kind for p in self.inputs)
@@ -60,9 +66,12 @@ class ProcessSpec:
 
 
 # ── the curated germline-chain catalog ────────────────────────────────────────────────────────
-# Commands are faithful to scripts/run_giab_pipeline.py (the working bioconda driver). Reads are a
-# read-pair tuple; references (reference_fasta / panel_bed) arrive as their own channels. Each
-# process declares a `stub:` so `nextflow run -stub-run` exercises the DAG with no data.
+# Commands are faithful to scripts/run_giab_pipeline.py (the working bioconda driver). Per-sample
+# processes carry the nf-core `[meta, files]` map and name outputs `${meta.id}.*`; references
+# (reference_fasta / panel_bed) arrive as shared value channels WITHOUT meta (broadcast to every
+# sample). Each process declares a `stub:` so `nextflow run -stub-run` exercises the DAG with no
+# data. MultiQC is the one AGGREGATOR (per_sample=False): it collects every sample's QC into one
+# report. The compiler adds the `tuple val(meta), …` wrapper + `tag "${meta.id}"` per this flag.
 _SPECS: tuple[ProcessSpec, ...] = (
     ProcessSpec(
         tool="fastp",
@@ -70,23 +79,26 @@ _SPECS: tuple[ProcessSpec, ...] = (
         conda="bioconda::fastp=0.23.4",
         container="quay.io/biocontainers/fastp:0.23.4--h5f740d0_0",
         label="Read QC + trim",
-        inputs=(Port("fastq", "tuple path(read1), path(read2)"),),
+        inputs=(Port("fastq", "path(read1), path(read2)"),),
         outputs=(
             Port(
                 "fastq",
-                'tuple path("*.trim.R1.fastq.gz"), path("*.trim.R2.fastq.gz")',
+                'path("*.trim.R1.fastq.gz"), path("*.trim.R2.fastq.gz")',
                 emit="fastq",
             ),
             Port("fastp_json", 'path("*.fastp.json")', emit="fastp_json"),
+            # fastp already writes the HTML report (`-h …fastp.html` below) — capture it as a real
+            # published output rather than a dangling reserved port (W3 full-port-wiring).
+            Port("fastp_html", 'path("*.fastp.html")', emit="fastp_html"),
         ),
         script=(
             "fastp -i ${read1} -I ${read2} \\\n"
-            "  -o ${params.sample}.trim.R1.fastq.gz -O ${params.sample}.trim.R2.fastq.gz \\\n"
-            "  -j ${params.sample}.fastp.json -h ${params.sample}.fastp.html -w ${task.cpus}"
+            "  -o ${meta.id}.trim.R1.fastq.gz -O ${meta.id}.trim.R2.fastq.gz \\\n"
+            "  -j ${meta.id}.fastp.json -h ${meta.id}.fastp.html -w ${task.cpus}"
         ),
         stub=(
-            "touch ${params.sample}.trim.R1.fastq.gz ${params.sample}.trim.R2.fastq.gz "
-            "${params.sample}.fastp.json"
+            "touch ${meta.id}.trim.R1.fastq.gz ${meta.id}.trim.R2.fastq.gz "
+            "${meta.id}.fastp.json ${meta.id}.fastp.html"
         ),
     ),
     ProcessSpec(
@@ -97,7 +109,7 @@ _SPECS: tuple[ProcessSpec, ...] = (
         "beb9b76a4c73c05e0b4b4f3fda67c9e1e5b6dc4f-0",
         label="Alignment",
         inputs=(
-            Port("fastq", "tuple path(read1), path(read2)"),
+            Port("fastq", "path(read1), path(read2)"),
             Port("reference_fasta", "tuple path(reference), path(reference_idx)"),
         ),
         outputs=(Port("bam", 'path("*.aligned.bam")', emit="bam"),),
@@ -105,14 +117,14 @@ _SPECS: tuple[ProcessSpec, ...] = (
         # minus markdup which is its own card downstream). ${reference} must be a pre-indexed fasta.
         script=(
             "bwa-mem2 mem -t ${task.cpus} \\\n"
-            '  -R "@RG\\tID:${params.sample}\\tSM:${params.sample}'
-            '\\tPL:ILLUMINA\\tLB:${params.sample}-panel" \\\n'
+            '  -R "@RG\\tID:${meta.id}\\tSM:${meta.id}'
+            '\\tPL:ILLUMINA\\tLB:${meta.id}-panel" \\\n'
             "  ${reference} ${read1} ${read2} \\\n"
             "  | samtools sort -n -@ ${task.cpus} -O bam - \\\n"
             "  | samtools fixmate -m - - \\\n"
-            "  | samtools sort -@ ${task.cpus} -O bam -o ${params.sample}.aligned.bam -"
+            "  | samtools sort -@ ${task.cpus} -O bam -o ${meta.id}.aligned.bam -"
         ),
-        stub="touch ${params.sample}.aligned.bam",
+        stub="touch ${meta.id}.aligned.bam",
     ),
     ProcessSpec(
         tool="samtools markdup",
@@ -120,20 +132,24 @@ _SPECS: tuple[ProcessSpec, ...] = (
         conda="bioconda::samtools=1.20",
         container="quay.io/biocontainers/samtools:1.20--h50ea8bc_0",
         label="Duplicate marking",
-        inputs=(Port("bam", "path aligned"),),
+        inputs=(Port("bam", "path(aligned)"),),
         outputs=(
             Port("bam", 'path("*.dedup.bam")', emit="bam"),
             Port("bai", 'path("*.dedup.bam.bai")', emit="bai"),
             Port("markdup_metrics", 'path("*.markdup.txt")', emit="markdup_metrics"),
+            # `samtools stats` on the dedup BAM — a real, MultiQC-parseable alignment-stats stream
+            # (was a dangling reserved port; now produced + wired to MultiQC, W3).
+            Port("samtools_stats", 'path("*.samtools_stats.txt")', emit="samtools_stats"),
         ),
         script=(
-            "samtools markdup -f ${params.sample}.markdup.txt "
-            "${aligned} ${params.sample}.dedup.bam\n"
-            "samtools index ${params.sample}.dedup.bam"
+            "samtools markdup -f ${meta.id}.markdup.txt "
+            "${aligned} ${meta.id}.dedup.bam\n"
+            "samtools index ${meta.id}.dedup.bam\n"
+            "samtools stats ${meta.id}.dedup.bam > ${meta.id}.samtools_stats.txt"
         ),
         stub=(
-            "touch ${params.sample}.dedup.bam ${params.sample}.dedup.bam.bai "
-            "${params.sample}.markdup.txt"
+            "touch ${meta.id}.dedup.bam ${meta.id}.dedup.bam.bai "
+            "${meta.id}.markdup.txt ${meta.id}.samtools_stats.txt"
         ),
     ),
     ProcessSpec(
@@ -143,7 +159,7 @@ _SPECS: tuple[ProcessSpec, ...] = (
         container="quay.io/biocontainers/mosdepth:0.3.8--hd299d5a_0",
         label="Coverage",
         inputs=(
-            Port("bam", "path dedup"),
+            Port("bam", "path(dedup)"),
             Port("panel_bed", "path panel"),
         ),
         outputs=(
@@ -153,11 +169,11 @@ _SPECS: tuple[ProcessSpec, ...] = (
         script=(
             "samtools index ${dedup}\n"
             "mosdepth --by ${panel} --no-per-base --thresholds 1,10,20,30 -t ${task.cpus} \\\n"
-            "  ${params.sample}.panel ${dedup}"
+            "  ${meta.id}.panel ${dedup}"
         ),
         stub=(
-            "touch ${params.sample}.panel.mosdepth.summary.txt "
-            "${params.sample}.panel.thresholds.bed.gz"
+            "touch ${meta.id}.panel.mosdepth.summary.txt "
+            "${meta.id}.panel.thresholds.bed.gz"
         ),
     ),
     ProcessSpec(
@@ -167,7 +183,7 @@ _SPECS: tuple[ProcessSpec, ...] = (
         container="quay.io/biocontainers/bcftools:1.20--h8b25389_0",
         label="Variant calling",
         inputs=(
-            Port("bam", "path dedup"),
+            Port("bam", "path(dedup)"),
             Port("reference_fasta", "tuple path(reference), path(reference_idx)"),
             Port("panel_bed", "path panel"),
         ),
@@ -175,9 +191,9 @@ _SPECS: tuple[ProcessSpec, ...] = (
         script=(
             "samtools index ${dedup}\n"
             "bcftools mpileup -f ${reference} -R ${panel} -Ou ${dedup} \\\n"
-            "  | bcftools call -mv -Oz -o ${params.sample}.calls.vcf.gz"
+            "  | bcftools call -mv -Oz -o ${meta.id}.calls.vcf.gz"
         ),
-        stub="touch ${params.sample}.calls.vcf.gz",
+        stub="touch ${meta.id}.calls.vcf.gz",
     ),
     ProcessSpec(
         tool="bcftools norm",
@@ -186,15 +202,15 @@ _SPECS: tuple[ProcessSpec, ...] = (
         container="quay.io/biocontainers/bcftools:1.20--h8b25389_0",
         label="Filter / normalize",
         inputs=(
-            Port("vcf", "path calls"),
+            Port("vcf", "path(calls)"),
             Port("reference_fasta", "tuple path(reference), path(reference_idx)"),
         ),
         outputs=(Port("filtered_vcf", 'path("*.norm.vcf.gz")', emit="filtered_vcf"),),
         script=(
-            "bcftools norm -f ${reference} -Oz -o ${params.sample}.norm.vcf.gz ${calls}\n"
-            "bcftools index -f ${params.sample}.norm.vcf.gz"
+            "bcftools norm -f ${reference} -Oz -o ${meta.id}.norm.vcf.gz ${calls}\n"
+            "bcftools index -f ${meta.id}.norm.vcf.gz"
         ),
-        stub="touch ${params.sample}.norm.vcf.gz",
+        stub="touch ${meta.id}.norm.vcf.gz",
     ),
     ProcessSpec(
         tool="MultiQC",
@@ -202,11 +218,17 @@ _SPECS: tuple[ProcessSpec, ...] = (
         conda="bioconda::multiqc=1.21",
         container="quay.io/biocontainers/multiqc:1.21--pyhdfd78af_0",
         label="QC aggregation",
-        # MultiQC scans a directory of QC outputs; each upstream QC file is staged in flat.
+        # AGGREGATOR: MultiQC scans a directory of QC files pooled ACROSS all samples, so it drops
+        # the per-sample meta and the compiler feeds each input `.map { it[1] }.collect()`. Every
+        # available metric stream is ingested (was only 3): fastp_json + samtools markdup metrics +
+        # samtools stats + mosdepth summary + mosdepth thresholds (W3 full-port-wiring).
+        per_sample=False,
         inputs=(
             Port("fastp_json", "path('*')"),
             Port("markdup_metrics", "path('*')"),
+            Port("samtools_stats", "path('*')"),
             Port("mosdepth_summary", "path('*')"),
+            Port("mosdepth_thresholds", "path('*')"),
         ),
         outputs=(
             Port("multiqc_json", 'path("multiqc_data/multiqc_data.json")', emit="multiqc_json"),

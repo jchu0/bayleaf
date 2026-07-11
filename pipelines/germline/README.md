@@ -7,12 +7,13 @@ composed this — it did not run it (compose ≠ execute). Validate with no data
 nextflow run main.nf -stub-run
 ```
 
-Run for real (bioconda tools on PATH), e.g.:
+Run for real (bioconda tools on PATH). `--input` is a samplesheet with a header row
+`sample,fastq_1,fastq_2` and one row per sample (fans out per sample); pick an executor
+profile — `standard` (local, one sample at a time) or `slurm` (one job per sample):
 
 ```bash
-nextflow run main.nf -profile conda \
-  --read1 R1.fastq.gz --read2 R2.fastq.gz \
-  --reference ref.fa --panel_bed panel.bed
+nextflow run main.nf -profile conda,standard \
+  --input samplesheet.csv --reference ref.fa --panel_bed panel.bed
 ```
 
 ## Steps (topological order)

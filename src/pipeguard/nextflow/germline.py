@@ -18,12 +18,17 @@ from .compiler import NfEdge, NfGraph, NfNode
 
 
 def germline_graph() -> NfGraph:
-    """The germline-panel card graph (matches the Builder's seeded template)."""
+    """The germline-panel card graph (matches the Builder's seeded template). Node out/in kinds are
+    in catalog port order — MultiQC now ingests every QC stream (fastp_json + markdup_metrics +
+    samtools_stats + mosdepth_summary + mosdepth_thresholds); fastp_html publishes (unwired)."""
     nodes = [
-        NfNode("n_fastp", "fastp", ins=["fastq"], outs=["fastq", "fastp_json"]),
+        NfNode("n_fastp", "fastp", ins=["fastq"], outs=["fastq", "fastp_json", "fastp_html"]),
         NfNode("n_bwa", "bwa-mem2", ins=["fastq", "reference_fasta"], outs=["bam"]),
         NfNode(
-            "n_markdup", "samtools markdup", ins=["bam"], outs=["bam", "bai", "markdup_metrics"]
+            "n_markdup",
+            "samtools markdup",
+            ins=["bam"],
+            outs=["bam", "bai", "markdup_metrics", "samtools_stats"],
         ),
         NfNode(
             "n_mosdepth",
@@ -38,7 +43,13 @@ def germline_graph() -> NfGraph:
         NfNode(
             "n_multiqc",
             "MultiQC",
-            ins=["fastp_json", "markdup_metrics", "mosdepth_summary"],
+            ins=[
+                "fastp_json",
+                "markdup_metrics",
+                "samtools_stats",
+                "mosdepth_summary",
+                "mosdepth_thresholds",
+            ],
             outs=["multiqc_json"],
         ),
     ]
@@ -50,6 +61,8 @@ def germline_graph() -> NfGraph:
         NfEdge("n_call", 0, "n_norm", 0),  # raw calls → normalize
         NfEdge("n_fastp", 1, "n_multiqc", 0),  # fastp_json → MultiQC
         NfEdge("n_markdup", 2, "n_multiqc", 1),  # markdup metrics → MultiQC
-        NfEdge("n_mosdepth", 0, "n_multiqc", 2),  # mosdepth summary → MultiQC
+        NfEdge("n_markdup", 3, "n_multiqc", 2),  # samtools stats → MultiQC
+        NfEdge("n_mosdepth", 0, "n_multiqc", 3),  # mosdepth summary → MultiQC
+        NfEdge("n_mosdepth", 1, "n_multiqc", 4),  # mosdepth thresholds → MultiQC
     ]
     return NfGraph(name="germline-panel", nodes=nodes, edges=edges)

@@ -6,7 +6,9 @@ generated pipeline at ``pipelines/germline/main.nf`` (the SAME artifact the Pipe
 from its cards, ADR-0003), then parses the pipeline's published QC outputs into the frozen-five CSV
 contract:
 
-    nextflow run pipelines/germline/main.nf --read1 … --read2 … --reference … --panel_bed …
+    nextflow run pipelines/germline/main.nf -profile <standard|slurm> --input samplesheet.csv …
+      → per-sample fan-out (one chain per samplesheet row) via the auto-detected executor:
+        `sbatch` on PATH → SLURM (a job per sample), else local single-thread-serial (W4)
       → fastp → bwa-mem2 → samtools markdup → {mosdepth, bcftools call → norm} + MultiQC
       → parse fastp.json + mosdepth summary/thresholds → data/<run_id>/ (dashboard-discoverable)
 
@@ -93,6 +95,16 @@ def _java_home(nextflow: Path) -> str | None:
     return str(candidate) if candidate.exists() else None
 
 
+def _detect_profile() -> str:
+    """Pick the Nextflow executor profile for THIS host (W4, ADR-0003 — same graph, executor by
+    profile). ``sbatch`` on PATH → ``slurm`` (one job per sample; per-sample parallel on an HPC
+    submit node); otherwise ``standard`` — the local single-thread-serial fallback (one sample at a
+    time). Mirrors the ``shutil.which("nextflow")`` probe; the compiled bundle is unchanged, only
+    the executor is chosen here (compose ≠ execute). CONFIG-VERIFIED, not cluster-verified — this
+    env has no ``sbatch``, so the demo always takes the local-serial branch."""
+    return "slurm" if shutil.which("sbatch") else "standard"
+
+
 def run_nextflow(cfg: RunConfig) -> Path:
     """Hand the whole chain to Nextflow; return the published-results dir.
 
@@ -117,11 +129,23 @@ def run_nextflow(cfg: RunConfig) -> Path:
     java_home = _java_home(Path(nextflow))
     if java_home:
         env.setdefault("JAVA_HOME", java_home)  # the launcher needs a JVM the env may not export
-    _log("nextflow", f"nextflow run {cfg.pipeline.name} — sample {cfg.sample}")
+    # Per-sample fan-out (W4): hand the pipeline a samplesheet (sample,fastq_1,fastq_2), not
+    # --read1/--read2. This single-sample run is a degenerate fan-out of 1 — the emitted outputs
+    # are named ${meta.id}.* = HG002.*, byte-identical to the pre-fan-out driver, so the frozen-five
+    # parse below is unchanged (a multi-sample sheet + N-run-dir parse is the deferred slice).
+    samplesheet = scratch / "samplesheet.csv"
+    samplesheet.write_text(
+        f"sample,fastq_1,fastq_2\n{cfg.sample},{cfg.read1},{cfg.read2}\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    # Executor auto-detected at the run boundary; no cluster here → the local-serial fallback.
+    profile = _detect_profile()
+    _log("nextflow", f"nextflow run {cfg.pipeline.name} — sample {cfg.sample} · -profile {profile}")
     cmd = [
-        nextflow, "run", str(cfg.pipeline), "-ansi-log", "false",
-        "-work-dir", str(scratch / "work"), "--sample", cfg.sample,
-        "--read1", str(cfg.read1), "--read2", str(cfg.read2),
+        nextflow, "run", str(cfg.pipeline), "-ansi-log", "false", "-profile", profile,
+        "-work-dir", str(scratch / "work"),
+        "--input", str(samplesheet),
         "--reference", str(cfg.reference), "--panel_bed", str(cfg.panel_bed),
         "--outdir", str(outdir),
     ]  # fmt: skip

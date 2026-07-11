@@ -12,7 +12,9 @@ include { MULTIQC } from './modules/multiqc.nf'
 include { BCFTOOLS_NORM } from './modules/bcftools_norm.nf'
 
 workflow {
-    ch_reads = Channel.value([file(params.read1), file(params.read2)])
+    ch_reads = Channel.fromPath(params.input)
+        .splitCsv(header: true)
+        .map { row -> tuple([id: row.sample], file(row.fastq_1), file(row.fastq_2)) }
     ch_panel_bed = Channel.value(file(params.panel_bed))
     ch_reference = Channel.value([file(params.reference), file("${params.reference}.*")])
 
@@ -21,6 +23,6 @@ workflow {
     SAMTOOLS_MARKDUP(BWA_MEM2_MEM.out.bam)
     MOSDEPTH(SAMTOOLS_MARKDUP.out.bam, ch_panel_bed)
     BCFTOOLS_CALL(SAMTOOLS_MARKDUP.out.bam, ch_reference, ch_panel_bed)
-    MULTIQC(FASTP.out.fastp_json, SAMTOOLS_MARKDUP.out.markdup_metrics, MOSDEPTH.out.mosdepth_summary)
+    MULTIQC(FASTP.out.fastp_json.map { it[1] }.collect(), SAMTOOLS_MARKDUP.out.markdup_metrics.map { it[1] }.collect(), SAMTOOLS_MARKDUP.out.samtools_stats.map { it[1] }.collect(), MOSDEPTH.out.mosdepth_summary.map { it[1] }.collect(), MOSDEPTH.out.mosdepth_thresholds.map { it[1] }.collect())
     BCFTOOLS_NORM(BCFTOOLS_CALL.out.vcf, ch_reference)
 }

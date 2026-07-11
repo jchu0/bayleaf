@@ -1,25 +1,25 @@
 // Filter / normalize — bcftools norm
 process BCFTOOLS_NORM {
-    tag "${params.sample}"
+    tag "${meta.id}"
     conda 'bioconda::bcftools=1.20'
     container 'quay.io/biocontainers/bcftools:1.20--h8b25389_0'
     publishDir "${params.outdir}/results", mode: 'copy'
 
     input:
-    path calls
+    tuple val(meta), path(calls)
     tuple path(reference), path(reference_idx)
 
     output:
-    path("*.norm.vcf.gz"), emit: filtered_vcf
+    tuple val(meta), path("*.norm.vcf.gz"), emit: filtered_vcf
 
     script:
     """
-    bcftools norm -f ${reference} -Oz -o ${params.sample}.norm.vcf.gz ${calls}
-    bcftools index -f ${params.sample}.norm.vcf.gz
+    bcftools norm -f ${reference} -Oz -o ${meta.id}.norm.vcf.gz ${calls}
+    bcftools index -f ${meta.id}.norm.vcf.gz
     """
 
     stub:
     """
-    touch ${params.sample}.norm.vcf.gz
+    touch ${meta.id}.norm.vcf.gz
     """
 }

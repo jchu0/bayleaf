@@ -98,6 +98,22 @@ def _proc_name(tool: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", tool).strip("_").upper() or "PROCESS"
 
 
+def _with_meta(decl: str) -> str:
+    """Thread the nf-core ``[meta, files]`` map onto a per-sample port decl. ``tuple path(a),
+    path(b)`` → ``tuple val(meta), path(a), path(b)``; ``path(x)`` → ``tuple val(meta), path(x)``.
+    Reference/value ports keep their bare decl (they are shared value channels, not per-sample)."""
+    if decl.startswith("tuple "):
+        return "tuple val(meta), " + decl[len("tuple ") :]
+    return "tuple val(meta), " + decl
+
+
+def _is_aggregator(tool: str) -> bool:
+    """A catalogued cross-sample AGGREGATOR (per_sample=False, e.g. MultiQC): it drops meta and
+    collects every sample's inputs into one run. Uncatalogued tools default to per-sample."""
+    spec = catalog_entry(tool)
+    return spec is not None and not spec.per_sample
+
+
 def _module_file(proc: str) -> str:
     return f"modules/{proc.lower()}.nf"
 
@@ -207,12 +223,26 @@ def _render_module(tool: str, nodes: dict[str, NfNode]) -> str:
 
 
 def _render_catalogued(spec: ProcessSpec) -> str:
-    ins = "\n    ".join(p.decl for p in spec.inputs) or "val _unused"
-    outs = "\n    ".join(f"{p.decl}, emit: {p.channel}" for p in spec.outputs)
+    if spec.per_sample:
+        # Per-sample: thread `[meta, files]` onto every non-reference input + every output, and tag
+        # by sample. Reference/value inputs (reference_fasta / panel_bed) stay meta-free — they are
+        # shared value channels broadcast to each sample.
+        in_decls = [
+            p.decl if p.kind in REFERENCE_PARAM else _with_meta(p.decl) for p in spec.inputs
+        ]
+        out_decls = [f"{_with_meta(p.decl)}, emit: {p.channel}" for p in spec.outputs]
+        tag = '    tag "${meta.id}"\n'
+    else:
+        # Aggregator (MultiQC): no meta anywhere; it collects across samples into one report.
+        in_decls = [p.decl for p in spec.inputs]
+        out_decls = [f"{p.decl}, emit: {p.channel}" for p in spec.outputs]
+        tag = ""
+    ins = "\n    ".join(in_decls) or "val _unused"
+    outs = "\n    ".join(out_decls)
     return (
         f"// {spec.label} — {spec.tool}\n"
         f"process {spec.process} {{\n"
-        f'    tag "${{params.sample}}"\n'
+        f"{tag}"
         f"    conda '{spec.conda}'\n"
         f"    container '{spec.container}'\n"
         f"    publishDir \"${{params.outdir}}/{spec.publish}\", mode: 'copy'\n\n"
@@ -226,18 +256,24 @@ def _render_catalogued(spec: ProcessSpec) -> str:
 
 def _render_placeholder(tool: str, node: NfNode) -> str:
     proc = _proc_name(tool)
-    in_decls = "\n    ".join(f"path in{i}" for i in range(len(node.ins))) or "val _unused"
+    # Meta-thread inputs/outputs like a catalogued per-sample process, so an uncatalogued card still
+    # wires into a fan-out graph (reference inputs stay meta-free value channels).
+    in_lines = [
+        f"path in{i}" if kind in REFERENCE_PARAM else _with_meta(f"path in{i}")
+        for i, kind in enumerate(node.ins)
+    ]
+    in_decls = "\n    ".join(in_lines) or "val _unused"
     out_lines, touches = [], []
     for kind in node.outs:
-        out_lines.append(f'path("{kind}.out"), emit: {kind}')
+        out_lines.append(_with_meta(f'path("{kind}.out")') + f", emit: {kind}")
         touches.append(f"{kind}.out")
-    outs = "\n    ".join(out_lines) or 'path("out"), emit: out'
+    outs = "\n    ".join(out_lines) or _with_meta('path("out")') + ", emit: out"
     touch = "touch " + " ".join(touches or ["out"])
     return (
         f'// PLACEHOLDER — no catalogued Nextflow command for "{tool}". The wiring is real; the\n'
         f"// command is not. `-stub-run` validates the DAG; a real run fails here until filled.\n"
         f"process {proc} {{\n"
-        f'    tag "${{params.sample}}"\n\n'
+        f'    tag "${{meta.id}}"\n\n'
         f"    input:\n    {in_decls}\n\n"
         f"    output:\n    {outs}\n\n"
         f'    script:\n    """\n'
@@ -271,7 +307,16 @@ def _render_main(
 
     src_lines = []
     if needs_reads:
-        src_lines.append("    ch_reads = Channel.value([file(params.read1), file(params.read2)])")
+        # Per-sample fan-out (W4): a samplesheet (sample,fastq_1,fastq_2) → a QUEUE channel of one
+        # `[meta, r1, r2]` per row, so each sample's chain runs independently. A single-row sheet is
+        # a degenerate fan-out of 1 (the live HG002 intake path is preserved). References stay value
+        # channels below, broadcast to every sample.
+        src_lines.append("    ch_reads = Channel.fromPath(params.input)")
+        src_lines.append("        .splitCsv(header: true)")
+        src_lines.append(
+            "        .map { row -> tuple([id: row.sample], "
+            "file(row.fastq_1), file(row.fastq_2)) }"
+        )
     for param in sorted(ref_params):
         if param in INDEXED_REFERENCE_PARAMS:
             # Stage the file + every `<file>.*` sidecar index (a bwa-mem2/samtools-indexed FASTA)
@@ -285,9 +330,10 @@ def _render_main(
 
     calls = []
     for n in order:
+        agg = _is_aggregator(n.tool)
         args = []
         for i, kind in enumerate(n.ins):
-            args.append(_input_channel(n, i, kind, incoming, nodes, call_name))
+            args.append(_input_channel(n, i, kind, incoming, nodes, call_name, agg))
         calls.append(f"    {call_name[n.id]}({', '.join(args)})")
 
     body = "\n".join([*src_lines, "", *calls]) if src_lines else "\n".join(calls)
@@ -307,17 +353,21 @@ def _input_channel(
     incoming: dict[tuple[str, int], tuple[str, int]],
     nodes: dict[str, NfNode],
     call_name: dict[str, str],
+    aggregator: bool = False,
 ) -> str:
-    """The Nextflow channel expression feeding input port ``idx`` of ``node``."""
+    """The Nextflow channel expression feeding input port ``idx`` of ``node``. For an AGGREGATOR
+    (MultiQC), a per-sample upstream stream is meta-stripped and pooled across samples
+    (``.map { it[1] }.collect()``) so the aggregator runs once over every sample's files."""
     if (node.id, idx) in incoming:
         from_node, from_idx = incoming[(node.id, idx)]
         src = nodes[from_node]
         if src.is_source():
             return f"ch_{REFERENCE_PARAM[src.outs[from_idx]]}"
-        return f"{call_name[from_node]}.out.{src.outs[from_idx]}"
+        chan = f"{call_name[from_node]}.out.{src.outs[from_idx]}"
+        return f"{chan}.map {{ it[1] }}.collect()" if aggregator else chan
     # Unwired input = a pipeline source.
     if kind == "fastq":
-        return "ch_reads"
+        return "ch_reads.map { it[1] }.collect()" if aggregator else "ch_reads"
     if kind in REFERENCE_PARAM:
         return f"ch_{REFERENCE_PARAM[kind]}"
     return f"ch_{kind}"
@@ -326,9 +376,9 @@ def _input_channel(
 def _render_config(
     name: str, ref_params: set[str], needs_reads: bool, extra_params: set[str]
 ) -> str:
-    params = ["    sample     = 'HG002'"]
+    params = []
     if needs_reads:
-        params += ["    read1      = null", "    read2      = null"]
+        params.append("    input      = null")  # samplesheet: sample,fastq_1,fastq_2 (W4 fan-out)
     for p in sorted(ref_params):
         params.append(f"    {p:<10} = null")
     for p in sorted(extra_params):
@@ -342,14 +392,37 @@ def _render_config(
         f"    nextflowVersion = '>=23.04.0'\n"
         f"}}\n\n"
         f"params {{\n" + "\n".join(params) + "\n}\n\n"
-        "process {\n    cpus = 2\n}\n\n"
-        "profiles {\n"
-        "    conda       { conda.enabled = true }\n"
-        "    docker      { docker.enabled = true }\n"
-        "    singularity { singularity.enabled = true }\n"
-        "    stub        { }\n"
-        "}\n"
+        "process {\n    cpus = 2\n}\n\n" + _PROFILES_BLOCK
     )
+
+
+# Executor profiles (W4, ADR-0003 — same graph, executor chosen by profile). The DRIVER picks one
+# at the run boundary (compose ≠ execute): `sbatch` on PATH → `slurm`, else `standard`. This text is
+# CONFIG-VERIFIED, not cluster-verified — the demo env has no sbatch; the emission + the driver's
+# branch are tested, a real cluster run is not. SLURM knobs are env-driven (PIPEGUARD_SLURM_*), so
+# the profile SHAPE is self-describing while its values stay site-tunable without a recompile.
+_PROFILES_BLOCK = """profiles {
+    // Local single-thread-serial fallback (the demo default): one sample at a time, one fork,
+    // one CPU. 'standard' is Nextflow's implicit default, so a plain `nextflow run` runs serially.
+    standard {
+        executor.queueSize = 1
+        process.maxForks   = 1
+        process.cpus       = 1
+    }
+    // Cluster execution: one sbatch job per process instance, so samples run in parallel. Queue,
+    // clusterOptions (e.g. '-A account') and the in-flight cap are env-driven, never baked guesses.
+    slurm {
+        process.executor       = 'slurm'
+        process.queue          = System.getenv('PIPEGUARD_SLURM_QUEUE') ?: 'normal'
+        process.clusterOptions = System.getenv('PIPEGUARD_SLURM_CLUSTER_OPTIONS') ?: ''
+        executor.queueSize     = (System.getenv('PIPEGUARD_SLURM_QUEUE_SIZE') ?: '50').toInteger()
+    }
+    conda       { conda.enabled = true }
+    docker      { docker.enabled = true }
+    singularity { singularity.enabled = true }
+    stub        { }
+}
+"""
 
 
 def _render_readme(name: str, order: list[NfNode], call_name: dict[str, str]) -> str:
@@ -359,10 +432,11 @@ def _render_readme(name: str, order: list[NfNode], call_name: dict[str, str]) ->
         f"Generated by PipeGuard from a Pipeline-Builder card graph (ADR-0003). PipeGuard\n"
         f"composed this — it did not run it (compose ≠ execute). Validate with no data/tools:\n\n"
         f"```bash\nnextflow run main.nf -stub-run\n```\n\n"
-        f"Run for real (bioconda tools on PATH), e.g.:\n\n"
-        f"```bash\nnextflow run main.nf -profile conda \\\n"
-        f"  --read1 R1.fastq.gz --read2 R2.fastq.gz \\\n"
-        f"  --reference ref.fa --panel_bed panel.bed\n```\n\n"
+        f"Run for real (bioconda tools on PATH). `--input` is a samplesheet with a header row\n"
+        f"`sample,fastq_1,fastq_2` and one row per sample (fans out per sample); pick an executor\n"
+        f"profile — `standard` (local, one sample at a time) or `slurm` (one job per sample):\n\n"
+        f"```bash\nnextflow run main.nf -profile conda,standard \\\n"
+        f"  --input samplesheet.csv --reference ref.fa --panel_bed panel.bed\n```\n\n"
         f"## Steps (topological order)\n\n{steps}\n"
     )
 

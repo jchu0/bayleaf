@@ -40,18 +40,26 @@ def test_germline_bundle_has_the_expected_files() -> None:
 
 def test_germline_channel_wiring_matches_the_typed_ports() -> None:
     main = compile_graph(germline_graph()).main_nf
-    # Each edge in the graph must appear as an UPSTREAM.out.<kind> argument.
+    # Each edge in the graph must appear as an UPSTREAM.out.<kind> argument. Per-sample meta rides
+    # INSIDE the tuple, so the spine's channel expressions are unchanged by the fan-out (W4).
     assert "BWA_MEM2_MEM(FASTP.out.fastq, ch_reference)" in main
     assert "SAMTOOLS_MARKDUP(BWA_MEM2_MEM.out.bam)" in main
     assert "MOSDEPTH(SAMTOOLS_MARKDUP.out.bam, ch_panel_bed)" in main
     assert "BCFTOOLS_CALL(SAMTOOLS_MARKDUP.out.bam, ch_reference, ch_panel_bed)" in main
     assert "BCFTOOLS_NORM(BCFTOOLS_CALL.out.vcf, ch_reference)" in main
+    # MultiQC is the cross-sample AGGREGATOR: every QC stream is meta-stripped + pooled (W3/W4),
+    # including the newly-wired samtools_stats + mosdepth_thresholds.
     assert (
-        "MULTIQC(FASTP.out.fastp_json, SAMTOOLS_MARKDUP.out.markdup_metrics, "
-        "MOSDEPTH.out.mosdepth_summary)" in main
+        "MULTIQC(FASTP.out.fastp_json.map { it[1] }.collect(), "
+        "SAMTOOLS_MARKDUP.out.markdup_metrics.map { it[1] }.collect(), "
+        "SAMTOOLS_MARKDUP.out.samtools_stats.map { it[1] }.collect(), "
+        "MOSDEPTH.out.mosdepth_summary.map { it[1] }.collect(), "
+        "MOSDEPTH.out.mosdepth_thresholds.map { it[1] }.collect())" in main
     )
-    # Unwired inputs became pipeline-source channels; the FASTA stages its index sidecars too.
-    assert "ch_reads = Channel.value([file(params.read1), file(params.read2)])" in main
+    # Reads are a per-sample QUEUE channel from a samplesheet; the FASTA stages its index sidecars.
+    assert "ch_reads = Channel.fromPath(params.input)" in main
+    assert ".splitCsv(header: true)" in main
+    assert ".map { row -> tuple([id: row.sample], file(row.fastq_1), file(row.fastq_2)) }" in main
     ref_ch = 'ch_reference = Channel.value([file(params.reference), file("${params.reference}.*")])'
     assert ref_ch in main
 
@@ -63,6 +71,69 @@ def test_a_process_carries_a_real_command_and_a_stub() -> None:
     assert "fastp -i ${read1} -I ${read2}" in fastp  # the real command
     assert "conda 'bioconda::fastp=0.23.4'" in fastp
     assert "stub:" in fastp and "touch" in fastp  # -stub-run has something to run
+
+
+# ── W4: per-sample fan-out + executor profiles ───────────────────────────────────
+def test_reads_are_a_per_sample_queue_channel_from_a_samplesheet() -> None:
+    """Fan-out (W4): reads become a samplesheet-driven QUEUE channel of `[meta, r1, r2]` per row,
+    not a single-sample value channel — so each sample's chain runs independently."""
+    main = compile_graph(germline_graph()).main_nf
+    assert "ch_reads = Channel.fromPath(params.input)" in main
+    assert "tuple([id: row.sample], file(row.fastq_1), file(row.fastq_2))" in main
+    assert "Channel.value([file(params.read1)" not in main  # the old single-sample shape is gone
+
+
+def test_per_sample_process_threads_the_meta_map() -> None:
+    """A per-sample process carries `[meta, files]` on its non-reference ports + tags by sample;
+    reference inputs stay meta-free shared value channels."""
+    files = compile_graph(germline_graph()).files
+    bwa = files["modules/bwa_mem2_mem.nf"]
+    assert 'tag "${meta.id}"' in bwa
+    assert "tuple val(meta), path(read1), path(read2)" in bwa  # per-sample reads, meta-threaded
+    assert "tuple path(reference), path(reference_idx)" in bwa  # reference: value channel, no meta
+    assert "tuple val(meta), path(\"*.aligned.bam\"), emit: bam" in bwa
+
+
+def test_multiqc_is_a_cross_sample_aggregator() -> None:
+    """MultiQC (per_sample=False) drops the meta and pools every sample's QC into one report; its
+    module carries no `val(meta)` and no per-sample tag."""
+    files = compile_graph(germline_graph())
+    multiqc = files.files["modules/multiqc.nf"]
+    assert "val(meta)" not in multiqc
+    assert 'tag "${meta.id}"' not in multiqc
+    assert 'path("multiqc_data/multiqc_data.json"), emit: multiqc_json' in multiqc
+
+
+def test_config_emits_standard_and_slurm_executor_profiles() -> None:
+    """W4: the emitted config carries a local single-thread-serial `standard` profile AND an
+    env-driven `slurm` profile. Config-verified, not cluster-verified."""
+    cfg = compile_graph(germline_graph()).files["nextflow.config"]
+    # local-serial fallback
+    assert "standard {" in cfg
+    assert "executor.queueSize = 1" in cfg
+    assert "process.maxForks   = 1" in cfg
+    assert "process.cpus       = 1" in cfg
+    # slurm — env-driven knobs, never hardcoded guesses
+    assert "slurm {" in cfg
+    assert "process.executor       = 'slurm'" in cfg
+    assert "System.getenv('PIPEGUARD_SLURM_QUEUE')" in cfg
+    # the reads param is now the samplesheet `input`, not read1/read2
+    assert "input      = null" in cfg
+    assert "read1" not in cfg and "read2" not in cfg
+
+
+def test_full_port_graph_wires_the_new_qc_streams() -> None:
+    """W3: samtools_stats + fastp_html are produced (were dangling reserved ports); samtools_stats
+    + mosdepth_thresholds are ingested by MultiQC (were unconsumed)."""
+    files = compile_graph(germline_graph()).files
+    markdup = files["modules/samtools_markdup.nf"]
+    assert "samtools stats ${meta.id}.dedup.bam > ${meta.id}.samtools_stats.txt" in markdup
+    assert "emit: samtools_stats" in markdup
+    assert "emit: fastp_html" in files["modules/fastp.nf"]
+    assert 'path("*.fastp.html")' in files["modules/fastp.nf"]
+    main = files["main.nf"]
+    assert "SAMTOOLS_MARKDUP.out.samtools_stats.map { it[1] }.collect()" in main
+    assert "MOSDEPTH.out.mosdepth_thresholds.map { it[1] }.collect()" in main
 
 
 # ── drift guard: the committed reference IS the compiler output ──────────────────
@@ -171,10 +242,14 @@ def test_generated_germline_stub_runs(tmp_path: Path) -> None:
     inputs += ["ref.fa.fai", "ref.fa.bwt.2bit.64"]  # bwa-mem2 + samtools sidecars
     for name in inputs:
         (tmp_path / name).write_text("", encoding="utf-8")
+    # A one-row samplesheet drives the per-sample queue channel (fan-out of 1 exercises the DAG).
+    (tmp_path / "samplesheet.csv").write_text(
+        "sample,fastq_1,fastq_2\nHG002,r1.fastq.gz,r2.fastq.gz\n", encoding="utf-8"
+    )
 
     proc = subprocess.run(
         [nextflow, "run", str(tmp_path / "main.nf"), "-stub-run",
-         "--read1", str(tmp_path / "r1.fastq.gz"), "--read2", str(tmp_path / "r2.fastq.gz"),
+         "--input", str(tmp_path / "samplesheet.csv"),
          "--reference", str(tmp_path / "ref.fa"), "--panel_bed", str(tmp_path / "panel.bed")],
         cwd=tmp_path, capture_output=True, text=True, timeout=300, env=os.environ,
     )  # fmt: skip
