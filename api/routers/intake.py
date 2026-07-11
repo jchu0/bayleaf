@@ -2,10 +2,13 @@
 
 The Submit-samplesheet screen registers a run and hands off here; this endpoint TRIGGERS the
 external pipeline driver (``scripts/run_giab_pipeline.py``) as a background subprocess and the
-resulting ``data/<run_id>/`` becomes gate-able. **compose ≠ execute holds at the core:**
-``src/pipeguard/`` never runs a tool — the API layer triggers the external driver, exactly like
-the Pipeline Builder's Nextflow hand-off. The driver needs the bioconda toolchain on PATH; inject
-it via ``PIPEGUARD_BIOCONDA_BIN`` (a plain ``uv run uvicorn`` without it fails every submit).
+resulting ``data/<run_id>/`` becomes gate-able. The driver is **Nextflow-first** (ADR-0003): it
+runs ``pipelines/germline/main.nf`` — the SAME pipeline the Pipeline Builder compiles from its
+cards — via ``nextflow run``, then parses the published QC outputs into the run dir. **compose ≠
+execute holds at the core:** ``src/pipeguard/`` never runs a tool — the API layer triggers the
+external driver, which orchestrates the toolchain through Nextflow. The driver needs ``nextflow`` +
+a JRE + the bioconda tools on PATH; inject the env bin via ``PIPEGUARD_BIOCONDA_BIN`` (a plain
+``uv run uvicorn`` without it fails every submit).
 
 Demo scope: only ``HG002`` has real panel reads on disk, so the endpoint processes exactly the
 samples in a server-side fixture registry and reports the rest as honestly *skipped* (registered,
