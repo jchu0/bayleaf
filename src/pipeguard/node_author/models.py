@@ -48,16 +48,25 @@ ARTIFACT_KINDS: frozenset[str] = frozenset(
     {
         "bai",
         "bam",
+        # fastp_html + samtools_stats + the mosdepth *_dist/regions byproducts were promoted from
+        # reserved to real, wireable (optional) port kinds in the frontend builder (W4 full-port
+        # wiring, BuilderShared.tsx PORT_STATE). Mirrored here so the backend vocabulary matches —
+        # a proposed node's port for these kinds is now `known` (a live typed slot), not reserved.
+        "fastp_html",
         "fastp_json",
         "fastq",
         "filtered_vcf",
         "markdup_metrics",
+        "mosdepth_global_dist",
+        "mosdepth_region_dist",
+        "mosdepth_regions",
         "mosdepth_summary",
         "mosdepth_thresholds",
         "multiqc_json",
         "ngscheckmate",
         "panel_bed",
         "reference_fasta",
+        "samtools_stats",
         "truth_vcf",
         "vcf",
     }

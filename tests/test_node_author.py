@@ -100,10 +100,13 @@ def test_proposal_ports_use_only_real_kinds_and_flag_unknowns_reserved():
     reserved_ports = [p for p in (*proposal.inputs, *proposal.outputs) if not p.known]
     assert live, "expected at least one live typed port"
     assert all(p.kind in ARTIFACT_KINDS for p in live)
-    # fastp documents real-but-unregistered I/O (adapter_fasta in, fastp_html out) as reserved.
+    # fastp documents real-but-unregistered I/O (adapter_fasta in) as reserved. fastp_html was
+    # promoted into the real vocabulary (W4 full-port wiring), so it is now a live typed port —
+    # NOT reserved — proving the backend mirror tracks the frontend's ARTIFACT_KINDS.
     assert reserved_ports and all(p.kind not in ARTIFACT_KINDS for p in reserved_ports)
     assert proposal.reserved_kinds == sorted({p.kind for p in reserved_ports})
-    assert "fastp_html" in proposal.reserved_kinds
+    assert "adapter_fasta" in proposal.reserved_kinds
+    assert "fastp_html" in ARTIFACT_KINDS and "fastp_html" not in proposal.reserved_kinds
 
 
 def test_no_proposal_ever_invents_a_port_kind_across_the_corpus():

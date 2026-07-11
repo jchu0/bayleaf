@@ -87,3 +87,7 @@ events — one per actionable card (S4, S5). These are test-pinned, so the demo 
   runbook, event-sourced provenance.
 - **Production intent:** framework-agnostic core; FastAPI seam; SQLite→Postgres via a
   repository port; Nextflow for compute portability.
+- **Pipeline authoring + approval gate:** the Builder composes a typed-port DAG → **draft →
+  submit → approve** (ADR-0017); `POST /api/pipelines/run` executes only the approver-blessed
+  baseline (an unapproved draft is a 409, a posted graph is refused). `scripts/seed_approved_germline.py`
+  seeds an approved `germline-panel` for the optional Builder Run beat; see the run-of-show.

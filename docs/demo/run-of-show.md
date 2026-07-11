@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | presenter |
-| **Related** | [demo_plan.md](demo_plan.md) (narrative + wow moments this script drives), [one-pager.md](one-pager.md), [../design/architecture.md](../design/architecture.md), [../data/provenance.md](../data/provenance.md), [../quality/evaluation.md](../quality/evaluation.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
+| **Related** | [demo_plan.md](demo_plan.md) (narrative + wow moments this script drives), [one-pager.md](one-pager.md), [../design/architecture.md](../design/architecture.md), [../data/provenance.md](../data/provenance.md), [../quality/evaluation.md](../quality/evaluation.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the draft→approve gate the optional Builder Run beat drives) |
 
 ## Overview
 
@@ -41,6 +41,11 @@ is skipped under pressure.
    → expect `[('S4','escalate'), ('S5','hold'), ('S1','proceed'), ('S2','proceed'), ('S3','proceed')]`.
 8. **[ ] Streamlit fallback armed** in a 4th terminal, ready to launch if React/API dies:
    `uv run streamlit run app/streamlit_app.py` (see Fallback ladder).
+9. **[ ] (Only if showing the optional Builder Run beat) Seed the approved germline baseline:**
+   `uv run python -m scripts.seed_approved_germline`. `POST /api/pipelines/run` only runs an
+   **approver-blessed** pipeline (the W1 approval gate, ADR-0017) — a fresh store has none, so this
+   composes → saves → submits → **approves** the germline chain, making `germline-panel` runnable by
+   name. Idempotent (re-running mints no duplicate); skip this item if you're not demoing the Run beat.
 
 ## The script
 
@@ -96,6 +101,27 @@ Safe variant if Slack is unavailable (builds + records, **sends nothing, $0**):
 ```bash
 uv run python -m pipeguard.notify data/mock_run_01
 ```
+
+### Optional beat — Builder: compose → Save → Approve → Run (W1 approval gate)
+
+Off the 5:00 clock; run only if the slot has room or a judge asks "how does a pipeline get
+authored + executed?" It shows the **draft → approve → run** lifecycle (ADR-0017) — the guardrail
+that a run executes only an **approver-blessed** pipeline, never a raw client graph.
+
+1. **Compose** — Pipeline Builder (`/builder`) → **New → From template** seeds the editable
+   germline chain (fastp → bwa-mem2 → markdup → {mosdepth, bcftools call → norm} → MultiQC).
+2. **Save** (as a reviewer) → the graph is a **draft**. **Submit → Approve** (as an approver) →
+   it becomes the emitted baseline. (Or skip the clicks: Pre-flight item 9's
+   `scripts/seed_approved_germline.py` seeds an approved `germline-panel` directly.)
+3. **Run** — `POST /api/pipelines/run` names that approved pipeline; it compiles the blessed graph
+   to Nextflow and hands off to the driver. **Say:** "A draft can't run — the gate is a 409 until an
+   approver blesses it; and a client can't smuggle a raw graph to run. Only the approved baseline
+   executes." **Fallback:** if the run driver isn't wired (no `nextflow`/reads on the demo box),
+   narrate the gate from the Builder — the 409-without-approval → 202-with-approval boundary is the
+   point, not a live compute run (compose ≠ execute).
+
+> The whole lifecycle is pinned offline by `tests/test_e2e_pipeline.py` (the acceptance test:
+> sheet → run → report, execution stubbed) — so this beat is demonstrable even with no `nextflow`.
 
 ## Fallback ladder (global)
 
