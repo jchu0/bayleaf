@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md) |
 
 ## Overview
 
@@ -197,12 +197,14 @@ node-authoring agent).
    pipeline-repair (REQ-F-023) and archivist (REQ-F-024) calls, each invoking an advisory agent
    **without re-entering the verdict path** — all read-only over already-decided artifacts.
    *Trace:* [architecture.md](../design/architecture.md), [agents.md](../design/agents.md), ADR-0010.
-3. **REQ-F-042 — Operator screens.** The UI presents **11 operator screens** (was 10 when this
-   entry was first written; Inbox — REQ-F-077 — is new as of Wave 7, T-108; this count corrects a
-   stale drift caught during the Wave 8 sweep), rebuilt to the refreshed design prototype
+3. **REQ-F-042 — Operator screens.** The UI presents **12 operator screens** (was 11 when this
+   entry was last corrected; Sample accessioning — REQ-F-082 — is new as of Wave 9, T-117),
+   rebuilt to the refreshed design prototype
    (`docs/design/frontend/`, 2026-07-09) in a **three-group nav** — **Operate** (reordered
-   2026-07-10, Wave 8, T-110, G4, to Notification→Action→Steps): Inbox (REQ-F-077), review queue
-   (tickets w/ role-gated actions, REQ-F-063), submit samplesheet (register a run's
+   2026-07-10, Wave 8, T-110, G4, to Notification→Action→Steps, then Wave 9, T-117, to lead the
+   Steps sub-sequence with accessioning): Inbox (REQ-F-077), review queue
+   (tickets w/ role-gated actions, REQ-F-063), sample accessioning (a CRM subject/sample
+   registration step upstream of the samplesheet — REQ-F-082), submit samplesheet (register a run's
    SampleSheet/FASTQ and hand off to the `POST /api/runs` execution boundary — REQ-F-067;
    compose≠execute still holds at the core), runs overview (per-verdict counts + needs-attention +
    a client-side scale kit: search/facet/sort/date-range/paginate; the top-bar run switcher shares
@@ -216,9 +218,12 @@ node-authoring agent).
    REQ-F-079) and settings (runbook thresholds, labelled illustrative). A separate Admin
    governance screen sits outside this operator nav, gated on the login identity's **`isAdmin`**
    (a frontend-only governance capability layered over the wire roles, **not** "any approver" —
-   REQ-F-066/REQ-F-069) — off the deterministic gate, it is not counted among the 11. A shared
+   REQ-F-066/REQ-F-069) — off the deterministic gate, it is not counted among the 12. A shared
    `RoleContext` (reviewer|approver) drives every RBAC-gated control, and now exposes a
-   full `setActor(actor)` (id+role together) consumed by Admin's "Act as" (REQ-F-066). Screens
+   full `setActor(actor)` (id+role together) consumed by Admin's "Act as" (REQ-F-066). A
+   **second, distinct** frontend-only governance layer, the page-access **view-gate**
+   (REQ-F-082), additionally filters which of these 12 screens a given user's nav even shows —
+   layered over, not replacing, `RoleContext`. Screens
    state their data boundary rather than fabricate instrument/compute artifacts the FASTQ-first
    build doesn't capture; one honest gap is explicitly rendered empty rather than invented:
    Monitoring's Median-review KPI (no backend field — its signature-level `first_seen`/
@@ -872,6 +877,68 @@ had reserved or listed as *not-yet-built*.
     [design/frontend/README.md](../design/frontend/README.md) §5.3,
     [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md) (commit `1052e15`),
     [tasks T-112](../planning/tasks.md).
+22. **REQ-F-081 — Canonical Bar component + Truncate applied (G3/G2).** `components/Bar.tsx`
+    (2026-07-10, Wave 9, T-116, commit `3e592d8`) gives every distribution/meter bar in the app
+    ONE geometry (`h-2 · rounded-[5px]`, 2px segment gaps — was three heights, two radii, two gap
+    sizes across the app). **`SegmentBar`** (a proportional multi-segment distribution; zero-value
+    segments drop out so a strip never lies about the mix) now backs the Runs verdict bar, the
+    Decision-cards `DecisionVerdictBar`, and the Review-queue `ReviewStatusBar` — verified: all
+    three now `import { SegmentBar } from './Bar'` / `'../components/Bar'`. **`MeterBar`** (a
+    single value against a track) now backs the Intake yield bar and the Monitoring gate-pass bars
+    — verified the same way. Colors pass as full Tailwind utility classes (not string-interpolated)
+    so the compiler emits them and theming holds in light+dark. Separately, `components/
+    Truncate.tsx` (shipped Wave 8/T-115 with zero call sites) is **applied for the first time**, to
+    the decision-card headline in `RunDetail.tsx` (verified: `grep -n Truncate RunDetail.tsx` →
+    one import + one JSX use at line 288; `grep -rln Truncate frontend/src` now returns exactly
+    `RunDetail.tsx` plus the component's own file). **This narrows, not closes, the open item this
+    doc's Notes/deferred §4 previously tracked** — a broader sweep of other truncated card strings
+    (run ids, sample names, artifact paths) remains explicitly open. Frontend-only (`git diff
+    --stat 109557e 3e592d8 -- src/ api/ tests/` empty). *Trace:*
+    [design/frontend/README.md](../design/frontend/README.md) §5.2/§9,
+    [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md) (commit `3e592d8`),
+    [tasks T-116](../planning/tasks.md).
+23. **REQ-F-082 — Page-access RBAC view-gate + sample-accessioning CRM screen (G1).** A second
+    frontend-only governance capability (2026-07-10, Wave 9, T-117, commit `66b14e4`), layered
+    over the wire roles exactly like the existing `isAdmin` capability, and — the maintainer's
+    explicit distinction — **NOT authorization**: `api/auth.py`'s `require_role` is verified
+    unchanged in the diff and remains the sole server-side write check. `access.ts` — a closed
+    12-page `PageId` catalog (`admin` intentionally excluded so an admin can never be page-gated
+    out of governance), 6 read-only `ACCESS_PROFILES` (accessioning/wetlab/analysis/review/
+    approval/governance), a per-user `UserGrant{profiles, overrides}`, and an `ACCESS_FLOOR` (Runs
+    + Decision cards) re-asserted LAST in `effectivePages()` so no deny override can strand a user
+    (verified: the floor re-assertion is the final statement in the function body).
+    `context/AccessContext.tsx` resolves `canSee = isAdmin || !enforce || canSeePage(...)` against
+    the ACTING actor (`actor.id`), so Admin's "Act as" naturally previews the impersonated user's
+    nav; `localStorage`-persisted; every mutation appends a client-side `AccessAuditEntry` that
+    merges into the Admin Activity log (badged "client-side," never confused with the three
+    backend-persisted feed kinds). `App.tsx`'s new `<RequirePage page=…>` wraps every gated route
+    → `components/PageAccessDenied.tsx`; `/admin`'s own route carries no `page` prop, so it stays
+    governed solely by its pre-existing `isAdmin` guard, unaffected. `Sidebar.tsx`'s `useNav` now
+    filters every nav item through `canSee` and drops any group left empty. Admin gains a fourth
+    "Page access" tab (`components/AccessEditor.tsx`) — a paginated roster, a staged draft (profile
+    checkboxes + a tri-state Inherit/Allow/Deny override per page), a live effective-nav preview,
+    Save behind `useConfirm` (REQ-F-075), an Enforcement On/Off master switch, Reset to defaults,
+    and a prominent "gates VIEWS not API enforcement" banner. New `screens/Accession.tsx`
+    (`/accession`, leading the Operate "Steps" sub-sequence ahead of Submit — REQ-F-042) composes
+    an `AccessionRecord[]` (drop a `sample_metadata.csv` via a tolerant parser — a missing/renamed
+    column degrades to an empty cell, never a crash — or add subjects by hand, paginated,
+    controlled-vocab dropdowns for tissue/sex/consent, checkbox multi-remove behind `useConfirm`),
+    Export CSV, Save draft, and "Send to wetlab intake" (behind `useConfirm`) → a client-side
+    `{subject_id, tissue}` `localStorage` one-shot handoff that `Submit.tsx` (REQ-F-074) now reads
+    on mount and pre-attaches, then clears. **PII/PHI seam, verified against the actual guard:**
+    no `AccessionRecord` field is ever sent over the network — `Accession.tsx`/`lib/accession.ts`
+    make zero `api` calls; the screen's own banner cites `POST /api/runs`'s `SubmitRunIn`/
+    `SampleIn` (`api/routers/intake.py`, confirmed unmodified) carrying no subject field and
+    `extra="forbid"`, so subject/PII persistence is a labelled, not-yet-built data-platform seam
+    (see [nonfunctional.md REQ-NF-023/REQ-NF-024](nonfunctional.md)); DOB/MRN are deliberately not
+    modeled as fields (PHI) — only lab-operational fields (collection date, accession #, site)
+    exist, and even those never leave the browser. `lib/csv.ts` extracts the shared tolerant CSV
+    parser (`splitCsv`/`colIndex`/`csvCell`) out of `Submit.tsx`, behavior-identically, so both
+    screens use one implementation. Frontend-only (`git diff --stat 3e592d8 66b14e4 -- src/ api/
+    tests/` empty). *Trace:* [design/frontend/README.md](../design/frontend/README.md) §4/§5.12/
+    §11, [architecture.md](../design/architecture.md),
+    [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md) (commit `66b14e4`),
+    [tasks T-117](../planning/tasks.md).
 
 ## Notes / deferred
 
@@ -883,7 +950,15 @@ had reserved or listed as *not-yet-built*.
 3. **IB4 — Inbox per-reminder external notification + cadence** (Slack/Discord/Teams/email,
    REQ-F-077) remains deferred as of Wave 8 (T-113) — the largest remaining Inbox item.
 4. **`components/Truncate.tsx`** (a full-text-on-hover primitive, Wave 8/T-115) shipped with no
-   call sites yet anywhere in `frontend/src` — added, not yet applied.
+   call sites; **now applied to one site** (the decision-card headline, Wave 9/T-116, REQ-F-081) —
+   a broader sweep of other truncated card strings (run ids, sample names, artifact paths) remains
+   open.
+5. **Subject/PII persistence** for the new Accession screen (REQ-F-082) is parsed and displayed
+   client-side only, not yet persisted server-side — gated on the data-platform PII/de-id design
+   (`POST /api/runs` stays `extra="forbid"` on any subject field).
+6. **Page-access enforcement is client-side only** (REQ-F-082) — a UI view-gate, not a
+   server-side authorization boundary; a production build would need to enforce page/read access
+   in `api/`, not just hide nav items in `frontend/`.
 
 ---
 

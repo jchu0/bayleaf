@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md) |
 
 ## Overview
 
@@ -424,6 +424,42 @@ Every finding and verdict is labelled with the gate it came from:
      (`BuilderShared`'s `ARTIFACT_KINDS` read `GIAB_LOC` before its declaration). A new
      `components/Truncate.tsx` full-text-on-hover primitive ("G2") **shipped with no call sites
      yet** anywhere in `frontend/src` — an open item, not silently dropped.
+   - **Frontend fixes — Wave 9 (2026-07-10, commits `3e592d8`→`66b14e4`, T-116–T-117,
+     [journal](../journal/2026-07-10-frontend-wave9.md)), frontend-only, no verdict/gate/ADR-0001
+     boundary changed** (`git diff --stat 109557e 66b14e4 -- src/ api/ tests/` empty). **(1)
+     Canonical Bar + Truncate applied** (T-116, `3e592d8`, G3/G2): a new `components/Bar.tsx`
+     gives ONE bar geometry (`h-2 · rounded-[5px]`, 2px segment gaps) — `SegmentBar` (proportional
+     distribution) now backs the Runs verdict bar, `DecisionVerdictBar`, and `ReviewStatusBar`
+     (previously three slightly different strips); `MeterBar` (single value vs a track) now backs
+     the Intake yield bar and the Monitoring gate-pass bars. `components/Truncate.tsx` (shipped in
+     Wave 8 with zero call sites) is **applied for the first time**, to the decision-card headline
+     in `RunDetail.tsx` — **narrows, does not close, Wave 8's "no call sites" open item above**
+     (verified: `grep -rln Truncate frontend/src` now returns `RunDetail.tsx` plus the component's
+     own file; a broader sweep of other truncated card strings stays open). **(2) Page-access RBAC
+     view-gate + a sample-accessioning CRM screen** (T-117, `66b14e4`, G1): a second frontend-only
+     governance capability layered over the wire roles, shaped exactly like `isAdmin` — `access.ts`
+     (a closed 12-page `PageId` catalog, `admin` intentionally excluded; 6 read-only
+     `ACCESS_PROFILES`; a per-user `UserGrant{profiles, overrides}`; an `ACCESS_FLOOR` of Runs +
+     Decision cards re-asserted LAST in `effectivePages()` so no deny can strand a user) +
+     `context/AccessContext.tsx` (`canSee = isAdmin || !enforce || canSeePage(...)`, resolved
+     against the ACTING actor so Admin's Act-as previews the impersonated user's nav;
+     `localStorage`-persisted; every mutation appends a client-side audit entry merged into the
+     Admin Activity log). `App.tsx`'s new `<RequirePage page=…>` wraps every gated route;
+     `/admin` keeps its own, untouched `isAdmin` guard. Admin gains a fourth "Page access" tab
+     (a paginated roster, a staged draft with a live effective-nav preview, Save behind
+     `useConfirm`, an Enforcement On/Off switch, and a prominent "gates VIEWS not API enforcement"
+     banner) — **this is NOT authorization; `api/auth.py`'s `require_role` is untouched, every
+     real write is still checked server-side by wire role.** New `screens/Accession.tsx`
+     (`/accession`, leading the Operate "Steps" sub-sequence, ahead of Submit) composes an
+     `AccessionRecord[]` (drop a `sample_metadata.csv` or add subjects by hand; a paginated,
+     controlled-vocab table; checkbox multi-remove behind `useConfirm`), Export CSV, Save draft,
+     and "Send to wetlab intake" → a client-side `{subject_id, tissue}` `localStorage` handoff
+     `Submit.tsx` now reads on mount. **Every field stays client-side — nothing is transmitted**:
+     `POST /api/runs`'s `SubmitRunIn`/`SampleIn` carry no subject field and are `extra="forbid"`,
+     so subject/PII persistence is a labelled, not-yet-built data-platform seam; DOB/MRN are
+     deliberately not modeled (PHI). `lib/csv.ts` extracts the shared tolerant CSV parser out of
+     `Submit.tsx` (behavior-identical) so both screens use one implementation. **Operator screen
+     count is now 12** (was 11; Accession is new).
    **Honest, labelled frontend deferrals (no fabrication):** the Monitoring **Median-review KPI**
    (no backend field yet — the signature-level `first_seen`/`last_seen`/`trend`/`affected_run_ids`
    fields below ARE shipped); Submit now
@@ -437,12 +473,17 @@ Every finding and verdict is labelled with the gate it came from:
    run volume, a real concern once `synthetic/scale.py` (T-050) seeds a much larger window). The
    Builder's Run-hand-off / pipeline-repair / archivist modals + saved-profiles (T-069) and the
    reusable run-selector (T-070) are **both now closed** (batch 7 above) — this paragraph no
-   longer carries them as open gaps. Of the **11** operator screens (was 10; **Inbox is new as of
-   Wave 7**, T-108): 8 (Runs, Intake, Decision cards, Review queue,
+   longer carries them as open gaps. Of the **12** operator screens (was 11; **Sample accessioning
+   is new as of Wave 9**, T-117): 8 (Runs, Intake, Decision cards, Review queue,
    Provenance, Agent triage, Monitoring, Settings) trace to the pre-refresh [T-022b](../planning/tasks.md)
    1:1 fidelity pass, Pipeline Builder to [T-044](../planning/tasks.md), Submit was new in the
-   T-062 rebuild, and Inbox is new in Wave 7 (T-108); Admin (governance, not counted among the 11)
-   is new in the earlier maintainer-feedback batch.
+   T-062 rebuild, Inbox is new in Wave 7 (T-108), and Sample accessioning is new in Wave 9
+   (T-117); Admin (governance, not counted among the 12) is new in the earlier maintainer-feedback
+   batch. A **second, distinct frontend-only governance layer landed alongside it** (Wave 9,
+   T-117): a page-access view-gate (`access.ts` + `context/AccessContext.tsx`) that hides nav
+   items/routes a user's access profile lacks — honestly labelled throughout as gating VIEWS, not
+   API authorization, which still lives solely in `api/auth.py`'s wire-role `require_role`
+   (unchanged).
    The `api/` surface (all additive / backward-compatible; the core is untouched — sorting,
    paging, aggregation, product writes, the draft→approve authoring lifecycle, and auth all live
    in `api/`, never `src/pipeguard/`):

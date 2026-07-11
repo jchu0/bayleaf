@@ -49,6 +49,16 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
     Submit samplesheet → Runs → Intake gate → Decision cards — Notification (Inbox) → Action
     (Review queue) → Steps (the process flow), work/issue-tracking pages now sit above the
     process flow (was Submit → Runs → Intake → Decision cards → Review queue → Inbox).
+    **Sample accessioning now leads the Steps sub-sequence (2026-07-10, T-117, "Wave 9," G1):**
+    accession → submit → runs → intake → decide — the CRM subject-registration step is upstream
+    of the wetlab samplesheet, preserving G4's Notification→Action→Steps order rather than
+    sitting atop the whole group (see §5.12).
+  - **Page-access view-gate (2026-07-10, T-117, "Wave 9," G1).** A second frontend-only
+    governance capability, layered over the wire roles exactly like `isAdmin`: `useNav` now
+    filters every non-Admin nav item through `useAccess().canSee(page)` and drops any group left
+    empty, and `App.tsx` wraps each gated route in `<RequirePage page=…>` →
+    `components/PageAccessDenied.tsx`. **This gates VIEWS, not API enforcement** — `api/auth.py`'s
+    `require_role` still authorizes every real write, unchanged. See §11 (Page access tab).
   - **Analyze:** Provenance · Agent triage · Monitoring
   - **Configure:** Pipeline builder · Settings
   - **View selectors are `Tabs`, not `FacetChip` (2026-07-10, T-110, "Wave 8," G5).** A new
@@ -164,6 +174,16 @@ The pipeline's front door — registers a run + its samples **before processing*
   draft-only). Selection clears whenever the sample set is replaced (parse or BaseSpace import).
   **S3** — "Add sample" becomes a bounded bulk add: a count input (clamped 1–500) + Add appends N
   blank rows at once, so a 100-sample plate isn't 100 clicks.
+- **Accession → Submit handoff (Shipped 2026-07-10, "Wave 9," T-117, commit `66b14e4`, G1).** A
+  new upstream **Sample accessioning** screen (§5.12, `/accession`) composes subject/sample
+  metadata; its "Send to wetlab intake" writes a one-shot `{subject_id, tissue}` `localStorage`
+  courier (`lib/accession.ts`) that Submit now reads on mount (`useEffect` + `readHandoff()`),
+  pre-attaching subject metadata and merging tissue into the sample-type column exactly like an
+  uploaded `sample_metadata.csv` would — then clears the courier. A footer cross-link ("Subject
+  metadata is authored in Sample accessioning") always points there. `subject_id` stays
+  client-side only, same seam as the pre-existing `sample_metadata.csv` attach above. `lib/csv.ts`
+  now holds the one shared `splitCsv`/`colIndex` implementation both screens' parsers import
+  (extracted behavior-identically out of this file).
 
 ### 5.2 Runs  (`view: 'overview'`)
 Scale-kit list surface:
@@ -180,6 +200,9 @@ Scale-kit list surface:
 - **Shipped 2026-07-10 (T-099, commit `3c6dacb`):** the verdict bar is now capped
   `max-w-[300px]` (was full-row-width) with 2px gaps between segments so adjacent verdict tones
   (hold amber / rerun orange) read as distinct blocks instead of one bleeding gradient.
+- **Canonical geometry (Shipped 2026-07-10, "Wave 9," T-116, commit `3e592d8`, G3).** This bar
+  (and every other distribution/meter bar in the app) now renders through the shared
+  `components/Bar.tsx` — see §9 Tokens for the full consolidation.
 
 ### 5.3 Intake gate  (`view: 'intake'`)
 Preflight sample-admission review. **Collapsible admission rows** (consistent bar lengths,
@@ -483,6 +506,41 @@ notifications are DERIVED, client-side, from the already-off-gate review queue's
   badge, a calendar reminder lands as "Due today," bell-dropdown triage, no console errors. tsc +
   oxlint clean.
 
+### 5.12 Sample accessioning  (`/accession`) — Shipped 2026-07-10, T-117, commit `66b14e4`, "Wave 9," G1
+**Brand new**, not part of the original design pass above — added at the maintainer's request to
+give `sample_metadata.csv` (subject/sample accessioning, the CRM step) its own screen distinct
+from `SampleSheet.csv` (the wetlab samplesheet, §5.1). Sits **upstream** of Submit in the
+Operate "Steps" order (§4): accession → submit → runs → intake → decide. Composes an
+`AccessionRecord[]` and hands it off — it **never runs a tool** (compose ≠ execute).
+
+- **Compose.** Drop a `sample_metadata.csv` (`parseAccessionCsv`, tolerant — a missing/renamed
+  column degrades to an empty cell, never a crash, the same boundary discipline as Submit's
+  parser) or add subjects by hand (bounded 1–500 at a time). A controlled table — Subject ID ·
+  Sample ID · Tissue (dropdown, mirrors Submit's sample-type vocabulary) · Sex · Consent ·
+  Collected-on · Accession # · Site/study · Notes — with a leading checkbox column, header
+  select-all (real `indeterminate` state), and a confirmed "Remove N" (`useConfirm`, danger
+  tone). Paginated via the shared `Pager` (§5.6).
+- **PII/PHI seam banner (prominent, honest).** "Subject identifiers stay in your browser" — every
+  field on this screen is **client-side only**; nothing is transmitted. The banner names the
+  concrete guard: `POST /api/runs` (`api/routers/intake.py`'s `SubmitRunIn`/`SampleIn`) carries no
+  subject field and is `extra="forbid"`, so it would reject one — real subject/PII persistence is
+  gated behind the data-platform PII/de-identification design (a labelled, not-yet-built seam;
+  [nonfunctional.md REQ-NF-023](../../requirements/nonfunctional.md)). **DOB and MRN are
+  deliberately not collected** (PHI) — only lab-operational fields (collection date, accession #,
+  site) exist, and even those never leave the browser.
+- **Actions.** Export CSV (`toAccessionCsv`, round-trips through the parser, defaults to
+  `sample_metadata.csv`); Save draft (`localStorage`, survives a refresh); **Send to wetlab
+  intake** (behind `useConfirm`) → stashes a one-shot `{subject_id, tissue}` `localStorage`
+  handoff that Submit (§5.1) reads on mount and pre-attaches, then clears.
+- **Shared with Submit:** `lib/csv.ts` (`splitCsv`/`colIndex`/`csvCell`) — extracted
+  behavior-identically out of `Submit.tsx` so both screens' parsers share one tolerant
+  implementation instead of each minting its own.
+- **Access-gated:** like every other operator page, `/accession` is wrapped in
+  `<RequirePage page="accession">` (§11, Page access tab) — visible by default to every seeded
+  demo account's access profile except the narrowest ones, per `access.ts`'s `ACCESS_PROFILES`.
+- Verified in-browser: PII banner, upload/manual-add, export, save-draft, send-to-intake handoff
+  landing in Submit with a toast. tsc --noEmit + tsc -b + oxlint clean; no backend touched.
+
 ---
 
 ## 6. Pipeline builder — full model
@@ -548,10 +606,12 @@ untouched.
 - **Fix:** a module-init temporal-dead-zone crash — `BuilderShared`'s `ARTIFACT_KINDS` read
   `GIAB_LOC` before its declaration, which `tsc` didn't flag but blanked the app at runtime — was
   resolved by reordering the two declarations.
-- **`components/Truncate.tsx`** (a full-text-on-hover primitive, "G2") **was added this batch but
-  has no call sites yet anywhere in `frontend/src`** besides its own definition — shipped, not
-  yet applied to any overflow-prone label (run ids, sample names, artifact paths). Open item, not
-  silently dropped; see [tasks.md T-115](../../planning/tasks.md).
+- **`components/Truncate.tsx`** (a full-text-on-hover primitive, "G2") **was added this batch with
+  no call sites yet anywhere in `frontend/src`** besides its own definition — shipped, not yet
+  applied to any overflow-prone label (run ids, sample names, artifact paths). **Applied for the
+  first time 2026-07-10 ("Wave 9," T-116, commit `3e592d8`)** — to the decision-card headline in
+  `RunDetail.tsx` (§5.4) — but a broader sweep of the other truncated card strings remains
+  explicitly **open**, not silently dropped; see [tasks.md T-116](../../planning/tasks.md).
 
 **Nodes.** Three kinds — `tool`, `agent`, `gate`:
 - **Seeded germline chain** (fastp → bwa-mem2 → samtools markdup → {mosdepth, bcftools call →
@@ -740,6 +800,17 @@ new theme-aware `--canvas-dot` token (cool+subtle in light as of the revert, dim
 left **nav** is also now themeable (`--color-nav*`, §4 App shell, T-105) — previously dark in
 both modes.
 
+**Canonical Bar component (Shipped 2026-07-10, "Wave 9," T-116, commit `3e592d8`, G3).** Before
+this, the app carried three bar heights (`h-2`/`h-[11px]`), two corner radii (5/6px), and two
+segment-gap sizes across its distribution/meter bars. `components/Bar.tsx` now provides the ONE
+geometry (`h-2 · rounded-[5px]`, 2px segment gaps) every bar in the app renders through: **
+`SegmentBar`** (a proportional multi-segment distribution; zero-value segments drop out so a
+strip never lies about the mix) backs the Runs verdict bar (§5.2), the Decision-cards
+`DecisionVerdictBar` (§5.4), and the Review-queue `ReviewStatusBar` (§5.5); **`MeterBar`** (a
+single value against a track) backs the Intake yield bar (§5.3) and the Monitoring gate-pass bars
+(§5.8). Colors are passed as full Tailwind utility classes (not interpolated) so the compiler
+emits them and theming holds in both light and dark.
+
 ## 10. Files
 - `PipeGuard.html` — complete self-contained prototype (open in a browser).
 - `source/PipeGuard.dc.html` — annotated source (all data + handlers).
@@ -758,7 +829,8 @@ against `frontend/src/`.
 batch); tracked here because it shares the login/RBAC surface §4 now fronts. A screen at `/admin`,
 visible only when the LOGGED-IN identity's `isAdmin` is true (a frontend-only governance
 capability layered over viewer/reviewer/approver — an admin is an approver who also holds
-governance; **not** "any approver," which was the original, now-corrected framing). Three tabs:
+governance; **not** "any approver," which was the original, now-corrected framing). Four tabs
+(a fourth, **Page access**, added 2026-07-10, "Wave 9," T-117 — see 11.2 below):
 
 1. **Users & roles** — an explicit **client-mock** roster (there is no backend user store;
    `api/auth.py` is a header dev-shim) with a per-user role selector and an "Act as" control wired
@@ -778,15 +850,31 @@ governance; **not** "any approver," which was the original, now-corrected framin
    now also swaps which operator's **Inbox** (§5.11) is visible — `InboxContext` re-reads its
    `localStorage` overlay keyed on `actor.id` whenever the acting identity changes, so impersonating
    a user shows their real triage/board/reminders, not a shared one.
-2. **Activity log** — a REAL, zero-new-backend audit feed merging `GET /api/settings/thresholds`
+2. **Page access** (`components/AccessEditor.tsx`, new 2026-07-10, "Wave 9," T-117, commit
+   `66b14e4`, G1) — assigns the client-side page-access view-gate (§4, §5.12) per user. A
+   paginated (`Pager`) roster of the demo accounts; selecting one opens a staged **draft**: profile
+   checkboxes (the 6 read-only `ACCESS_PROFILES` — accessioning/wetlab/analysis/review/approval/
+   governance) plus a tri-state **Inherit/Allow/Deny** override select per individual page, with a
+   live effective-nav preview computed from the draft before it's saved. Nothing applies until
+   **Save** (behind `useConfirm`); a **Reset to defaults** restores the seeded `DEFAULT_ACCESS`
+   map; a master **Enforcement On/Off** switch is the escape hatch (off shows every page to
+   everyone). A persistent `ViewGateBanner` states, in the editor itself: **"Page access gates
+   VIEWS, not API enforcement"** — the API still authorizes every write by wire role
+   (`api/auth.py`, untouched); a production build would need to enforce page/read access
+   server-side too (a labelled seam). Every save appends a client-side `AccessAuditEntry`
+   (`localStorage`, no backend) that surfaces in the Activity log below, badged "client-side."
+3. **Activity log** — a REAL, zero-new-backend audit feed merging `GET /api/settings/thresholds`
    + `GET /api/pipelines` + `GET /api/review/tickets` into one append-only when/actor/kind/target/
    status table, filterable by kind via a **`Tabs`** view selector (2026-07-10, "Wave 8," T-110,
    G5; was `FacetChip` pills). **Shipped 2026-07-10 (T-093, commit `8a14661`, "A2"):**
    the feed now paginates (25/50/100 + a numbered pager, "Showing X–Y of Z," resets on filter
    change — was a flat, uncapped list that got messy as it grew) and each row is a compact
    summary that expands on click to a labelled Detail/Target/Actor/When panel (one open at a
-   time); no backend change.
-3. **System** — REAL reads of `GET /api/health` + the runbook's gate count + the metric-registry
+   time); no backend change. **Extended 2026-07-10 ("Wave 9," T-117):** a fourth `FeedKind`,
+   `access`, merges in the client-side page-access audit trail above (§11, item 2) — each row carries a
+   "client-side" badge so the append-only backend-persisted rows (threshold/pipeline/ticket) are
+   never confused with the localStorage-only access-governance ones.
+4. **System** — REAL reads of `GET /api/health` + the runbook's gate count + the metric-registry
    version/gated-count, labelled illustrative-not-clinical. **Shipped 2026-07-10 (T-094, commit
    `7c56564`, "A3/A4"):** gained an **Artifact-store** stat card (`local` · the
    `PIPEGUARD_ARTIFACT_STORE` s3 seam) and an **Observability** section linking the read-API's

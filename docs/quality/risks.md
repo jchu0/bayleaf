@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | all |
-| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-confirm-dialog-audit-gate.md](../journal/2026-07-10-confirm-dialog-audit-gate.md) |
+| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-confirm-dialog-audit-gate.md](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal/2026-07-10-frontend-wave9.md](../journal/2026-07-10-frontend-wave9.md) |
 
 ## Overview
 
@@ -317,6 +317,20 @@ tab (still the same client-mock roster this risk describes) now stages a role ch
 draft behind an explicit Save/Discard bar, and "Act as" confirms before impersonating — this
 makes the **legitimate** UI path deliberate/auditable but does **not** change the underlying
 posture above (a viewer can still bypass the UI entirely via `localStorage`).
+
+**Related, distinct client-side gate (2026-07-10, Wave 9, T-117, commit `66b14e4`).** A second,
+separate capability landed with the same shape and the same posture: a page-access **view-gate**
+(`frontend/src/access.ts` + `context/AccessContext.tsx`) lets Admin assign a per-user bundle of
+page-visibility profiles. Same exposure class as this risk (a viewer can edit `localStorage` to
+grant themselves every page, or flip `enforce` off), but **narrower blast radius** — it only hides
+nav items/routes client-side, and unlike the login gate it was never presented as any form of
+access control: the editor UI carries its own persistent banner ("gates VIEWS, not API
+enforcement") and `api/auth.py`'s `require_role` — the actual, unaffected authorization boundary
+for every real write — is verified unchanged in the diff. Not tracked as a separate RISK-NNN
+(same category/likelihood/impact/mitigation posture as this one, and it is explicitly labelled at
+the point of use rather than a hidden gap) — see [functional.md
+REQ-F-082](../requirements/functional.md) and [nonfunctional.md
+REQ-NF-024](../requirements/nonfunctional.md).
 
 **Further hardening (2026-07-10, T-102, commit `d65c9c1`):** Act-as's confirm now uses the same
 reusable, branded `ConfirmDialog`/`useConfirm()` gate the review queue adopted (replacing the

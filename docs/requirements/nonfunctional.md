@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-10 (MST) |
 | **Audience** | software / all |
-| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) |
+| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md) |
 
 ## Overview
 
@@ -82,10 +82,33 @@ links to [evaluation.md](../quality/evaluation.md).
    Expert Determination, no audit, no BAA/DUA). `safe_harbor.py` is **built and unit-tested
    but not yet wired to any egress endpoint** (the report/share surface it is intended for,
    ADR-0018 §5–6, is not yet built) — this requirement is only *partially* satisfied until
-   that wiring lands. *Trace:* [scope-and-wishlist.md](scope-and-wishlist.md) #14,
+   that wiring lands. **A third, frontend-only instance of the same pattern landed 2026-07-10
+   (Wave 9, T-117, REQ-F-082):** the new Sample-accessioning screen (`/accession`) composes
+   subject id / tissue / collection metadata entirely **client-side** — no `api` call exists in
+   `screens/Accession.tsx` or `lib/accession.ts`, and `POST /api/runs`'s `SubmitRunIn`/`SampleIn`
+   (`api/routers/intake.py`) reject an unknown field via `extra="forbid"`, so there is currently no
+   wire path for this data to reach the server even accidentally. DOB/MRN are deliberately not
+   modeled as fields at all (PHI). This reinforces, rather than satisfies, this requirement: real
+   subject/PII persistence for accessioned data remains gated on the same not-yet-built
+   de-identification precondition. *Trace:* [scope-and-wishlist.md](scope-and-wishlist.md) #14,
    [schemas.md](../data/schemas.md) §Sample,
    [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) D3,
-   [quality/evaluation.md](../quality/evaluation.md) EVAL-050.
+   [quality/evaluation.md](../quality/evaluation.md) EVAL-050,
+   [functional.md REQ-F-082](functional.md).
+5. **REQ-NF-024 — A frontend page-access view-gate is not server-side authorization.** As of
+   2026-07-10 (Wave 9, T-117, REQ-F-082), `frontend/src/access.ts` + `context/AccessContext.tsx`
+   let Admin assign each user a bundle of page-access profiles that filter which screens their nav
+   shows (`canSee(page)`), mirroring the pre-existing `isAdmin` capability. **This gates client-side
+   navigation only** — verified against the actual guard: `api/auth.py`'s `Role`/`Actor`/
+   `require_role` primitive (ADR-0017) is unmodified by the change, remains the sole real
+   authorization boundary, and continues to check every off-gate write server-side regardless of
+   what the frontend nav shows. The editor UI itself states this in a persistent banner ("gates
+   VIEWS, not API enforcement"). A production deployment would need a server-side page/read-access
+   check to close this gap — not yet built, a labelled seam. *Trace:*
+   [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md),
+   [design/frontend/README.md](../design/frontend/README.md) §11,
+   [functional.md REQ-F-082](functional.md),
+   [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md).
 
 ## Performance & cost
 

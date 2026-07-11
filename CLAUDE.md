@@ -485,6 +485,51 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    the app at runtime). `components/Truncate.tsx` (a full-text-on-hover primitive, "G2") was added
    but has **no call sites yet anywhere in `frontend/src`** — shipped, not yet applied; an open
    item, not silently dropped.
+   **Wave 9 (2026-07-10, commits `3e592d8`→`66b14e4`, T-116–T-117,
+   [journal](docs/journal/2026-07-10-frontend-wave9.md)), frontend-only, no verdict/gate/ADR-0001
+   boundary changed** (`git diff --stat 109557e 66b14e4 -- src/ api/ tests/` empty). **Canonical
+   Bar component + Truncate applied** (T-116, `3e592d8`, G3/G2): a new `components/Bar.tsx` gives
+   ONE bar geometry (`h-2 · rounded-[5px]`, 2px segment gaps) replacing three heights/two radii/two
+   gap sizes the app had carried — `SegmentBar` (proportional distribution, zero-value segments
+   drop out so a strip never lies about the mix) now backs the Runs verdict bar, the Decision-cards
+   `DecisionVerdictBar`, and the Review-queue `ReviewStatusBar`; `MeterBar` (single value vs a
+   track) now backs the Intake yield bar and the Monitoring gate-pass bars. `components/
+   Truncate.tsx` (Wave 8, "G2" — ResizeObserver-measured overflow, a native `title` attached only
+   when the text actually overflows) is **applied for the first time**, to the decision-card
+   headline in `RunDetail.tsx` — **this narrows, not closes, the Wave-8 "no call sites yet" note
+   above** (verified: `grep -rln Truncate frontend/src` now returns `RunDetail.tsx` + the
+   component's own file; a broader sweep of other truncated card strings — run ids, sample names,
+   artifact paths — stays an explicitly open item). **Page-access RBAC view-gate + a
+   sample-accessioning CRM screen** (T-117, `66b14e4`, G1): a second frontend-only governance
+   capability layered over the wire roles, shaped exactly like `isAdmin` — `access.ts` (a closed
+   12-page `PageId` catalog with `admin` intentionally excluded so an admin can never be
+   page-gated out of governance; 6 read-only `ACCESS_PROFILES`; a per-user `UserGrant{profiles,
+   overrides}`; an `ACCESS_FLOOR` of Runs + Decision cards re-asserted LAST in `effectivePages()`
+   so no deny can strand a user) + `context/AccessContext.tsx` (`AccessProvider`/`useAccess()`;
+   `canSee = isAdmin || !enforce || canSeePage(...)`, resolved against the ACTING actor so Admin's
+   Act-as previews the impersonated user's nav; localStorage-persisted; every mutation appends a
+   client-side `AccessAuditEntry` merged into the Admin Activity log, badged "client-side"). New
+   `App.tsx` `<RequirePage page=…>` wraps every gated route → `components/PageAccessDenied.tsx`;
+   `/admin` keeps its own untouched `isAdmin` guard. `Sidebar.tsx` tags each nav item with a
+   `PageId`; `useNav` filters by `canSee` and drops any group left empty. Admin gains a fourth
+   "Page access" tab (`components/AccessEditor.tsx`): a paginated roster, a staged draft (profile
+   checkboxes + a tri-state Inherit/Allow/Deny override per page), a live effective-nav preview,
+   Save behind `useConfirm`, an Enforcement On/Off master switch, and a prominent "gates VIEWS not
+   API enforcement" banner — **this is NOT authorization; `api/auth.py`'s `require_role` is
+   untouched, every real write is still checked server-side by wire role.** New
+   `screens/Accession.tsx` (`/accession`, first item in Operate, ahead of Submit — the CRM step
+   upstream of the wetlab samplesheet) composes an `AccessionRecord[]` (drop a
+   `sample_metadata.csv` or add subjects by hand; a paginated, controlled-vocab table — tissue/sex/
+   consent dropdowns, never free-typed or cycle-on-click; checkbox multi-remove behind
+   `useConfirm`), Export CSV, Save draft, and "Send to wetlab intake" → a client-side
+   `{subject_id, tissue}` handoff that `Submit.tsx` now reads on mount via a `localStorage`
+   one-shot courier (`lib/accession.ts`). **Every field stays CLIENT-SIDE — nothing is
+   transmitted**: `POST /api/runs`'s `SubmitRunIn`/`SampleIn` carry no subject field and are
+   `extra="forbid"`, so subject/PII persistence is a labelled, not-yet-built data-platform seam;
+   DOB/MRN are deliberately NOT modeled (PHI) — only lab-operational fields (collection date,
+   accession #, site) are kept, and even those never leave the browser. `lib/csv.ts` extracts
+   `splitCsv`/`colIndex` (behavior-identical) out of `Submit.tsx` as the one shared tolerant CSV
+   parser both screens now use. Operator screen count is now **12** (Accession is new).
    `src/pipeguard/synthetic/` drives the failure-mode data generator, incl. `scale.py` for
    at-volume runs (`demo/scale/bulk` CLI, T-050).
 
