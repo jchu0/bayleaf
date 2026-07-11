@@ -175,12 +175,15 @@ export const TOOLS: Tool[] = [
 // removed with the "broken lines" fix.)
 
 export type Ref = { id: string; label: string; kind: string; file: string; x: number }
-// Reference source cards sit in a top band ABOVE the spine (REF_Y=40); x is aligned over the primary
-// consumer in the spine+branch layout: fasta→bwa (x420), panel BED→mosdepth column (x800), truth VCF
-// parked over norm (x1560, unwired). Pitch matches the tool spine (NODE_W 320 + ~60 gap).
+// Reference source cards sit in a top band ABOVE the spine (REF_Y=40). x is EDGE-OCCLUSION-biased (PASS-2
+// B): fasta→bwa (x420); Panel BED at x1150 — NOT over its primary consumer's column (x800), because an
+// occlusion-scoring relaxation (minimise edges routed BEHIND a non-endpoint card) found that stacking it
+// over markdup put its panel_bed→mosdepth wire behind markdup AND put it on the fasta→call/norm lanes;
+// moving it right (above the markdup·call gap / call) clears 3 of the layout's occlusions at once. Truth
+// VCF parked over norm (x1560, unwired). Pitch matches the tool spine (NODE_W 320 + ~60 gap).
 export const REFS: Ref[] = [
   { id: 'r_fasta', label: 'Reference genome', kind: 'reference_fasta', file: 'reference/GRCh38.fa', x: 420 },
-  { id: 'r_bed', label: 'Panel BED', kind: 'panel_bed', file: 'reference/panel.bed', x: 800 },
+  { id: 'r_bed', label: 'Panel BED', kind: 'panel_bed', file: 'reference/panel.bed', x: 1150 },
   { id: 'r_truth', label: 'Truth VCF', kind: 'truth_vcf', file: 'HG002…benchmark.vcf.gz', x: 1560 },
 ]
 
@@ -416,7 +419,12 @@ export type LaidPort = {
   state: PortState
   idx: number
   pidx: number
-  cidx: number // clockwise DISPLAY index (top L→R, right T→B, bottom R→L, left B→T) — never the wire idx
+  cidx: number // DISPLAY number keyed to the box row — never the wire idx
+  // The specific EDGE (index into the graph's edge list) this laid port serves, or -1 for an unconnected
+  // /reserved port. A wireable port that connects to N cards SPLITS into N laid ports (one per edge),
+  // each carrying its edge's eid, so no two edges ever share a start/end point (PASS-2 A). Ports that
+  // share a `pidx` are the split halves of ONE logical port (grouped back into one box row).
+  eid: number
   lx: number
   ly: number
 }
@@ -508,16 +516,29 @@ export function layoutCardPorts(name: string | undefined, ins: string[], outs: s
   const bodyTop = CARD_HEADER_H
   const { left, right } = balanceSides(ports)
   const laid: LaidPort[] = []
-  left.forEach((p, i) => laid.push({ ...p, side: 'left', lx: 0, ly: bodyTop + (bodyH * (i + 1)) / (left.length + 1), cidx: i + 1 }))
-  right.forEach((p, i) => laid.push({ ...p, side: 'right', lx: w, ly: bodyTop + (bodyH * (i + 1)) / (right.length + 1), cidx: left.length + i + 1 }))
+  left.forEach((p, i) => laid.push({ ...p, side: 'left', lx: 0, ly: bodyTop + (bodyH * (i + 1)) / (left.length + 1), cidx: i + 1, eid: -1 }))
+  right.forEach((p, i) => laid.push({ ...p, side: 'right', lx: w, ly: bodyTop + (bodyH * (i + 1)) / (right.length + 1), cidx: left.length + i + 1, eid: -1 }))
   return laid
 }
 
-// Ports of ONE of the three boxes: the laid ports in `cat`, one ROW each (un-deduped — a kind that's
-// both in + out gets a row per direction), ordered by display number so the box reads top→bottom in the
-// same order the outside markers count.
-export function boxPorts(laid: LaidPort[], cat: BoxCat): LaidPort[] {
-  return laid.filter((p) => inCat(p.kind, p.state, cat)).sort((a, b) => a.cidx - b.cidx)
+// Rows for ONE of the three boxes. A row = one LOGICAL port (grouped by `pidx`), so a split port (N laid
+// halves) lists the kind ONCE with its N numbers — the row count stays = the catalog port count the card
+// height was sized for, and the box reads coherently (kind · dir · [1][2] · tag). Ordered by lowest number.
+export type BoxRow = { pidx: number; kind: string; dir: 'in' | 'out'; state: PortState; cidxs: number[]; minCidx: number }
+export function boxPorts(laid: LaidPort[], cat: BoxCat): BoxRow[] {
+  const byPidx = new Map<number, LaidPort[]>()
+  for (const p of laid) {
+    if (!inCat(p.kind, p.state, cat)) continue
+    const arr = byPidx.get(p.pidx)
+    if (arr) arr.push(p)
+    else byPidx.set(p.pidx, [p])
+  }
+  const rows: BoxRow[] = [...byPidx.values()].map((ps) => {
+    ps.sort((a, b) => a.cidx - b.cidx)
+    return { pidx: ps[0].pidx, kind: ps[0].kind, dir: ps[0].dir, state: ps[0].state, cidxs: ps.map((p) => p.cidx), minCidx: ps[0].cidx }
+  })
+  rows.sort((a, b) => a.minCidx - b.minCidx)
+  return rows
 }
 // The category tag stamped on every box row — one consistent set across all boxes: REQ / REF / OPT /
 // RSVD. Reference-box rows read REF regardless of their req/opt state (the box header already carries
@@ -576,50 +597,63 @@ function sideAndAlong(dir: Vec2, w: number, h: number): { side: PortSide; along:
   if (tx <= ty) return { side: dir.x >= 0 ? 'right' : 'left', along: h / 2 + dir.y * tx }
   return { side: dir.y >= 0 ? 'bottom' : 'top', along: w / 2 + dir.x * ty }
 }
+// PASS-2 A — SPLIT PORTS. Any wireable port that connects to N cards splits into N laid ports (one per
+// edge), each aimed at ITS target, so no two edges ever share a start/end point (unrelated I/O edges stop
+// visually merging). The split is layout-only: the graph model (ins/outs/idx) and the save contract are
+// untouched — only the RENDER + wire anchors gain per-edge sub-points. `eid` on each laid port keys it to
+// its edge; the wire looks itself up by (dir, idx, eid). Split halves share a `pidx`, so the box regroups
+// them into one row (kind once, N numbers) and the card height (sized by catalog count) is unchanged.
 export function computeGraphPortLayout(nodes: UserNode[], edges: UserEdge[]): Map<string, LaidPort[]> {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const centerOf = (n: UserNode): Vec2 => ({ x: n.x + NODE_W / 2, y: n.y + nodeHeight(n) / 2 })
   const result = new Map<string, LaidPort[]>()
   for (const n of nodes) {
     const h = nodeHeight(n)
-    // Stable identity + NUMBER for every port (side here is the balance placeholder — recomputed below).
+    // Stable identity per LOGICAL port (kind/dir/idx/pidx/state); side + display number recomputed below.
     const stable = layoutCardPorts(n.name, n.ins, n.outs, NODE_W, h)
     const catalog = cardPortList(n.name, n.ins, n.outs) // conventional side per port (pidx order), for the unconnected fallback
     const nc = centerOf(n)
-    // 1. Each port's DESIRED side, aimed at its connected node(s) (centroid for a multi-edge port),
-    //    or its conventional catalog side when it has no edge.
-    const want = stable.map((p) => {
+    // 1. Expand each logical port into one SLOT per edge (splitting multi-edge ports); a 0-edge port keeps
+    //    a single slot on its conventional catalog side. Assign the display number sequentially so split
+    //    halves get consecutive numbers, then aim each slot at ITS edge's target (nearest side).
+    const aimTo = (targetId: string, kind: string, dir: 'in' | 'out'): Vec2 => {
+      const t = byId.get(targetId)
+      if (!t) return sideToVec(portSide(kind, dir))
+      const tc = centerOf(t)
+      const d = { x: tc.x - nc.x, y: tc.y - nc.y }
+      return d.x === 0 && d.y === 0 ? sideToVec(portSide(kind, dir)) : d
+    }
+    type Slot = { p: LaidPort; side: PortSide; along: number }
+    const slots: Slot[] = []
+    let cidx = 0
+    for (const p of stable) {
       const conn =
         p.idx >= 0
-          ? edges.filter(
-              (e) =>
-                (p.dir === 'out' && e.from.node === n.id && e.from.idx === p.idx) ||
-                (p.dir === 'in' && e.to.node === n.id && e.to.idx === p.idx),
-            )
+          ? edges
+              .map((e, ei) => ({ e, ei }))
+              .filter(
+                ({ e }) =>
+                  (p.dir === 'out' && e.from.node === n.id && e.from.idx === p.idx) ||
+                  (p.dir === 'in' && e.to.node === n.id && e.to.idx === p.idx),
+              )
           : []
-      let dir: Vec2
-      if (conn.length) {
-        let sx = 0
-        let sy = 0
-        for (const e of conn) {
-          const t = byId.get(p.dir === 'out' ? e.to.node : e.from.node)
-          if (t) {
-            const tc = centerOf(t)
-            sx += tc.x - nc.x
-            sy += tc.y - nc.y
-          }
-        }
-        dir = sx === 0 && sy === 0 ? sideToVec(portSide(p.kind, p.dir)) : { x: sx, y: sy }
+      if (conn.length === 0) {
+        cidx += 1
+        const dir = sideToVec(catalog[p.pidx - 1]?.side ?? portSide(p.kind, p.dir))
+        slots.push({ p: { ...p, cidx, eid: -1 }, ...sideAndAlong(dir, NODE_W, h) })
       } else {
-        dir = sideToVec(catalog[p.pidx - 1]?.side ?? portSide(p.kind, p.dir))
+        for (const { e, ei } of conn) {
+          cidx += 1
+          const dir = aimTo(p.dir === 'out' ? e.to.node : e.from.node, p.kind, p.dir)
+          slots.push({ p: { ...p, cidx, eid: ei }, ...sideAndAlong(dir, NODE_W, h) })
+        }
       }
-      return { p, ...sideAndAlong(dir, NODE_W, h) }
-    })
-    // 2. Spread each side's ports evenly (ordered by desired position) so they never overlap. Left/right
-    //    ports occupy the body band (below header, above footer); top/bottom ports span the width, inset.
+    }
+    // 2. Spread each side's slots evenly (ordered by desired position) so they never overlap. Left/right
+    //    slots occupy the body band (below header, above footer); top/bottom slots span the width, inset.
     const laid: LaidPort[] = []
     for (const side of ['left', 'right', 'top', 'bottom'] as PortSide[]) {
-      const grp = want.filter((q) => q.side === side).sort((a, b) => a.along - b.along)
+      const grp = slots.filter((q) => q.side === side).sort((a, b) => a.along - b.along)
       const vert = side === 'left' || side === 'right'
       const lo = vert ? CARD_HEADER_H + 4 : PORT_EDGE_MARGIN
       const hi = vert ? h - CARD_FOOTER_H - 4 : NODE_W - PORT_EDGE_MARGIN

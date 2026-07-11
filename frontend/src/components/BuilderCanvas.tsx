@@ -29,6 +29,7 @@ import {
   nodeHeight,
   rowTag,
   type BoxCat,
+  type BoxRow,
   type LaidPort,
   type Mode,
   type PortSide,
@@ -350,21 +351,24 @@ export function BuilderCanvas(props: CanvasProps) {
 
   // User-edge geometry: anchor a wire to the EXACT half-circle port on its (now dynamic) side, from the
   // shared portLayout the card renders with — so an endpoint and its port are one point at any zoom.
-  // Wire-to-tip: offset outward by PORT_R along the port's side normal so the wire meets the half-circle's
-  // outer edge (portBoxStyle keeps the flat side on the card edge; only the WIRE anchor moves outward).
-  const anchorFull = (id: string, dir: 'out' | 'in', idx: number): { x: number; y: number; side: PortSide } | null => {
+  // PASS-2 A: a split port has one laid sub-port PER edge, so the anchor is looked up by (dir, idx, EID) —
+  // each edge lands on its OWN sub-point, and no two edges share an endpoint. The eid=-1 fallback (drag
+  // preview / a not-yet-laid edge) resolves to the port's first sub-point. Wire-to-tip: offset outward by
+  // PORT_R along the port's side normal so the wire meets the half-circle's outer edge.
+  const anchorForEdge = (id: string, dir: 'out' | 'in', idx: number, eid: number): { x: number; y: number; side: PortSide } | null => {
     const n = nodesById.get(id)
-    const p = portLayout.get(id)?.find((q) => q.dir === dir && q.idx === idx)
+    const laid = portLayout.get(id)
+    const p = laid?.find((q) => q.dir === dir && q.idx === idx && q.eid === eid) ?? laid?.find((q) => q.dir === dir && q.idx === idx)
     if (!n || !p) return null
     const [nx, ny] = sideVec(p.side)
     return { x: n.x + p.lx + nx * PORT_R, y: n.y + p.ly + ny * PORT_R, side: p.side }
   }
   // Keep the ORIGINAL userEdges index on each drawn edge so selection/delete address the right wire
-  // (a filtered array would renumber and mis-target).
+  // (a filtered array would renumber and mis-target). That index IS the edge's eid — the split-port key.
   const edgePaths = userEdges
     .map((ed, i) => {
-      const a = anchorFull(ed.from.node, 'out', ed.from.idx)
-      const b = anchorFull(ed.to.node, 'in', ed.to.idx)
+      const a = anchorForEdge(ed.from.node, 'out', ed.from.idx, i)
+      const b = anchorForEdge(ed.to.node, 'in', ed.to.idx, i)
       if (!a || !b) return null
       const { d, mid } = routeEdge(a, b)
       return { i, d, mid }
@@ -627,7 +631,7 @@ export function BuilderCanvas(props: CanvasProps) {
             {/* Drag-to-connect rubber band. */}
             {wireDrag &&
               (() => {
-                const a = anchorFull(wireDrag.fromNode, 'out', wireDrag.fromIdx)
+                const a = anchorForEdge(wireDrag.fromNode, 'out', wireDrag.fromIdx, -1)
                 if (!a) return null
                 return <path d={`M${a.x} ${a.y} L${wireDrag.cx} ${wireDrag.cy}`} fill="none" stroke="var(--color-accent)" strokeWidth={1.8} strokeDasharray="5 4" />
               })()}
@@ -994,33 +998,38 @@ function RowTagChip({ tag }: { tag: ReturnType<typeof rowTag> }) {
   return <span className={`shrink-0 rounded px-1 text-[7.5px] font-bold uppercase leading-none ${TAG_CLASS[tag]}`}>{tag}</span>
 }
 // One gray box (batch 3a point 3, columned in the refine pass): a titled panel whose rows are aligned
-// COLUMNS — number-circle · kind · dir · tag. Each row is one PORT (un-deduped) so the columns line up.
-// A box with many ports (boxCols → 2) lays them in a compact 2-column grid, column-major (reads down
-// then across), so it stays scannable instead of a tall list. The number keys to the OUTSIDE marker.
-function ConnBox({ cat, title, ports, top }: { cat: BoxCat; title: string; ports: LaidPort[]; top: number }) {
-  const cols = boxCols(ports.length)
-  const rowsPerCol = Math.ceil(ports.length / cols)
+// COLUMNS — number(s) · kind · dir · tag. One row per LOGICAL port; a SPLIT port (PASS-2 A) lists the
+// kind once with its N numbers (e.g. `bam · out · [2][3]`), so the row count still equals the catalog
+// count the card height was sized for. A box with many rows (boxCols → 2) uses a compact 2-column grid.
+function ConnBox({ cat, title, rows, top }: { cat: BoxCat; title: string; rows: BoxRow[]; top: number }) {
+  const cols = boxCols(rows.length)
+  const rowsPerCol = Math.ceil(rows.length / cols)
   return (
     <div
       className="pointer-events-none absolute left-[11px] right-[11px] rounded-lg border border-line px-2 pb-1.5 pt-1"
       style={{ top, background: 'color-mix(in srgb, var(--color-card-2) 60%, transparent)' }}
     >
-      <div className="mb-0.5 text-[8px] font-bold uppercase tracking-[0.5px] text-text-3">{title} · {ports.length}</div>
+      <div className="mb-0.5 text-[8px] font-bold uppercase tracking-[0.5px] text-text-3">{title} · {rows.length}</div>
       <div
         className="grid gap-x-2.5"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rowsPerCol}, ${LIST_ROW_H}px)`, gridAutoFlow: 'column' }}
       >
-        {ports.map((p) => (
-          <div key={p.pidx} className="flex items-center gap-1.5">
-            <span
-              className="inline-grid h-[13px] w-[13px] shrink-0 place-items-center rounded-full bg-card text-[7.5px] font-bold leading-none text-text-2"
-              style={{ border: `1px solid ${kindColor(p.kind)}` }}
-            >
-              {p.cidx}
+        {rows.map((r) => (
+          <div key={r.pidx} className="flex items-center gap-1">
+            <span className="flex shrink-0 items-center gap-0.5">
+              {r.cidxs.map((c) => (
+                <span
+                  key={c}
+                  className="inline-grid h-[13px] w-[13px] place-items-center rounded-full bg-card text-[7.5px] font-bold leading-none text-text-2"
+                  style={{ border: `1px solid ${kindColor(r.kind)}` }}
+                >
+                  {c}
+                </span>
+              ))}
             </span>
-            <span className="min-w-0 flex-1 truncate font-mono text-[9.5px] text-text">{p.kind}</span>
-            <span className="shrink-0 text-[8px] text-text-3">{p.dir}</span>
-            <RowTagChip tag={rowTag(cat, p.state)} />
+            <span className="min-w-0 flex-1 truncate font-mono text-[9.5px] text-text">{r.kind}</span>
+            <span className="shrink-0 text-[8px] text-text-3">{r.dir}</span>
+            <RowTagChip tag={rowTag(cat, r.state)} />
           </div>
         ))}
       </div>
@@ -1028,17 +1037,17 @@ function ConnBox({ cat, title, ports, top }: { cat: BoxCat; title: string; ports
   )
 }
 // The THREE separate gray boxes (batch 3a point 3), stacked top→bottom: REQUIRED, REFERENCE,
-// OPTIONAL / RESERVED — each rendered only when it has ports; height follows its 1/2-column layout.
+// OPTIONAL / RESERVED — each rendered only when it has rows; height follows its 1/2-column layout.
 function CardBoxes({ laid }: { laid: LaidPort[] }) {
   let top = BOX_TOP
   return (
     <>
       {BOX_META.map(({ cat, title }) => {
-        const ports = boxPorts(laid, cat)
-        if (!ports.length) return null
+        const rows = boxPorts(laid, cat)
+        if (!rows.length) return null
         const at = top
-        top += 24 + Math.ceil(ports.length / boxCols(ports.length)) * LIST_ROW_H + 8
-        return <ConnBox key={cat} cat={cat} title={title} ports={ports} top={at} />
+        top += 24 + Math.ceil(rows.length / boxCols(rows.length)) * LIST_ROW_H + 8
+        return <ConnBox key={cat} cat={cat} title={title} rows={rows} top={at} />
       })}
     </>
   )
@@ -1488,7 +1497,7 @@ function UserCard({
         if (p.state === 'reserved') {
           return (
             <span
-              key={p.pidx}
+              key={p.cidx}
               className="pointer-events-none absolute"
               title={`#${p.cidx} · ${p.kind} · ${p.dir} · reserved`}
               style={{ ...portBoxStyle(p), borderWidth: 1.5, borderStyle: 'solid', zIndex: 4, ...portVisualStyle(p) }}
@@ -1498,7 +1507,7 @@ function UserCard({
         const armed = connectFrom === `${n.id}|${p.dir}|${p.idx}`
         return (
           <span
-            key={p.pidx}
+            key={p.cidx}
             data-port="1"
             data-node={n.id}
             data-side={p.dir}
@@ -1526,7 +1535,7 @@ function UserCard({
         )
       })}
       {laid.map((p) => (
-        <PortIndexChip key={`c${p.pidx}`} p={p} w={UW} />
+        <PortIndexChip key={`c${p.cidx}`} p={p} w={UW} />
       ))}
       {/* ADVISORY agent-attach point (item 2) — a small dashed-accent badge hugging the top-right corner,
           DISTINCT from the half-circle data ports (an advisory link, not a data edge). Click toggles the
