@@ -443,6 +443,26 @@ class TraceRecord(BaseModel):
     exit: int | None = None
 
 
+class VariantCall(BaseModel):
+    """One annotated candidate variant PipeGuard READS from an externally-produced annotated
+    VCF/table (ADR-0018) — a driver ran the annotator (VEP/bcftools); PipeGuard never does
+    (composes ≠ executes, ADR-0001/0003). Clinical significance is a VERBATIM quotation of
+    ClinVar, never PipeGuard's own determination (ADR-0004 — never invent pathogenicity):
+    `clinvar_significance` is the raw CLNSIG string, `clinvar_review_status` the review status
+    (star rating), `clinvar_accession` + `clinvar_version` the citation. Every field is optional
+    so a partial/garbled annotation is a signal, not a crash (CLAUDE.md data-handling 2). This
+    record feeds only the OFF-BY-DEFAULT route-to-human rule (VAR-RTH-001); it sets no verdict.
+    """
+
+    sample_id: str
+    gene: str | None = None
+    hgvs: str | None = None  # e.g. NM_000059.4:c.68_69del
+    clinvar_significance: str | None = None  # CLNSIG, verbatim (e.g. "Pathogenic")
+    clinvar_review_status: str | None = None  # CLNREVSTAT, verbatim
+    clinvar_accession: str | None = None  # e.g. VCV000009999
+    clinvar_version: str | None = None  # ClinVar release for the citation
+
+
 class RunArtifacts(BaseModel):
     """Everything the gate ingests for a single run, keyed by sample_id where possible."""
 
@@ -454,6 +474,9 @@ class RunArtifacts(BaseModel):
     log_lines: list[str] = Field(default_factory=list)
     # Structured Nextflow/nf-core execution trace (`trace.txt`) — READ, never run (EXEC-001).
     execution_trace: list[TraceRecord] = Field(default_factory=list)
+    # Annotated candidate variants READ from an externally-produced annotated VCF/table
+    # (ADR-0018). Empty for every run today; feeds only the off-by-default route-to-human rule.
+    variant_calls: list[VariantCall] = Field(default_factory=list)
     # Run-level context parsed from the sample sheet's [Header] block (Illumina v2).
     # All optional: a sheet may omit any of them, and `run_date` stays the raw ISO
     # string — we never fabricate a datetime when the field is absent.
@@ -472,6 +495,8 @@ class RunArtifacts(BaseModel):
             seen.setdefault(q.sample_id, None)
         for d in self.demux:
             seen.setdefault(d.sample_id, None)
+        for v in self.variant_calls:
+            seen.setdefault(v.sample_id, None)
         return list(seen)
 
 

@@ -27,6 +27,7 @@ from .models import (
     Severity,
     SourceKind,
     TraceRecord,
+    VariantCall,
     Verdict,
 )
 from .runbook import DEFAULT_RUNBOOK, QCThreshold, Runbook
@@ -318,6 +319,91 @@ def _check_execution_trace(sid: str, trace: list[TraceRecord], runbook: Runbook)
     )
 
 
+def _norm_sig(value: str) -> str:
+    """Fold a ClinVar significance / review-status string for robust matching.
+
+    ClinVar writes "Likely_pathogenic", a config may say "likely pathogenic" — comparing on
+    alphanumerics only makes the match separator-/case-insensitive WITHOUT ever altering the
+    stored/quoted string (the finding always cites the value verbatim; this is match-only).
+    """
+    return "".join(ch for ch in value.lower() if ch.isalnum())
+
+
+def _check_route_to_human(
+    sid: str, variant_calls: list[VariantCall], runbook: Runbook
+) -> Finding | None:
+    """VAR-RTH-001 — route a sample to MANDATORY human review when an annotated candidate carries
+    an armed ClinVar significance (ADR-0018 D2).
+
+    OFF BY DEFAULT: `runbook.route_to_human` is disarmed unless an operator configures
+    significances, so a stock run never fires this and the deterministic QC gate is unchanged.
+    When armed, this is a review-ROUTING rule, NOT a clinical-significance verdict: it quotes
+    ClinVar VERBATIM as cited evidence and suggests ESCALATE (route to a human) — it authors no
+    pathogenicity of its own (ADR-0004). A qualified human adjudicates via the RBAC-gated review
+    queue (ADR-0017). The action space is only {route-to-human}; there is no Pathogenic/Benign
+    determination and no probability.
+    """
+    policy = runbook.route_to_human
+    if not policy.armed:
+        return None
+    armed = {_norm_sig(s) for s in policy.significances}
+    allowed_rev = {_norm_sig(s) for s in policy.review_statuses}
+    hit = next(
+        (
+            v
+            for v in variant_calls
+            if v.sample_id == sid
+            and v.clinvar_significance
+            and _norm_sig(v.clinvar_significance) in armed
+            and (
+                not allowed_rev
+                or (v.clinvar_review_status and _norm_sig(v.clinvar_review_status) in allowed_rev)
+            )
+        ),
+        None,
+    )
+    if hit is None:
+        return None
+    gene_bit = f" in {hit.gene}" if hit.gene else ""
+    hgvs_bit = f" ({hit.hgvs})" if hit.hgvs else ""
+    citation = hit.clinvar_accession or "ClinVar"
+    return Finding(
+        rule_id="VAR-RTH-001",
+        sample_id=sid,
+        category=Category.VARIANT,
+        severity=Severity.CRITICAL,
+        title="Clinically significant variant — mandatory human review",
+        detail=(
+            f"An annotated candidate for {sid}{gene_bit}{hgvs_bit} is classified "
+            f'"{hit.clinvar_significance}" in ClinVar ({citation}). Per the runbook route-to-human '
+            f"policy this sample is ESCALATED to a qualified reviewer before release. PipeGuard "
+            f"makes no pathogenicity determination of its own — the classification is quoted "
+            f"verbatim from ClinVar and a human adjudicates."
+        ),
+        evidence=[
+            Evidence(
+                source=(f"ClinVar {hit.clinvar_version}" if hit.clinvar_version else "ClinVar"),
+                locator=hit.clinvar_accession or hit.hgvs or f"sample_id={sid}",
+                value=hit.clinvar_significance,  # VERBATIM CLNSIG — never PipeGuard's determination
+                expected="reviewed by a qualified human before release",
+                source_field="CLNSIG",
+                threshold=(
+                    f"review status: {hit.clinvar_review_status}"
+                    if hit.clinvar_review_status
+                    else None
+                ),
+            ),
+            Evidence(
+                source="variants.csv",
+                locator=f"sample_id={sid}",
+                value=f"{hit.gene or '?'} {hit.hgvs or ''}".strip(),
+                expected="route-to-human policy armed",
+            ),
+        ],
+        suggested_verdict=Verdict.ESCALATE,
+    )
+
+
 def evaluate_sample(sid: str, artifacts: RunArtifacts, runbook: Runbook) -> list[Finding]:
     meta = next((s for s in artifacts.samples if s.sample_id == sid), None)
     sheet = next((e for e in artifacts.sample_sheet if e.sample_id == sid), None)
@@ -351,6 +437,14 @@ def evaluate_sample(sid: str, artifacts: RunArtifacts, runbook: Runbook) -> list
     trace_finding = _check_execution_trace(sid, artifacts.execution_trace, runbook)
     if trace_finding:
         findings.append(trace_finding)
+
+    # Route-to-human (VAR-RTH-001) — OFF by default; fires only when the runbook arms it AND an
+    # annotated candidate carries a matching ClinVar significance. Rules decide to route; a human
+    # adjudicates (ADR-0018 D2). A stock run has an empty variant_calls list and a disarmed policy,
+    # so this is a no-op and the existing demo scenario is byte-for-byte unchanged.
+    rth_finding = _check_route_to_human(sid, artifacts.variant_calls, runbook)
+    if rth_finding:
+        findings.append(rth_finding)
 
     return findings
 

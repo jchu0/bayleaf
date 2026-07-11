@@ -29,6 +29,7 @@ from .models import (
     Sample,
     SampleSheetEntry,
     TraceRecord,
+    VariantCall,
 )
 
 # Canonical intake fields; anything else on the row is preserved in `extra`.
@@ -278,6 +279,52 @@ def parse_execution_trace(path: Path) -> list[TraceRecord]:
     return records
 
 
+def parse_variant_calls(path: Path) -> list[VariantCall]:
+    """Parse an annotated candidate-variant table (`variants.csv`) into structured rows.
+
+    A tabular projection of an externally-produced annotated VCF (the columns a driver's
+    VEP/bcftools step would emit): sample_id + gene/HGVS + the ClinVar CLNSIG / review-status /
+    accession / version. PipeGuard READS this — it never runs an annotator (composes ≠ executes,
+    ADR-0003/0018). Tolerant of the common column spellings (clnsig/clinvar_significance,
+    clnrevstat/clinvar_review_status, clnacc/clinvar_accession); an absent file or missing column
+    yields no records / a None field rather than crashing. Clinical significance is preserved
+    VERBATIM — this parser never normalizes or reclassifies it (ADR-0004).
+    """
+    if not path.exists():
+        return []
+    try:
+        df = pd.read_csv(path, dtype=str)
+    except Exception:
+        return []
+    df.columns = [c.strip().lower() for c in df.columns]
+    col_sample = _first_present(df.columns, ["sample_id", "sampleid", "sample"])
+    col_gene = _first_present(df.columns, ["gene", "symbol", "gene_symbol"])
+    col_hgvs = _first_present(df.columns, ["hgvs", "hgvsc", "hgvs_c", "variant"])
+    col_sig = _first_present(
+        df.columns, ["clinvar_significance", "clnsig", "clin_sig", "significance"]
+    )
+    col_rev = _first_present(df.columns, ["clinvar_review_status", "clnrevstat", "review_status"])
+    col_acc = _first_present(df.columns, ["clinvar_accession", "clnacc", "accession"])
+    col_ver = _first_present(df.columns, ["clinvar_version", "clnver", "clinvar_release"])
+    records: list[VariantCall] = []
+    for _, row in df.iterrows():
+        sample_id = _clean(row.get(col_sample)) if col_sample else None
+        if sample_id is None:
+            continue
+        records.append(
+            VariantCall(
+                sample_id=sample_id,
+                gene=_clean(row.get(col_gene)) if col_gene else None,
+                hgvs=_clean(row.get(col_hgvs)) if col_hgvs else None,
+                clinvar_significance=_clean(row.get(col_sig)) if col_sig else None,
+                clinvar_review_status=_clean(row.get(col_rev)) if col_rev else None,
+                clinvar_accession=_clean(row.get(col_acc)) if col_acc else None,
+                clinvar_version=_clean(row.get(col_ver)) if col_ver else None,
+            )
+        )
+    return records
+
+
 def _first_present(columns: Iterable[str], candidates: list[str]) -> str | None:
     cols = list(columns)
     return next((c for c in candidates if c in cols), None)
@@ -308,6 +355,9 @@ def load_run(run_dir: str | Path, run_id: str | None = None) -> RunArtifacts:
     qc = parse_qc_metrics(_maybe("qc_metrics.csv")) if _maybe("qc_metrics.csv").exists() else []
     log = parse_log(_maybe("pipeline.log"))
     trace = parse_execution_trace(_maybe("trace.txt"))
+    # Annotated candidate variants (ADR-0018) — absent for every run today; feeds only the
+    # off-by-default route-to-human rule, so a run without variants.csv is unaffected.
+    variant_calls = parse_variant_calls(_maybe("variants.csv"))
 
     return RunArtifacts(
         run_id=run_id,
@@ -317,6 +367,7 @@ def load_run(run_dir: str | Path, run_id: str | None = None) -> RunArtifacts:
         qc=qc,
         log_lines=log,
         execution_trace=trace,
+        variant_calls=variant_calls,
         platform=header.platform,
         run_date=header.run_date,
         run_name=header.run_name,

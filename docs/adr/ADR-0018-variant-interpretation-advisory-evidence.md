@@ -2,9 +2,9 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed |
+| **Status** | Accepted (maintainer sign-off 2026-07-10 MST; three open questions decided — see [Maintainer decisions](#maintainer-decisions-2026-07-10-sign-off)) |
 | **Date** | 2026-07-10 (MST) |
-| **Deciders** | maintainer (pending sign-off), design pass (4 parallel memos, 2026-07-10) |
+| **Deciders** | maintainer (signed off 2026-07-10), design pass (4 parallel memos, 2026-07-10) |
 | **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md) (three-gate model), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md) (GIAB benchmark / no invented pathogenicity), [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) (advisory agent scoping), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md) (self-contained records), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [design/variant-interpretation.md](../design/variant-interpretation.md) |
 
 ## Context
@@ -77,6 +77,54 @@ questions must stay separate.
    is present. (The terminal gate already reads "partial lineage" when upstream stages didn't run — ADR-adjacent
    fix, commit `91cdd6d`.)
 
+## Maintainer decisions (2026-07-10 sign-off)
+
+The maintainer signed off on the boundary above and resolved three of the open questions. Two of
+these **change** the "Proposed" recommendations; they are recorded here as the governing decisions.
+
+**D1 — Report name (resolves Q1).** The report is **"QC Decision & Provenance Report"** (as
+recommended). "Interpretation report" reads clinical and is not used.
+
+**D2 — Route-to-human belongs ON the gate (resolves Q2; OVERRIDES the Proposed "off-gate for MVP"
+recommendation).** The maintainer chose to add a route-to-human action on the gate, framed explicitly
+as *"a role-based access gate for human review — the design is already built in."* This is the
+single highest clinical-sensitivity call, so its scope is drawn tightly to stay inside ADR-0001 and
+Decision 1 (the variant gate stays QC, never a clinical-significance gate):
+
+- **A rule decides to ROUTE; a human decides the outcome.** The gate action is *"human review
+  required"* — the most conservative direction (never auto-proceed, never auto-classify). PipeGuard
+  still authors **no pathogenicity**: the routing rule reads a variant's *already-present, verbatim-
+  cited* significance field (e.g. an annotated VCF's `CLNSIG` with its ClinVar review status) as
+  **evidence**, and emits an ESCALATE-gated `Finding` that says *"a ClinVar P/LP-flagged candidate is
+  present — a human must review before release,"* quoting the source. The annotation never *sets* a
+  verdict; a deterministic rule uses cited evidence to route, exactly as every other rule uses cited
+  QC evidence. This is "rules decide, humans adjudicate" — not "annotation decides."
+- **Not a clinical-significance gate.** The action space is only `{route-to-human}` — there is no
+  Pathogenic/Benign verdict, no probability, no actionability. It escalates *toward* human judgment;
+  it never renders a clinical determination. Decision 1 holds: the variant **QC** gate (DP/GQ/AB) is
+  untouched; this is a distinct, additive review-routing rule.
+- **Off by default, config-armed, RBAC-gated, reusing shipped infra.** The rule is an operator-owned
+  runbook policy, **off by default** (like every illustrative threshold); when armed it routes via
+  the existing review-queue + `require_role` + draft→approve lifecycle (ADR-0017) — a
+  reviewer/approver clears the human-review hold. No new access pattern; the "design already built in"
+  the maintainer referred to is this RBAC + review-queue seam.
+- **Demo substrate honesty.** The only real sample is GIAB **HG002** (a consented benchmark, not a
+  patient); any P/LP-flagged candidate that exercises this path is a clearly-labelled
+  `origin=contrived` spiked fixture, never implying a real individual (ADR-0004).
+
+**D3 — De-identification: most-conservative, HIPAA-Safe-Harbor-STYLE, as the default (resolves Q7;
+strengthens Decision 6).** The maintainer chose the most conservative option (*"HIPAA compliance is so
+key here"*). The share/report egress therefore defaults to a **Safe-Harbor-style scrub** that
+mechanically removes the **§164.514(b) 18 identifier classes** (names, geographic subdivisions < state,
+all date elements finer than year + ages > 89, contact numbers, IDs/accounts, device/biometric ids,
+URLs/IPs, free-text catch-all, …), generalizes dates to year, and redacts free-text — the **most
+privacy-preserving** policy is the default, and a less-strict policy is an explicit opt-down.
+**Honesty guardrail (unchanged):** this is Safe-Harbor-**style** identifier removal, **not** a certified
+or attested de-identification — no Expert Determination, no formal audit, no BAA/DUA. It makes **no
+compliance claim** (CLAUDE.md life-science guardrail 1); the label says "conservative Safe-Harbor-style
+scrub," never "HIPAA-compliant." Real patient data would still require a real, audited de-id program
+before any external share.
+
 ## Assumptions
 
 - Real rare-disease value comes from **surfacing existing evidence + ordering human review**, not from an automated
@@ -105,21 +153,28 @@ questions must stay separate.
 | **Costs** | Real reference data (ClinVar/gnomAD) + fetch scripts + a new core module + models + report/share endpoints + frontend — a multi-part build. PHI-scrub is only partial (labelled seams); external egress carries real privacy risk mitigated by role-gate + confirm + audit, not by compliance controls. |
 | **Follow-ups** | Docs owed on build (qc_metrics.md Gate 3, metric_registry.md `variant.gnomad_af` + annotation-source registry, a new data/variant_annotation.md, schemas.md, a license table, data/README origins, ToC). The interpretation **agent**, trio/inheritance context, more annotation sources, `DateShift`/free-text redaction, real S3/Box egress, PDF, and a persisted ledger-anchored report are all **deferred seams**. |
 
-## Open questions (need a maintainer decision before/while building)
+## Open questions
 
-1. **Report framing/name** — "interpretation report" reads clinical; recommend **"QC Decision & Provenance Report."**
-2. **Does any ClinVar/gnomAD-driven *review-routing* (route-to-human HOLD/ESCALATE) belong on the gate?** Recommend
-   **off the gate for MVP** — annotation stays advisory-only; a route-to-human rule is an operator-owned, off-by-default
-   config seam needing explicit sign-off. This is the single highest clinical-sensitivity call.
+**Resolved by the maintainer (2026-07-10)** — see [Maintainer decisions](#maintainer-decisions-2026-07-10-sign-off):
+
+1. ~~**Report framing/name**~~ → **DECIDED (D1):** "QC Decision & Provenance Report."
+2. ~~**Does route-to-human belong on the gate?**~~ → **DECIDED (D2):** yes, ON the gate, as a
+   role-based human-review routing rule (rule routes, human adjudicates; authors no pathogenicity;
+   off by default). Overrides the earlier "off-gate for MVP" recommendation.
+7. ~~**Dates/free-text de-id strictness**~~ → **DECIDED (D3):** most-conservative Safe-Harbor-style
+   scrub as the default (18-identifier removal + date→year + free-text redaction), honestly labelled
+   as **not** attested HIPAA de-identification. (PDF & persist-vs-re-render remain open below.)
+
+**Still open (build-time / follow-up):**
+
 3. **Reference-data licensing** verified table; the gene→inheritance source (open PanelApp vs paywalled OMIM).
 4. **Transcript convention** (recommend MANE Select, surfaced explicitly) + **gnomAD version/slice** (panel-restricted).
 5. **Report grain** — per-run (MVP) vs per-sample vs per-subject/family (trios).
-6. **Egress role bar** (recommend reviewer for internal staged export, approver for external) + which destinations to
-   wire vs leave as seams + the security-level → de-id → destination mapping + raw-artifact egress default (recommend
-   "disallow for guarded origins").
-7. **Dates/free-text** — accept as documented seams for now (only real data is public HG002), or build a minimal regex
-   redactor now? **PDF** — approve a rendering dependency or HTML-only + browser print? **Persist** the report or keep
-   it a live re-render like `/api/export` (recommend live re-render for MVP)?
+6. **Egress destinations** — which to wire vs leave as seams + the security-level → de-id → destination mapping +
+   raw-artifact egress default (recommend "disallow for guarded origins"). Role bar decided by D2's RBAC reuse
+   (reviewer internal / approver external).
+7. **PDF** — approve a rendering dependency or HTML-only + browser print? **Persist** the report or keep it a live
+   re-render like `/api/export` (recommend live re-render for MVP)?
 
 ## Revisit when
 

@@ -42,6 +42,32 @@ class QCThreshold(BaseModel):
     required: bool = True
 
 
+class RouteToHumanPolicy(BaseModel):
+    """OFF-BY-DEFAULT rule that routes a sample to mandatory human review when an annotated
+    variant carries a clinically-significant ClinVar classification (ADR-0018 decision D2).
+
+    This is a review-ROUTING rule, NOT a clinical-significance gate. It authors no pathogenicity:
+    it reads a variant's *already-present, verbatim* ClinVar significance as EVIDENCE and escalates
+    to human judgment — the most conservative action (never auto-proceed, never auto-classify). A
+    deterministic rule decides to ROUTE; a qualified human adjudicates the clinical meaning (rules
+    decide / humans adjudicate, ADR-0001). Empty ``significances`` = DISARMED (the default), so a
+    stock runbook never routes and the deterministic QC gate is byte-for-byte unchanged. Thresholds
+    here are illustrative/operator-configurable, NOT clinical thresholds (CLAUDE.md guardrail 3).
+    """
+
+    # ClinVar CLNSIG values (matched case-/separator-insensitively) that route a sample to human
+    # review. EMPTY by default → the rule is OFF. e.g. ("Pathogenic", "Likely_pathogenic").
+    significances: tuple[str, ...] = ()
+    # Optional review-status allow-list (star rating floor). Empty → any review status qualifies
+    # (still requires an armed significance match). e.g. ("criteria_provided,_multiple_submitters").
+    review_statuses: tuple[str, ...] = ()
+
+    @property
+    def armed(self) -> bool:
+        """True only when at least one significance is configured (else the rule never fires)."""
+        return bool(self.significances)
+
+
 class Runbook(BaseModel):
     run_id_field: str = "run_id"
     require_metadata_fields: list[str] = Field(
@@ -146,6 +172,10 @@ class Runbook(BaseModel):
     # Execution-trace task statuses that count as an operational failure (EXEC-001). A task is
     # also a failure on a nonzero exit code, whatever its status. Illustrative/configurable.
     trace_failure_statuses: list[str] = Field(default_factory=lambda: ["FAILED", "ABORTED"])
+    # OFF-BY-DEFAULT route-to-human policy (ADR-0018 D2). Disarmed by default (no significances),
+    # so the stock runbook never routes and the deterministic QC gate is unchanged. An operator
+    # arms it to escalate ClinVar-significant candidates to mandatory human review (RBAC-gated).
+    route_to_human: RouteToHumanPolicy = Field(default_factory=RouteToHumanPolicy)
 
     def threshold_for(self, metric: str) -> QCThreshold | None:
         return next((t for t in self.qc_thresholds if t.metric == metric), None)
