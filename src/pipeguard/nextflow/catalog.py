@@ -171,10 +171,7 @@ _SPECS: tuple[ProcessSpec, ...] = (
             "mosdepth --by ${panel} --no-per-base --thresholds 1,10,20,30 -t ${task.cpus} \\\n"
             "  ${meta.id}.panel ${dedup}"
         ),
-        stub=(
-            "touch ${meta.id}.panel.mosdepth.summary.txt "
-            "${meta.id}.panel.thresholds.bed.gz"
-        ),
+        stub=("touch ${meta.id}.panel.mosdepth.summary.txt ${meta.id}.panel.thresholds.bed.gz"),
     ),
     ProcessSpec(
         tool="bcftools call",

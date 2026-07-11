@@ -91,7 +91,7 @@ def test_per_sample_process_threads_the_meta_map() -> None:
     assert 'tag "${meta.id}"' in bwa
     assert "tuple val(meta), path(read1), path(read2)" in bwa  # per-sample reads, meta-threaded
     assert "tuple path(reference), path(reference_idx)" in bwa  # reference: value channel, no meta
-    assert "tuple val(meta), path(\"*.aligned.bam\"), emit: bam" in bwa
+    assert 'tuple val(meta), path("*.aligned.bam"), emit: bam' in bwa
 
 
 def test_multiqc_is_a_cross_sample_aggregator() -> None:

@@ -314,8 +314,7 @@ def _render_main(
         src_lines.append("    ch_reads = Channel.fromPath(params.input)")
         src_lines.append("        .splitCsv(header: true)")
         src_lines.append(
-            "        .map { row -> tuple([id: row.sample], "
-            "file(row.fastq_1), file(row.fastq_2)) }"
+            "        .map { row -> tuple([id: row.sample], file(row.fastq_1), file(row.fastq_2)) }"
         )
     for param in sorted(ref_params):
         if param in INDEXED_REFERENCE_PARAMS:
