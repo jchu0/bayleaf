@@ -1,11 +1,15 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import type { PageId } from './access'
 import { Layout } from './components/Layout'
+import { PageAccessDenied } from './components/PageAccessDenied'
 import { ToastProvider } from './components/Toast'
 import { ConfirmProvider } from './components/ConfirmDialog'
+import { AccessProvider, useAccess } from './context/AccessContext'
 import { InboxProvider } from './context/InboxContext'
 import { PrefsProvider } from './context/PrefsContext'
 import { RoleProvider, useRole } from './context/RoleContext'
+import { Accession } from './screens/Accession'
 import { Admin } from './screens/Admin'
 import { AgentTriage } from './screens/AgentTriage'
 import { Inbox } from './screens/Inbox'
@@ -31,12 +35,23 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+// Page-access VIEW-GATE (not a security control): hides a page a user's access profile lacks and
+// shows a friendly denied state instead. isAdmin + the floor + the enforce switch live in
+// useAccess().canSee, so an admin/floor page always passes. The API still authorizes every write by
+// wire role (api/auth.py, unchanged) — deep-linking a denied URL hides the page, not a fetch.
+function RequirePage({ page, children }: { page: PageId; children: ReactNode }) {
+  const { canSee } = useAccess()
+  if (!canSee(page)) return <PageAccessDenied page={page} />
+  return <>{children}</>
+}
+
 export default function App() {
   return (
     <ToastProvider>
       <ConfirmProvider>
       <PrefsProvider>
       <RoleProvider>
+      <AccessProvider>
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -49,21 +64,24 @@ export default function App() {
                 </RequireAuth>
               }
             >
-              <Route path="/" element={<RunOverview />} />
-              <Route path="/submit" element={<Submit />} />
-              <Route path="/inbox" element={<Inbox />} />
-              <Route path="/runs/:runId" element={<RunDetail />} />
-              <Route path="/runs/:runId/provenance" element={<Provenance />} />
-              <Route path="/runs/:runId/intake" element={<Intake />} />
-              <Route path="/runs/:runId/agent" element={<AgentTriage />} />
-              <Route path="/settings" element={<Settings />} />
+              <Route path="/" element={<RequirePage page="runs"><RunOverview /></RequirePage>} />
+              <Route path="/accession" element={<RequirePage page="accession"><Accession /></RequirePage>} />
+              <Route path="/submit" element={<RequirePage page="submit"><Submit /></RequirePage>} />
+              <Route path="/inbox" element={<RequirePage page="inbox"><Inbox /></RequirePage>} />
+              <Route path="/runs/:runId" element={<RequirePage page="cards"><RunDetail /></RequirePage>} />
+              <Route path="/runs/:runId/provenance" element={<RequirePage page="provenance"><Provenance /></RequirePage>} />
+              <Route path="/runs/:runId/intake" element={<RequirePage page="intake"><Intake /></RequirePage>} />
+              <Route path="/runs/:runId/agent" element={<RequirePage page="agent"><AgentTriage /></RequirePage>} />
+              <Route path="/settings" element={<RequirePage page="settings"><Settings /></RequirePage>} />
+              {/* Admin stays governed solely by isAdmin (its own guard) — never page-gated. */}
               <Route path="/admin" element={<Admin />} />
-              <Route path="/monitoring" element={<Monitoring />} />
-              <Route path="/queue" element={<ReviewQueue />} />
-              <Route path="/builder" element={<PipelineBuilder />} />
+              <Route path="/monitoring" element={<RequirePage page="monitoring"><Monitoring /></RequirePage>} />
+              <Route path="/queue" element={<RequirePage page="queue"><ReviewQueue /></RequirePage>} />
+              <Route path="/builder" element={<RequirePage page="builder"><PipelineBuilder /></RequirePage>} />
             </Route>
           </Routes>
         </BrowserRouter>
+      </AccessProvider>
       </RoleProvider>
       </PrefsProvider>
       </ConfirmProvider>

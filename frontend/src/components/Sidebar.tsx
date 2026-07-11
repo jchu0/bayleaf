@@ -2,6 +2,7 @@ import {
   Activity,
   Bell,
   ChevronUp,
+  ClipboardList,
   FileCheck2,
   FileUp,
   Filter,
@@ -19,12 +20,16 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import type { PageId } from '../access'
+import { useAccess } from '../context/AccessContext'
 import { useInbox } from '../context/InboxContext'
 import { useRole } from '../context/RoleContext'
 import type { RunSummary } from '../types'
 import { UserSettingsDialog } from './UserSettingsDialog'
 
-type Item = { label: string; to: string; icon: LucideIcon; active: boolean; badge?: number }
+// `page` tags an item with its PageId so the page-access view-gate can filter it (canSee). Admin
+// items carry no page — they're gated by isAdmin, not by the access profile.
+type Item = { label: string; to: string; icon: LucideIcon; active: boolean; badge?: number; page?: PageId }
 type Group = { heading: string; items: Item[] }
 
 // Nav groups (Operate / Analyze / Configure, + an approver-only Admin group). Per-run views
@@ -34,29 +39,33 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
   const { pathname } = useLocation()
   const { runId } = useParams()
   const { isAdmin } = useRole()
+  const { canSee } = useAccess()
   const { unreadCount } = useInbox()
   const run = runId ?? defaultRunId
   const runHome = run ? `/runs/${run}` : '/'
   const flagged = runs.find((r) => r.run_id === run)?.n_attention ?? 0
-  return [
+  const groups: Group[] = [
     {
       // Ordered Notification → Action → Steps (G4): the operator starts at what needs their
-      // attention (Inbox), then what needs resolving (Review queue), then walks the process steps
-      // (submit → runs → intake → decide). Work/issue-tracking pages sit above the process flow.
+      // attention (Inbox), then what needs resolving (Review queue), then walks the process steps.
+      // Accessioning is the FIRST process step (upstream of the samplesheet), so it leads the
+      // step sub-sequence: accession → submit → runs → intake → decide.
       heading: 'Operate',
       items: [
         // Notification: the personal triage workspace (GA3), badged with the operator's unread count.
-        { label: 'Inbox', to: '/inbox', icon: Bell, active: pathname.startsWith('/inbox'), badge: unreadCount || undefined },
+        { label: 'Inbox', to: '/inbox', icon: Bell, active: pathname.startsWith('/inbox'), badge: unreadCount || undefined, page: 'inbox' },
         // Action: issues waiting on a human.
-        { label: 'Review queue', to: '/queue', icon: Inbox, active: pathname.startsWith('/queue') },
-        // Steps: the process flow.
-        { label: 'Submit samplesheet', to: '/submit', icon: FileUp, active: pathname.startsWith('/submit') },
-        { label: 'Runs', to: '/', icon: Rows3, active: pathname === '/' },
+        { label: 'Review queue', to: '/queue', icon: Inbox, active: pathname.startsWith('/queue'), page: 'queue' },
+        // Steps: the process flow, beginning at subject accessioning (the CRM step).
+        { label: 'Sample accessioning', to: '/accession', icon: ClipboardList, active: pathname.startsWith('/accession'), page: 'accession' },
+        { label: 'Submit samplesheet', to: '/submit', icon: FileUp, active: pathname.startsWith('/submit'), page: 'submit' },
+        { label: 'Runs', to: '/', icon: Rows3, active: pathname === '/', page: 'runs' },
         {
           label: 'Intake gate',
           to: run ? `/runs/${run}/intake` : '/',
           icon: Filter,
           active: pathname.includes('/intake'),
+          page: 'intake',
         },
         {
           label: 'Decision cards',
@@ -64,6 +73,7 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
           icon: FileCheck2,
           active: /^\/runs\/[^/]+$/.test(pathname),
           badge: flagged || undefined,
+          page: 'cards',
         },
       ],
     },
@@ -75,25 +85,28 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
           to: run ? `/runs/${run}/provenance` : '/',
           icon: Waypoints,
           active: pathname.includes('/provenance') || pathname.includes('/canvas'),
+          page: 'provenance',
         },
         {
           label: 'Agent triage',
           to: run ? `/runs/${run}/agent` : '/',
           icon: Star,
           active: pathname.includes('/agent'),
+          page: 'agent',
         },
-        { label: 'Monitoring', to: '/monitoring', icon: Activity, active: pathname.startsWith('/monitoring') },
+        { label: 'Monitoring', to: '/monitoring', icon: Activity, active: pathname.startsWith('/monitoring'), page: 'monitoring' },
       ],
     },
     {
       heading: 'Configure',
       items: [
-        { label: 'Pipeline builder', to: '/builder', icon: GitFork, active: pathname.startsWith('/builder') },
-        { label: 'Settings', to: '/settings', icon: SlidersVertical, active: pathname.startsWith('/settings') },
+        { label: 'Pipeline builder', to: '/builder', icon: GitFork, active: pathname.startsWith('/builder'), page: 'builder' },
+        { label: 'Settings', to: '/settings', icon: SlidersVertical, active: pathname.startsWith('/settings'), page: 'settings' },
       ],
     },
     // Admin is governance (users/RBAC/audit), gated to the dedicated admin capability (the login
-    // identity, not just any approver) — see auth.ts / RoleContext.isAdmin.
+    // identity, not just any approver) — see auth.ts / RoleContext.isAdmin. Its item has no `page`,
+    // so it bypasses the access filter (isAdmin already bounds the whole group).
     ...(isAdmin
       ? [
           {
@@ -105,6 +118,12 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
         ]
       : []),
   ]
+  // Page-access view-gate: keep only items this actor may see (untagged admin items always pass),
+  // then drop any group left empty. isAdmin + the floor make canSee permissive, so a governance
+  // user still sees everything.
+  return groups
+    .map((g) => ({ ...g, items: g.items.filter((it) => it.page == null || canSee(it.page)) }))
+    .filter((g) => g.items.length > 0)
 }
 
 function UserPanel() {

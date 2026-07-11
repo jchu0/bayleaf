@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
   CircleCheck,
+  ClipboardList,
   FileCheck,
   Info,
   Paperclip,
@@ -17,6 +18,8 @@ import { useConfirm } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { useToast } from '../components/Toast'
+import { clearHandoff, readHandoff } from '../lib/accession'
+import { colIndex, splitCsv } from '../lib/csv'
 import type { SampleRow, SubmitRunIn } from '../types'
 
 // Submit samplesheet (§5.1) — the pipeline's front door: registers a run + its samples BEFORE
@@ -66,32 +69,8 @@ const INPUT_CLS =
 type SampleMeta = { subject_id?: string; tissue?: string }
 type ParsedSheet = { meta: Partial<RunMeta>; samples: SampleRow[] }
 
-// Tolerant CSV line split — handles simple double-quoted fields; trims each cell. Not a full RFC
-// parser (no embedded newlines), which is fine for a samplesheet a boundary reads defensively.
-function splitCsv(line: string): string[] {
-  const out: string[] = []
-  let cur = ''
-  let inQ = false
-  for (const c of line) {
-    if (c === '"') inQ = !inQ
-    else if (c === ',' && !inQ) {
-      out.push(cur)
-      cur = ''
-    } else cur += c
-  }
-  out.push(cur)
-  return out.map((s) => s.trim())
-}
-
-// Resolve a column index tolerantly by any of several accepted header names (case-insensitive).
-function colIndex(header: string[], names: string[]): number {
-  const lc = header.map((h) => h.toLowerCase())
-  for (const n of names) {
-    const i = lc.indexOf(n)
-    if (i >= 0) return i
-  }
-  return -1
-}
+// splitCsv / colIndex now live in lib/csv.ts, shared with the Accession screen (one tolerant parser
+// instead of a private copy per screen). parseSamplesheet / parseMetadata below use the imports.
 
 // Parse an Illumina v2 SampleSheet ([Header] key-values + a [*_Data] section) OR a plain CSV
 // (Sample_ID,Sample_Type,index,index2,Study). A missing field is a signal, not a crash (boundary
@@ -209,6 +188,21 @@ export function Submit() {
   const [baseToken, setBaseToken] = useState('')
   const [selectedRun, setSelectedRun] = useState(BASE_RUNS[0].id)
   const [imported, setImported] = useState(false)
+
+  // Accession → Submit handoff: if the Sample accessioning screen sent subject/tissue metadata,
+  // pre-attach it here (the same client-side merge an uploaded sample_metadata.csv gets) and clear
+  // the one-shot courier. subject_id stays client-side — the POST /api/runs body is unchanged.
+  useEffect(() => {
+    const handoff = readHandoff()
+    if (!handoff) return
+    const n = Object.keys(handoff).length
+    if (!n) return
+    setSampleMeta(handoff)
+    setMetaName(`from Sample accessioning · ${n} subjects`)
+    setSamples((rows) => rows.map((r) => (handoff[r.sample]?.tissue ? { ...r, type: handoff[r.sample].tissue as string } : r)))
+    clearHandoff()
+    toast(`Loaded ${n} subjects from Sample accessioning — subject ids held client-side.`, 'info')
+  }, [toast])
 
   const loaded = method === 'upload' || imported
   const count = loaded ? samples.length : 0
@@ -534,6 +528,17 @@ export function Submit() {
                 Attach metadata
               </button>
             )}
+          </div>
+          {/* Cross-link: subject metadata is authored upstream in the CRM/accessioning screen. */}
+          <div className="mt-1.5 flex items-center gap-1.5 px-1 text-[11px] text-text-3">
+            <ClipboardList size={12} strokeWidth={1.9} className="shrink-0" />
+            <span>
+              Subject metadata is authored in{' '}
+              <Link to="/accession" className="font-medium text-accent-strong hover:underline">
+                Sample accessioning
+              </Link>{' '}
+              — send it here to pre-attach subject &amp; tissue.
+            </span>
           </div>
         </>
       )}

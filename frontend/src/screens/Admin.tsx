@@ -1,12 +1,14 @@
-import { Activity, BarChart3, CheckCircle2, ChevronRight, Database, ExternalLink, LineChart, ShieldCheck, UserCog } from 'lucide-react'
+import { Activity, BarChart3, CheckCircle2, ChevronRight, Database, ExternalLink, KeyRound, LineChart, ShieldCheck, UserCog } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
+import { AccessEditor } from '../components/AccessEditor'
 import { Tabs } from '../components/Tabs'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/ConfirmDialog'
 import { DEMO_ACCOUNTS } from '../auth'
+import { useAccess } from '../context/AccessContext'
 import { useRole } from '../context/RoleContext'
 import type {
   MetricCatalog,
@@ -23,7 +25,7 @@ import type {
 // off-gate writes + whose id lands in audit fields — it never sets or overrides a verdict,
 // finding, or confidence (ADR-0001 / README §8). No confidence meter anywhere.
 
-type Tab = 'users' | 'activity' | 'system'
+type Tab = 'users' | 'access' | 'activity' | 'system'
 
 const ROLE_OPTS: { value: Role; label: string }[] = [
   { value: 'viewer', label: 'Viewer' },
@@ -190,14 +192,17 @@ function UsersTab() {
   )
 }
 
-// ── Activity log (real endpoints) ────────────────────────────────────────────
-type FeedKind = 'threshold' | 'pipeline' | 'ticket'
-type FeedRow = { when: string; actor: string; kind: FeedKind; target: string; detail: string }
+// ── Activity log (real endpoints + client-side access feed) ──────────────────
+// threshold/pipeline/ticket are backend-persisted; `access` is the client-side page-access
+// governance store (localStorage, no backend) merged in and clearly badged — an honest seam.
+type FeedKind = 'threshold' | 'pipeline' | 'ticket' | 'access'
+type FeedRow = { when: string; actor: string; kind: FeedKind; target: string; detail: string; clientSide?: boolean }
 
 const KIND_STYLE: Record<FeedKind, string> = {
   threshold: 'bg-qc/10 text-qc',
   pipeline: 'bg-variant/10 text-variant',
   ticket: 'bg-preflight/10 text-preflight',
+  access: 'bg-hold/10 text-hold-fg',
 }
 
 type ActPerPage = '25' | '50' | '100'
@@ -209,7 +214,8 @@ const ACT_PER_PAGE: SegmentOption<ActPerPage>[] = [
 const rowKey = (r: FeedRow) => `${r.when}|${r.kind}|${r.target}|${r.detail}`
 
 function ActivityTab() {
-  const [rows, setRows] = useState<FeedRow[] | null>(null)
+  const { audit } = useAccess()
+  const [backendRows, setBackendRows] = useState<FeedRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | FeedKind>('all')
   const [perPage, setPerPage] = useState<ActPerPage>('25')
@@ -262,13 +268,31 @@ function ActivityTab() {
           }
         }
         feed.sort((a, b) => (a.when < b.when ? 1 : -1))
-        setRows(feed)
+        setBackendRows(feed)
       })
       .catch((e) => setError(String(e)))
   }, [])
 
+  // The client-side page-access audit trail (localStorage), merged in as a labelled `access` feed.
+  const accessRows = useMemo<FeedRow[]>(
+    () =>
+      audit.map((a) => ({
+        when: a.at,
+        actor: a.actor,
+        kind: 'access' as const,
+        target: a.targetUser === '*' ? 'all users' : a.targetUser,
+        detail: a.summary,
+        clientSide: true,
+      })),
+    [audit],
+  )
+  const rows = useMemo<FeedRow[] | null>(() => {
+    if (backendRows == null) return null
+    return [...backendRows, ...accessRows].sort((a, b) => (a.when < b.when ? 1 : -1))
+  }, [backendRows, accessRows])
+
   const counts = useMemo(() => {
-    const c = { threshold: 0, pipeline: 0, ticket: 0 }
+    const c = { threshold: 0, pipeline: 0, ticket: 0, access: 0 }
     for (const r of rows ?? []) c[r.kind]++
     return c
   }, [rows])
@@ -287,7 +311,8 @@ function ActivityTab() {
     <div>
       <p className="mb-3 text-[12.5px] text-text-2">
         Append-only audit trail of off-gate governance — threshold overrides, pipeline versions,
-        and review tickets. Read-only; a rules-decided verdict never appears here.
+        and review tickets (backend-persisted), plus page-access changes (a client-side store,
+        badged as such). Read-only; a rules-decided verdict never appears here.
       </p>
       <div className="mb-3">
         <Tabs<'all' | FeedKind>
@@ -296,6 +321,7 @@ function ActivityTab() {
             { value: 'threshold', label: 'Thresholds', count: counts.threshold },
             { value: 'pipeline', label: 'Pipelines', count: counts.pipeline },
             { value: 'ticket', label: 'Tickets', count: counts.ticket },
+            { value: 'access', label: 'Access', count: counts.access },
           ]}
           value={filter}
           onChange={setFilter}
@@ -324,6 +350,11 @@ function ActivityTab() {
                       {r.kind}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-[13px] text-text">{r.detail}</span>
+                    {r.clientSide && (
+                      <span className="hidden shrink-0 rounded bg-card-2 px-1.5 py-0.5 text-[10px] font-medium text-text-3 sm:inline">
+                        client-side
+                      </span>
+                    )}
                     <span className="hidden font-mono text-[11.5px] text-text-2 md:block">{r.actor}</span>
                     <span className="w-[150px] shrink-0 text-right font-mono text-[11px] text-text-3">{fmtWhen(r.when)}</span>
                   </button>
@@ -503,6 +534,7 @@ export function Admin() {
   }
   const tabOptions = [
     { value: 'users' as const, label: <TabLabel icon={<UserCog size={13} />} text="Users & roles" /> },
+    { value: 'access' as const, label: <TabLabel icon={<KeyRound size={13} />} text="Page access" /> },
     { value: 'activity' as const, label: <TabLabel icon={<Activity size={13} />} text="Activity log" /> },
     { value: 'system' as const, label: <TabLabel icon={<CheckCircle2 size={13} />} text="System" /> },
   ]
@@ -511,13 +543,14 @@ export function Admin() {
       <PageHeader
         eyebrow="Governance"
         title="Admin"
-        subtitle="Manage users and their RBAC roles, review the off-gate audit trail, and read system posture. Admin never sets or overrides a verdict."
+        subtitle="Manage users and their RBAC roles, assign page access, review the off-gate audit trail, and read system posture. Admin never sets or overrides a verdict."
         actions={<ShieldCheck size={20} className="text-text-3" />}
       />
       <div className="mb-5">
         <SegmentedControl<Tab> options={tabOptions} value={tab} onChange={setTab} />
       </div>
       {tab === 'users' && <UsersTab />}
+      {tab === 'access' && <AccessEditor />}
       {tab === 'activity' && <ActivityTab />}
       {tab === 'system' && <SystemTab />}
     </div>
