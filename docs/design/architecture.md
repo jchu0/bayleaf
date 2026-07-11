@@ -82,9 +82,10 @@ Every finding and verdict is labelled with the gate it came from:
    and the node-authoring agent (`src/pipeguard/node_author/`, T-046, 2026-07-10) retrieves over a
    curated 11-entry tool-card corpus to propose a typed `NodeProposal` for the Pipeline Builder
    palette. All are stub-first ($0), import `anthropic` lazily, and fall back to the stub on any
-   error. **Node-authoring is core-only as of this build** — unlike the other four, it has no
-   `api/` endpoint and is invoked only by direct Python import (its 19 offline tests); the
-   Builder's "Author a tool node" modal predates it and stays a static preview.
+   error. **Node-authoring gained a read-only `api/` endpoint 2026-07-11** (W2, T-127,
+   `GET /api/builder/node-proposal`) — the Builder's "Author a tool node" modal now renders the
+   real proposal instead of a static preview; accept→card stays deferred (see
+   [agent-authoring-contract.md](agent-authoring-contract.md)).
 4. **Delivery layers (thin, over the core).** `app/` Streamlit (offline demo / fallback);
    `api/` FastAPI — the production read-API seam (ADR-0010/0014/0016); `frontend/` React —
    **rebuilt to the refreshed design prototype** (`docs/design/frontend/`, 2026-07-09, Waves 1–3),
@@ -808,7 +809,7 @@ config override, notably, records intent without mutating the live runbook.
 | Feedback-triage agent (off-gate) | `PIPEGUARD_FEEDBACK_AGENT=stub\|claude` (`PIPEGUARD_FEEDBACK_MODEL`); advisory categorization of the in-app feedback corpus (`api/feedback_agent.py`) | stub ($0) |
 | Pipeline-repair agent (advisory) | `PIPEGUARD_PIPELINE_REPAIR_AGENT=stub\|claude` (`PIPEGUARD_PIPELINE_REPAIR_MODEL`, default Opus-high); cross-run remediation proposals over a recurring signature (`src/pipeguard/pipeline_repair/`) | stub ($0) |
 | Archivist agent (off-gate) | `PIPEGUARD_ARCHIVIST_AGENT=stub\|claude` (`PIPEGUARD_ARCHIVIST_MODEL`, default Haiku); organizational digest/index over released runs (`api/archivist.py`) | stub ($0) |
-| Node-authoring agent (advisory, core-only) | `PIPEGUARD_NODE_AUTHOR_AGENT=stub\|claude` (`PIPEGUARD_NODE_AUTHOR_MODEL`, default Sonnet); retrieves a `NodeProposal` over a curated 11-card tool corpus (`src/pipeguard/node_author/`, T-046). **No `api/` endpoint yet** — unlike the other four agent rows, this seam is reachable only by direct Python import (tests) today | stub ($0) |
+| Node-authoring agent (advisory) | `PIPEGUARD_NODE_AUTHOR_AGENT=stub\|claude` (`PIPEGUARD_NODE_AUTHOR_MODEL`, default Sonnet); retrieves a `NodeProposal` over a curated 11-card tool corpus (`src/pipeguard/node_author/`, T-046). **A read-only `GET /api/builder/node-proposal` endpoint + Builder-modal wiring shipped 2026-07-11 (W2, T-127)** — closes the earlier "core-only, reachable only by direct Python import" gap; accept→card stays deferred, see [agent-authoring-contract.md](agent-authoring-contract.md) | stub ($0) |
 | Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack\|teams\|discord`; each adapter armed by its OWN `PIPEGUARD_{SLACK,TEAMS,DISCORD}_LIVE=1` (Teams/Discord also need `PIPEGUARD_{TEAMS,DISCORD}_WEBHOOK_URL`) | stub ($0, no network) |
 | Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — add/remap a source metric without touching rules | canonical decimals; ON the critical path |
 | Repository (persistence) | `Repository` port; SqliteRepository **and** guarded PostgresRepository built (ADR-0016), `get_repository()` selects | SQLite + JSONL (Postgres off by default) |

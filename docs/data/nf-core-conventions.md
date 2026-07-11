@@ -19,7 +19,13 @@ packaging, `process`/`conda`/`container` directives, `emit:` channel names) are 
 notes on someone else's convention — `src/pipeguard/nextflow/catalog.py` follows them directly to
 generate a REAL, runnable DSL2 pipeline from a Builder card graph, and
 `scripts/run_giab_pipeline.py` now runs that generated pipeline via `nextflow run` for the intake
-driver. See [design/nextflow-codegen.md](../design/nextflow-codegen.md).
+driver. See [design/nextflow-codegen.md](../design/nextflow-codegen.md). **Same-day follow-up
+(W4):** §2's `[meta, files]` channel convention below was, at first, only a documented target —
+the initial generator threaded `${params.sample}` directly rather than a real `meta` map. W4
+closes that gap too: every catalogued process now carries `tuple val(meta), …` and tags by
+`${meta.id}`, so the generated pipeline genuinely adopts §2, not just the packaging conventions
+above it (MultiQC is the one deliberate exception, per §2's own aggregator framing — it collects
+across samples and so drops `meta`, matching real nf-core aggregator modules).
 
 ## 1. Sample sheet → `Sample`
 

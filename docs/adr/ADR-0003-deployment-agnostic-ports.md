@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · Realized (event-bus / run-store / notify / artifact-store ports + metric-registry seam built; **Nextflow compute is now executable** — a card-graph→Nextflow compiler + a Nextflow-first intake driver, both LOCAL-profile; job-runner + cloud/Slurm compute adapters stay wishlist) |
-| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) · updated 2026-07-09 (MST) · updated 2026-07-11 (MST) |
+| **Status** | Accepted · Realized (event-bus / run-store / notify / artifact-store ports + metric-registry seam built; **Nextflow compute is now executable** — a card-graph→Nextflow compiler + a Nextflow-first intake driver, plus a baked-in `standard`/`slurm` executor-profile layer (W4) — the `slurm` profile is CONFIG-verified, not CLUSTER-verified; job-runner + AWS-Batch/HealthOmics compute adapters stay wishlist) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) · updated 2026-07-09 (MST) · updated 2026-07-11 (MST) · updated 2026-07-11 (MST, W4 executor profiles) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0016](ADR-0016-postgres-port.md), [design/architecture.md](../design/architecture.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0016](ADR-0016-postgres-port.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (the approval gate W1 adds to the execution path this ADR realizes), [design/architecture.md](../design/architecture.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md) |
 
 ## Context
 
@@ -123,8 +123,40 @@ rather than aspirational (full design in
    port's adapter abstraction — remain unbuilt. The compiler's catalog is curated (this pipeline's
    germline chain), not a claim that any arbitrary Builder card is runnable.
 
+## Realized (2026-07-11, W4) — an executor-profile layer: local-serial / Slurm, config-verified not cluster-verified
+
+Same day, a further increment (T-129, commit `5f0d5ec`) narrows item 4 above — a non-local
+executor profile now exists, though it has not been run against a real cluster. Full detail in
+[design/nextflow-codegen.md §Executor profiles](../design/nextflow-codegen.md#executor-profiles-local-serial--slurm-w4-nextflowconfig--the-intake-driver).
+
+1. **Two baked-in `nextflow.config` profiles**, alongside the pre-existing `conda`/`docker`/
+   `singularity`/`stub`: `standard` (the demo default — local single-thread-serial:
+   `queueSize=1`/`maxForks=1`/`cpus=1`) and `slurm` (`process.executor='slurm'`, with queue /
+   `clusterOptions` / in-flight cap all **env-driven** —
+   `PIPEGUARD_SLURM_QUEUE`/`_CLUSTER_OPTIONS`/`_QUEUE_SIZE` — never a baked guess). One sbatch job
+   is submitted per process instance.
+2. **The driver auto-selects.** `run_giab_pipeline.py`'s `_detect_profile()`: `sbatch` on `PATH` →
+   `-profile slurm`; absent → `-profile standard`. The compiled bundle is identical either way —
+   only the executor chosen at the `nextflow run` command line changes (compose ≠ execute — the
+   compiler never bakes an executor choice into the emitted graph).
+3. **Per-sample fan-out, at the compiler/pipeline level.** Every catalogued process now carries
+   the nf-core `[meta, files]` map and runs once per samplesheet row (`ProcessSpec.per_sample`,
+   default `True`; `MultiQC` is the one cross-sample aggregator). `main.nf`'s reads channel is
+   built from a samplesheet (`--input samplesheet.csv`), not a bare `--read1`/`--read2` pair. The
+   live intake driver still submits a **one-row** sheet (HG002) — a degenerate fan-out of 1; a
+   true multi-sample driver run (N result dirs → N gate-able run dirs) is not built.
+4. **Honest limit, stated precisely: CONFIG-verified, not CLUSTER-verified.** This sandbox (and
+   the maintainer's local verification environment) has no `sbatch` on `PATH`, so every live run
+   to date — including the HG002 verification the "Realized (2026-07-11)" section above
+   describes — has taken the `standard` local-serial branch. The `slurm` profile's Nextflow
+   syntax has been read and reasoned through, but it has **never been submitted to, or executed
+   by, a real Slurm cluster.** AWS-Batch/HealthOmics executor config remains fully unbuilt.
+
 ## Revisit when
 
 - We commit to a single production deployment target.
-- We configure a non-local Nextflow executor (Slurm / AWS Batch / HealthOmics) for the compiled
-  pipeline, closing the remaining compute-portability gap item 4 above names.
+- We **cluster-verify** the `slurm` profile against a real Slurm cluster (a non-local profile is
+  now *configured*, per the 2026-07-11 W4 addendum — this trigger is narrower than it was: it
+  fires on actually running it, not on declaring it), or configure and verify an AWS Batch /
+  HealthOmics executor, closing the remaining compute-portability gap item 4 (2026-07-11 section)
+  names.

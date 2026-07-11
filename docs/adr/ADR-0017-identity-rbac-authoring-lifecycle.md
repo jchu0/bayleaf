@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · MVP **dev-shim identity + RBAC BUILT** (`api/auth.py`), permissive by default; the draft→approve lifecycle is realized for pipeline graphs / config overrides / review tickets. A real identity provider + multi-worker version integrity are deferred seams. |
-| **Date** | 2026-07-09 (MST) |
+| **Status** | Accepted · MVP **dev-shim identity + RBAC BUILT** (`api/auth.py`), permissive by default; the draft→approve lifecycle is realized for pipeline graphs / config overrides / review tickets, and (2026-07-11, W1) now gates a real Nextflow EXECUTION too, not just config authoring. A real identity provider + multi-worker version integrity are deferred seams. |
+| **Date** | 2026-07-09 (MST) · updated 2026-07-11 (MST, W1 approval-gated execution) |
 | **Deciders** | maintainer + Claude Code |
-| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0010](ADR-0010-ticketing-notify-read-api.md) · [ADR-0014](ADR-0014-productionization-fastapi-react.md) · [ADR-0016](ADR-0016-postgres-port.md) · [design/architecture.md](../design/architecture.md) · [design/frontend/handoffs/2026-07-09-backend-contracts.md](../design/frontend/handoffs/2026-07-09-backend-contracts.md) · [planning/tasks.md](../planning/tasks.md) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (the execution path W1 gates) · [ADR-0010](ADR-0010-ticketing-notify-read-api.md) · [ADR-0014](ADR-0014-productionization-fastapi-react.md) · [ADR-0016](ADR-0016-postgres-port.md) · [design/architecture.md](../design/architecture.md) · [design/frontend/handoffs/2026-07-09-backend-contracts.md](../design/frontend/handoffs/2026-07-09-backend-contracts.md) · [planning/tasks.md](../planning/tasks.md) (T-126) · [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md) |
 
 ## Context
 
@@ -106,3 +106,38 @@ intentionally stay direct one-clicks — gating them would add friction without 
 accidental-click risk. See [architecture.md](../design/architecture.md) §Invariants,
 [risks.md](../quality/risks.md) RISK-035, and
 [functional.md](../requirements/functional.md) REQ-F-075 for the full framing.
+
+## Realized addendum (2026-07-11, W1) — the draft→approve lifecycle now gates a real EXECUTION, not just config
+
+Until this landing, the draft→approve lifecycle this ADR defines governed **product state only**
+(a saved pipeline graph, a config-threshold override, a review ticket) — never anything that
+actually ran. A second execution path, `POST /api/pipelines/run` (`api/routers/pipeline_run.py`,
+ADR-0003), let an operator run their **live canvas graph** with no approved-status check at all —
+a real Fable-5 release-hardening-audit finding (P1-6/P3-14, `audit/SYNTHESIS.md`,
+[tasks T-125](../planning/tasks.md)): the endpoint was authz-gated (`require_role("reviewer",
+"approver")`) but not *lifecycle*-gated, so an unapproved, unreviewed draft could execute for
+real (compile → Nextflow → a gate-able run dir).
+
+**The fix (T-126, commit `94c19da`):** the endpoint's body now NAMES a saved pipeline rather than
+carrying a raw graph (`RunPipelineIn` is `extra="forbid"`, so a smuggled `graph` field 422s
+before anything compiles); the server resolves that pipeline's approver-blessed (`emitted`)
+snapshot from `PipelineGraphStore` (`_resolve_approved`) and compiles + runs **that** — never the
+client's live, possibly-unreviewed canvas state. A name with no approved version is a **409**
+("no approved version of pipeline '…' — submit and approve it before running"), matching the
+existing draft→submit→approve status vocabulary this ADR defines rather than inventing a new one.
+The Builder's "Run" action is disabled client-side until the current pipeline is approved. A
+committed helper, `scripts/seed_approved_germline.py`, idempotently drives the SAME
+save→submit→approve lifecycle (via `record_transition`/`record_emission`, the exact functions the
+API uses) to seed a runnable `germline-panel` baseline, since a fresh store otherwise has no
+approved pipeline to name.
+
+**Additive framing, mostly — one real behavior change, stated plainly:** this does not add a new
+role, a new transition, or a new store; it makes an *existing* lifecycle stage (approved) a
+**precondition for a capability this ADR did not originally scope** (execution). The lifecycle's
+job widened from "gate who may author config" to "gate who may author config **and what may run**"
+— still advisory governance over product state, never touching the deterministic gate's verdict
+(ADR-0001; `run_pipeline` produces a new `data/<run_id>/` directory that `run_gate` later
+evaluates unchanged). See [functional.md REQ-F-086](../requirements/functional.md),
+[design/nextflow-codegen.md](../design/nextflow-codegen.md),
+[tasks T-126](../planning/tasks.md),
+[journal 2026-07-11](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md).

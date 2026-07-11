@@ -39,6 +39,7 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 |---|---|---|
 | [design/architecture.md](design/architecture.md) | ✅ | System shape: three gates, component map, data flow, invariants, swappable seams, deployment |
 | [design/agents.md](design/agents.md) | ✅ | Agent-layer hub: roster, shared invariants (captured once), intake checklist for new agent ideas |
+| [design/agent-authoring-contract.md](design/agent-authoring-contract.md) | ✅ | Boundaries MD for how an *authoring* agent (card/tool authoring, or the general convention for adding a 7th/8th advisory agent) is built and constrained — what templates it may fill, Nextflow-integration rules, UI dos/don'ts; the node-authoring agent's `GET /api/builder/node-proposal` is its first realized instance |
 | [design/data-platform-and-archivist.md](design/data-platform-and-archivist.md) | ✅ | Data-platform + export + run-browser + Archivist agent design (draft for review; tiered already-built / build-now / target-state) |
 | [design/node-authoring-agent.md](design/node-authoring-agent.md) | ✅ | Roster agent #5 — **built (T-046), narrower than proposed**: retrieval over an 11-card curated corpus from a natural-language request (not the originally-proposed dropped-doc parser); core-only, no `api/` endpoint or Builder wiring yet |
 | [design/variant-interpretation.md](design/variant-interpretation.md) | 🚧 | Variant interpretation & reporting design (ADR-0018) — advisory ClinVar/gnomAD evidence + review-ordering + a cited `RunReport` + a PHI-scrub Share window; two pieces built and (2026-07-11) demonstrated end-to-end (route-to-human `VAR-RTH-001` fires against a committed run; the conservative de-id module is wired to a narrower-than-designed `POST /api/runs/{id}/share` egress), the rest (agent, report, the full Share window) still design-only |
@@ -105,6 +106,20 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | [quality/evaluation.md](quality/evaluation.md) | ✅ | What "good" means, checks (EVAL-NNN) grounded in the test suite, failure modes |
 | [quality/risks.md](quality/risks.md) | ✅ | Technical / product / data / demo risks + mitigations (RISK-NNN) |
 
+## Audit (release-hardening review, repo root — not under `docs/`)
+| Doc | Status | Purpose |
+|---|---|---|
+| [audit/AUDIT_PLAN.md](../audit/AUDIT_PLAN.md) | ✅ | The Fable-5 release-hardening audit plan — two tracks (release-hardening findings, wishlist feasibility), 10 read-only specialist agents |
+| [audit/SYNTHESIS.md](../audit/SYNTHESIS.md) | ✅ | The consolidated, adversarially-re-verified findings (P0–P3, deduped, CONFIRMED/UNVERIFIED/REFUTED) + the pre-recording go/no-go checklist — see [evaluation.md EVAL-060](quality/evaluation.md) |
+| audit/{ui-ux,data-lineage,journeys,integration,reliability,agent-safety,science-repro,demo-readiness,contract,truthfulness}.md | ✅ | The 10 individual specialist reports `SYNTHESIS.md` consolidates |
+| [audit/wishlist/w1.md](../audit/wishlist/w1.md)–[w4.md](../audit/wishlist/w4.md) | ✅ | Grounded 3-approach design panels on four wishlist items, feeding [tasks T-126–T-130](planning/tasks.md) |
+
+> **Read-only deliverable, not a doc-owned area.** The audit is a point-in-time review snapshot
+> (2026-07-11) — it does not get routine upkeep like the canonical docs above; its *findings* are
+> what gets acted on (tracked as `planning/tasks.md` rows + code fixes), not the audit files
+> themselves. Kept at the repo root (`audit/`, not `docs/audit/`) as delivered by the audit run;
+> registered here so it isn't an orphaned, undiscoverable directory.
+
 ## Demo
 | Doc | Status | Purpose |
 |---|---|---|
@@ -151,6 +166,7 @@ One decision per file, in [adr/](adr/). Self-identifying `ADR-NNNN-*` names.
 | ⚪ | You **make** a load-bearing decision (or realize/supersede one) | A **new `adr/ADR-NNNN-*.md`** (one decision/file) or an existing ADR's Decision/Status + a journal Decisions row. **Never bury a decision in a design-doc appendix or a "D1-Dn" list.** *(Confirmed drift: D1-D14 + a 261-line design landed as appendices.)* |
 | ⚪ | Scope / wishlist / "built" changes | `requirements/scope-and-wishlist.md` (+ mirror `functional.md`, `tasks.md`). A new wishlist item is a scope-guardrail checkpoint — push back if scope over-broadens. |
 | ⚪ | Files moved across `src/`/`app/`/`data/`/`docs/`/`tests/`, a module added, **or a trigger in this map rotted** | `CLAUDE.md` "Current code map" + **this map** (the self-referential row: when layout moves, this table's triggers go stale — fix them here). |
+| ⚪ | You run a structured multi-agent **audit** (release-hardening, freshness, or similar) | `audit/` (or wherever the run lands) for the raw deliverable + `quality/evaluation.md` (an EVAL entry recording the review discipline, e.g. EVAL-060) + `planning/tasks.md` (a task row per finding acted on) — the audit itself is a point-in-time snapshot, not a doc that gets routine upkeep; its *findings* are what the map above routes onward as normal code/doc changes. |
 
 **Catch-all** (any module not listed above whose behavior/contract you changed): update the doc that owns it — see the "Necessary documentation stack" table. **Also occasional:** demo flow / exact commands / port change → `demo/run-of-show.md` + `demo/one-pager.md` + `README.md`; a new tool/dependency → `data/licensing.md` + `requirements/constraints.md`; a new *type* of doc with no template → create `_templates/<type>.md` **first**, then the doc.
 

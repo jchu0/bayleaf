@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md) |
+| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
 
 ## Overview
 
@@ -19,41 +19,47 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **427 tests across 29 files** — collection verified via
-`uv run pytest --collect-only -q` (427 collected) + `git ls-files 'tests/*.py' | wc -l` (29).
-Pass/skip count depends on whether `nextflow` is on `PATH` (the new
-`test_generated_germline_stub_runs` machine-gated live check, EVAL-006, joins the existing
-Postgres live-integration pattern): **423 pass / 4 skip** when `nextflow` is present (verified by
-the maintainer on a local `hackathon` conda env with Nextflow 26.04 + a JRE), **422 pass / 5
-skip** when it is not (this repo's default sandboxed dev/CI environment — verified here via
-`uv run pytest -q`). Either way every non-live test runs unconditionally. By collected size:
-`test_api` (42), `test_notify` (36), `test_synthetic` (33), `test_fetch_giab` (32), `test_gate`
-(29), `test_node_author` (19, the advisory node-authoring agent, T-046), `test_persistence` (17),
+The offline suite is **471 tests across 33 files** — collection verified via
+`uv run pytest --collect-only -q` (471 collected) + `git ls-files 'tests/*.py' | wc -l` (33), both
+re-run 2026-07-11 after the audit/hardening/W1-W4/E2E session (was 427/29). Pass/skip count
+depends on whether `nextflow` is on `PATH` (two machine-gated live checks now join the existing
+Postgres live-integration pattern: `test_nextflow_compile.py`'s `test_generated_germline_stub_runs`,
+EVAL-006, and the new `test_e2e_pipeline.py::test_approved_germline_pipeline_stub_runs_live`,
+EVAL-007): **465 pass / 6 skip** when `nextflow` is absent (this repo's default sandboxed dev/CI
+environment — verified here via `uv run pytest -q`), **467 pass / 4 skip** when it is present
+(the maintainer's local `hackathon` conda env with Nextflow 26.04 + a JRE). Either way every
+non-live test runs unconditionally. By collected size: `test_api` (43), `test_notify` (36),
+`test_synthetic` (33), `test_fetch_giab` (32), `test_gate` (30, +1 this session for the
+percent-display fraction-metric fix), `test_review_queue` (19, the ticket domain),
+`test_node_author` (19, the advisory node-authoring agent, T-046), `test_persistence` (17),
 `test_metrics` (17), `test_archivist` (17, the advisory archivist/librarian agent), `test_triage`
 (16), `test_pipeline_repair` (16, the advisory pipeline-repair agent), `test_nextflow_compile`
-(10, the card-graph→Nextflow compiler, incl. the drift guard + the one machine-gated live
-`-stub-run` check, EVAL-006, new 2026-07-11), `test_settings` (13, config-override authoring),
-`test_review_queue` (13, the ticket domain), `test_card_readout` (13, the QC-readout projection
-incl. the gate-dependency `blocked_by` case, T-087), `test_pipeline_lifecycle` (11,
+(15, +5 this session for the W4 per-sample fan-out + executor-profile wiring, the card-graph→
+Nextflow compiler, incl. the drift guard + the one machine-gated live `-stub-run` check,
+EVAL-006), `test_card_readout` (14, +1 this session), `test_settings` (13, config-override
+authoring), `test_pipeline_run` (12, the Pipeline-Builder Run endpoint, incl. the W1 approval-gate
+cases this session — previously undercounted in this table), `test_pipeline_lifecycle` (11,
 submit/approve/dry-run/diff), `test_route_to_human` (10, the off-by-default route-to-human gate
-rule VAR-RTH-001, ADR-0018 D2 — now incl. one committed-fixture, end-to-end-via-the-API case,
-2026-07-11), `test_auth` (10, the RBAC dev shim),
+rule VAR-RTH-001, ADR-0018 D2 — incl. one committed-fixture, end-to-end-via-the-API case),
+`test_auth` (10, the RBAC dev shim), `test_e2e_pipeline` (10, NEW this session — the offline
+acceptance test threading sheet→intake→the W1 approval gate→report/provenance, EVAL-007),
 `test_gate_notify` (9), `test_artifacts_s3` (9),
 `test_safe_harbor` (8, the conservative Safe-Harbor-style de-id egress transform, ADR-0018 D3),
 `test_pipelines` (8, the Pipeline Builder save/version store),
 `test_execution_trace` (8, the structured execution-trace feed →
 EXEC-001), `test_artifacts` (7), `test_share_store` (6, the pluggable jsonl/sqlite/postgres
-share-egress-audit sink, ADR-0016/ADR-0018 D3, new 2026-07-11),
-`test_share_egress` (5, the de-identified share/report egress endpoint, ADR-0018 D3,
-2026-07-11), `test_metrics_mapping` (5),
-`test_nextflow_api` (4, the `POST /api/pipelines/compile` endpoint, new 2026-07-11),
-`test_persistence_postgres_live` (4, one added
-2026-07-11 for the share store's live-Postgres round-trip) — all
+share-egress-audit sink, ADR-0016/ADR-0018 D3), `test_node_author_api` (6, NEW this session — the
+W2 read-only `GET /api/builder/node-proposal` endpoint),
+`test_share_egress` (5, the de-identified share/report egress endpoint, ADR-0018 D3),
+`test_metrics_mapping` (5),
+`test_persistence_postgres_live` (4), `test_nextflow_api` (4, the `POST /api/pipelines/compile`
+endpoint), `test_run_giab_driver` (2, NEW this session — the W4 Slurm/local executor-profile
+auto-detection unit) — all
 runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `test_api` and
 `test_triage` suites need the api/claude extras to import FastAPI, while `test_execution_trace`,
 `test_route_to_human`, `test_safe_harbor`, `test_share_egress`, `test_share_store`,
-`test_nextflow_compile`, and the agent suites run pure-offline over the core + pydantic,
-`test_share_egress`/`test_nextflow_api` via a `TestClient`).
+`test_nextflow_compile`, `test_e2e_pipeline`, and the agent suites run pure-offline over the core
++ pydantic, `test_share_egress`/`test_nextflow_api`/`test_e2e_pipeline` via a `TestClient`).
 
 ## What "good" means (principles)
 
@@ -212,6 +218,51 @@ itself is intentionally narrow (7 germline-chain tools) — this is a documented
 (§Limitations, [design/nextflow-codegen.md](../design/nextflow-codegen.md)), not a gap this case
 claims to cover: "any Builder card compiles to something runnable" is explicitly **not** the
 claim.
+
+### EVAL-007 — End-to-end acceptance: sheet → the approval-gated run → report/provenance
+
+| Field | Value |
+|---|---|
+| **Target** | The full W1+W3+W4 arc over the real API surface — `api/routers/intake.py` (registration), `api/pipeline_store.py` + `api/routers/pipelines_lifecycle.py` (Save→Submit→Approve), `api/routers/pipeline_run.py` (the approval-gated execution, ADR-0017), `GET /api/runs/{id}` (report/provenance data, W3) |
+| **Type** | Deterministic (+ one machine-gated live check) |
+| **Automated?** | Yes — `test_e2e_pipeline.py` (9 offline + 1 machine-gated: `test_sheet_creation_registers_run_and_skips_unfixtured_samples`, `test_intake_parse_contract_rejects_pii_and_a_no_op_sheet`, `test_approval_gate_blocks_run_until_approved_then_accepts`, `test_run_rejects_a_posted_graph_no_bypass`, `test_seed_script_produces_an_approved_baseline_runnable_by_name`, `test_report_data_verdict_mix_and_per_sample_gate_outcomes`, `test_report_route_to_human_quotes_clinvar_verbatim`, `test_downstream_provenance_stages_read_honestly`, `test_downstream_stage_seam_mapping_is_honest`, `test_approved_germline_pipeline_stub_runs_live`) |
+
+**Definition of good.** The whole demo arc holds together end to end, over the real API, not just
+per-module unit tests: (1) a multi-sample sheet registers a run and honestly reports which
+samples are processed vs. skipped (only fixtured samples run), and a smuggled `subject_id`
+(PII) is rejected at the parse boundary (422) — never silently accepted. (2) The approval gate
+(ADR-0017/REQ-F-086): a saved-but-unapproved pipeline's run 409s; submit→approve mints an
+approved baseline; the SAME run then succeeds (202) and the compiled step order is the seeded
+germline chain's real topological order (`FASTP`→`BWA_MEM2_MEM`→…→`BCFTOOLS_NORM`); a client
+cannot smuggle a raw `graph` to bypass the gate (422, `extra="forbid"`). The committed
+`scripts/seed_approved_germline.py` produces a baseline runnable **by name** without clicking
+through the Builder, idempotently (a second call mints no duplicate revision). (3) The report/
+provenance data (W3, REQ-F-087/REQ-F-088): the pinned `mock_run_01` scenario's verdict mix and
+per-sample gate outcomes are exactly what EVAL-001 already pins; the committed
+`RUN-2026-07-11-CLINVAR-RTH` fixture escalates via `VAR-RTH-001` with ClinVar quoted **verbatim**
+(never PipeGuard's own determination); the downstream `review` provenance stage reads ESCALATE
+(the fired gate wins over "skipped," the W3 honesty fix), while `filter`/`share` honestly read
+"not run in this build" since neither produced an artifact or event on this run.
+
+**Method.** Drive a `TestClient` against the real routers with the intake driver
+(`intake._run_pipeline`) and the operator-run background executor (`pipeline_run._execute`)
+monkeypatched to no-ops — **no subprocess and no Nextflow ever run** in the offline suite; the
+test asserts the WIRING (registration, the approval gate, the compiled step order, the hand-off),
+never a live pipeline. The operator-run input catalog is monkeypatched to a deterministic
+tmp-path fixture so the happy path is environment-independent; the pipeline store is isolated to
+a per-test tmp JSONL. A tenth, env-gated case (`test_approved_germline_pipeline_stub_runs_live`)
+confirms the SAME approved graph is a real `nextflow -stub-run`-valid pipeline when `nextflow` is
+on `PATH`; absent it, the case **skips**, never fails (mirrors the Postgres-live pattern).
+
+**Known failure modes.** A wiring regression that dropped or reordered a compiled process would
+be invisible to per-module unit tests that only check the compiler in isolation — pinned here by
+asserting the actual `steps` list `POST /api/pipelines/run` returns. A regression that let a
+posted graph bypass the approval gate (the exact audit finding P1-6/P3-14 this arc closes) is
+pinned by `test_run_rejects_a_posted_graph_no_bypass`, independent of the store/approval state.
+The route-to-human "skipped-while-escalated" lineage bug (W3) is pinned directly by
+`test_downstream_provenance_stages_read_honestly`, not just by the underlying rule test
+(EVAL-012) — a regression in the frontend-facing stage-mapping logic, not just the rule, would be
+caught here.
 
 ## Failure-mode cases (synthetic)
 
@@ -515,6 +566,49 @@ reads committed), run the gate, compare against truth in high-confidence regions
 outside it, absence of a call is not evidence. Requires the genomics toolchain
 (bioconda/containers), kept separate from the app's `uv` toolchain.
 
+## Process cases (manual/agent review, not an automated test)
+
+### EVAL-060 — Release-hardening audit: adversarial re-verification discipline
+
+| Field | Value |
+|---|---|
+| **Target** | The whole shipped app (`src/pipeguard/`, `api/`, `frontend/`) as of commit `9878231`, judged against the demo/recording golden path |
+| **Type** | Process (manual/multi-agent review) |
+| **Automated?** | **No** — a Fable-5 multi-agent audit run, all read-only (no source changed by the audit itself); its findings are then verified/fixed by the automated test suite (T-126) |
+
+**Definition of good.** Not "zero bugs" — a demo-stage codebase with 465 automated tests still
+has real drift between what a screen claims and what it does. Good here means: (1) every
+Blocker/High-severity finding is **adversarially re-verified** by a second pass before being
+acted on — reproduced against the live app or the exact cited `file:line`, not accepted on a
+single specialist's say-so; (2) findings are **deduplicated and prioritized honestly** (a demo-
+blocking lie ranks above a cosmetic label, a `post-hackathon` item is named as such rather than
+inflated); (3) the fix scope is **disciplined to relabeling/rewording/wiring the minimum**, not a
+license to add new scope under audit cover; (4) every fix **preserves the guardrails**
+(ADR-0001 — no advisory agent sets/edits a verdict; stub-default $0; no clinical/pathogenicity
+language; ClinVar quoted verbatim).
+
+**Method.** Two tracks, ten read-only specialist agents (ui-ux, data-lineage, journeys,
+integration, reliability, agent-safety, science-repro, demo-readiness, contract, truthfulness) +
+a wishlist-feasibility track (`w1`–`w4`, 3-approach design panels), synthesized in
+`audit/SYNTHESIS.md`: 60 raw findings deduped to 26 items; **every item marked `[CONFIRMED]`**
+(independently re-verified) **or `[UNVERIFIED]`** (rests on the specialist's own stated
+confidence, never silently upgraded) — **0 REFUTED, 0 UNCERTAIN**. Findings sorted P0 (must-fix
+before recording, 1 item) → P1 (fix before submission if possible, 6) → P2 (hide/document, 12) →
+P3 (post-hackathon backlog, 14), each with an effort/risk estimate and the raising specialist(s)
+named. A pre-recording go/no-go checklist closes the plan. T-126 then fixed the P0 + all 6 P1s in
+one hardening commit, verified by the offline test suite (442 passed / 5 skipped at that point)
+plus live manual verification of the P0 (stopped the API, reloaded `/`, confirmed the hero dot
+went non-green).
+
+**Known failure modes.** An audit that rubber-stamps its own specialists' findings without
+re-verification would let a false positive burn a fix cycle, or a false negative ship a real
+demo-breaking lie — mitigated by the adversarial re-verification pass and the explicit
+CONFIRMED/UNVERIFIED/REFUTED taxonomy (never a silent "trust the agent"). An audit with no
+prioritization discipline would either over-fix (scope creep under audit cover, explicitly
+guarded against — see `SYNTHESIS.md`'s "Discipline" note) or under-fix (a real P0 buried in a
+list of 84). The P2/P3 items are deliberately **not** fixed in this session — named as open,
+tracked in `audit/SYNTHESIS.md`, not silently dropped.
+
 ## What we do *not* claim
 
 1. **No calibrated probabilities.** Confidence is a heuristic; we do not evaluate it as
@@ -525,12 +619,17 @@ outside it, absence of a call is not evidence. Requires the genomics toolchain
 3. **No performance SLA.** No throughput/latency benchmark is measured at this stage
    (see [risks.md](risks.md), [nonfunctional.md](../requirements/nonfunctional.md)
    REQ-NF-032).
-4. **The new execution boundary (`POST /api/runs`, T-057, 2026-07-09) has no automated
-   test yet.** It was verified **manually** ("Submit → Processing… → gated HOLD," commit
-   `e77c2e6`) — grepped `tests/` for `intake`/`submit_run`/`SubmitRunIn`: no hits. The 362-test
-   count above is unchanged by this session's five commits (confirmed:
-   `git diff --stat a111703..01ba673 -- tests/` is empty). Tracked as an open gap, not silently
-   assumed covered ([risks.md](risks.md) RISK-034).
+4. **The execution boundary (`POST /api/runs`, T-057, 2026-07-09) now has automated
+   registration/parsing coverage, but never a live-driver run in the offline suite — CLOSED for
+   the registration path, still open for a genuinely live intake run.** It was first verified
+   only **manually** ("Submit → Processing… → gated HOLD," commit `e77c2e6`); `test_e2e_pipeline.py`
+   (2026-07-11, EVAL-007) now asserts the registration/parsing contract automatically
+   (`test_sheet_creation_registers_run_and_skips_unfixtured_samples`,
+   `test_intake_parse_contract_rejects_pii_and_a_no_op_sheet`) — but with `intake._run_pipeline`
+   monkeypatched to a no-op, so **no test in the offline suite ever actually runs the live
+   subprocess/Nextflow driver end to end**; that remains verified only manually (T-063's
+   real-GIAB run) plus the env-gated live-stub checks (EVAL-006/EVAL-007). Tracked as a narrower
+   open gap than before, not silently assumed fully covered ([risks.md](risks.md) RISK-034).
 
 ---
 

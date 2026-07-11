@@ -2,20 +2,21 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed (design; **two components now built end-to-end against a committed run**, see §0) |
+| **Status** | Proposed (design; **three components now built end-to-end against a committed run**, see §0) |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (the decision + [Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11)), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported`), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [qc_metrics.md](../data/qc_metrics.md) (§Route-to-human policy), [schemas.md](../data/schemas.md) (`VariantCall`), [provenance.md](../data/provenance.md), [architecture.md](architecture.md), [data-platform-and-archivist.md](data-platform-and-archivist.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md) |
+| **Related** | [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (the decision + [Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11)), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported`), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [qc_metrics.md](../data/qc_metrics.md) (§Route-to-human policy), [schemas.md](../data/schemas.md) (`VariantCall`), [provenance.md](../data/provenance.md), [architecture.md](architecture.md), [data-platform-and-archivist.md](data-platform-and-archivist.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md) |
 
 ## 0. Build status update (2026-07-11, after the maintainer's D1/D2/D3 sign-off)
 
 The maintainer signed off on ADR-0018 and its three open questions (see the ADR's
 [Maintainer decisions](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#maintainer-decisions-2026-07-10-sign-off)).
-Two pieces of this design are now **BUILT and demonstrated end-to-end against a committed run**
-(2026-07-10 landed the rule/module in isolation; 2026-07-11 wired each to a real, runnable path) —
-everything else below (the interpretation agent, `RunReport`, the full Share window, the
-ClinVar/gnomAD fetch scripts, gnomAD AF surfacing, inheritance-fit, review-ordering tier) remains
-design-only, not built:
+Three pieces of this design are now **BUILT and demonstrated end-to-end against a committed run**
+(2026-07-10 landed the rule/module in isolation; 2026-07-11 wired each to a real, runnable path,
+and — same day, a separate slice, W3 — a Report tab shipped over the already-wired data) —
+everything else below (the interpretation agent, the full Share window, the ClinVar/gnomAD fetch
+scripts, gnomAD AF surfacing, inheritance-fit, the review-ordering tier) remains design-only, not
+built:
 
 1. **Route-to-human (D2) — BUILT, fires end-to-end (2026-07-11).** `models.VariantCall` +
    `parsers.parse_variant_calls` (reads `variants.csv`) + `runbook.RouteToHumanPolicy` +
@@ -42,9 +43,27 @@ design-only, not built:
    (`frontend/src/screens/Provenance.tsx`). This is **not** the full Share window §4 describes —
    no scope selector, no location choice, no security-level tier; see §4 below for the precise
    gap. `GET /api/export` still runs the separate, less-strict `api/deid.py` policy (unchanged).
-3. Sections §1/§3–§6 below describe the **full** design (interpretation agent, `RunReport`,
-   Share window, fetch scripts, gnomAD/inheritance evidence) as originally proposed — still
-   entirely unbuilt except for the two narrower pieces above.
+3. **A `RunReport` view — BUILT the same day (W3, commit `3d5a73d`), narrower than §1 item 3's
+   `api/report.py` projection.** `RunDetail` gains a `?view=report` **Report** tab
+   (`frontend/src/components/RunReport.tsx`): a per-run "QC Decision & Provenance Report" —
+   verdict mix, a route-to-human hero panel quoting ClinVar significance VERBATIM (no authored
+   pathogenicity, ADR-0004/G3/G4), per-sample gate outcomes + cited evidence, and a sign-off
+   footer stating human sign-off is a labelled seam, not a button. **What makes this "option A,"
+   narrower than the design:** it is built entirely over `detail` (cards + events) already on the
+   wire — no new `api/report.py` projection, no `ReportStore`, no draft→approve/sign-off write
+   path, no persisted/immutable report artifact (a reload re-derives the same report from the
+   same already-decided cards rather than reading back a signed snapshot). There is also still
+   **no per-variant evidence table** (ClinVar/gnomAD/inheritance-fit per candidate, §1 item 1's
+   `AnnotatedVariant`) — only the route-to-human hits a run's rules already flagged. The same
+   commit also fixed a real honesty bug in the Lineage DAG: a fired route-to-human ESCALATE used
+   to render the review node as "skipped" (no VCF artifact) even though the rules had already
+   escalated the sample — a fired gate now wins over the no-artifact default. See
+   [functional.md REQ-F-087/REQ-F-088](../requirements/functional.md),
+   [tasks T-128](../planning/tasks.md).
+4. Sections §1/§3–§6 below describe the **full** design (the interpretation agent, the
+   `api/report.py`/`ReportStore`/sign-off lifecycle, the Share window, fetch scripts,
+   gnomAD/inheritance evidence) as originally proposed — still entirely unbuilt except for the
+   three narrower pieces above.
 
 ## Overview
 

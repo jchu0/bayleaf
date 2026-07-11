@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
 
 ## Overview
 
@@ -1121,6 +1121,82 @@ had reserved or listed as *not-yet-built*.
     [design/nextflow-codegen.md](../design/nextflow-codegen.md), REQ-F-045, REQ-F-067,
     [tasks T-123](../planning/tasks.md),
     [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md).
+27. **REQ-F-086 — Approval-gated Builder pipeline execution (W1).** `POST /api/pipelines/run`
+    resolves and compiles only a named pipeline's approver-blessed (`emitted`) baseline from
+    `PipelineGraphStore` (`_resolve_approved`) — never a raw client-posted graph
+    (`RunPipelineIn` is `extra="forbid"`, so a smuggled `graph` field 422s before anything
+    compiles). A name with no approved version is a **409** (`"no approved version … submit and
+    approve it before running"`), not a silent bypass; the Builder's "Run" action stays disabled
+    until the current pipeline is approved. Closes the audit's P1-6/P3-14 finding — the endpoint
+    previously ran the operator's live canvas graph with no approved-status check at all. A new
+    committed helper, `scripts/seed_approved_germline.py`, idempotently composes→saves→submits→
+    approves the seeded germline chain so a fresh store still has a runnable-by-name baseline for
+    the demo/E2E "Run" beat. *Trace:* [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md)
+    (Realized addendum 2026-07-11) — the draft→approve lifecycle now gates a real execution, not
+    just config — REQ-F-054 (the Save→Submit→Approve lifecycle this consumes), REQ-F-085,
+    [tasks T-126](../planning/tasks.md), [journal 2026-07-11](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
+28. **REQ-F-087 — RunDetail Report tab: a per-run QC Decision & Provenance report (W3).** A new
+    `?view=report` tab on `RunDetail` (`RunReport.tsx`) renders a single-document report over
+    data already on the wire (no new endpoint): verdict mix, a route-to-human hero panel quoting
+    ClinVar significance **verbatim** (no authored pathogenicity, ADR-0004/G3/G4), per-sample gate
+    outcomes with cited evidence, and a sign-off footer stating human sign-off is a labelled seam,
+    not a button — PipeGuard never marks a report final on its own. Read-only; confidence stays
+    omitted (T-019). Narrower than the full design: no interpretation agent, no per-variant
+    evidence table, no persisted/signed report artifact. *Trace:*
+    [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) Decision D1 (report
+    framing) + [Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11),
+    [design/variant-interpretation.md §0](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off),
+    [tasks T-128](../planning/tasks.md), [journal 2026-07-11](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
+29. **REQ-F-088 — Honest downstream provenance stages (`filter`/`review`/`share`) + the
+    route-to-human lineage fix (W3).** The Lineage DAG (`Provenance.tsx`) grows from 6 to 9
+    stages; `PipelineStage` (`types.ts`) gains `filter | review | share`, each reading "not run in
+    this build" unless THIS build actually produced its artifact or fired its gate —
+    `api/main.py`'s `_ARTIFACT_STAGE` gains the filename→stage seams (a `.norm.vcf.gz` →
+    `filter`, a `route_to_human.json` → `review`, a `share_manifest.json` → `share`; none is
+    emitted by any committed fixture, so all three read honestly empty today). **Fixes a real
+    honesty bug**: a fired route-to-human ESCALATE (`VAR-RTH-001`, REQ-F not yet numbered — see
+    ADR-0018 D2) used to render the review node as "skipped" (no VCF artifact) even though the
+    rules had already escalated the sample; a fired gate now wins over the no-artifact default,
+    so the review node reads ESCALATE, matching the decision the rules made. *Trace:*
+    [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), REQ-F-078 (the
+    Lineage/Event-trail/Artifacts Provenance rework this extends),
+    [tasks T-128](../planning/tasks.md), [journal 2026-07-11](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
+30. **REQ-F-089 — Node-authoring agent read endpoint + the agent-authoring scaffold contract
+    (W2).** A new read-only `GET /api/builder/node-proposal?request=…`
+    (`api/routers/node_author.py`, off-gate, no RBAC write) makes the previously core-only
+    `propose_node()` reachable over the wire; the Builder's `AuthorToolNodeModal` now renders the
+    real `NodeProposal` (typed live/reserved port chips, a `platform_version` stamp, heuristic-
+    labelled citation scores) instead of a static mock. `NodeProposal` gains `platform_version`
+    (`identifiers.PLATFORM_VERSION`, sourced from `pyproject.toml`) so a proposal pins tool
+    version + corpus + schema + platform. A new [design/agent-authoring-contract.md](../design/agent-authoring-contract.md)
+    is the governing boundaries MD for any authoring agent (card or agent authoring): metadata-
+    only output (never a `script:`/`stub:` body), the Nextflow-integration rules, UI dos/don'ts,
+    and the seven-point convention for adding a 7th/8th advisory agent. **This corrects Notes
+    item 7 below** — "no `api/` endpoint and no frontend wiring" is no longer true for the read
+    path; the modal still never auto-adds a card (accept→draft-library-entry stays deferred).
+    *Trace:* [design/node-authoring-agent.md](../design/node-authoring-agent.md),
+    [design/agent-authoring-contract.md](../design/agent-authoring-contract.md), REQ-F-025,
+    REQ-F-050, [tasks T-127](../planning/tasks.md),
+    [journal 2026-07-11](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
+31. **REQ-F-090 — Nextflow executor profiles (local-serial / Slurm) + per-sample fan-out + full
+    QC port wiring (W4).** The generated `nextflow.config` gains two baked-in profiles:
+    `standard` (the demo default — local single-thread-serial) and `slurm` (env-driven queue/
+    cluster-options, one sbatch job per process instance); `run_giab_pipeline.py` auto-detects
+    `sbatch` on `PATH` and picks the profile. **Honest limit: CONFIG-verified, not
+    CLUSTER-verified** — this repo's sandbox has no `sbatch`, so only the local-serial branch has
+    actually executed; the Slurm profile has never run against a real cluster. Every catalogued
+    process now carries the nf-core `[meta, files]` map and fans out per-sample
+    (`ProcessSpec.per_sample`, default `True`; MultiQC is the one cross-sample aggregator,
+    `per_sample=False`) — HG002 stays a degenerate fan-out of 1; a true multi-sample driver run
+    (parsing N result dirs into N run dirs) stays deferred. `fastp_html`/`samtools_stats` are
+    promoted from reserved/unwired to real, wireable optional ports (both are real commands the
+    driver already ran); the mosdepth `regions`/`global_dist`/`region_dist` byproducts are wired
+    too; MultiQC now ingests all 5 available QC streams (was 3). **This narrows, not closes,**
+    REQ-F-085's "local execution only" limitation and REQ-NF-060's Slurm/cloud gap — see the
+    updated Notes item 9 below and the REQ-NF-060 addendum. *Trace:*
+    [design/nextflow-codegen.md](../design/nextflow-codegen.md),
+    [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Realized addendum 2026-07-11),
+    REQ-F-085, [tasks T-129](../planning/tasks.md), [journal 2026-07-11](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
 
 ## Notes / deferred
 
@@ -1141,24 +1217,35 @@ had reserved or listed as *not-yet-built*.
 6. **Page-access enforcement is client-side only** (REQ-F-082) — a UI view-gate, not a
    server-side authorization boundary; a production build would need to enforce page/read access
    in `api/`, not just hide nav items in `frontend/`.
-7. **Node-authoring agent (REQ-F-025) has no `api/` endpoint and no frontend wiring.** The core
-   Python agent is built + tested, but nothing in `api/` calls `propose_node()` and nothing in
-   `frontend/src` calls it either — the Pipeline Builder's "Author a tool node" modal is still a
-   static, pre-existing `phase-2` preview. It is also **narrower than the roster's original
-   design**: retrieval over a fixed 11-card curated corpus, not a parser over a dropped tool's own
-   docs, so it cannot onboard a genuinely new/arbitrary tool yet (see
+7. **Node-authoring agent (REQ-F-025) now has a read-only `api/` endpoint + Builder wiring
+   (REQ-F-089, 2026-07-11) — this item is CLOSED for the read path, narrower for the write
+   path.** `GET /api/builder/node-proposal` makes `propose_node()` reachable and the Builder's
+   "Author a tool node" modal now renders the real proposal — the "static preview, no transport"
+   framing this note used to carry is stale. What is **still** true: **accept→card is not built**
+   (the modal never auto-adds a card; "Copy proposal" is the only action), there is no governed
+   library store, and the agent is still **narrower than the roster's original design**:
+   retrieval over a fixed 11-card curated corpus, not a parser over a dropped tool's own docs, so
+   it cannot onboard a genuinely new/arbitrary tool yet (see
    [node-authoring-agent.md](../design/node-authoring-agent.md) "What actually shipped").
 8. **UIC-16's larger four-side-typed-port Builder cards remain unbuilt** (REQ-F-083i) — only the
    full-canvas dot grid and the current-tools palette expander shipped; ports stay left/right-only
    on the existing fixed-size cards, tracked in [builder-cards/](../design/builder-cards/) §5.
+   **Closed the next day** (2026-07-11, T-121) — see [ui-conventions.md UIC-16](../design/ui-conventions.md).
 9. **The Nextflow compiler's catalog (REQ-F-085) is curated, not general** — only the 7
    germline-chain tools have a real `script:`; any other tool (incl. a future node-authoring-agent
    proposal) compiles to a labelled, loudly-failing placeholder until a `ProcessSpec` is added for
-   it. **Local execution only** — the generated `nextflow.config` declares `conda`/`docker`/
-   `singularity`/`stub` profiles, no Slurm/AWS-Batch/HealthOmics executor config; that remains the
-   open half of [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)'s compute-portability
-   decision. Container images are named per the nf-core biocontainer convention but only the
-   `conda` profile has been live-verified.
+   it. **Executor config narrowed, not closed (REQ-F-090, 2026-07-11)**: the generated
+   `nextflow.config` now also declares `standard` (local single-thread-serial) and `slurm`
+   (env-driven queue/cluster-options) profiles alongside `conda`/`docker`/`singularity`/`stub` —
+   but the Slurm profile is **CONFIG-verified, not CLUSTER-verified** (no `sbatch` in this
+   sandbox, so it has never executed against a real cluster); AWS-Batch/HealthOmics executor
+   config remains fully unbuilt. That gap is the still-open half of
+   [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)'s compute-portability decision.
+   Container images are named per the nf-core biocontainer convention but only the `conda`
+   profile has been live-verified. **Also narrowed (REQ-F-090):** every catalogued process now
+   fans out per-sample via the nf-core `[meta, files]` map, but the live intake driver still runs
+   one sample (HG002) at a time — a true multi-sample driver run (N result dirs → N run dirs)
+   remains deferred.
 
 ---
 

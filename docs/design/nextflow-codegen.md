@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Built (2026-07-11, T-123, commits `10f1816`→`e4ba174`) |
+| **Status** | Built (2026-07-11, T-123, commits `10f1816`→`e4ba174`); **extended the same day** (T-129, "W4," commit `5f0d5ec`) with executor profiles, per-sample fan-out, and full QC port wiring |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide, AI advisory — this module sets no verdict), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; this doc REALIZES its "Nextflow carries compute portability" decision), [design/architecture.md](architecture.md) (component map), [data/nf-core-conventions.md](../data/nf-core-conventions.md) (the vocabulary this catalog adopts), [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) (the card graph this compiles), [design/builder-cards/](builder-cards/) (the per-tool port specs the catalog mirrors), [planning/tasks.md](../planning/tasks.md) (T-123), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide, AI advisory — this module sets no verdict), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; this doc REALIZES its "Nextflow carries compute portability" decision), [design/architecture.md](architecture.md) (component map), [data/nf-core-conventions.md](../data/nf-core-conventions.md) (the vocabulary this catalog adopts), [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) (the card graph this compiles), [design/builder-cards/](builder-cards/) (the per-tool port specs the catalog mirrors), [planning/tasks.md](../planning/tasks.md) (T-123, T-129), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md) |
 
 ## Overview
 
@@ -68,6 +68,24 @@ The catalog covers the **germline-panel chain this repo actually runs**: `fastp`
 flags that a reference FASTA's sidecar index (`.fai`, `.bwt.2bit.64`, …) must be staged alongside
 it — Nextflow otherwise stages only the single declared file (see below).
 
+**Full QC port wiring (W4).** Every real byproduct each tool already writes is now a real,
+published output — not a dangling reserved port a card renders but never wires. `fastp` publishes
+`fastp_html` (the HTML report it already writes via `-h`) alongside `fastp_json`/`fastq`;
+`samtools markdup` runs an added `samtools stats` on the dedup BAM and publishes
+`samtools_stats`; `mosdepth` was already publishing `mosdepth_summary`/`mosdepth_thresholds`.
+`MultiQC` (the aggregator) now ingests **all 5** available QC streams instead of 3 — `fastp_json`,
+`markdup_metrics`, `samtools_stats`, `mosdepth_summary`, `mosdepth_thresholds` — each
+`.map { it[1] }.collect()`'d across every sample before MultiQC scans them. `fastp_html` and
+`samtools_stats` are mirrored in the frontend's `BuilderShared.tsx` (`BTOOLSPEC`/`ARTIFACT_KINDS`)
+and in `node_author.models.ARTIFACT_KINDS` (T-130), so a card's port for these kinds reads as
+`known`/wireable, not `reserved`, everywhere the vocabulary is checked. The mosdepth
+`regions`/`global_dist`/`region_dist` byproducts were wired the same way. A handful of kinds
+remain genuinely reserved (no producer exists yet): `vcf_index`, `multiqc_html`, `per_base`,
+`adapter_fasta`, `unpaired_fastq`, `failed_fastq`, `read_group`, `fastqc_zip`, `bcftools_stats`,
+`picard_hsmetrics` — see
+[builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
+for the current, up-to-date remainder.
+
 **Honesty framing — the catalog is curated, not universal.** This is deliberate, not a
 shortcut left for later: the module docstring says it plainly — "The catalog is deliberately
 small and curated (this pipeline's real germline chain). It is NOT a claim that any card is
@@ -113,6 +131,63 @@ command (see [Wiring rules](#wiring-rules) point 5).
 8. **A bad edge is rejected.** An edge naming a missing node or an out-of-range port index raises
    `CompileError` immediately — never silently dropped (a dropped edge would be a *worse* bug than
    a loud failure: a graph that looks valid but wires nothing).
+
+## Per-sample fan-out (W4, `catalog.py` / `compiler.py`)
+
+Every catalogued process is now **per-sample by default** (`ProcessSpec.per_sample: bool = True`):
+its input/output declarations carry the nf-core `[meta, files]` map, it runs once per samplesheet
+row, and it tags/names its outputs by `${meta.id}` — so a multi-sample samplesheet **fans out**
+(each sample's chain runs independently through the whole DAG) and a single sample is a fan-out of
+one. `MultiQC` is the one catalogued **aggregator** (`per_sample=False`): it drops the meta and
+`.collect()`s every sample's QC streams into a single report, since QC aggregation is inherently
+cross-sample. The compiler's `_render_catalogued` branches on this flag — a per-sample process
+gets `tag "${meta.id}"` + meta-threaded `tuple val(meta), …` ports (`_with_meta`); reference/panel
+inputs (`reference_fasta`/`panel_bed`) stay meta-free **shared value channels**, broadcast to every
+sample rather than carried per-row. `main.nf`'s reads channel is built from a samplesheet, not a
+bare `--read1`/`--read2` pair: `Channel.fromPath(params.input).splitCsv(header: true).map { row ->
+tuple([id: row.sample], file(row.fastq_1), file(row.fastq_2)) }`. An **uncatalogued** tool's
+placeholder module fans out the same way (`_render_placeholder` meta-threads its inputs/outputs
+too), so an unknown card still wires into a fan-out graph rather than breaking it.
+
+**Honest scope.** The seeded germline chain and the live intake driver still hand the pipeline a
+**one-row** samplesheet (HG002) — a degenerate fan-out of 1. The emitted output filenames
+(`${meta.id}.*` = `HG002.*`) are byte-identical to the pre-fan-out driver, so the existing
+frozen-five CSV parse (`run_giab_pipeline.py`) is unchanged. A true **multi-sample** driver run —
+submitting an N-row samplesheet and parsing N result directories into N gate-able run dirs — is
+not built; the fan-out is wired at the compiler/pipeline level, not yet exercised at the driver
+level with more than one real sample.
+
+## Executor profiles: local-serial / Slurm (W4, `nextflow.config` / the intake driver)
+
+The generated `nextflow.config` now bakes in two additional `profiles {}` blocks, alongside the
+pre-existing `conda`/`docker`/`singularity`/`stub`:
+
+1. **`standard`** — the demo default (Nextflow's implicit profile, so a plain `nextflow run` takes
+   this path). Forces strict local serial execution: `executor.queueSize = 1`, `process.maxForks =
+   1`, `process.cpus = 1` — one sample, one process, one CPU at a time. This is deliberately the
+   most conservative possible local profile, matching the single-machine demo environment.
+2. **`slurm`** — cluster execution: `process.executor = 'slurm'`, with the queue name
+   (`PIPEGUARD_SLURM_QUEUE`, default `normal`), any `clusterOptions` string (e.g. `-A
+   my-account`, `PIPEGUARD_SLURM_CLUSTER_OPTIONS`), and the in-flight job cap
+   (`PIPEGUARD_SLURM_QUEUE_SIZE`, default `50`) all **env-driven, never a baked guess** — a
+   deployer supplies their own account/queue/partition via environment, not a hand-edited config
+   file. One sbatch job is submitted per process instance, so samples (and independent stages
+   within a sample) can run in parallel across the cluster.
+
+`scripts/run_giab_pipeline.py`'s `_detect_profile()` picks between them: `shutil.which("sbatch")`
+present → `-profile slurm`; absent → `-profile standard`. The compiled bundle is identical either
+way — only the executor selected at the `nextflow run` command line changes (compose ≠ execute:
+the compiler never bakes an executor choice into the graph itself).
+
+**Honest limit, stated precisely: CONFIG-verified, not CLUSTER-verified.** This repo's sandbox
+(and the maintainer's local verification environment) has no `sbatch` on `PATH`, so every live
+run to date — including the "Verified live" HG002 run below — has taken the `standard` local-
+serial branch. The `slurm` profile has been read and reasoned through, and its Nextflow syntax is
+valid, but it has **never been submitted to, or executed by, a real Slurm cluster.** This is the
+same class of limit ADR-0003's own "job-runner/cloud adapters stay wishlist" note already carries
+— W4 narrows that gap (a Slurm profile now exists, is auto-selected, and is env-configurable) but
+does not close it (no cluster has run it). AWS-Batch/HealthOmics executor config remains entirely
+unbuilt.
 
 ## The reference-pipeline drift guard
 
@@ -199,28 +274,38 @@ run, not *what* they compute.
 | `test_generated_germline_stub_runs` | **Machine-gated, skip-safe** (mirrors the Postgres-live pattern): if `nextflow` is on `PATH`, the generated pipeline must validate end-to-end via `-stub-run` with placeholder inputs; absent Nextflow → skip, never fail. |
 | `tests/test_nextflow_api.py` (4 tests) | `POST /api/pipelines/compile` — JSON preview, `.zip` download, a 422 on a cycle/empty graph. |
 
-Census (verified `uv run pytest --collect-only -q` + `git ls-files 'tests/*.py' | wc -l`, this
-session, in a sandbox with `nextflow` NOT on `PATH`): **427 tests collected across 29 files**
-(was 413/27) — **422 passed / 5 skipped** here (the extra skip is the live `-stub-run` gate above,
-absent `nextflow`); on a machine with `nextflow` on `PATH` (the `hackathon` conda env used for the
-live-run verification) that test passes instead, giving **423 passed / 4 skipped** — the maintainer
-verified this configuration directly. Either way the compiler/wiring/drift/placeholder tests above
-run unconditionally offline, with no `nextflow` binary required.
+Census (verified `uv run pytest --collect-only -q` + `git ls-files 'tests/*.py' | wc -l`, updated
+2026-07-11 after W4 + the E2E acceptance test, in a sandbox with `nextflow` NOT on `PATH`):
+**471 tests collected across 33 files** (was 427/29) — **465 passed / 6 skipped** here (the
+`test_nextflow_compile.py` live `-stub-run` skip above plus the new `test_e2e_pipeline.py`
+env-gated live-stub check, both absent `nextflow`); on a machine with `nextflow` on `PATH` both
+run instead, giving 467 passed / 4 skipped. Either way the compiler/wiring/drift/placeholder
+tests run unconditionally offline, with no `nextflow` binary required. `test_nextflow_compile.py`
+itself grew from 10 to 15 cases covering the W4 per-sample fan-out (meta-threaded ports, the
+samplesheet-driven reads channel, the MultiQC aggregator's `.collect()` wiring) and the executor
+profiles (`standard`/`slurm` render in the generated `nextflow.config`).
 
 ## Limitations (recorded in the open, not hidden)
 
 1. **The catalog is curated, not general.** Only the 7 germline-chain tools have a real command.
    A future node-authoring-agent proposal or an arbitrary Builder palette card compiles to a
    placeholder, not a runnable process, until someone adds a `ProcessSpec` for it.
-2. **Local execution only.** `nextflow run pipelines/germline/main.nf -profile conda` is what was
-   verified; Slurm/AWS-Batch/HealthOmics executor config (the rest of ADR-0003's compute-
-   portability decision) is unbuilt — the `nextflow.config` profiles block declares `conda`/
-   `docker`/`singularity`/`stub` only, no cluster executor.
+2. **Cluster execution is CONFIG-verified, not CLUSTER-verified (narrowed 2026-07-11, W4).**
+   `nextflow run pipelines/germline/main.nf -profile conda`/`-profile standard` is what was
+   actually verified live. A `slurm` profile now exists (env-driven queue/cluster-options/
+   in-flight cap) and is auto-selected when `sbatch` is on `PATH` — but this sandbox has no
+   `sbatch`, so it has **never executed against a real cluster**; only its Nextflow syntax has
+   been read and reasoned through. AWS-Batch/HealthOmics executor config (the rest of ADR-0003's
+   compute-portability decision) remains fully unbuilt.
 3. **Container images are named, not pulled/verified.** Each `ProcessSpec.container` names a
    plausible biocontainer image (nf-core convention); none has been pulled or run in this repo —
    only the `conda` profile has been live-verified.
-4. **The intake driver is still single-sample, HG002-fixture-scoped** — unchanged by this
-   landing; see [functional.md REQ-F-067](../requirements/functional.md) for that boundary.
+4. **The intake driver is still single-sample, HG002-fixture-scoped** (unchanged by this landing;
+   see [functional.md REQ-F-067](../requirements/functional.md) for that boundary) — **though the
+   compiled pipeline itself now fans out per-sample (W4)**: every catalogued process carries the
+   nf-core `[meta, files]` map and would run once per samplesheet row given a multi-row sheet.
+   HG002 stays a degenerate fan-out of 1; parsing N result directories into N gate-able run dirs
+   for a real multi-sample submission is not built.
 5. **No `nextflow_schema.json`/`pipeline_info/` round-trip.** The driver parses each process's
    published QC file directly (fastp.json, mosdepth summary) rather than ingesting Nextflow's own
    `pipeline_info/` provenance manifest (`software_versions.yml`, `execution_trace_*.txt`, …) —

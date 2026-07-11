@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Built, narrower than proposed (2026-07-10, T-046, commit `71d4ff9`)** — roster agent #5. The core Python agent (`src/pipeguard/node_author/`) is built and tested; the flow this doc originally proposed (drop a tool's docs → parse → propose) was **not** what shipped — see "What actually shipped" below. No `api/` endpoint and no Pipeline-Builder wiring exist yet (the builder's "Author a tool node" modal is still the pre-existing static `phase-2` preview). |
-| **Last updated** | 2026-07-10 (MST) |
+| **Status** | **Built, narrower than proposed (2026-07-10, T-046, commit `71d4ff9`)** — roster agent #5. The core Python agent (`src/pipeguard/node_author/`) is built and tested; the flow this doc originally proposed (drop a tool's docs → parse → propose) was **not** what shipped — see "What actually shipped" below. **Updated 2026-07-11 (W2, T-127): a read-only `api/` endpoint + Pipeline-Builder wiring now exist** — the builder's "Author a tool node" modal renders the real proposal instead of a static `phase-2` preview; accept→card and a governed library store stay deferred (see item 5 below + [agent-authoring-contract.md](agent-authoring-contract.md)). |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [design/agents.md](agents.md) (roster #5) · [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) · [design/frontend/README.md](frontend/README.md) (§4 node model) · [design/frontend/handoffs/2026-07-09-review-to-design.md](frontend/handoffs/2026-07-09-review-to-design.md) (§4h, §6) · [design/builder-cards/](builder-cards/) (the tool-card corpus this agent retrieves over) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#9, #11) · [planning/tasks.md](../planning/tasks.md) (T-044, T-046) · [functional.md](../requirements/functional.md) (node-authoring REQ-F) |
+| **Related** | [design/agents.md](agents.md) (roster #5) · [design/agent-authoring-contract.md](agent-authoring-contract.md) (the boundaries MD this agent's endpoint + UI must satisfy) · [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) · [design/frontend/README.md](frontend/README.md) (§4 node model) · [design/frontend/handoffs/2026-07-09-review-to-design.md](frontend/handoffs/2026-07-09-review-to-design.md) (§4h, §6) · [design/builder-cards/](builder-cards/) (the tool-card corpus this agent retrieves over) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#9, #11) · [planning/tasks.md](../planning/tasks.md) (T-044, T-046, T-127) · [functional.md](../requirements/functional.md) (REQ-F-025, REQ-F-089) |
 
 > **Built, narrower than proposed.** Originated as maintainer review point #11 and was scoped in the
 > review→design brief (§4h). It is **advisory and off the gate** (ADR-0001); it authors a *proposal*,
@@ -37,11 +37,16 @@ doc-drop pipeline this note originally proposed:
 4. **Wishlist #9's deterministic nf-core-schema importer was NOT built as part of this agent** —
    see the correction in [scope-and-wishlist.md](../requirements/scope-and-wishlist.md) #9. The two
    were previously described as sharing a stub core; they do not.
-5. **No `api/` route and no frontend wiring.** `grep -rn node_author api/` and
-   `grep -rn "propose_node\|NodeProposal" frontend/src` both return nothing — the builder's
-   "Author a tool node" modal (`AuthorToolNodeModal` in `BuilderModals.tsx`) predates this build and
-   is still a static, hardcoded `phase-2` preview (a mock `STAR --help` parse), unconnected to
-   `propose_node()`. Wiring an endpoint + the modal is the next slice.
+5. **`api/` route + frontend wiring added 2026-07-11 (W2, T-127) — this item is CLOSED for the
+   read path.** A new read-only `GET /api/builder/node-proposal?request=…`
+   (`api/routers/node_author.py`, mirrors the other advisory-agent read shapes, off-gate, no RBAC
+   write) makes `propose_node()` reachable; the Builder's `AuthorToolNodeModal`
+   (`BuilderModals.tsx`) now fetches and renders the REAL proposal (typed live/reserved port
+   chips, a `platform_version` stamp, heuristic-labelled citation scores) instead of the old
+   static mock. **What is still deferred, not silently dropped:** the modal's primary action stays
+   "Copy proposal" — it never auto-adds a card; accept→a draft library entry, a governed library
+   store, and a per-agent conformance harness are the next slices (see
+   [agent-authoring-contract.md §Status](agent-authoring-contract.md#status--what-is-wired-vs-deferred-honest)).
 
 What DID carry over faithfully from the design: **advisory-only, off the gate** (`advisory: True`,
 no verdict/confidence field), **never invents a port kind** (`PortSpec.known` computed against the

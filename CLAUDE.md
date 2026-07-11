@@ -219,12 +219,17 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    **second execution path** sits beside the intake boundary above: `POST /api/pipelines/run`
    (`api/routers/pipeline_run.py`, mounted `api/main.py:98`, UI-wired `api.ts`→the Builder "Run"
    action in `BuilderModals.tsx`) is the Pipeline-Builder **Run** endpoint
-   (`require_role("reviewer", "approver")`) — it compiles the operator's live canvas graph and
-   runs it via the same Nextflow driver (202 + `GET /api/pipelines/run/{id}` poll), distinct from
-   `pipelines_lifecycle.py`'s Save→Submit→Approve profile flow (which governs locators/dry-run/diff,
-   not this executable graph). It currently runs the submitted graph without an approved-status
-   check; a per-pipeline **approval gate** (W1) is being added so only an approved pipeline version
-   runs. `GET
+   (`require_role("reviewer", "approver")`) — **approval-gated (W1, 2026-07-11, closing the P1-6
+   audit finding):** the body NAMES a saved pipeline (never a raw posted graph — `extra="forbid"`
+   422s a smuggled `graph`), and the endpoint resolves + compiles that pipeline's approver-blessed
+   (`emitted`) snapshot from `PipelineGraphStore` (`_resolve_approved`) — a name with no approved
+   version is a **409**, not a silent bypass. Only then does it run the compiled graph via the same
+   Nextflow driver (202 + `GET /api/pipelines/run/{id}` poll), distinct from
+   `pipelines_lifecycle.py`'s Save→Submit→Approve profile flow (which mints the approval this
+   endpoint consumes). The Builder's "Run" action stays disabled until the current pipeline is
+   approved. `scripts/seed_approved_germline.py` (idempotent compose→save→submit→approve of the
+   seeded germline chain) seeds a runnable `germline-panel` baseline so a fresh store still has
+   something to run by name. `GET
    /api/runbook`'s `RunbookThreshold` now also carries `pipeline_gate` (the registry gate)
    distinct from the numeric `gate` value, powering the decision card's honest three-gate
    (preflight/qc/variant) readout with an empty-state note where a gate has no metric table —
@@ -705,6 +710,77 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    (items 4/9/11 "not a Nextflow hand-off" corrected), `quality/evaluation.md` (new EVAL-006,
    census refreshed), `tasks.md` (T-123 done), `TABLE_OF_CONTENTS.md`. [journal
    2026-07-11](docs/journal/2026-07-11-nextflow-codegen-execution.md).
+   **Release-hardening audit + W1–W4 + E2E (2026-07-11, commits `c71fb6c`→`2e9b4e5`, T-125–T-130).**
+   A Fable-5 multi-agent **audit** (`audit/AUDIT_PLAN.md` + 10 read-only specialist reports +
+   `audit/SYNTHESIS.md` + `audit/wishlist/w1-w4.md`, all-read-only, no source changed) surfaced 84
+   findings (60 raw → 26 consolidated after dedup), all 11 Blocker/High adversarially re-verified
+   (0 refuted). **P0/P1 hardening** (commit `94c19da`) fixed the one P0 (`RunOverview`'s hardcoded
+   "Gate online" dot now driven by the shared `useApiHealth` hook, red when the API is down — was
+   lying during an outage) + 6 P1s: demo docs narrate the real `Advisory`/`Rule-derived triage
+   (offline)` labels (not a nonexistent `ADVISORY · STUB` badge); Intake override copy says
+   "recorded locally this session (not persisted)" (was "recorded on the run"); Submit shows a
+   "seeded demo" chip instead of a fabricated parsed sample count; `rules.py` renders fraction QC
+   metrics (`breadth_20x`/`breadth_30x`/`pct_mapped`/`on_target`) as percent (85%, not 0.85%) via a
+   registry-backed display conversion — no verdict/hash change, +2 tests; the Submit and
+   Builder-run pollers surface an honest "lost track of this run" toast on a 404/network blip
+   instead of spinning "running" forever; and this file's own router map (above) now states the
+   Run-endpoint's approval gate instead of the stale "no bypass check" line. **W1 — the approval
+   gate itself** ships in the same commit (see the `pipeline_run.py` paragraph above). **W2 — the
+   node-authoring agent gets a read path**: `docs/design/agent-authoring-contract.md` (the
+   boundaries MD — what an authoring agent may author, Nextflow-integration rules, UI dos/don'ts,
+   the six-agent-making convention) + a new read-only `GET /api/builder/node-proposal`
+   (`api/routers/node_author.py`, mirrors the other advisory-agent read endpoints, off-gate, no
+   RBAC write) that the Builder's `AuthorToolNodeModal` now calls for a REAL `NodeProposal` (typed
+   live/reserved port chips, a `platform_version` stamp sourced from `pyproject.toml` via
+   `identifiers.PLATFORM_VERSION`, heuristic-labelled citation scores) instead of a static mock;
+   node-author is now a first-class Settings agent-roster row (`wired`, corrected env
+   `PIPEGUARD_NODE_AUTHOR_AGENT`). Still deferred, labelled: accept→draft-library-entry, a governed
+   library store, and the doc-drop importer (the corpus stays fixed at 11 cards). **W3 — a Report
+   tab + honest downstream provenance**: `RunDetail` gains a `?view=report` **Report** tab
+   (`RunReport.tsx`) — a per-run "QC Decision & Provenance Report" (verdict mix, a route-to-human
+   hero panel quoting ClinVar significance VERBATIM, per-sample gate outcomes + cited evidence, a
+   sign-off footer stating human sign-off is a labelled seam, not a button) built entirely over
+   `detail` (cards + events) already on the wire — no new endpoint, read-only, no
+   confidence/verdict authored. `PipelineStage` (`types.ts`) gains `filter | review | share`; the
+   Lineage DAG now renders 9 stages instead of 6, each reading "not run in this build" unless THIS
+   build actually produced its artifact or fired its gate — **fixing a real honesty bug**: a fired
+   route-to-human ESCALATE (`VAR-RTH-001`) used to show the review node as "skipped" (no VCF
+   artifact) even though the rules had already escalated the sample; now a fired gate wins over the
+   no-artifact default, so the review node reads ESCALATE. `api/main.py`'s `_ARTIFACT_STAGE` gains
+   the `filter`/`review`/`share` filename→stage seams (a `.norm.vcf.gz` → `filter`, a
+   `route_to_human.json` → `review`, a `share_manifest.json` → `share`; none is emitted by any
+   committed fixture yet, so they honestly read "not run in this build" until a real build produces
+   one). **W4 — an executor model + per-sample fan-out + full port wiring**: the generated
+   `nextflow.config` gains two baked-in profiles — `standard` (the demo default: local
+   single-thread-serial, `queueSize=1`/`maxForks=1`/`cpus=1`) and `slurm` (env-driven
+   `PIPEGUARD_SLURM_QUEUE`/`_CLUSTER_OPTIONS`/`_QUEUE_SIZE`, one sbatch job per process instance) —
+   `run_giab_pipeline.py` auto-detects `sbatch` on `PATH` and picks the profile accordingly.
+   **Config-verified, NOT cluster-verified**: this sandbox has no `sbatch`, so only the
+   local-serial branch has actually run; the Slurm profile has never executed against a real
+   cluster. Every catalogued process now carries the nf-core `[meta, files]` map and fans out
+   per-sample (`ProcessSpec.per_sample`, default `True`; MultiQC is the one aggregator,
+   `per_sample=False`, collecting across samples into one report) — HG002 stays a degenerate
+   fan-out of 1 (the live intake path is unchanged; a true multi-sample driver run is still
+   deferred). `fastp_html` and `samtools_stats` are promoted from reserved/unwired to real,
+   wireable optional ports (fastp already wrote the HTML report; `samtools stats` is a new real
+   command on the dedup BAM); the mosdepth `regions`/`global_dist`/`region_dist` byproducts are
+   wired too; MultiQC now ingests all 5 QC streams (was 3). `pipelines/germline/` regenerated; the
+   drift test stays green. **E2E (commit `2e9b4e5`)**: `tests/test_e2e_pipeline.py` — an offline,
+   deterministic acceptance test threading sheet→intake→the W1 approval gate→report/provenance
+   over the real API surface (background subprocess/Nextflow calls monkeypatched to no-ops; one
+   env-gated `nextflow -stub-run` check joins the skip-safe live pattern). `node_author`'s
+   `ARTIFACT_KINDS` backend set gains the 5 kinds W4 promoted on the frontend
+   (`fastp_html`/`samtools_stats`/`mosdepth_global_dist`/`mosdepth_region_dist`/`mosdepth_regions`)
+   so a proposed node's port for these kinds is `known`, not `reserved`, on both sides. Verify:
+   **465 passed / 6 skipped** (471 collected across 33 files, was 427/29), ruff+mypy+tsc+oxlint
+   clean. Docs swept: `requirements/functional.md` (REQ-F-086..090), `requirements/nonfunctional.md`
+   (REQ-NF-060 addendum), `design/nextflow-codegen.md`, `design/variant-interpretation.md`,
+   `design/agents.md`, `design/node-authoring-agent.md`, `design/ui-conventions.md` (UIC-16 fastp_html/
+   samtools_stats correction), `design/builder-cards/README.md` §5, `ADR-0003` (Realized addendum),
+   `ADR-0017` (Realized addendum), `ADR-0018` (Realized item + §Open questions), `quality/
+   evaluation.md` (EVAL-007, EVAL-060, census refreshed), `tasks.md` (T-125–T-130),
+   `TABLE_OF_CONTENTS.md` (registers `audit/` + `agent-authoring-contract.md`). [journal
+   2026-07-11](docs/journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
 
 ## Git conventions
 

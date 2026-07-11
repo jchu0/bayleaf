@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | draft (§§1–3 now mostly REALIZED — see §5) |
-| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST, card geometry) · updated 2026-07-11 (MST, edge clarity + off-canvas boundary) |
+| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST, card geometry) · updated 2026-07-11 (MST, edge clarity + off-canvas boundary) · updated 2026-07-11 (MST, W4 full QC port wiring) |
 | **Audience** | frontend / design / bioinformatics |
 | **Related** | [frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model) (Pipeline Builder — full node model) · [design/ui-conventions.md UIC-16](../ui-conventions.md) · [data/nf-core-conventions.md](../../data/nf-core-conventions.md) (tool I/O → `ArtifactRef` / `MetricValue`) · [data/qc_metrics-sources.md](../../data/qc_metrics-sources.md) (metric provenance) · [frontend `BuilderShared.tsx`](../../../frontend/src/components/BuilderShared.tsx) (`BTOOLSPEC` · `TOOLS` · `GIAB_LOC` · `germlineTemplate()` · `portSide()` · `layoutPorts()` · `cardHeight()`) · [frontend `BuilderCanvas.tsx`](../../../frontend/src/components/BuilderCanvas.tsx) (current render + wiring) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) (the real germline commands the cards abstract) |
 
@@ -105,17 +105,29 @@ Verified by reading `frontend/src/components/BuilderShared.tsx` / `BuilderCanvas
    visible` on each card body render true half-circle nubs poking past the card edge on all four
    sides, becoming full circles in Connect mode (unchanged prior behavior); typing is still enforced
    in wiring (`reconcileEdges`, kind-matched).
-4. **Reserved kinds still need registering — STILL OPEN.** Several documented ports (`fastp_html`,
-   `adapter_fasta`, `samtools_stats`, the mosdepth `*_dist`/`per_base` family, `vcf_index`,
-   `multiqc_html`, MultiQC's discovered-log bay) are real tool I/O that `portSide()`'s placement
-   sets (`REF_IN_KINDS`/`METRIC_OUT_KINDS`) already anticipate the correct *side* for, but they are
-   still **absent from any `BTOOLSPEC` tool's actual `ins`/`outs`** and so from `ARTIFACT_KINDS`
-   (verified: `grep -n 'fastp_html\|samtools_stats' BuilderShared.tsx` finds them only in the
-   placement sets, not in any tool's `ins`/`outs` list) — a card renders only its real, wired ports;
-   these stay reserved, unrendered, never fabricated, until each gets a kind + a producer.
+4. **Reserved kinds — NARROWED the same day (W4, commit `5f0d5ec`), still partially open.**
+   `fastp_html` and `samtools_stats` — the two kinds this item originally cited — are **no longer
+   reserved**: `fastp` now publishes its already-written HTML report as `fastp_html`, and
+   `samtools markdup` runs an added `samtools stats` publishing `samtools_stats`; both are real,
+   wireable optional ports in `BTOOLSPEC`'s `ins`/`outs` and in `ARTIFACT_KINDS` (mirrored in the
+   backend `node_author.models.ARTIFACT_KINDS` too, T-130), and MultiQC now ingests both alongside
+   the mosdepth `regions`/`global_dist`/`region_dist` byproducts (also newly wired, was reserved).
+   **Still genuinely reserved** — no producer/kind registered yet, `portSide()`'s placement sets
+   already anticipate the correct *side* for them but no tool's `ins`/`outs` carries them
+   (verified: `grep -n 'per_base\|vcf_index\|multiqc_html\|adapter_fasta\|unpaired_fastq\|
+   failed_fastq\|read_group\|fastqc_zip\|bcftools_stats\|picard_hsmetrics' BuilderShared.tsx`
+   finds each only in the placement sets or the reserved `PORT_STATE` entries, never in a tool's
+   `ins`/`outs`): `per_base` (mosdepth per-base depth, disabled by `--no-per-base` in the real
+   command), `vcf_index` (a `.tbi`/`.csi` sidecar bcftools norm's index step produces but no port
+   models), `multiqc_html` (MultiQC's human-readable report, `multiqc_json` is the only wired
+   output today), `adapter_fasta`/`unpaired_fastq`/`failed_fastq`/`read_group` (fastp/bwa-mem2
+   optional flags never exercised by the driver), `fastqc_zip`/`bcftools_stats`/`picard_hsmetrics`
+   (tools not in the catalog at all) — a card renders only its real, wired ports; these stay
+   reserved, unrendered, never fabricated, until each gets a kind + a producer.
 
-Only item 4 remains a **frontend follow-up** now. Each per-tool doc stays the authority on *what
-ports a node should host*; this section is the (now much smaller) honest gap between spec and code.
+Only item 4 remains a **frontend follow-up** now, and it is narrower than when this section was
+first written. Each per-tool doc stays the authority on *what ports a node should host*; this
+section is the (now much smaller) honest gap between spec and code.
 
 ## 6. Edge clarity + the off-canvas decision boundary (2026-07-11, commits `a03704f`→`3d531de`)
 

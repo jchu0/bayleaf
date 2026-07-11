@@ -176,10 +176,18 @@ links to [evaluation.md](../quality/evaluation.md).
    half of this is no longer only "open via" — it is **built and live-verified**: a card-graph →
    Nextflow compiler (`src/pipeguard/nextflow/`) plus a Nextflow-first intake driver
    (`scripts/run_giab_pipeline.py`) run the real germline chain locally via `nextflow run
-   -profile conda` end to end. What remains open is narrower: Slurm/AWS-Batch/HealthOmics
-   **executor config** for that same generated pipeline — not "does Nextflow run at all." *Trace:*
-   [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Realized 2026-07-11),
-   [design/nextflow-codegen.md](../design/nextflow-codegen.md),
+   -profile conda` end to end. **Update (2026-07-11, W4):** an executor-profile layer now
+   exists — the generated `nextflow.config` also declares `standard` (local single-thread-serial,
+   the demo default) and `slurm` (env-driven `PIPEGUARD_SLURM_QUEUE`/`_CLUSTER_OPTIONS`/
+   `_QUEUE_SIZE`, one sbatch job per process instance), with `run_giab_pipeline.py` auto-detecting
+   `sbatch` on `PATH` to pick between them. **Honest scope: CONFIG-verified, not
+   CLUSTER-verified** — no `sbatch` exists in this sandbox, so only the local-serial branch has
+   actually executed; the Slurm profile has never run against a real cluster, and AWS-Batch/
+   HealthOmics executor config is fully unbuilt. What remains open is now narrower still: a
+   *cluster-verified* Slurm run and the two cloud executors — not "is a non-local profile even
+   declared." *Trace:*
+   [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Realized 2026-07-11, incl. the W4
+   addendum), [design/nextflow-codegen.md](../design/nextflow-codegen.md),
    [architecture.md](../design/architecture.md) §Deployment. Cloud/IaC executor config is still
    *wishlist*.
 

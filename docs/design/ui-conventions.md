@@ -26,9 +26,15 @@ rework shipped: `frontend/src/components/BuilderShared.tsx` gained one geometry 
 (`portSide()`/`layoutPorts()`/`cardHeight()`, `NODE_W = 232`) that both `BuilderCanvas.tsx`'s
 render and its wire-endpoint math call, so a wire can never detach from its port. Only item 4 of
 [builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
-(registering a handful of still-unregistered reserved kinds, e.g. `fastp_html`/`samtools_stats`)
-remains open — see that doc for the grounded detail; UIC-16 below is marked ✅ on the strength of
-the larger-card + four-sided-port ask, which is what this row exists to track.
+(registering a handful of still-unregistered reserved kinds) remains open — see that doc for the
+grounded detail; UIC-16 below is marked ✅ on the strength of the larger-card + four-sided-port
+ask, which is what this row exists to track. **Same-day follow-up (W4, commit `5f0d5ec`):**
+`fastp_html` and `samtools_stats` — the two kinds this note originally cited as examples of
+"still-unregistered" — were promoted to real, wireable optional ports (both are real commands the
+driver already ran, now published + wired to MultiQC); the mosdepth `regions`/`global_dist`/
+`region_dist` byproducts were wired the same way. Item 4's remaining list narrowed accordingly —
+see the UIC-16 entry below and [builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
+for the current set.
 
 ---
 
@@ -225,10 +231,14 @@ I/O; Databricks-inspired aesthetic. **Shipped**: the alignment dot grid spans th
 every zoom level; the palette shows the current pipeline's tools with a "≫ ALL" expander; and
 (2026-07-11, commit `12a9913`) cards grew to `NODE_W = 232` with typed half-circle ports on all
 four sides, driven by one geometry source of truth (`BuilderShared.portSide()`/`layoutPorts()`)
-shared by render and wire math. **One item stays open, not silently dropped**: a handful of
-documented tool ports (`fastp_html`, `samtools_stats`, the mosdepth `*_dist`/`per_base` family,
-`vcf_index`, `multiqc_html`) have no kind registered in `ARTIFACT_KINDS` yet and so stay reserved,
-unrendered — [builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
+shared by render and wire math. **One item stays open, narrowed the same day (W4, commit
+`5f0d5ec`)**: `fastp_html` and `samtools_stats` (both real commands the driver already ran) and
+the mosdepth `regions`/`global_dist`/`region_dist` byproducts were promoted from reserved to
+real, wireable optional ports (MultiQC now ingests all 5 available QC streams). What remains
+genuinely reserved (no producer/kind registered yet): `per_base`, `vcf_index`, `multiqc_html`,
+`adapter_fasta`, `unpaired_fastq`, `failed_fastq`, `read_group`, `fastqc_zip`, `bcftools_stats`,
+`picard_hsmetrics` —
+[builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
 item 4.
 
 ### UIC-17 — Pipeline Builder: composable-only canvas + an "⋯ More" overflow toolbar · ✅
