@@ -77,6 +77,13 @@ settings_overrides.jsonl
 settings_overrides.jsonl.tmp
 settings_overrides.sqlite
 
+# Nextflow run artifacts (ADR-0003) — the generated pipeline TEXT under pipelines/ is committed;
+# its execution outputs are not. `nextflow run` writes these into the CWD it runs from.
+.nextflow/
+.nextflow.log*
+work/
+pipelines/**/results/
+
 # De-identified share/report egress events (ADR-0018 D3) — the pluggable DATA_EXPORTED audit sink
 # (api/share_store.py; jsonl/sqlite/postgres). Carries run ids + who exported, so local-only, never
 # committed (the .sqlite is already covered by *.sqlite above).
