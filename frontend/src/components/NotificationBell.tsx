@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DEMO_ACCOUNTS } from '../auth'
 import { useInbox } from '../context/InboxContext'
-import { initials, SOURCE_META, timeAgo } from '../inbox'
+import { initials, SOURCE_META, sourceLabel, timeAgo } from '../inbox'
 
 // A tiny assignee chip so the quick-glance surface shows who owns an item (IB14 / UIC-14 assignment).
 function AssigneeChip({ id }: { id: string }) {
@@ -89,7 +89,7 @@ export function NotificationBell() {
                         {i.title}
                       </div>
                       <div className="mt-0.5 flex items-center gap-2 text-[10.5px] text-text-3">
-                        <span>{SOURCE_META[i.source].label}</span>
+                        <span>{sourceLabel(i)}</span>
                         {i.runId && <span className="font-mono">· {i.runId}</span>}
                         <span>· {timeAgo(i.createdAt)}</span>
                       </div>

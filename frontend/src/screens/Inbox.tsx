@@ -57,6 +57,7 @@ import {
   PRIORITY_ORDER,
   shortItemId,
   SOURCE_META,
+  sourceLabel,
   timeAgo,
   todayYmd,
 } from '../inbox'
@@ -230,7 +231,7 @@ function InboxRow({ item }: { item: InboxItem }) {
         </button>
         <button onClick={() => setOpen((o) => !o)} className="min-w-0 flex-1 text-left">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={`rounded-md border px-1.5 py-px text-[10px] font-medium ${src.badge}`}>{src.label}</span>
+            <span className={`rounded-md border px-1.5 py-px text-[10px] font-medium ${src.badge}`}>{sourceLabel(item)}</span>
             <PriorityChip p={item.priority} />
             <DueChip due={item.due} />
             {item.column !== 'inbox' && (
@@ -455,7 +456,7 @@ function BoardCard({
       <div className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className={`h-2 w-2 shrink-0 rounded-full ${src.dot}`} />
-          <span className="shrink-0 text-[10px] font-medium text-text-3">{src.label}</span>
+          <span className="shrink-0 text-[10px] font-medium text-text-3">{sourceLabel(item)}</span>
           {/* IB14: a stable, referenceable id — a ticket shows its review-queue id, a self card IB-XXXX. */}
           <span className="truncate font-mono text-[10px] text-text-3" title={item.id}>{shortItemId(item.id, item.isSelf)}</span>
         </span>
@@ -705,7 +706,7 @@ function BoardCardDetail({
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3.5">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className={`rounded-md border px-1.5 py-px text-[10px] font-medium ${src.badge}`}>{src.label}</span>
+              <span className={`rounded-md border px-1.5 py-px text-[10px] font-medium ${src.badge}`}>{sourceLabel(item)}</span>
               <span className="font-mono text-[11px] text-text-3" title={item.id}>{shortItemId(item.id, item.isSelf)}</span>
             </div>
             <h2 className="mt-1.5 text-[15px] font-medium leading-snug text-text">{item.title}</h2>
@@ -848,7 +849,7 @@ function BoardTab() {
   const openItem = openId ? (items.find((i) => i.id === openId) ?? null) : null
   // The board is the ASSIGNED-work view (the Inbox stream keeps every notification): a ticket-
   // derived card shows only once it has an owner (assigned in the review queue or here). Self-
-  // authored reminders are the operator's own board items, not "tickets", so they always show.
+  // authored notes/reminders are the operator's own board items, not "tickets", so they always show.
   const byColumn = (c: InboxColumn) =>
     items
       .filter((i) => i.column === c && (i.isSelf || i.assignee != null))
@@ -1149,7 +1150,7 @@ function CalendarTab() {
   )
 }
 
-// ── NOTES tab: self reminders + notes to self, with edit-gating + folders ───────
+// ── NOTES tab: self notes (undated) + ticket annotations, with edit-gating + folders ──
 const UNFILED = '__unfiled__'
 
 // An absolute created-date for a note header (4a). Tolerant of a bad timestamp (house rule: a
@@ -1207,7 +1208,7 @@ function NotesTab() {
     if (!selfSelected.length) return
     const ok = await confirm({
       title: `Delete ${selfSelected.length} note${selfSelected.length === 1 ? '' : 's'}?`,
-      body: "Your own reminders are removed. Ticket annotations aren't deleted here.",
+      body: "Your own notes are removed. Ticket annotations aren't deleted here.",
       confirmLabel: 'Delete',
       tone: 'danger',
     })
@@ -1311,9 +1312,10 @@ function NotesTab() {
           }}
           className="rounded-[14px] border border-line bg-card p-4"
         >
-          <div className="text-[13px] font-semibold text-text">New note to self</div>
+          <div className="text-[13px] font-semibold text-text">New note</div>
           <p className="mb-3 mt-0.5 text-[11.5px] text-text-3">
-            A private reminder — lands in your inbox and board, never on the gate.
+            A private note — lands in your inbox, never on the gate. Add a due date on the Calendar to
+            make it a reminder.
           </p>
           <input
             value={title}
@@ -1368,7 +1370,7 @@ function NotesTab() {
 
         <div className="flex flex-col gap-2.5">
           {shown.length === 0 ? (
-            <Empty message="No notes here. Jot a reminder to yourself in the composer above." />
+            <Empty message="No notes here. Jot a note to yourself in the composer above." />
           ) : (
             shown.map((i) => {
               const editing = editingId === i.id
@@ -1440,7 +1442,7 @@ function NotesTab() {
                                 onClick={async () => {
                                   const ok = await confirm({
                                     title: 'Delete this note?',
-                                    body: 'Your reminder is removed.',
+                                    body: 'Your note is removed.',
                                     confirmLabel: 'Delete',
                                     tone: 'danger',
                                   })

@@ -9,7 +9,15 @@ export const SOURCE_META: Record<InboxSource, { label: string; dot: string; badg
   escalate: { label: 'Escalation', dot: 'bg-escalate', badge: 'bg-escalate-bg text-escalate-fg border-escalate-bd' },
   rerun: { label: 'Rerun', dot: 'bg-rerun', badge: 'bg-rerun-bg text-rerun-fg border-rerun-bd' },
   hold: { label: 'Hold', dot: 'bg-hold', badge: 'bg-hold-bg text-hold-fg border-hold-bd' },
-  self: { label: 'My reminder', dot: 'bg-accent', badge: 'bg-accent-weak text-accent-strong border-accent/30' },
+  self: { label: 'Note', dot: 'bg-accent', badge: 'bg-accent-weak text-accent-strong border-accent/30' },
+}
+
+// A self-authored item is a REMINDER when it carries a due date (scheduled — authored on the
+// Calendar page) or a NOTE when it doesn't (authored in Notes). So a note never masquerades as a
+// "reminder": reminders are the dated, Calendar-owned things. Non-self items keep their verdict label.
+export function sourceLabel(item: { source: InboxSource; due?: string | null }): string {
+  if (item.source === 'self') return item.due ? 'Reminder' : 'Note'
+  return SOURCE_META[item.source].label
 }
 
 // The four kanban columns, in board order. "inbox" is the untriaged intake; "done" is the archive
