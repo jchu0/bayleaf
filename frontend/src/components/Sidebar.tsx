@@ -116,40 +116,40 @@ function UserPanel() {
           {initials}
         </span>
         <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate font-mono text-[12.5px] font-semibold text-[#e7ecf1]">{actor.id}</span>
+          <span className="block truncate font-mono text-[12.5px] font-semibold text-nav-text">{actor.id}</span>
           <span className="flex items-center gap-1.5">
             <span className="h-[5px] w-[5px] rounded-full bg-[#3ba55d]" />
-            <span className="text-[10.5px] text-[#7c8794]">{roleLabel}</span>
+            <span className="text-[10.5px] text-nav-label">{roleLabel}</span>
           </span>
         </span>
-        <ChevronUp size={14} className="shrink-0 text-[#7c8794]" />
+        <ChevronUp size={14} className="shrink-0 text-nav-label" />
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-[66px] left-3 right-3 z-40 overflow-hidden rounded-[11px] border border-[#2b3543] bg-nav-hover shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
-            <div className="border-b border-[#2b3543] px-3.5 py-3">
-              <div className="font-mono text-[12.5px] font-semibold text-[#e7ecf1]">{actor.id}</div>
-              <div className="font-mono text-[10.5px] text-[#7c8794]">{actor.id}@lab.org</div>
+          <div className="absolute bottom-[66px] left-3 right-3 z-40 overflow-hidden rounded-[11px] border border-nav-border bg-nav-hover shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
+            <div className="border-b border-nav-border px-3.5 py-3">
+              <div className="font-mono text-[12.5px] font-semibold text-nav-text">{actor.id}</div>
+              <div className="font-mono text-[10.5px] text-nav-label">{actor.id}@lab.org</div>
             </div>
             <button
               onClick={() => {
                 setOpen(false)
                 setDialog(true)
               }}
-              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12.5px] text-[#c3ccd6] hover:bg-white/5"
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12.5px] text-nav-text hover:bg-nav-hover"
             >
-              <Settings size={14} className="text-[#c3ccd6]" />
+              <Settings size={14} className="text-nav-text" />
               Settings
             </button>
             <button
               onClick={toggleRole}
-              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12.5px] text-[#c3ccd6] hover:bg-white/5"
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12.5px] text-nav-text hover:bg-nav-hover"
             >
-              <Shield size={14} className="text-[#c3ccd6]" />
+              <Shield size={14} className="text-nav-text" />
               <span className="flex-1">Role</span>
-              <span className="font-mono text-[10.5px] capitalize text-[#8b97a4]">{role}</span>
+              <span className="font-mono text-[10.5px] capitalize text-nav-label">{role}</span>
             </button>
             <button
               onClick={() => {
@@ -157,7 +157,7 @@ function UserPanel() {
                 logout()
                 navigate('/login', { replace: true })
               }}
-              className="flex w-full items-center gap-2.5 border-t border-[#2b3543] px-3.5 py-2.5 text-left text-[12.5px] text-[#e0868c] hover:bg-white/5"
+              className="flex w-full items-center gap-2.5 border-t border-nav-border px-3.5 py-2.5 text-left text-[12.5px] text-escalate-fg hover:bg-nav-hover"
             >
               <LogOut size={14} />
               Sign out
@@ -189,8 +189,8 @@ export function Sidebar({
           </svg>
         </span>
         <span className="leading-[1.1]">
-          <span className="block text-[15px] font-bold tracking-[-0.2px] text-white">PipeGuard</span>
-          <span className="block text-[10.5px] font-medium uppercase tracking-[0.3px] text-[#7c8794]">
+          <span className="block text-[15px] font-bold tracking-[-0.2px] text-nav-text">PipeGuard</span>
+          <span className="block text-[10.5px] font-medium uppercase tracking-[0.3px] text-nav-label">
             Decision gate
           </span>
         </span>
@@ -209,8 +209,8 @@ export function Sidebar({
                   to={it.to}
                   className={`flex items-center gap-2.5 rounded-lg px-[11px] py-2 text-[13.5px] leading-[1.1] transition-colors ${
                     it.active
-                      ? 'bg-nav-active font-semibold text-white'
-                      : 'text-[#aab4bf] hover:bg-nav-hover hover:text-white'
+                      ? 'bg-nav-active font-semibold text-nav-active-text'
+                      : 'text-nav-text hover:bg-nav-hover hover:text-nav-active-text'
                   }`}
                 >
                   <it.icon size={17} strokeWidth={1.7} className="shrink-0" />

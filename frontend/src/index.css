@@ -11,31 +11,33 @@
      Consumed via the shared PageHeader component (font-serif utility). */
   --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
 
-  /* Light content surface — softened to a warm japandi palette (sand/greige) at the maintainer's
-     request (2026-07-10): the page is a warm off-white sand rather than a cool near-white, cards
-     are a soft warm white (never glaring #fff), insets step down through warm greige. Contrast on
-     text is preserved (WCAG AA+). --color-page vs --color-card-2 stay a deliberate 2-step backdrop. */
-  --color-page: #f2efe7;
-  --color-card: #faf9f4;
-  --color-card-2: #ebe6da;
-  --color-card-3: #e2dccd;
-  --color-line: #e5dfd1;
-  --color-line-strong: #d1c9b8;
-  --color-text: #2a2620;
-  --color-text-2: #6a6459;
-  --color-text-3: #978f80;
+  /* Light content surface — cool, clinical/biotech palette (2026-07-10: reverted from a warm
+     japandi trial that didn't read clinical). Kept off the glaring pure-white that causes eye
+     strain: cards are a soft off-white (#f9fbfd, not #fff), the page a soft cool gray, insets step
+     down through cool grays. Contrast on text is preserved (WCAG AA+). */
+  --color-page: #eef1f5;
+  --color-card: #f9fbfd;
+  --color-card-2: #e7ecf2;
+  --color-card-3: #dee4ec;
+  --color-line: #e0e6ee;
+  --color-line-strong: #ccd4de;
+  --color-text: #1b232c;
+  --color-text-2: #566573;
+  --color-text-3: #8a94a1;
   --color-accent: #1f5fd0;
-  --color-accent-weak: #eaeef6;
+  --color-accent-weak: #e9eefb;
   --color-accent-strong: #1a4fac;
 
-  /* Dark left nav. --color-nav-active is the selected-item background (#22303f); nav-hover
-     doubles as the elevated dark surface for the user-panel button + popover (#1b222b). */
-  --color-nav: #141a21;
-  --color-nav-hover: #1b222b;
-  --color-nav-active: #22303f;
-  --color-nav-border: #202832;
-  --color-nav-text: #c3ccd6;
-  --color-nav-label: #6b7683;
+  /* Left nav — now THEMEABLE (2026-07-10): light in light mode (below), dark in dark mode (the
+     :root[data-theme='dark'] override). --color-nav-active-text is the selected-item label (dark
+     accent in light, white in dark). The Sidebar consumes these vars end-to-end (no hardcoded hexes). */
+  --color-nav: #ffffff;
+  --color-nav-hover: #eef2f7;
+  --color-nav-active: #e7eefb;
+  --color-nav-active-text: #1a4fac;
+  --color-nav-border: #e2e7ee;
+  --color-nav-text: #3a4552;
+  --color-nav-label: #8a94a1;
 
   /* Verdicts — base / bg / border / fg */
   --color-proceed: #1a854e;
@@ -72,8 +74,8 @@
   color-scheme: light;
   font-family: var(--font-sans);
   font-size: 14px;
-  /* Pipeline-builder canvas dot grid — warm, subtle on the sand surface. */
-  --canvas-dot: #d6cfbe;
+  /* Pipeline-builder canvas dot grid — subtle cool dots on the light surface. */
+  --canvas-dot: #d3dae4;
 }
 
 /* Dark theme — the content surfaces adopt the app's existing dark-nav aesthetic (the nav itself
@@ -94,6 +96,15 @@
   --color-accent: #4b8bf0;
   --color-accent-weak: #17233a;
   --color-accent-strong: #6ba3f5;
+  /* Dark nav — the app's original dark-nav aesthetic, now an explicit dark-mode override (the
+     base @theme nav vars are light). --color-nav-active-text is white on the dark active pill. */
+  --color-nav: #141a21;
+  --color-nav-hover: #1b222b;
+  --color-nav-active: #22303f;
+  --color-nav-active-text: #ffffff;
+  --color-nav-border: #202832;
+  --color-nav-text: #c3ccd6;
+  --color-nav-label: #6b7683;
   --color-proceed-bg: #12271c;
   --color-proceed-bd: #244d34;
   --color-proceed-fg: #64d69a;
