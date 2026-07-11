@@ -1,4 +1,4 @@
-import { Calendar, ChevronRight, ExternalLink, Star } from 'lucide-react'
+import { Calendar, ChevronRight, ExternalLink, EyeOff, RotateCcw, Star } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { AgentProposal, MonitoringSignature } from '../types'
@@ -34,6 +34,8 @@ export function MonitoringSignatureRow({
   onToggle,
   windowShort,
   windowLabel,
+  cleared = false,
+  onToggleClear,
 }: {
   sig: MonitoringSignature
   open: boolean
@@ -42,7 +44,15 @@ export function MonitoringSignatureRow({
   windowShort: string
   /** e.g. "7 days" — spelled-out window for the detail copy. */
   windowLabel: string
+  /** Whether this row is currently cleared from the main view (M4). */
+  cleared?: boolean
+  /** Clear this signature from view / restore it — a reversible, client-side view filter (never
+   *  a DB purge); the signature stays searchable and recoverable. Omit to hide the control. */
+  onToggleClear?: () => void
 }) {
+  // Stable, unique, human-readable id for the signature (M6). The `signature` hash is already
+  // unique per recurring pattern (rule_id can repeat across patterns) — surface a short prefix of it.
+  const sigId = `SIG-${sig.signature.slice(0, 8)}`
   const [escState, setEscState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [proposal, setProposal] = useState<AgentProposal | null>(null)
   const [escError, setEscError] = useState<string | null>(null)
@@ -94,9 +104,9 @@ export function MonitoringSignatureRow({
           strokeWidth={2.4}
           className={`shrink-0 text-text-3 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
         />
-        {/* Col 2 — signature (rule · title), mono, ellipsis */}
+        {/* Col 2 — unique id (M6) + signature (rule · title), mono, ellipsis */}
         <span className="min-w-0 truncate font-mono text-[12px] text-text">
-          {sig.rule_id} · {sig.title}
+          <span className="text-text-3" title={`Signature id · ${sig.signature}`}>{sigId}</span> · {sig.rule_id} · {sig.title}
         </span>
         {/* Col 3 — first → last seen; omitted honestly when only undated runs carry the signature */}
         {sig.first_seen && sig.last_seen ? (
@@ -162,6 +172,17 @@ export function MonitoringSignatureRow({
               <Star size={13} />
               {escState === 'loading' ? 'Consulting repair agent…' : 'Escalate to repair agent'}
             </button>
+            {onToggleClear && (
+              <button
+                type="button"
+                onClick={onToggleClear}
+                title={cleared ? 'Restore this signature to the main list' : 'Clear from view (reversible — not purged; still searchable)'}
+                className="inline-flex items-center gap-[6px] whitespace-nowrap rounded-[8px] border border-line-strong bg-card px-[11px] py-[7px] text-[11.5px] font-medium text-text-2 transition-colors hover:border-line"
+              >
+                {cleared ? <RotateCcw size={13} /> : <EyeOff size={13} />}
+                {cleared ? 'Restore to view' : 'Clear from view'}
+              </button>
+            )}
             <span className="text-[10.5px] text-text-3">{autoNote}</span>
           </div>
 

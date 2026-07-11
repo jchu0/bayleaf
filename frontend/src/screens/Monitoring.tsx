@@ -1,5 +1,6 @@
-import { RotateCw } from 'lucide-react'
+import { EyeOff, RotateCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Bar, CartesianGrid, ComposedChart, Line, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api'
 import { DateRangePicker } from '../components/DateRangePicker'
 import { MonitoringSignatureRow } from '../components/MonitoringSignatureRow'
@@ -20,8 +21,8 @@ const WINDOW_OPTIONS: SegmentOption<MonitoringWindow>[] = [
 ]
 const WINDOW_LABEL: Record<string, string> = { '7d': '7 days', '14d': '14 days', '30d': '30 days', all: 'all time' }
 
-// Per-page options, shared by both client-side pagers on this screen (signatures + per-run rows),
-// mirroring the Runs list (RunOverview) so all three are consistent.
+// Per-page options for the signatures pager, mirroring the Runs list (RunOverview). NOTE: the
+// Verdict-over-time chart no longer has a per-page control (it scrolls sideways instead, M5).
 type PerPage = '25' | '50' | '100'
 const PER_PAGE_OPTIONS: SegmentOption<PerPage>[] = [
   { value: '25', label: '25' },
@@ -29,18 +30,79 @@ const PER_PAGE_OPTIONS: SegmentOption<PerPage>[] = [
   { value: '100', label: '100' },
 ]
 
-// Stacked-bar order, top→bottom (escalate on top, proceed at the baseline).
-const STACK_ORDER: Verdict[] = ['escalate', 'rerun', 'hold', 'proceed']
+// Verdict base colors — theme-INVARIANT (the dark theme overrides only the -bg/-bd/-fg variants,
+// not these bases), so they're safe to hand to Recharts as literal fills in both light and dark.
+const V_HEX: Record<Verdict, string> = {
+  proceed: '#1a854e',
+  hold: '#b07714',
+  rerun: '#c1560f',
+  escalate: '#cf3238',
+}
+// The flagged-trend line — a neutral blue that reads on both the sand and dark canvases and is
+// distinct from every verdict color.
+const TREND_HEX = '#3b73d6'
+
 // Legend order per the design.
 const LEGEND_ORDER: Verdict[] = ['proceed', 'hold', 'rerun', 'escalate']
 // Gate-pass row labels — the design labels only QC/Variant with "gate".
 const GATE_PASS_LABEL: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', variant: 'Variant gate' }
+
+// Frame geometry for the throughput chart: a constant per-column slot so bar density never distorts
+// as the run count changes; the chart holds a ~14-day frame (FRAME_W) and scrolls sideways beyond it.
+const COL_W = 42
+const FRAME_W = 588
+const CLEARED_KEY = 'pipeguard.monitoring.cleared'
 
 // Short throughput-bar date derived from the run's [Header] date (YYYY-MM-DD → MM-DD). We never
 // fabricate a date: an undated run (shouldn't appear in a dated window) falls back to its run id.
 function shortDate(runDate: string | null, runId: string): string {
   if (runDate && runDate.length >= 10) return runDate.slice(5, 10)
   return runId.length > 6 ? runId.slice(-6) : runId
+}
+
+type ChartDatum = {
+  label: string
+  runId: string
+  samples: number
+  proceed: number
+  hold: number
+  rerun: number
+  escalate: number
+  flagged: number
+}
+
+// Grounded hover card (M2): every number comes from the run's real per-verdict counts — no synthesis.
+function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: ChartDatum }> }) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  const rows: [Verdict, number][] = [
+    ['proceed', d.proceed],
+    ['hold', d.hold],
+    ['rerun', d.rerun],
+    ['escalate', d.escalate],
+  ]
+  return (
+    <div className="rounded-lg border border-line-strong bg-card px-3 py-2 text-[11px] shadow-pop">
+      <div className="font-mono text-[11px] font-semibold text-text">{d.runId}</div>
+      <div className="mb-1 text-[10px] text-text-3">
+        {d.label} · {d.samples} samples
+      </div>
+      {rows
+        .filter(([, n]) => n > 0)
+        .map(([v, n]) => (
+          <div key={v} className="flex items-center gap-1.5">
+            <span className="inline-block h-[8px] w-[8px] rounded-[2px]" style={{ background: V_HEX[v] }} />
+            <span className="text-text-2">{VERDICT_LABEL[v]}</span>
+            <span className="ml-auto pl-4 font-mono font-semibold text-text">{n}</span>
+          </div>
+        ))}
+      <div className="mt-1 flex items-center gap-1.5 border-t border-line pt-1">
+        <span className="inline-block h-[8px] w-[8px] rounded-full" style={{ background: TREND_HEX }} />
+        <span className="text-text-2">Flagged</span>
+        <span className="ml-auto pl-4 font-mono font-semibold text-text">{d.flagged}</span>
+      </div>
+    </div>
+  )
 }
 
 export function Monitoring() {
@@ -55,8 +117,33 @@ export function Monitoring() {
   const [openSigs, setOpenSigs] = useState<Set<string>>(new Set())
   const [sigPerPage, setSigPerPage] = useState<PerPage>('25')
   const [sigPage, setSigPage] = useState(1)
-  const [runsPerPage, setRunsPerPage] = useState<PerPage>('25')
-  const [runsPage, setRunsPage] = useState(1)
+  // Signatures the operator has cleared from view (M4) — a REVERSIBLE, client-side view filter
+  // (localStorage-persisted, keyed by the unique signature id), never a DB purge. Cleared signatures
+  // stay searchable/recoverable via the "Cleared" toggle + each row's Restore action.
+  const [cleared, setCleared] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(CLEARED_KEY)
+      return new Set<string>(raw ? (JSON.parse(raw) as string[]) : [])
+    } catch {
+      return new Set<string>()
+    }
+  })
+  const [showCleared, setShowCleared] = useState(false)
+  useEffect(() => {
+    try {
+      localStorage.setItem(CLEARED_KEY, JSON.stringify([...cleared]))
+    } catch {
+      /* localStorage unavailable — the view filter simply won't persist across reloads. */
+    }
+  }, [cleared])
+  const toggleClear = useCallback((signature: string) => {
+    setCleared((prev) => {
+      const next = new Set(prev)
+      if (next.has(signature)) next.delete(signature)
+      else next.add(signature)
+      return next
+    })
+  }, [])
 
   // Single pre-aggregated call (drops the old N+1 runs.map(api.run) reassembly, F21). A request
   // id guards against out-of-order responses on a window switch — only the latest may commit.
@@ -80,27 +167,26 @@ export function Monitoring() {
     if (!data) return []
     const q = query.trim().toLowerCase()
     if (!q) return data.signatures
-    return data.signatures.filter((s) =>
-      `${s.rule_id} ${s.title} ${s.signature}`.toLowerCase().includes(q),
-    )
+    return data.signatures.filter((s) => `${s.signature} ${s.rule_id} ${s.title}`.toLowerCase().includes(q))
   }, [data, query])
 
-  // Client-side pagination over the filtered signatures (the payload is uncapped, F21).
+  // Split the (search-filtered) signatures into the main view vs. the cleared set (M4). Both stay
+  // searchable — clearing only moves a row into the collapsible "Cleared" section, never drops it.
+  const visibleSigs = useMemo(() => filteredSigs.filter((s) => !cleared.has(s.signature)), [filteredSigs, cleared])
+  const clearedSigs = useMemo(() => filteredSigs.filter((s) => cleared.has(s.signature)), [filteredSigs, cleared])
+
+  // Client-side pagination over the visible signatures (the payload is uncapped, F21).
   const sigPer = Number(sigPerPage)
-  const sigTotal = filteredSigs.length
+  const sigTotal = visibleSigs.length
   const sigPages = Math.max(1, Math.ceil(sigTotal / sigPer))
   const sigCurPage = Math.min(sigPage, sigPages) // clamp so a narrowing filter can't strand the pager
   const sigFrom = sigTotal === 0 ? 0 : (sigCurPage - 1) * sigPer + 1
   const sigTo = Math.min(sigCurPage * sigPer, sigTotal)
-  const pagedSigs = filteredSigs.slice((sigCurPage - 1) * sigPer, sigCurPage * sigPer)
+  const pagedSigs = visibleSigs.slice((sigCurPage - 1) * sigPer, sigCurPage * sigPer)
   // Reset to page 1 when the window, search, or per-page changes.
   useEffect(() => {
     setSigPage(1)
   }, [window, query, sigPerPage])
-  // Reset to page 1 when the window, date range, or per-page changes (mirrors the signatures reset).
-  useEffect(() => {
-    setRunsPage(1)
-  }, [window, dateStart, dateEnd, runsPerPage])
 
   const control = (
     <div className="flex items-center gap-2">
@@ -144,17 +230,27 @@ export function Monitoring() {
         return true
       })
     : data.runs
-  const maxSamples = Math.max(...chartRuns.map((r) => r.n_samples), 1)
 
-  // Client-side pagination over the per-run rows. data.runs is uncapped server-side (the T-072 gap);
-  // this bounds only what we RENDER — the payload is still uncapped. Mirrors the signatures pager.
-  const runsPer = Number(runsPerPage)
-  const runsTotal = chartRuns.length
-  const runsPages = Math.max(1, Math.ceil(runsTotal / runsPer))
-  const runsCurPage = Math.min(runsPage, runsPages)
-  const runsFrom = runsTotal === 0 ? 0 : (runsCurPage - 1) * runsPer + 1
-  const runsTo = Math.min(runsCurPage * runsPer, runsTotal)
-  const pagedRuns = chartRuns.slice((runsCurPage - 1) * runsPer, runsCurPage * runsPer)
+  // Chart rows carry each run's real per-verdict counts + a flagged (non-proceed) total for the
+  // trend line. No fabricated values — an absent verdict is a 0, not a guess.
+  const chartData: ChartDatum[] = chartRuns.map((r) => {
+    const hold = r.counts.hold ?? 0
+    const rerun = r.counts.rerun ?? 0
+    const escalate = r.counts.escalate ?? 0
+    return {
+      label: shortDate(r.run_date, r.run_id),
+      runId: r.run_id,
+      samples: r.n_samples,
+      proceed: r.counts.proceed ?? 0,
+      hold,
+      rerun,
+      escalate,
+      flagged: hold + rerun + escalate,
+    }
+  })
+  // Freeze to a ~14-day frame, scroll beyond it (M1). Width is a constant per-column slot × count,
+  // floored at the frame so few runs don't stretch; maxBarSize caps bar width so they don't fatten.
+  const chartWidth = Math.max(FRAME_W, chartData.length * COL_W)
 
   const kpis: { label: string; value: string; hint?: string }[] = [
     { label: `Runs · ${windowShort}`, value: String(o.n_runs) },
@@ -185,7 +281,7 @@ export function Monitoring() {
 
       {/* Two-column band: verdicts-over-time (1.5fr) + gate pass rate (1fr) */}
       <div className="mt-[14px] grid gap-[14px] lg:grid-cols-[1.5fr_1fr]">
-        <div className="rounded-[14px] border border-line bg-card px-[18px] py-4">
+        <div className="min-w-0 rounded-[14px] border border-line bg-card px-[18px] py-4">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <div className="text-[13.5px] font-semibold text-text">Verdicts over time</div>
             {/* Honest scope note (a): the date range narrows only this chart. The KPI tiles and the
@@ -195,143 +291,60 @@ export function Monitoring() {
               Date range refines this chart only · KPIs &amp; gate-pass stay {windowShort}-scoped
             </div>
           </div>
-          {chartRuns.length === 0 ? (
+          {chartData.length === 0 ? (
             <p className="mt-4 text-[12.5px] text-text-3">
               {hasDateFilter ? 'No runs in the selected date range.' : 'No dated runs in this window.'}
             </p>
           ) : (
-            <div className="mt-4 flex gap-2">
-              {/* Y-axis gutter: a rotated "samples" axis label + max / half / 0 tick labels aligned to
-                  the plot height (kept in its own flex sub-columns so the label never overlaps a tick). */}
-              <div className="flex h-[150px] shrink-0 gap-1" aria-hidden="true">
-                <div className="relative w-3">
-                  <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 whitespace-nowrap text-[9px] font-medium tracking-wide text-text-3">
-                    samples
-                  </span>
-                </div>
-                <div className="relative w-6">
-                  <span className="absolute right-0 top-0 -translate-y-1/2 font-mono text-[9px] text-text-3">
-                    {maxSamples}
-                  </span>
-                  <span className="absolute right-0 top-1/2 -translate-y-1/2 font-mono text-[9px] text-text-3">
-                    {Math.round(maxSamples / 2)}
-                  </span>
-                  <span className="absolute bottom-0 right-0 translate-y-1/2 font-mono text-[9px] text-text-3">
-                    0
-                  </span>
-                </div>
-              </div>
-
-              {/* Scroll viewport: bars are a CONSTANT width so the row never distorts as the run
-                  count grows (a long window ≈ a 14-day view's density); when they overrun the row
-                  it scrolls sideways instead of squishing. `w-max min-w-full` fills the row when
-                  few runs, then grows to content (scroll) when many. The Y-axis gutter stays fixed. */}
-              <div className="min-w-0 flex-1 overflow-x-auto">
-                <div className="w-max min-w-full">
-                  {/* Plot area: gridlines (0 / half / max) drawn behind the bars, both 150px tall so
-                      the stacked bar % heights read against the same scale the ticks label. */}
-                  <div className="relative h-[150px]">
-                    <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-                      {[0, 0.5, 1].map((f) => (
-                        <div
-                          key={f}
-                          className="absolute inset-x-0 border-t border-dashed border-line"
-                          style={{ top: `${(1 - f) * 100}%` }}
-                        />
-                      ))}
-                    </div>
-                    <div className="relative flex h-full items-end gap-[12px]">
-                      {pagedRuns.map((r) => (
-                        <div
-                          key={r.run_id}
-                          className="flex h-full w-[28px] shrink-0 flex-col justify-end gap-[2px]"
-                          title={`${r.run_id} · ${r.n_samples} samples`}
-                        >
-                          {STACK_ORDER.map((v) => {
-                            const n = r.counts[v] ?? 0
-                            return n ? (
-                              <div
-                                key={v}
-                                className={`w-full rounded-[2px] ${VERDICT_BAR[v]}`}
-                                style={{ height: `${(n / maxSamples) * 100}%` }}
-                                title={`${VERDICT_LABEL[v]}: ${n}`}
-                              />
-                            ) : null
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Date labels — mirror the bar flex so each sits centered under its column. */}
-                  <div className="mt-[7px] flex gap-[12px]">
-                    {pagedRuns.map((r) => (
-                      <div key={r.run_id} className="w-[28px] shrink-0 text-center">
-                        <span className="whitespace-nowrap font-mono text-[9px] text-text-3">
-                          {shortDate(r.run_date, r.run_id)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            // Fixed 14-day frame; the chart scrolls sideways when the run count exceeds it (M1). The
+            // Y-axis lives inside the plot, so it scrolls with the earliest runs — reading left→right
+            // (oldest→newest) keeps it in view for the common case.
+            <div className="mt-3 overflow-x-auto">
+              <ComposedChart
+                width={chartWidth}
+                height={200}
+                data={chartData}
+                margin={{ top: 8, right: 12, bottom: 0, left: -6 }}
+                barCategoryGap="24%"
+              >
+                <CartesianGrid vertical={false} stroke="rgba(128,138,152,0.22)" />
+                <YAxis
+                  tick={{ fontSize: 9, fill: '#8b95a1' }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={34}
+                  allowDecimals={false}
+                  label={{ value: 'samples', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#8b95a1', textAnchor: 'middle' }, offset: 18 }}
+                />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 9, fill: '#8b95a1' }}
+                  axisLine={{ stroke: 'rgba(128,138,152,0.3)' }}
+                  tickLine={false}
+                  interval={0}
+                />
+                <Tooltip cursor={{ fill: 'rgba(128,138,152,0.12)' }} content={<ChartTooltip />} />
+                <Bar dataKey="proceed" stackId="v" fill={V_HEX.proceed} maxBarSize={26} isAnimationActive={false} />
+                <Bar dataKey="hold" stackId="v" fill={V_HEX.hold} maxBarSize={26} isAnimationActive={false} />
+                <Bar dataKey="rerun" stackId="v" fill={V_HEX.rerun} maxBarSize={26} isAnimationActive={false} />
+                <Bar dataKey="escalate" stackId="v" fill={V_HEX.escalate} maxBarSize={26} radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                <Line type="monotone" dataKey="flagged" name="Flagged" stroke={TREND_HEX} strokeWidth={2} dot={{ r: 2, fill: TREND_HEX, strokeWidth: 0 }} isAnimationActive={false} />
+              </ComposedChart>
             </div>
           )}
-          <div className="mt-[14px] flex flex-wrap gap-[14px] border-t border-line pt-3">
+          <div className="mt-[14px] flex flex-wrap items-center gap-[14px] border-t border-line pt-3">
             {LEGEND_ORDER.map((v) => (
               <span key={v} className="inline-flex items-center gap-[5px] text-[11px] text-text-2">
                 <span className={`inline-block h-[9px] w-[9px] rounded-[2px] ${VERDICT_BAR[v]}`} />
                 {VERDICT_LABEL[v]}
               </span>
             ))}
+            {/* Trend-line key (M3) */}
+            <span className="inline-flex items-center gap-[5px] text-[11px] text-text-2">
+              <span className="inline-block h-[2px] w-[14px] rounded-full" style={{ background: TREND_HEX }} />
+              Flagged (trend)
+            </span>
           </div>
-
-          {runsTotal > 0 && (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-[11.5px] text-text-2">
-              <span>
-                Showing {runsFrom}–{runsTo} of {runsTotal} runs
-              </span>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11.5px] text-text-3">Per page</span>
-                  <SegmentedControl<PerPage> options={PER_PAGE_OPTIONS} value={runsPerPage} onChange={setRunsPerPage} />
-                </div>
-                {runsPages > 1 && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setRunsPage(Math.max(1, runsCurPage - 1))}
-                      className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
-                      aria-label="Previous page"
-                    >
-                      ‹
-                    </button>
-                    {Array.from({ length: runsPages }, (_, i) => i + 1).map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => setRunsPage(n)}
-                        className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] transition-colors ${
-                          n === runsCurPage
-                            ? 'bg-accent font-semibold text-white'
-                            : 'border border-line bg-card text-text-2 hover:border-line-strong'
-                        }`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setRunsPage(Math.min(runsPages, runsCurPage + 1))}
-                      className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
-                      aria-label="Next page"
-                    >
-                      ›
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="rounded-[14px] border border-line bg-card px-[18px] py-4">
@@ -376,17 +389,34 @@ export function Monitoring() {
               A signature recurring 3× auto-escalates to the pipeline-repair agent.
             </div>
           </div>
-          <div className="flex min-w-[230px] items-center gap-[7px] rounded-[9px] border border-line bg-card-2 px-[10px] py-[6px]">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-text-3">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m21 21-4.1-4.1" />
-            </svg>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search historic issues…"
-              className="min-w-0 flex-1 border-none bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-3"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Cleared-view toggle (M4) — shows the reversibly-hidden signatures; count keeps them
+                discoverable so a cleared item is never silently lost. */}
+            {cleared.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowCleared((v) => !v)}
+                className={`inline-flex items-center gap-1.5 rounded-[9px] border px-[10px] py-[6px] text-[11.5px] transition-colors ${
+                  showCleared ? 'border-accent bg-accent-weak text-accent-strong' : 'border-line bg-card-2 text-text-2 hover:border-line-strong'
+                }`}
+                title="Show signatures you've cleared from the main view (reversible)"
+              >
+                <EyeOff size={13} />
+                Cleared · {cleared.size}
+              </button>
+            )}
+            <div className="flex min-w-[230px] items-center gap-[7px] rounded-[9px] border border-line bg-card-2 px-[10px] py-[6px]">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-text-3">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.1-4.1" />
+              </svg>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search historic issues…"
+                className="min-w-0 flex-1 border-none bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-3"
+              />
+            </div>
           </div>
         </div>
 
@@ -406,13 +436,19 @@ export function Monitoring() {
               }
               windowShort={windowShort}
               windowLabel={windowLabel}
+              cleared={false}
+              onToggleClear={() => toggleClear(s.signature)}
             />
           ))}
 
-          {filteredSigs.length === 0 &&
+          {visibleSigs.length === 0 &&
             (query.trim() ? (
               <div className="rounded-[10px] border border-dashed border-line-strong px-6 py-6 text-center text-[12.5px] text-text-2">
-                No historic issues match “{query.trim()}”.
+                No historic issues match “{query.trim()}”{cleared.size > 0 ? ' in the main view' : ''}.
+              </div>
+            ) : cleared.size > 0 ? (
+              <div className="rounded-[10px] border border-dashed border-line-strong px-6 py-6 text-center text-[12.5px] text-text-2">
+                All recurring signatures are cleared from view. Use “Cleared · {cleared.size}” to review or restore them.
               </div>
             ) : (
               <Empty message={`No recurring issue signatures in the last ${windowLabel}.`} />
@@ -463,6 +499,36 @@ export function Monitoring() {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Cleared signatures (M4) — reversibly hidden; still fully rendered + searchable + escalatable. */}
+        {showCleared && clearedSigs.length > 0 && (
+          <div className="mt-4 border-t border-line pt-3">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.4px] text-text-3">
+              Cleared from view · {clearedSigs.length}
+            </div>
+            <div className="flex flex-col gap-[9px] opacity-90">
+              {clearedSigs.map((s) => (
+                <MonitoringSignatureRow
+                  key={s.signature}
+                  sig={s}
+                  open={openSigs.has(s.signature)}
+                  onToggle={() =>
+                    setOpenSigs((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(s.signature)) next.delete(s.signature)
+                      else next.add(s.signature)
+                      return next
+                    })
+                  }
+                  windowShort={windowShort}
+                  windowLabel={windowLabel}
+                  cleared={true}
+                  onToggleClear={() => toggleClear(s.signature)}
+                />
+              ))}
             </div>
           </div>
         )}
