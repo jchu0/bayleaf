@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Check, Copy, Download, FileText, Play, ShieldCheck } from 'lucide-react'
+import { RunSelector } from './RunSelector'
 import type { DiffResult, DryRunResult } from '../types'
 import {
   VAL_ROWS,
@@ -60,7 +61,7 @@ const RESOLVE_CHIP: Record<string, string> = {
 
 export function BuilderConsole(props: ConsoleProps) {
   const [copied, setCopied] = useState(false)
-  const [runId, setRunId] = useState('mock_run_01') // the run dir Dry-run resolves against
+  const [runId, setRunId] = useState<string | null>(null) // the run dir Dry-run resolves against
   const tabs: { k: ConsoleTab; l: string }[] = [
     { k: 'validate', l: 'Validate' },
     { k: 'diff', l: 'Diff' },
@@ -232,16 +233,11 @@ export function BuilderConsole(props: ConsoleProps) {
               <div>
                 {/* Backend dry-run (POST /{name}/dry-run?run_id=…) once saved; else client-side preview. */}
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <input
-                    value={runId}
-                    onChange={(e) => setRunId(e.target.value)}
-                    placeholder="run id"
-                    className="w-[150px] rounded-md border border-line bg-card px-2 py-1 font-mono text-[11px] text-text outline-none focus:border-accent"
-                  />
+                  <RunSelector value={runId} onChange={setRunId} />
                   <button
                     type="button"
-                    onClick={() => props.onDryRun(runId.trim())}
-                    disabled={!props.savedName || props.dryRunBusy || !runId.trim()}
+                    onClick={() => runId && props.onDryRun(runId)}
+                    disabled={!props.savedName || props.dryRunBusy || !runId}
                     className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-card px-2.5 py-1 text-[11px] font-medium text-text-2 hover:border-line disabled:opacity-50"
                     title={props.savedName ? 'Resolve the saved graph against this run dir' : 'Save the pipeline first'}
                   >
