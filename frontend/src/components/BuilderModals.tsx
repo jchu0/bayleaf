@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Archive, Check, Copy, Loader2, Play, TriangleAlert, Upload, Wrench, X } from 'lucide-react'
+import {
+  Archive,
+  Check,
+  Copy,
+  Download,
+  FileCode,
+  Loader2,
+  Play,
+  TriangleAlert,
+  Upload,
+  Wrench,
+  X,
+} from 'lucide-react'
 import { api } from '../api'
 import { FALLBACK_SUMMARY } from './ReviewRepairCard'
 import { useToast } from './Toast'
@@ -12,7 +24,13 @@ import {
   STAR_HELP,
   type IconKey,
 } from './BuilderShared'
-import type { AgentProposal, ArchiveDigest, MonitoringSignature } from '../types'
+import type {
+  AgentProposal,
+  ArchiveDigest,
+  CompiledNextflow,
+  MonitoringSignature,
+  NextflowGraphBody,
+} from '../types'
 
 // Honest state when the advisory archivist index can't be reached (off-gate, non-critical). We show
 // NO counts, manifest, or proposal — only that the librarian is unavailable. Nothing about the runs,
@@ -662,5 +680,130 @@ function SparkleGlyph() {
     <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.4 2.4M15.3 15.3l2.4 2.4M17.7 6.3l-2.4 2.4M8.7 15.3l-2.4 2.4" />
     </svg>
+  )
+}
+
+// ── Export to Nextflow (compose → a runnable DSL2 pipeline; ADR-0003) ─────────
+// Compiles the CURRENT Builder card graph into a real nf-core-style Nextflow pipeline via
+// POST /api/pipelines/compile. It COMPOSES — the backend emits text, it never runs a tool or
+// touches a verdict (compose ≠ execute). Preview main.nf + download the full .zip bundle.
+export function NextflowExportModal({ graph, onClose }: { graph: NextflowGraphBody; onClose: () => void }) {
+  const { toast } = useToast()
+  const [result, setResult] = useState<CompiledNextflow | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    setResult(null)
+    setError(null)
+    api
+      .compileNextflow(graph)
+      .then((r) => live && setResult(r))
+      .catch((e) => live && setError(e instanceof Error ? e.message : String(e)))
+    return () => {
+      live = false
+    }
+  }, [graph])
+
+  const copy = () => {
+    if (!result) return
+    navigator.clipboard?.writeText(result.main_nf)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1400)
+  }
+  const download = async () => {
+    setDownloading(true)
+    try {
+      const blob = await api.compileNextflowZip(graph)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${result?.name ?? 'pipeline'}-nextflow.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), 'error')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const moduleCount = result
+    ? Object.keys(result.files).filter((f) => f.startsWith('modules/')).length
+    : 0
+
+  return (
+    <ModalShell width={780} onClose={onClose}>
+      <div className="flex items-start gap-3 border-b border-line px-5 py-4">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-weak text-accent-strong">
+          <FileCode size={18} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-semibold text-text">Export to Nextflow</div>
+          <div className="mt-0.5 text-[12px] leading-relaxed text-text-2">
+            PipeGuard compiles these cards into a runnable nf-core-style DSL2 pipeline. It{' '}
+            <strong>composes</strong> — it never runs a tool or sets a verdict (ADR-0003). Validate
+            with <code className="rounded bg-card-2 px-1 py-px font-mono">nextflow run main.nf -stub-run</code>.
+          </div>
+        </div>
+        <CloseBtn onClose={onClose} />
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        {error ? (
+          <div className="flex items-center gap-2 rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-2.5 text-[12.5px] text-escalate-fg">
+            <TriangleAlert size={15} className="shrink-0" /> Couldn't compile: {error}
+          </div>
+        ) : !result ? (
+          <div className="flex items-center gap-2 py-10 text-[12.5px] text-text-3">
+            <Loader2 size={15} className="animate-spin" /> Compiling…
+          </div>
+        ) : (
+          <>
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              {result.steps.map((s, i) => (
+                <span key={s} className="inline-flex items-center gap-1.5">
+                  {i > 0 && <span className="text-text-3">→</span>}
+                  <span className="rounded-md border border-line bg-card-2 px-2 py-0.5 font-mono text-[11px] text-text-2">
+                    {s}
+                  </span>
+                </span>
+              ))}
+            </div>
+            <div className="mb-2 text-[11.5px] text-text-3">
+              {Object.keys(result.files).length} files · {moduleCount} process modules + main.nf +
+              nextflow.config
+            </div>
+            <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-wide text-text-3">main.nf</div>
+            <pre className="max-h-[320px] overflow-auto rounded-lg border border-line bg-card-2 p-3 font-mono text-[11px] leading-relaxed text-text-2">
+              {result.main_nf}
+            </pre>
+          </>
+        )}
+      </div>
+
+      <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+        <button
+          onClick={copy}
+          disabled={!result}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong disabled:opacity-50"
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          {copied ? 'Copied' : 'Copy main.nf'}
+        </button>
+        <button
+          onClick={download}
+          disabled={!result || downloading}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+        >
+          <Download size={14} />
+          {downloading ? 'Preparing…' : 'Download .zip'}
+        </button>
+      </div>
+    </ModalShell>
   )
 }

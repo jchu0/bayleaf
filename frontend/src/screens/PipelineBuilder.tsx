@@ -8,6 +8,7 @@ import {
   ChevronsRight,
   CopyPlus,
   Download,
+  FileCode,
   FolderOpen,
   Frame,
   GitBranch,
@@ -35,7 +36,13 @@ import { BuilderInspector } from '../components/BuilderInspector'
 import { BuilderProfileCombobox } from '../components/BuilderProfileCombobox'
 import { BuilderContextMenu, type MenuItem } from '../components/BuilderContextMenu'
 import type { AlignKind, DistributeAxis } from '../components/SelectionActionBar'
-import { ArchivistModal, AuthorToolNodeModal, PipelineRepairModal, RunHandoffModal } from '../components/BuilderModals'
+import {
+  ArchivistModal,
+  AuthorToolNodeModal,
+  NextflowExportModal,
+  PipelineRepairModal,
+  RunHandoffModal,
+} from '../components/BuilderModals'
 import {
   GRAPH_ID,
   ICONS,
@@ -194,6 +201,7 @@ export function PipelineBuilder() {
   const [diffBusy, setDiffBusy] = useState(false)
 
   const [runOpen, setRunOpen] = useState(false)
+  const [nfOpen, setNfOpen] = useState(false)
   const [authorOpen, setAuthorOpen] = useState(false)
   const [repairOpen, setRepairOpen] = useState(false)
   const [archivistOpen, setArchivistOpen] = useState(false)
@@ -1093,6 +1101,14 @@ export function PipelineBuilder() {
             Emit
           </button>
           <button
+            onClick={() => setNfOpen(true)}
+            title="Compile these cards into a runnable Nextflow (DSL2) pipeline"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
+          >
+            <FileCode size={14} />
+            Nextflow
+          </button>
+          <button
             onClick={() => setRunOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
           >
@@ -1270,6 +1286,22 @@ export function PipelineBuilder() {
           onClose={() => setRunOpen(false)}
         />
       )}
+      {nfOpen &&
+        (() => {
+          // Compile the current draft; fall back to the seeded germline template for the default
+          // linked view (which renders from static TOOLS, not userNodes) so the export always works.
+          const src = userNodes.length ? { nodes: userNodes, edges: userEdges } : germlineTemplate()
+          return (
+            <NextflowExportModal
+              graph={{
+                name: docName,
+                nodes: src.nodes.map((n) => ({ id: n.id, name: n.name, ins: n.ins, outs: n.outs })),
+                edges: src.edges.map((e) => ({ from: e.from, to: e.to })),
+              }}
+              onClose={() => setNfOpen(false)}
+            />
+          )
+        })()}
       {authorOpen && <AuthorToolNodeModal onClose={() => setAuthorOpen(false)} />}
       {repairOpen && <PipelineRepairModal onClose={() => setRepairOpen(false)} />}
       {archivistOpen && <ArchivistModal onClose={() => setArchivistOpen(false)} />}

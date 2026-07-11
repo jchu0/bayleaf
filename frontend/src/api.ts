@@ -9,6 +9,7 @@ import type {
   AgentProposal,
   ArchiveDigest,
   CardReadout,
+  CompiledNextflow,
   DecisionCard,
   DiffResult,
   DryRunResult,
@@ -18,6 +19,7 @@ import type {
   MetricCatalog,
   MonitoringMetrics,
   MonitoringWindow,
+  NextflowGraphBody,
   PipelineGraph,
   PipelineGraphAck,
   PipelineGraphIn,
@@ -190,6 +192,19 @@ export const api = {
   // ── de-identified share/report egress (ADR-0018 D3; approver-gated + confirm-gated) ──
   // Records a DATA_EXPORTED provenance event server-side; the caller refetches the run to show it.
   shareRun: (runId: string) => write<ShareBundle>(`/api/runs/${enc(runId)}/share`, 'POST', {}),
+
+  // ── compile a Builder card graph → Nextflow (ADR-0003; stateless, off-gate) ──
+  compileNextflow: (body: NextflowGraphBody) =>
+    write<CompiledNextflow>('/api/pipelines/compile', 'POST', body),
+  compileNextflowZip: async (body: NextflowGraphBody): Promise<Blob> => {
+    const res = await fetch('/api/pipelines/compile?format=zip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw await httpError(res)
+    return res.blob()
+  },
 
   // ── review-queue tickets ──
   createTicket: (body: TicketIn) => write<Ticket>('/api/review/tickets', 'POST', body),

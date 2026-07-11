@@ -165,6 +165,22 @@ export type ShareBundle = {
   rows: Record<string, unknown>[]
 }
 
+// The Builder-card graph in the shape POST /api/pipelines/compile accepts (name=tool per node;
+// edges by typed-port index) — ADR-0003: the Builder composes this; the compiler emits Nextflow.
+export type NextflowGraphBody = {
+  name: string
+  nodes: { id: string; name: string; ins: string[]; outs: string[] }[]
+  edges: { from: { node: string; idx: number }; to: { node: string; idx: number } }[]
+}
+// The compiled pipeline: a map of relative path → file content, the main.nf, and the DAG's
+// topological tool order (a quick human summary).
+export type CompiledNextflow = {
+  name: string
+  files: Record<string, string>
+  main_nf: string
+  steps: string[]
+}
+
 export type TriageCitation = {
   source_kind: 'knowledge' | 'finding'
   ref: string
