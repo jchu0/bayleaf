@@ -248,7 +248,10 @@ export function InboxProvider({ children }: { children: ReactNode }) {
         note: m.note ?? '',
         folder: m.folder ?? null,
         notify: m.notify ?? null,
-        assignee: m.assignee ?? null,
+        // Effective owner: the operator's inbox overlay wins if they set one (incl. explicitly
+        // unassigning to null), else the ticket's REAL review-queue assignee (api/review). So a
+        // ticket assigned in the review queue is owned on the board without a second assignment.
+        assignee: 'assignee' in m ? m.assignee ?? null : t.assignee ?? null,
       }
     })
     const selves: InboxItem[] = selfItems.map((s) => {

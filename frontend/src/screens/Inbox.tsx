@@ -846,9 +846,12 @@ function BoardTab() {
   })
   // Resolve the open card from live items (not a captured copy) so edits reflect instantly.
   const openItem = openId ? (items.find((i) => i.id === openId) ?? null) : null
+  // The board is the ASSIGNED-work view (the Inbox stream keeps every notification): a ticket-
+  // derived card shows only once it has an owner (assigned in the review queue or here). Self-
+  // authored reminders are the operator's own board items, not "tickets", so they always show.
   const byColumn = (c: InboxColumn) =>
     items
-      .filter((i) => i.column === c)
+      .filter((i) => i.column === c && (i.isSelf || i.assignee != null))
       .sort((a, b) => PRIORITY_META[b.priority].weight - PRIORITY_META[a.priority].weight)
 
   // Close a ticket-derived card from the board. A state-changing backend write, so it's confirm-gated
