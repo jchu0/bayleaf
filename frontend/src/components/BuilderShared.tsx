@@ -219,6 +219,10 @@ export const BTOOLSPEC: Record<string, { version: string; icon: IconKey; ins: st
   'Reference FASTA': { version: 'GRCh38', icon: 'db', ins: [], outs: ['reference_fasta'] },
   'Panel BED': { version: 'panel', icon: 'db', ins: [], outs: ['panel_bed'] },
   'Truth VCF': { version: 'v4.2.1', icon: 'db', ins: [], outs: ['truth_vcf'] },
+  // Primary-lane INPUT source (raw FASTQ folder) + a file-OUTPUT sink (a report/artifact destination),
+  // so the graph closes on both ends: source → tools → sink (ADR-0019 slice 1c). Both compose ≠ execute.
+  'FASTQ input': { version: 'folder', icon: 'db', ins: [], outs: ['fastq'] },
+  'File output': { version: 'file', icon: 'archive', ins: ['multiqc_json'], outs: [] },
 }
 
 export function makeUserNode(name: string, kind: string, index: number): UserNode {
@@ -368,6 +372,8 @@ export const CARD_PORTS: Record<string, CardPort[]> = {
   'Reference FASTA': [{ kind: 'reference_fasta', dir: 'out', side: 'bottom', state: 'required' }],
   'Panel BED': [{ kind: 'panel_bed', dir: 'out', side: 'bottom', state: 'required' }],
   'Truth VCF': [{ kind: 'truth_vcf', dir: 'out', side: 'bottom', state: 'reserved' }],
+  'FASTQ input': [{ kind: 'fastq', dir: 'out', side: 'right', state: 'required' }],
+  'File output': [{ kind: 'multiqc_json', dir: 'in', side: 'left', state: 'required' }],
 }
 
 // Resolve a node's FULL render port list. ins/outs are the WIREABLE truth (editable); their
@@ -594,7 +600,9 @@ export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
     const spec = BTOOLSPEC[name] ?? { version: 'v1.0', icon: 'db' as IconKey, ins: [], outs: [r.kind] }
     return { id: r.id, name, kind: r.kind, version: spec.version, icon: spec.icon, ins: [], outs: [r.kind], x: r.x, y: REF_Y }
   })
-  const nodes: UserNode[] = [...toolNodes, ...sourceNodes]
+  // Primary-lane FASTQ input source (raw fastq folder → fastp) so the first card is fed (slice 1c).
+  const fastqSource: UserNode = { id: 'src_fastq', name: 'FASTQ input', kind: 'fastq', version: 'folder', icon: 'db', ins: [], outs: ['fastq'], x: 40, y: 40 }
+  const nodes: UserNode[] = [...toolNodes, ...sourceNodes, fastqSource]
   // Resolve a port index by kind (0 if absent), so the wiring can never forge a mismatched edge.
   const portIdx = (nodeId: string, side: 'ins' | 'outs', kind: string): number => {
     const n = nodes.find((x) => x.id === nodeId)
@@ -620,6 +628,7 @@ export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
     wire('r_fasta', 'reference_fasta', 'n_norm', 'reference_fasta'),
     wire('r_bed', 'panel_bed', 'n_mosdepth', 'panel_bed'),
     wire('r_bed', 'panel_bed', 'n_call', 'panel_bed'),
+    wire('src_fastq', 'fastq', 'n_fastp', 'fastq'), // FASTQ input source → fastp (slice 1c)
   ]
   return { nodes, edges }
 }

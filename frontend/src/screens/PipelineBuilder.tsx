@@ -989,6 +989,8 @@ export function PipelineBuilder() {
         { name: 'Reference FASTA', sub: 'reference_fasta', icon: 'db', onClick: () => addNode('Reference FASTA', 'reference_fasta') },
         { name: 'Panel BED', sub: 'panel_bed', icon: 'db', onClick: () => addNode('Panel BED', 'panel_bed') },
         { name: 'Truth VCF', sub: 'truth_vcf', icon: 'db', onClick: () => addNode('Truth VCF', 'truth_vcf') },
+        { name: 'FASTQ input', sub: 'fastq/ folder', icon: 'db', onClick: () => addNode('FASTQ input', 'fastq') },
+        { name: 'File output', sub: 'report sink', icon: 'archive', onClick: () => addNode('File output', 'multiqc_json') },
       ],
     },
     {
