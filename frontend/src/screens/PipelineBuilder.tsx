@@ -32,6 +32,7 @@ import { useConfirm } from '../components/ConfirmDialog'
 import type { SegmentOption } from '../components/SegmentedControl'
 import { BuilderCanvas } from '../components/BuilderCanvas'
 import type { CanvasMenuReq } from '../components/BuilderCanvas'
+import { DecisionBoundaryModal } from '../components/DecisionBoundaryModal'
 import { BuilderConsole } from '../components/BuilderConsole'
 import { BuilderInspector } from '../components/BuilderInspector'
 import { BuilderProfileCombobox } from '../components/BuilderProfileCombobox'
@@ -206,6 +207,7 @@ export function PipelineBuilder() {
   const [runOpen, setRunOpen] = useState(false)
   const [nfOpen, setNfOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false) // toolbar overflow "⋯ More" menu (PASS-3 consolidation)
+  const [boundaryOpen, setBoundaryOpen] = useState(false) // "Decision boundary" read-only modal (PASS-6 B)
   const [authorOpen, setAuthorOpen] = useState(false)
   const [repairOpen, setRepairOpen] = useState(false)
   const [archivistOpen, setArchivistOpen] = useState(false)
@@ -1179,6 +1181,17 @@ export function PipelineBuilder() {
                     <Play size={14} className="shrink-0 text-text-3" />
                     Run hand-off
                   </button>
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false)
+                      setBoundaryOpen(true)
+                    }}
+                    title="View the deterministic ingest → gate → verdict boundary (read-only)"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-page"
+                  >
+                    <ShieldCheck size={14} className="shrink-0 text-text-3" />
+                    Decision boundary
+                  </button>
                   {linkedView && (
                     <>
                       <div className="my-1 border-t border-line" />
@@ -1391,6 +1404,7 @@ export function PipelineBuilder() {
       {archivistOpen && <ArchivistModal onClose={() => setArchivistOpen(false)} />}
       {newOpen && <NewPipelineModal onClose={() => setNewOpen(false)} onCreate={newPipeline} />}
       {loadOpen && <LoadSavedModal onClose={() => setLoadOpen(false)} onLoad={loadSavedPipeline} />}
+      {boundaryOpen && <DecisionBoundaryModal onClose={() => setBoundaryOpen(false)} />}
       {menu && <BuilderContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}
     </div>
   )
@@ -1408,7 +1422,7 @@ function NewPipelineModal({
   const [kind, setKind] = useState<'blank' | 'germline'>('blank')
   const [name, setName] = useState('')
   const choices = [
-    ['blank', 'Blank graph', 'Start from an empty canvas — just the terminal Decision gate.'],
+    ['blank', 'Blank graph', 'Start from an empty canvas — compose your own tool graph.'],
     ['germline', 'From template', 'Seed from the germline panel chain (fastp → … → MultiQC).'],
   ] as const
   return (
