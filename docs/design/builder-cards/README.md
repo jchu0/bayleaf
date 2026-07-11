@@ -1,0 +1,107 @@
+# Builder cards — card-design convention + index
+
+| Field | Value |
+|---|---|
+| **Status** | draft |
+| **Date** | 2026-07-10 (MST) |
+| **Audience** | frontend / design / bioinformatics |
+| **Related** | [frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model) (Pipeline Builder — full node model) · [data/nf-core-conventions.md](../../data/nf-core-conventions.md) (tool I/O → `ArtifactRef` / `MetricValue`) · [data/qc_metrics-sources.md](../../data/qc_metrics-sources.md) (metric provenance) · [frontend `BuilderShared.tsx`](../../../frontend/src/components/BuilderShared.tsx) (`BTOOLSPEC` · `TOOLS` · `GIAB_LOC` · `germlineTemplate()`) · [frontend `BuilderCanvas.tsx`](../../../frontend/src/components/BuilderCanvas.tsx) (current render + wiring) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) (the real germline commands the cards abstract) |
+
+This is the **general** card-design convention for the Pipeline Builder, plus the index of the
+per-tool card specs. Each per-tool doc grounds one node's ports in that tool's **real** CLI I/O and
+the exact germline command it wraps; this doc holds the shared rules those specs assume. The
+convention is a **design target** — the current [`BuilderCanvas`](../../../frontend/src/components/BuilderCanvas.tsx)
+implements a subset (see §5).
+
+## 1. Philosophy — Databricks-style process cards
+
+1. **A node is a process card, not a chip.** Model each tool as a Databricks-inspired process card:
+   a rounded rectangle with a header row (icon · tool name · pinned version · stage label · PG
+   badge) and a body large enough to host the tool's connection ports around its perimeter.
+2. **Typed half-circle ports on all four sides.** Every input and output is a typed half-circle
+   port carrying a `kind` (`fastq`, `bam`, `reference_fasta`, `mosdepth_summary`, …). A node hosts
+   **enough ports for all of the tool's real I/O**, distributed across the four edges — not a single
+   left-in / right-out pair.
+3. **An edge is typed data flow.** An edge runs from an **output** port to a **matching input**
+   port of the same `kind` (`vcf`→`vcf`, never `fasta`→`fastq`); a mismatched wire is dropped, never
+   coerced (`reconcileEdges`). Kinds live in `ARTIFACT_KINDS` (the union of `BTOOLSPEC` + `GIAB_LOC`).
+4. **Never invent I/O.** Consult each tool's own per-tool doc (§4) — which traces every port to a
+   real flag, glob, or output in `run_giab_pipeline.py` / the tool's CLI docs — to decide its ports.
+   A port that has no producer/consumer or no registered kind yet is **reserved** (a labelled,
+   inert slot), never fabricated as a live wire. Compose ≠ execute: the card authors flow; the
+   deterministic gate still runs at `run_gate` time, off the canvas (ADR-0001, frontend README §6).
+
+## 2. Port-placement convention
+
+The four edges carry fixed semantics so every card reads the same way:
+
+1. **Left → Right = primary data flow.** The main sample-data lane enters **left** and exits
+   **right** (`fastq` → `bam` → `vcf` …), so the chain reads left-to-right.
+2. **Top = references / panels / regions.** Static reference inputs (`reference_fasta`, `panel_bed`,
+   truth VCF, region files) enter from the **top**, visually separating the fixed reference bundle
+   from the flowing sample data. Applied consistently across bwa-mem2, samtools-markdup, mosdepth,
+   bcftools-call, and bcftools-norm.
+3. **Bottom = QC / metrics exit.** QC and metrics artifacts (`fastp_json`, `markdup_metrics`,
+   the mosdepth `*_dist` family, `multiqc_html`) drop out the **bottom**, off the primary spine,
+   toward MultiQC / reports. A card with no QC artifact (bwa-mem2, bcftools-call) keeps its bottom
+   edge deliberately **clean** — that asymmetry is meaningful.
+4. **User-defined ports are reserved, not all shown.** A tool's optional / off-in-the-demo I/O
+   (adapter FASTA, CRAM reference, `--ploidy-file`, `samtools_stats`, `per_base`, the MultiQC
+   discovered-log bay) gets **geometric room reserved** on the correct edge but renders only when
+   populated — so enabling one later never reflows the card. Kinds not yet in `ARTIFACT_KINDS` must
+   be registered (with a producer) before their reserved port can carry an edge.
+
+## 3. Card sizing — larger than today, and why
+
+1. **Larger footprint.** The target card is bigger than today's fixed **168 px** node
+   (`BuilderShared.NODE_W` / `BuilderCanvas.UW`; the seeded ToolCard is **208 px**, `TW`) — roughly
+   **~210–230 px wide** and tall enough to host up to **6 half-circle ports** (e.g. samtools-markdup:
+   2 in + 4 out; mosdepth: 3 in + 6 out) plus the header text.
+2. **Why larger.** Four-sided typed ports need perimeter real estate the current small card can't
+   give: a top reference bay, a left data-in, a right data-out, and a bottom QC exit must each sit
+   clear of the header (icon · name · version · stage label · PG badge) and of each other. Cramming
+   6 ports onto a 168 px chip crowds the labels and makes the typed half-circles unhittable. The
+   Databricks process-card aesthetic (generous header, ports on the edges, a readable body) *is* the
+   affordance that makes typed wiring legible.
+3. **Verdict spine, not verdict fill.** Tool cards keep the vstatus-colored left accent spine
+   (`V_COLOR[node.vstatus]`); the decision-card spine was dropped. A tool card is `draft`-neutral
+   until a run binds — it never shows a verdict or confidence (ADR-0001, frontend README §6).
+
+## 4. Index — per-tool card specs
+
+Germline-chain order (fastp → bwa-mem2 → samtools-markdup → {mosdepth, bcftools-call → bcftools-norm}
+→ multiqc). Each doc holds that tool's full input/output port tables, concrete edges, and layout.
+
+| Card doc | Tool / version | Stage role (one line) |
+|---|---|---|
+| [fastp.md](fastp.md) | `fastp` 0.23.4 | Stage 0 — adapter/quality trim + read-level QC; emits trimmed `fastq` (→ bwa-mem2) and `fastp_json` (→ MultiQC). |
+| [bwa-mem2.md](bwa-mem2.md) | `bwa-mem2` 2.2.1 | Alignment — maps trimmed reads onto the reference; emits the `bam` stream (→ markdup). No QC port. |
+| [samtools-markdup.md](samtools-markdup.md) | `samtools markdup` 1.20 | Duplicate marking — a bundled sort/fixmate/markdup/index stage; emits `bam` + `bai` + `markdup_metrics`. |
+| [mosdepth.md](mosdepth.md) | `mosdepth` 0.3.8 | Coverage QC leaf — mean coverage + breadth ≥20×/≥30× from the dedup BAM + panel BED. |
+| [bcftools-call.md](bcftools-call.md) | `bcftools call` 1.20 | Variant calling — wraps an `mpileup | call` pipe as one node; emits the raw (unnormalized) `vcf`. |
+| [bcftools-norm.md](bcftools-norm.md) | `bcftools norm` 1.20 | Left-align / normalize — terminal variant-branch node; emits the gate-ready `filtered_vcf` → variant gate. |
+| [multiqc.md](multiqc.md) | `MultiQC` 1.21 | QC aggregation — terminal fan-in of the QC ports; emits `multiqc_json` → ingest → the gate. |
+
+## 5. Open / TODO — this is a spec the frontend does not yet fully implement
+
+Labelled seam. The convention above is the **design target**; the shipped
+[`BuilderCanvas`](../../../frontend/src/components/BuilderCanvas.tsx) implements a subset:
+
+1. **Ports are left/right-only today.** The current canvas anchors every **output** dot to the
+   card's **right** edge and every **input** dot to the **left** edge (`BuilderCanvas.tsx`, edge
+   geometry: "out = right edge, in = left edge"), stacked at `TPT + idx·TROW`. The §2 **top**
+   (references) and **bottom** (QC) edges are **not yet** used as port sides — this doc's four-sided
+   placement is aspirational.
+2. **Cards are still the small fixed size.** Nodes render at the fixed `UW = 168` (user) / `TW = 208`
+   (seeded ToolCard) widths; the §3 enlarged, port-count-driven card is not yet built.
+3. **Half-circle typed ports are not yet the visual.** Ports render as small edge dots, not the
+   Databricks-style typed half-circles on the perimeter; typing is enforced in wiring
+   (`reconcileEdges`, kind-matched) but not yet expressed as four-sided half-circle geometry.
+4. **Reserved kinds need registering.** Several documented ports (`fastp_html`, `adapter_fasta`,
+   `samtools_stats`, the mosdepth `*_dist`/`per_base` family, `vcf_index`, `multiqc_html`, MultiQC's
+   discovered-log bay) are real tool I/O with **no kind in `ARTIFACT_KINDS`** yet; they stay reserved
+   until a kind + producer card is added — never auto-wired.
+
+Adopting these per-tool specs is therefore a **frontend follow-up** (a `BuilderCanvas` port-model
+rework), not a claim about current behavior. Until then, treat each per-tool doc as the authority on
+*what ports a node should host*, and this section as the honest gap between spec and code.
