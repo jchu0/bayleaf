@@ -6,7 +6,7 @@ export type RepairApproval = 'none' | 'instance' | 'class'
 // Honest fallback used only when the advisory pipeline-repair agent can't be reached (off-gate,
 // non-critical). We do NOT fabricate a class-specific fix for an unknown signature — the card
 // simply states the agent is unavailable; the recurring pattern and the gate are unaffected.
-const FALLBACK_SUMMARY =
+export const FALLBACK_SUMMARY =
   'The pipeline-repair agent is unavailable, so no proposed fix can be shown for this signature. The recurring pattern is unchanged and the gate is unaffected.'
 
 // The pipeline-repair agent's proposed fix, surfaced inline on a recurring ticket after the

@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Check,
   ChevronLeft,
   ChevronRight,
   Download,
+  FolderOpen,
   GitBranch,
   LayoutGrid,
+  Loader2,
   Play,
   Plus,
   Save,
@@ -37,6 +39,7 @@ import {
   mergedLoc,
   savedLocators,
   yamlFor,
+  type BuilderGraphPayload,
   type ConsoleTab,
   type IconKey,
   type LocEdits,
@@ -48,7 +51,7 @@ import {
 } from '../components/BuilderShared'
 import { useRole } from '../context/RoleContext'
 import { api } from '../api'
-import type { DiffResult, DryRunResult } from '../types'
+import type { DiffResult, DryRunResult, PipelineGraph } from '../types'
 
 // The Pipeline Builder (#11) — the editable superset of the Provenance canvas: a left→right DAG
 // the operator *configures* (nodes, locators, the advisory agent), whose sole grounded output is
@@ -116,6 +119,7 @@ export function PipelineBuilder() {
   const [docKind, setDocKind] = useState<'germline' | 'blank'>('germline')
   const [docName, setDocName] = useState<string>(GRAPH_ID)
   const [newOpen, setNewOpen] = useState(false)
+  const [loadOpen, setLoadOpen] = useState(false)
 
   const isView = mode === 'view'
   // Only the original seeded pipeline is the LINKED doc; a new draft (blank or template) is not.
@@ -147,6 +151,40 @@ export function PipelineBuilder() {
     setProfile(kind === 'blank' ? 'default' : 'giab_panel')
     setMode('edit')
     setNewOpen(false)
+  }
+
+  // Load a previously-saved pipeline back into the builder (T-069 saved-profiles). A loaded graph is
+  // a USER graph (docKind='blank' → not the seeded LINKED doc), so its composed nodes render and it
+  // stays editable. savedName=pg.name means the graph already exists in the store, so Dry-run/Diff
+  // resolve immediately. Re-saving mints a NEW draft version server-side, so loading an approved
+  // graph never mutates it. Compose ≠ execute; no verdict is read or written.
+  function loadSavedPipeline(pg: PipelineGraph) {
+    const g = (pg.graph ?? {}) as BuilderGraphPayload
+    const nodes = Array.isArray(g.nodes) ? g.nodes : []
+    const edges = Array.isArray(g.edges) ? g.edges : []
+    setDocKind('blank')
+    setDocName(pg.name)
+    setUserNodes(nodes)
+    setUserEdges(edges)
+    setLocEdits(g.locator_edits ?? {})
+    setRefLoc(g.reference_locators ?? {})
+    setSelected(null)
+    setConnectMode(false)
+    setConnectFrom(null)
+    setProfile(pg.profile ?? 'default')
+    setVersion(pg.version)
+    setSaveStatus(pg.status === 'approved' ? 'approved' : pg.status === 'pending_review' ? 'pending' : 'draft')
+    setEmitted(false)
+    setEmittedSnap(null)
+    setSavedName(pg.name) // graph is in the store → Dry-run/Diff can resolve it now
+    setDryRun(null)
+    setDiff(null)
+    setMode(pg.status === 'approved' ? 'view' : 'edit') // approved opens read-only (existing behavior)
+    setLoadOpen(false)
+    // Honest signal when the saved envelope carries no restorable builder topology (foreign/older
+    // schema_version) — never fabricate nodes.
+    if (!nodes.length) toast(`Loaded ${pg.name} · v${pg.version} — no builder topology to restore (schema ${pg.schema_version})`, 'info')
+    else toast(`Loaded ${pg.name} · v${pg.version} · ${pg.status}`, 'success')
   }
 
   // Cancel/exit a draft: discard the in-progress build and return to the original linked pipeline
@@ -456,6 +494,14 @@ export function PipelineBuilder() {
           <Plus size={13} />
           New
         </button>
+        <button
+          onClick={() => setLoadOpen(true)}
+          title="Open a previously-saved pipeline"
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line-strong bg-card px-2.5 py-1.5 text-[12.5px] font-medium text-text hover:border-line"
+        >
+          <FolderOpen size={13} />
+          Open
+        </button>
         {!isLinked && (
           <button
             onClick={cancelDraft}
@@ -676,11 +722,22 @@ export function PipelineBuilder() {
       />
 
       {/* ── modals ── */}
-      {runOpen && <RunHandoffModal envHint={envHint} onClose={() => setRunOpen(false)} />}
+      {runOpen && (
+        <RunHandoffModal
+          envHint={envHint}
+          profile={profile}
+          yaml={yaml}
+          curLoc={curLoc}
+          savedName={savedName}
+          onEmit={onEmit}
+          onClose={() => setRunOpen(false)}
+        />
+      )}
       {authorOpen && <AuthorToolNodeModal onClose={() => setAuthorOpen(false)} />}
       {repairOpen && <PipelineRepairModal onClose={() => setRepairOpen(false)} />}
       {archivistOpen && <ArchivistModal onClose={() => setArchivistOpen(false)} />}
       {newOpen && <NewPipelineModal onClose={() => setNewOpen(false)} onCreate={newPipeline} />}
+      {loadOpen && <LoadSavedModal onClose={() => setLoadOpen(false)} onLoad={loadSavedPipeline} />}
     </div>
   )
 }
@@ -754,6 +811,85 @@ function NewPipelineModal({
             className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-accent-strong"
           >
             Create pipeline
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// "Open saved" modal — lists saved pipelines from the store (latest per name) and hydrates the
+// builder from one (T-069 saved-profiles). Read-only fetch; honest loading/empty/error states;
+// never invents a row. Approved graphs open read-only; loading one never mutates the store record.
+function LoadSavedModal({ onClose, onLoad }: { onClose: () => void; onLoad: (pg: PipelineGraph) => void }) {
+  const [rows, setRows] = useState<PipelineGraph[] | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    api
+      .listPipelines()
+      .then((r) => live && setRows(r))
+      .catch((e) => live && setErr(errMsg(e)))
+    return () => {
+      live = false
+    }
+  }, [])
+  const stFor = (s: PipelineGraph['status']): SaveStatus =>
+    s === 'approved' ? 'approved' : s === 'pending_review' ? 'pending' : 'draft'
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-[460px] max-w-full overflow-hidden rounded-2xl border border-line bg-card shadow-pop">
+        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+          <h2 className="font-serif text-[18px] font-medium text-text">Open saved pipeline</h2>
+          <button
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-lg text-text-2 hover:bg-page"
+            aria-label="Close"
+          >
+            <X size={17} />
+          </button>
+        </div>
+        <div className="max-h-[52vh] overflow-y-auto px-5 py-4">
+          <p className="mb-3 text-[12.5px] leading-relaxed text-text-2">
+            Loads a saved graph back into the builder — the latest version of each. Approved pipelines open
+            read-only; loading one never mutates it. Compose ≠ execute.
+          </p>
+          {err ? (
+            <div className="rounded-lg border border-hold-bd bg-hold-bg px-3 py-2.5 text-[12px] text-hold-fg">
+              Couldn’t load saved pipelines — {err}
+            </div>
+          ) : rows === null ? (
+            <p className="inline-flex items-center gap-1.5 text-[12.5px] text-text-3">
+              <Loader2 size={13} className="animate-spin" /> Loading saved pipelines…
+            </p>
+          ) : rows.length === 0 ? (
+            <p className="text-[12.5px] text-text-2">No saved pipelines yet — Save a draft to see it here.</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {rows.map((pg) => {
+                const st = SAVE_ST[stFor(pg.status)]
+                return (
+                  <button
+                    key={pg.id}
+                    onClick={() => onLoad(pg)}
+                    className="flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-left hover:border-line-strong hover:bg-page"
+                  >
+                    <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] font-medium text-text">{pg.name}</span>
+                    {pg.profile && <span className="shrink-0 text-[11px] text-text-3">{pg.profile}</span>}
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${st.cls}`}>{st.label}</span>
+                    <span className="shrink-0 font-mono text-[10px] text-text-3">v{pg.version}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-line bg-card px-3.5 py-1.5 text-[13px] font-medium text-text-2 hover:bg-page"
+          >
+            Close
           </button>
         </div>
       </div>

@@ -516,11 +516,89 @@ export type ThresholdOverrideAck = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Advisory agent reads (off-gate, read-only): pipeline-repair + archivist proposals.
 // ─────────────────────────────────────────────────────────────────────────────
+export type RepairCitation = {
+  source_kind: 'knowledge' | 'rule' | 'signature'
+  ref: string
+  title?: string | null
+  // Heuristic keyword-overlap for knowledge hits — NOT a calibrated probability. Null for rule/signature refs.
+  score?: number | null
+}
+
+// Advisory agent read (off-gate). Mirrors backend RepairProposal (pipeline_repair/models.py) and the
+// qc_triage/archivist advisory shape. Enrichment fields are optional so existing consumers
+// (ReviewRepairCard, MonitoringSignatureRow, ReviewQueue) that read only summary/mode keep compiling.
+// The wire field for the repair endpoint is `advisory: true`; `advisory_only` is kept optional for
+// any legacy caller but is NOT emitted by the repair endpoint.
 export type AgentProposal = {
   agent: 'qc_triage' | 'pipeline_repair' | 'archivist'
-  advisory_only: true
+  advisory?: true
+  advisory_only?: true
   summary: string
   mode: 'stub' | 'claude'
+  // ── enrichment (present on the repair endpoint payload) ──
+  addresses_rule_id?: string
+  addresses_signature?: string
+  signature_count?: number
+  run_ids?: string[]
+  rationale?: string
+  attach_to?: string | null
+  scope?: Gate | null
+  citations?: RepairCitation[]
+  generated_by?: 'stub' | 'claude'
+  model?: string | null
+}
+
+// Advisory archivist digest (GET /api/archive/index cross-run | GET /api/runs/:id/archive-digest
+// per-run). Organizational ONLY: there is deliberately NO verdict/decision/confidence field —
+// the librarian indexes, the rules decide (ADR-0001). `manifest` is populated only for scope
+// 'run'; a cross-run 'index' carries n_artifacts/total_size_bytes instead (manifest is []).
+export type ArchiveArtifactRef = {
+  name: string
+  kind: string
+  sha256: string | null
+  size_bytes: number
+  origin: string
+}
+export type ArchiveSignature = {
+  signature: string
+  rule_id: string
+  title: string
+  gate: Gate
+  count: number
+}
+export type ArchiveCitation = {
+  source_kind: 'run' | 'signature' | 'artifact'
+  ref: string
+  title: string | null
+}
+export type ArchiveDigest = {
+  id: string
+  advisory: true
+  agent: string
+  generated_by: 'stub' | 'claude'
+  model: string | null
+  scope: 'run' | 'index'
+  run_ids: string[]
+  n_runs: number
+  n_samples: number
+  n_attention: number
+  verdict_counts: Record<string, number>
+  by_origin: Record<string, number>
+  by_status: Record<string, number>
+  n_archive_ready: number
+  archive_ready: boolean
+  n_artifacts: number
+  total_size_bytes: number
+  recurring_signatures: ArchiveSignature[]
+  manifest: ArchiveArtifactRef[]
+  proposed_action: string
+  summary: string
+  citations: ArchiveCitation[]
+  disclaimer: string
+  digest_version: string
+  schema_version: number
+  created_at: string
+  content_hash: string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

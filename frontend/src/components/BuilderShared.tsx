@@ -284,6 +284,16 @@ export const ON_CYCLE: Record<OnMultiple, OnMultiple> = { first: 'all', all: 'er
 export type LocEdit = Partial<Pick<GiabLoc, 'loc' | 'parser' | 'required' | 'on'>>
 export type LocEdits = Record<string, LocEdit>
 
+// The builder's read-back view of a saved PipelineGraph.graph envelope (T-069 saved-profiles load
+// path). Every field optional: the store keeps `graph` as an arbitrary dict (api/pipeline.py), so a
+// save from another schema_version may omit these. Absent → treat as empty; never invent a topology.
+export type BuilderGraphPayload = {
+  nodes?: UserNode[]
+  edges?: UserEdge[]
+  locator_edits?: LocEdits
+  reference_locators?: Record<string, string>
+}
+
 export function mergedLoc(k: string, edits: LocEdits): GiabLoc {
   const base = GIAB_LOC.find((x) => x.k === k)
   if (!base) throw new Error(`unknown locator kind ${k}`)

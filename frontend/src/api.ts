@@ -7,6 +7,7 @@
 import type {
   Actor,
   AgentProposal,
+  ArchiveDigest,
   CardReadout,
   DecisionCard,
   DiffResult,
@@ -158,8 +159,8 @@ export const api = {
   signatureRepair: (signature: string) =>
     get<AgentProposal>(`/api/monitoring/signatures/${enc(signature)}/repair`),
   archiveDigest: (runId: string) =>
-    get<Record<string, unknown>>(`/api/runs/${enc(runId)}/archive-digest`),
-  archiveIndex: () => get<Record<string, unknown>>('/api/archive/index'),
+    get<ArchiveDigest>(`/api/runs/${enc(runId)}/archive-digest`),
+  archiveIndex: () => get<ArchiveDigest>('/api/archive/index'),
 
   // ── export (download link; no fetch needed for the CSV) ──
   exportUrl: (params: Record<string, string> = {}) =>
