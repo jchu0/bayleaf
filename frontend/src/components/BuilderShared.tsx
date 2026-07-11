@@ -88,12 +88,15 @@ export const PG_BADGE: Record<PgStatus, { label: string; fg: string; bg: string 
 }
 export const V_COLOR: Record<VStatus, string> = { ok: '#1a854e', warn: '#b07714', blocked: '#cf3238' }
 
-// Seeded germline chain: fastp → bwa-mem2 → samtools markdup → {mosdepth, bcftools call →
-// bcftools norm} → MultiQC. Kinds on the ports drive the palette subs + kind-matching.
+// Seeded germline chain in a SPINE + BRANCH layout: the primary spine fastp → bwa-mem2 → samtools
+// markdup → bcftools call → bcftools norm sits on one row (y = SPINE_Y 260); mosdepth (off markdup)
+// and MultiQC (the QC fan-in) drop to a BRANCH row below (y = BRANCH_Y 600). Reference/FASTQ sources
+// live in a top band (y = REF_Y 40) above their consumers. Kinds on the ports drive the palette
+// subs + kind-matching. x pitch = NODE_W (320) + ~60px gap = 380.
 export const TOOLS: Tool[] = [
   {
     id: 'n_fastp', tool: 'fastp', version: '0.23.4', stageLabel: 'Read QC + trim', pg: 'ours', icon: 'scissors',
-    x: 40, y: 180, vstatus: 'ok', inputs: [{ kind: 'fastq' }], outputs: [{ kind: 'fastp_json' }, { kind: 'fastq' }],
+    x: 40, y: 260, vstatus: 'ok', inputs: [{ kind: 'fastq' }], outputs: [{ kind: 'fastp_json' }, { kind: 'fastq' }],
     params: [
       { k: 'qualified_quality_phred', v: '15', help: 'Per-base quality floor' },
       { k: 'length_required', v: '50', help: 'Min read length after trim' },
@@ -106,7 +109,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_bwa', tool: 'bwa-mem2', version: '2.2.1', stageLabel: 'Alignment', pg: 'partial', icon: 'merge',
-    x: 400, y: 180, vstatus: 'ok', inputs: [{ kind: 'fastq' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'bam' }],
+    x: 420, y: 260, vstatus: 'ok', inputs: [{ kind: 'fastq' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'bam' }],
     params: [
       { k: 'read_group', v: '@RG\\tID:HG002\\tSM:HG002', help: 'Read-group header' },
       { k: 'sort', v: 'coordinate', help: 'Output sort order' },
@@ -118,7 +121,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_markdup', tool: 'samtools markdup', version: '1.20', stageLabel: 'Duplicate marking', pg: 'full', icon: 'copy',
-    x: 760, y: 180, vstatus: 'ok', inputs: [{ kind: 'bam' }], outputs: [{ kind: 'bam' }, { kind: 'bai' }, { kind: 'markdup_metrics' }],
+    x: 800, y: 260, vstatus: 'ok', inputs: [{ kind: 'bam' }], outputs: [{ kind: 'bam' }, { kind: 'bai' }, { kind: 'markdup_metrics' }],
     params: [{ k: 'remove_duplicates', v: 'false', help: 'Mark, do not drop' }],
     io: [
       { name: 'HG002.md.bam', sha: 'sha256:7a11…4c2', size: '32 GB', origin: 'real-giab' },
@@ -127,7 +130,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_mosdepth', tool: 'mosdepth', version: '0.3.8', stageLabel: 'Coverage', pg: 'ours', icon: 'bars',
-    x: 1120, y: 180, vstatus: 'warn', inputs: [{ kind: 'bam' }, { kind: 'panel_bed', ref: true }],
+    x: 800, y: 600, vstatus: 'warn', inputs: [{ kind: 'bam' }, { kind: 'panel_bed', ref: true }],
     // The 3 optional *_dist/regions coverage byproducts (mosdepth --by emits these) — the ONLY new
     // WIREABLE graph ports this change adds (builder-cards/mosdepth.md §2/§3). They are compose
     // affordances (bottom QC exits), NOT emitted run_layout locators: GIAB_LOC is untouched.
@@ -142,7 +145,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_call', tool: 'bcftools call', version: '1.20', stageLabel: 'Variant calling', pg: 'partial', icon: 'dna',
-    x: 1480, y: 180, vstatus: 'ok', inputs: [{ kind: 'bam' }, { kind: 'reference_fasta', ref: true }, { kind: 'panel_bed', ref: true }], outputs: [{ kind: 'vcf' }],
+    x: 1180, y: 260, vstatus: 'ok', inputs: [{ kind: 'bam' }, { kind: 'reference_fasta', ref: true }, { kind: 'panel_bed', ref: true }], outputs: [{ kind: 'vcf' }],
     params: [
       { k: 'min_MQ', v: '20', help: 'mpileup min mapping quality' },
       { k: 'min_BQ', v: '20', help: 'mpileup min base quality' },
@@ -152,7 +155,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_norm', tool: 'bcftools norm', version: '1.20', stageLabel: 'Filter / normalize', pg: 'partial', icon: 'funnel',
-    x: 1840, y: 180, vstatus: 'ok', inputs: [{ kind: 'vcf' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'filtered_vcf' }],
+    x: 1560, y: 260, vstatus: 'ok', inputs: [{ kind: 'vcf' }, { kind: 'reference_fasta', ref: true }], outputs: [{ kind: 'filtered_vcf' }],
     params: [
       { k: 'norm', v: '-m -both', help: 'Split multiallelics' },
       { k: 'fasta_ref', v: 'GRCh38.fa', help: 'Left-align against the reference' },
@@ -161,7 +164,7 @@ export const TOOLS: Tool[] = [
   },
   {
     id: 'n_multiqc', tool: 'MultiQC', version: '1.21', stageLabel: 'QC aggregation', pg: 'full', icon: 'layers',
-    x: 2200, y: 180, vstatus: 'ok', inputs: [{ kind: 'fastp_json' }, { kind: 'markdup_metrics' }, { kind: 'mosdepth_summary' }], outputs: [{ kind: 'multiqc_json' }],
+    x: 1180, y: 600, vstatus: 'ok', inputs: [{ kind: 'fastp_json' }, { kind: 'markdup_metrics' }, { kind: 'mosdepth_summary' }], outputs: [{ kind: 'multiqc_json' }],
     params: [{ k: 'force', v: 'true', help: 'Overwrite existing report' }],
     io: [{ name: 'multiqc_data.json', sha: 'sha256:5be3…9c4', size: '2.1 MB', origin: 'real-giab' }],
   },
@@ -172,14 +175,13 @@ export const TOOLS: Tool[] = [
 // removed with the "broken lines" fix.)
 
 export type Ref = { id: string; label: string; kind: string; file: string; x: number }
-// Reference source cards sit in a band ABOVE the tool spine (REF_Y) and descend into each
-// consumer's TOP reference port; x is aligned over the primary consumer (fasta→bwa, bed→mosdepth).
-// Re-spaced for the wider (296px) tool cards (see NODE_W): the old below-spine y=372 would collide
-// with the now-taller cards, so the reference band moved up (BuilderCanvas.REF_Y).
+// Reference source cards sit in a top band ABOVE the spine (REF_Y=40); x is aligned over the primary
+// consumer in the spine+branch layout: fasta→bwa (x420), panel BED→mosdepth column (x800), truth VCF
+// parked over norm (x1560, unwired). Pitch matches the tool spine (NODE_W 320 + ~60 gap).
 export const REFS: Ref[] = [
-  { id: 'r_fasta', label: 'Reference genome', kind: 'reference_fasta', file: 'reference/GRCh38.fa', x: 400 },
-  { id: 'r_bed', label: 'Panel BED', kind: 'panel_bed', file: 'reference/panel.bed', x: 1120 },
-  { id: 'r_truth', label: 'Truth VCF', kind: 'truth_vcf', file: 'HG002…benchmark.vcf.gz', x: 2560 },
+  { id: 'r_fasta', label: 'Reference genome', kind: 'reference_fasta', file: 'reference/GRCh38.fa', x: 420 },
+  { id: 'r_bed', label: 'Panel BED', kind: 'panel_bed', file: 'reference/panel.bed', x: 800 },
+  { id: 'r_truth', label: 'Truth VCF', kind: 'truth_vcf', file: 'HG002…benchmark.vcf.gz', x: 1560 },
 ]
 
 export const GATE_CHECKPOINTS = [
@@ -213,11 +215,12 @@ export const BTOOLSPEC: Record<string, { version: string; icon: IconKey; ins: st
   'bcftools norm': { version: '1.20', icon: 'funnel', ins: ['vcf', 'reference_fasta'], outs: ['filtered_vcf'] },
   'MultiQC': { version: '1.21', icon: 'layers', ins: ['fastp_json', 'markdup_metrics', 'mosdepth_summary'], outs: ['multiqc_json'] },
   'NGSCheckMate': { version: '1.0.1', icon: 'bars', ins: ['bam'], outs: ['ngscheckmate'] },
-  // Reference SOURCES — no inputs; each emits a reference artifact a tool's ref input consumes
-  // (fasta → bwa/call/norm, bed → mosdepth/call, truth VCF → benchmarking). Typed wiring keeps
-  // a fasta from landing on a fastq port.
-  'Reference FASTA': { version: 'GRCh38', icon: 'db', ins: [], outs: ['reference_fasta'] },
-  'Panel BED': { version: 'panel', icon: 'db', ins: [], outs: ['panel_bed'] },
+  // Reference SOURCES — no inputs; each emits ONE output port PER consumer (same kind, distinct idx)
+  // so every consumer edge is a clean one-to-one wire instead of many edges branching off one port
+  // (the "tangled mess"): fasta → bwa/call/norm (3 outs), panel BED → mosdepth/call (2 outs), truth
+  // VCF → benchmarking (1, unwired). Typed wiring keeps a fasta from landing on a fastq port.
+  'Reference FASTA': { version: 'GRCh38', icon: 'db', ins: [], outs: ['reference_fasta', 'reference_fasta', 'reference_fasta'] },
+  'Panel BED': { version: 'panel', icon: 'db', ins: [], outs: ['panel_bed', 'panel_bed'] },
   'Truth VCF': { version: 'v4.2.1', icon: 'db', ins: [], outs: ['truth_vcf'] },
   // Primary-lane INPUT source (raw FASTQ folder) + a file-OUTPUT sink (a report/artifact destination),
   // so the graph closes on both ends: source → tools → sink (ADR-0019 slice 1c). Both compose ≠ execute.
@@ -368,10 +371,19 @@ export const CARD_PORTS: Record<string, CardPort[]> = {
     { kind: 'multiqc_json', dir: 'out', side: 'right', state: 'required' },
     { kind: 'multiqc_html', dir: 'out', side: 'bottom', state: 'reserved' },
   ],
-  // Reference SOURCES (used only when dropped as a user node) — emit their artifact downward.
-  'Reference FASTA': [{ kind: 'reference_fasta', dir: 'out', side: 'bottom', state: 'required' }],
-  'Panel BED': [{ kind: 'panel_bed', dir: 'out', side: 'bottom', state: 'required' }],
-  'Truth VCF': [{ kind: 'truth_vcf', dir: 'out', side: 'bottom', state: 'reserved' }],
+  // Reference SOURCES — one output port PER consumer (same kind, distinct idx) so each consumer edge is
+  // a 1:1 wire (no branching). Side is 'right' (balanceSides lays ref OUTPUTS on the right, with the
+  // required outputs); the count MUST match BTOOLSPEC outs (3 fasta / 2 bed / 1 truth).
+  'Reference FASTA': [
+    { kind: 'reference_fasta', dir: 'out', side: 'right', state: 'required' },
+    { kind: 'reference_fasta', dir: 'out', side: 'right', state: 'required' },
+    { kind: 'reference_fasta', dir: 'out', side: 'right', state: 'required' },
+  ],
+  'Panel BED': [
+    { kind: 'panel_bed', dir: 'out', side: 'right', state: 'required' },
+    { kind: 'panel_bed', dir: 'out', side: 'right', state: 'required' },
+  ],
+  'Truth VCF': [{ kind: 'truth_vcf', dir: 'out', side: 'right', state: 'reserved' }],
   'FASTQ input': [{ kind: 'fastq', dir: 'out', side: 'right', state: 'required' }],
   'File output': [{ kind: 'multiqc_json', dir: 'in', side: 'left', state: 'required' }],
 }
@@ -422,19 +434,24 @@ function indexedPorts(name: string | undefined, ins: string[], outs: string[]): 
 }
 
 // ── Two-side balanced port layout (batch 3a — ports ONLY on left/right, no top/bottom) ──
-// LEFT = required non-ref inputs (top) then references (below); RIGHT = required non-ref outputs. The
-// optional/reserved non-ref ports are then DISTRIBUTED across both sides to balance the per-side count
-// (~equal; an odd total gives LEFT the extra, so left ≥ right always). The card's ins/outs arrays, the
-// wire idx, and the wiring model are untouched — only each port's SIDE / position / display number change.
+// LEFT = required non-ref inputs then reference INPUTS (below); RIGHT = required non-ref outputs then
+// reference OUTPUTS (source cards emit their ref artifact rightward, toward the consumers below/right —
+// so a top-band source's wires don't loop back across the card). The optional/reserved non-ref ports
+// are then DISTRIBUTED across both sides to balance the per-side count (~equal; an odd total gives LEFT
+// the extra, so left ≥ right always). The card's ins/outs arrays, the wire idx, and the wiring model
+// are untouched — only each port's SIDE / position / display number change. Tool cards are unchanged
+// (they carry no ref OUTPUT); only reference-source cards move their outputs left→right.
 const isRef = (kind: string): boolean => REF_IN_KINDS.has(kind)
 function balanceSides(ports: IndexedPort[]): { left: IndexedPort[]; right: IndexedPort[] } {
   const reqIn = ports.filter((p) => !isRef(p.kind) && p.state === 'required' && p.dir === 'in')
-  const refs = ports.filter((p) => isRef(p.kind))
+  const refIn = ports.filter((p) => isRef(p.kind) && p.dir === 'in')
+  const refOut = ports.filter((p) => isRef(p.kind) && p.dir === 'out')
   const reqOut = ports.filter((p) => !isRef(p.kind) && p.state === 'required' && p.dir === 'out')
   const distrib = ports.filter((p) => !isRef(p.kind) && p.state !== 'required')
-  const leftBase = [...reqIn, ...refs]
+  const leftBase = [...reqIn, ...refIn]
+  const rightBase = [...reqOut, ...refOut]
   const toLeft = Math.max(0, Math.min(Math.ceil(ports.length / 2) - leftBase.length, distrib.length))
-  return { left: [...leftBase, ...distrib.slice(0, toLeft)], right: [...reqOut, ...distrib.slice(toLeft)] }
+  return { left: [...leftBase, ...distrib.slice(0, toLeft)], right: [...rightBase, ...distrib.slice(toLeft)] }
 }
 
 // The three in-card boxes (batch 3a): REQUIRED (required non-ref), REFERENCE (reference kinds),
@@ -600,9 +617,12 @@ export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
     const spec = BTOOLSPEC[name] ?? { version: 'v1.0', icon: 'db' as IconKey, ins: [], outs: [r.kind] }
     return { id: r.id, name, kind: r.kind, version: spec.version, icon: spec.icon, ins: [], outs: [r.kind], x: r.x, y: REF_Y }
   })
-  // Primary-lane FASTQ input source (raw fastq folder → fastp) so the first card is fed (slice 1c).
-  const fastqSource: UserNode = { id: 'src_fastq', name: 'FASTQ input', kind: 'fastq', version: 'folder', icon: 'db', ins: [], outs: ['fastq'], x: 40, y: 40 }
-  const nodes: UserNode[] = [...toolNodes, ...sourceNodes, fastqSource]
+  // Primary-lane FASTQ input source (raw fastq folder → fastp) so the first card is fed (slice 1c),
+  // above fastp in the top source band. And a File-output SINK on the branch row near MultiQC, so the
+  // whole graph closes on both ends: source → tools → sink (the intent recorded in BTOOLSPEC's comment).
+  const fastqSource: UserNode = { id: 'src_fastq', name: 'FASTQ input', kind: 'fastq', version: 'folder', icon: 'db', ins: [], outs: ['fastq'], x: 40, y: REF_Y }
+  const fileOutput: UserNode = { id: 'sink_file', name: 'File output', kind: 'multiqc_json', version: 'file', icon: 'archive', ins: ['multiqc_json'], outs: [], x: 1560, y: 600 }
+  const nodes: UserNode[] = [...toolNodes, ...sourceNodes, fastqSource, fileOutput]
   // Resolve a port index by kind (0 if absent), so the wiring can never forge a mismatched edge.
   const portIdx = (nodeId: string, side: 'ins' | 'outs', kind: string): number => {
     const n = nodes.find((x) => x.id === nodeId)
@@ -611,6 +631,13 @@ export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
   }
   const wire = (fromId: string, outKind: string, toId: string, inKind: string): UserEdge => ({
     from: { node: fromId, idx: portIdx(fromId, 'outs', outKind) },
+    to: { node: toId, idx: portIdx(toId, 'ins', inKind) },
+  })
+  // A reference source now has ONE output port per consumer (same kind), so its edges must address a
+  // DISTINCT output idx each — portIdx-by-kind would return 0 for all of them and re-branch. wireOut
+  // pins the exact source output index; the consumer input is still resolved by kind (one per tool).
+  const wireOut = (fromId: string, fromIdx: number, toId: string, inKind: string): UserEdge => ({
+    from: { node: fromId, idx: fromIdx },
     to: { node: toId, idx: portIdx(toId, 'ins', inKind) },
   })
   const edges: UserEdge[] = [
@@ -622,13 +649,15 @@ export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
     wire('n_fastp', 'fastp_json', 'n_multiqc', 'fastp_json'),
     wire('n_markdup', 'markdup_metrics', 'n_multiqc', 'markdup_metrics'),
     wire('n_mosdepth', 'mosdepth_summary', 'n_multiqc', 'mosdepth_summary'),
-    // reference source → tool ref-input edges (fasta→bwa/call/norm, bed→mosdepth/call; truth VCF unwired)
-    wire('r_fasta', 'reference_fasta', 'n_bwa', 'reference_fasta'),
-    wire('r_fasta', 'reference_fasta', 'n_call', 'reference_fasta'),
-    wire('r_fasta', 'reference_fasta', 'n_norm', 'reference_fasta'),
-    wire('r_bed', 'panel_bed', 'n_mosdepth', 'panel_bed'),
-    wire('r_bed', 'panel_bed', 'n_call', 'panel_bed'),
+    // reference source → tool ref-input edges, each off a DISTINCT source output port (fasta out 0/1/2
+    // → bwa/call/norm; bed out 0/1 → mosdepth/call; truth VCF unwired).
+    wireOut('r_fasta', 0, 'n_bwa', 'reference_fasta'),
+    wireOut('r_fasta', 1, 'n_call', 'reference_fasta'),
+    wireOut('r_fasta', 2, 'n_norm', 'reference_fasta'),
+    wireOut('r_bed', 0, 'n_mosdepth', 'panel_bed'),
+    wireOut('r_bed', 1, 'n_call', 'panel_bed'),
     wire('src_fastq', 'fastq', 'n_fastp', 'fastq'), // FASTQ input source → fastp (slice 1c)
+    wire('n_multiqc', 'multiqc_json', 'sink_file', 'multiqc_json'), // QC report → file-output sink
   ]
   return { nodes, edges }
 }

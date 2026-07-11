@@ -10,6 +10,8 @@ import {
   Inbox,
   LogOut,
   type LucideIcon,
+  PanelLeftClose,
+  PanelLeftOpen,
   Rows3,
   Settings,
   Shield,
@@ -23,6 +25,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { PageId } from '../access'
 import { useAccess } from '../context/AccessContext'
 import { useInbox } from '../context/InboxContext'
+import { usePrefs } from '../context/PrefsContext'
 import { useRole } from '../context/RoleContext'
 import type { RunSummary } from '../types'
 import { UserSettingsDialog } from './UserSettingsDialog'
@@ -129,7 +132,7 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
     .filter((g) => g.items.length > 0)
 }
 
-function UserPanel() {
+function UserPanel({ collapsed = false }: { collapsed?: boolean }) {
   const { actor, role, toggleRole, logout } = useRole()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -139,28 +142,43 @@ function UserPanel() {
   const initials = actor.id.split(/[.\-_ ]/).map((p) => p[0]?.toUpperCase() ?? '').join('').slice(0, 2) || 'U'
 
   return (
-    <div className="relative border-t border-nav-border p-3">
+    <div className={`relative border-t border-nav-border ${collapsed ? 'p-2' : 'p-3'}`}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2.5 rounded-[9px] bg-nav-hover px-2.5 py-[7px] text-left transition-colors hover:brightness-110"
+        // Collapsed: just the avatar acts as the account trigger; a title/aria-label keeps it legible.
+        aria-label={collapsed ? `${actor.id} — account menu` : undefined}
+        title={collapsed ? `${actor.id} (${roleLabel})` : undefined}
+        className={`flex w-full items-center rounded-[9px] bg-nav-hover text-left transition-colors hover:brightness-110 ${
+          collapsed ? 'justify-center p-1.5' : 'gap-2.5 px-2.5 py-[7px]'
+        }`}
       >
         <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-[linear-gradient(150deg,#3a7,#186)] text-[12px] font-semibold text-white">
           {initials}
         </span>
-        <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate font-mono text-[12.5px] font-semibold text-nav-text">{actor.id}</span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-[5px] w-[5px] rounded-full bg-[#3ba55d]" />
-            <span className="text-[10.5px] text-nav-label">{roleLabel}</span>
-          </span>
-        </span>
-        <ChevronUp size={14} className="shrink-0 text-nav-label" />
+        {!collapsed && (
+          <>
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block truncate font-mono text-[12.5px] font-semibold text-nav-text">{actor.id}</span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-[5px] w-[5px] rounded-full bg-[#3ba55d]" />
+                <span className="text-[10.5px] text-nav-label">{roleLabel}</span>
+              </span>
+            </span>
+            <ChevronUp size={14} className="shrink-0 text-nav-label" />
+          </>
+        )}
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-[66px] left-3 right-3 z-40 overflow-hidden rounded-[11px] border border-nav-border bg-nav-hover shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
+          {/* When collapsed the rail is too narrow to host the menu, so it pops out to a fixed
+              width beyond the rail's right edge (still anchored to the account button). */}
+          <div
+            className={`absolute z-40 overflow-hidden rounded-[11px] border border-nav-border bg-nav-hover shadow-[0_16px_40px_rgba(0,0,0,0.4)] ${
+              collapsed ? 'bottom-[54px] left-2 w-[232px]' : 'bottom-[66px] left-3 right-3'
+            }`}
+          >
             <div className="border-b border-nav-border px-3.5 py-3">
               <div className="font-mono text-[12.5px] font-semibold text-nav-text">{actor.id}</div>
               <div className="font-mono text-[10.5px] text-nav-label">{actor.id}@lab.org</div>
@@ -211,43 +229,97 @@ export function Sidebar({
   defaultRunId?: string | null
 }) {
   const groups = useNav(runs, defaultRunId)
-  return (
-    <aside className="flex w-[236px] shrink-0 flex-col border-r border-nav-border bg-nav text-nav-text">
-      <Link to="/" className="flex items-center gap-2.5 px-[18px] pb-[15px] pt-[17px]">
-        <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-lg bg-[linear-gradient(155deg,#2f6bd6,#1a4fac)]">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={1.9} strokeLinecap="round">
-            <path d="M5 3c0 6 14 6 14 12M19 3c0 6-14 6-14 12M5 21c0-2 14-2 14 0M5 3c0 2 14 2 14 0" />
-            <path d="M7 6h10M8 9.5h8M8 14.5h8M7 18h10" strokeWidth={1.3} />
-          </svg>
-        </span>
-        <span className="leading-[1.1]">
-          <span className="block text-[15px] font-bold tracking-[-0.2px] text-nav-text">PipeGuard</span>
-          <span className="block text-[10.5px] font-medium uppercase tracking-[0.3px] text-nav-label">
-            Decision gate
-          </span>
-        </span>
-      </Link>
+  // Collapse state lives in the shared prefs store (localStorage-persisted), so the rail survives
+  // navigation + reload like the other prefs. Collapsing to an icons-only rail hands the reclaimed
+  // width to the main content (which is flex-1 in Layout) — e.g. the Builder canvas beside its inspector.
+  const { navCollapsed: collapsed, setNavCollapsed } = usePrefs()
 
-      <nav className="flex-1 overflow-y-auto pb-2">
+  return (
+    <aside
+      // Width via inline style (not a w-[Npx] class) so the collapse works regardless of whether the
+      // Tailwind JIT has generated the arbitrary-value rule; the transition-[width] class still animates it.
+      className="relative flex shrink-0 flex-col border-r border-nav-border bg-nav text-nav-text transition-[width] duration-200 ease-in-out"
+      style={{ width: collapsed ? 64 : 236 }}
+    >
+      <div
+        className={`flex items-center pb-[15px] pt-[17px] ${
+          collapsed ? 'flex-col gap-2 px-2' : 'gap-2.5 px-[18px]'
+        }`}
+      >
+        <Link
+          to="/"
+          title="PipeGuard — Runs"
+          className={`flex min-w-0 items-center gap-2.5 ${collapsed ? '' : 'flex-1'}`}
+        >
+          <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-lg bg-[linear-gradient(155deg,#2f6bd6,#1a4fac)]">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={1.9} strokeLinecap="round">
+              <path d="M5 3c0 6 14 6 14 12M19 3c0 6-14 6-14 12M5 21c0-2 14-2 14 0M5 3c0 2 14 2 14 0" />
+              <path d="M7 6h10M8 9.5h8M8 14.5h8M7 18h10" strokeWidth={1.3} />
+            </svg>
+          </span>
+          {!collapsed && (
+            <span className="min-w-0 leading-[1.1]">
+              <span className="block truncate text-[15px] font-bold tracking-[-0.2px] text-nav-text">PipeGuard</span>
+              <span className="block text-[10.5px] font-medium uppercase tracking-[0.3px] text-nav-label">
+                Decision gate
+              </span>
+            </span>
+          )}
+        </Link>
+
+        {/* Collapse / expand toggle — a chevron at the rail's inner edge. aria-expanded reflects
+            the OPEN state (expanded = true), and the label/title flip so it stays legible collapsed. */}
+        <button
+          type="button"
+          onClick={() => setNavCollapsed(!collapsed)}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+          title={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-nav-label transition-colors hover:bg-nav-hover hover:text-nav-active-text"
+        >
+          {collapsed ? <PanelLeftOpen size={17} strokeWidth={1.8} /> : <PanelLeftClose size={17} strokeWidth={1.8} />}
+        </button>
+      </div>
+
+      {/* overflow-x-hidden clips label reflow during the width transition so nothing spills into
+          the content column mid-animation. */}
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden pb-2">
         {groups.map((g, gi) => (
           <div key={g.heading} className={gi === 0 ? 'mt-1.5' : 'mt-3.5'}>
-            <p className="px-3 pb-1 pt-1.5 text-[10.5px] font-semibold uppercase tracking-[0.6px] text-nav-label">
-              {g.heading}
-            </p>
-            <div className="flex flex-col gap-0.5 px-3">
+            {collapsed
+              ? gi > 0 && <div className="mx-3 mb-1 border-t border-nav-border/70" />
+              : (
+                  <p className="px-3 pb-1 pt-1.5 text-[10.5px] font-semibold uppercase tracking-[0.6px] text-nav-label">
+                    {g.heading}
+                  </p>
+                )}
+            <div className={`flex flex-col gap-0.5 ${collapsed ? 'px-2' : 'px-3'}`}>
               {g.items.map((it) => (
                 <Link
                   key={it.label}
                   to={it.to}
-                  className={`flex items-center gap-2.5 rounded-lg px-[11px] py-2 text-[13.5px] leading-[1.1] transition-colors ${
+                  // Collapsed rows are icon-only, so carry the label as aria-label + a hover tooltip.
+                  aria-label={collapsed ? it.label : undefined}
+                  title={collapsed ? it.label : undefined}
+                  className={`flex items-center rounded-lg text-[13.5px] leading-[1.1] transition-colors ${
+                    collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-[11px] py-2'
+                  } ${
                     it.active
                       ? 'bg-nav-active font-semibold text-nav-active-text'
                       : 'text-nav-text hover:bg-nav-hover hover:text-nav-active-text'
                   }`}
                 >
-                  <it.icon size={17} strokeWidth={1.7} className="shrink-0" />
-                  <span className="flex-1">{it.label}</span>
-                  {it.badge != null && (
+                  <span className="relative flex shrink-0">
+                    <it.icon size={17} strokeWidth={1.7} className="shrink-0" />
+                    {/* Collapsed: the count can't sit inline, so pin a compact badge to the icon corner. */}
+                    {collapsed && it.badge != null && (
+                      <span className="absolute -right-1.5 -top-1.5 grid h-[13px] min-w-[13px] place-items-center rounded-full bg-escalate px-[3px] font-mono text-[8.5px] font-semibold leading-none text-white">
+                        {it.badge}
+                      </span>
+                    )}
+                  </span>
+                  {!collapsed && <span className="flex-1 whitespace-nowrap">{it.label}</span>}
+                  {!collapsed && it.badge != null && (
                     <span className="grid h-[17px] min-w-[17px] place-items-center rounded-[9px] bg-escalate px-[5px] font-mono text-[10.5px] font-semibold text-white">
                       {it.badge}
                     </span>
@@ -259,7 +331,7 @@ export function Sidebar({
         ))}
       </nav>
 
-      <UserPanel />
+      <UserPanel collapsed={collapsed} />
     </aside>
   )
 }

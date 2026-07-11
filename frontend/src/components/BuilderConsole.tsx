@@ -59,9 +59,88 @@ const RESOLVE_CHIP: Record<string, string> = {
   invalid: 'text-escalate-fg bg-escalate-bg border-escalate-bd',
 }
 
+// Drag-resizable drawer height. Kept SELF-CONTAINED here (local state + a dedicated
+// localStorage key) rather than threaded through a prop, so the resize never touches the
+// PipelineBuilder call site. Clamp: a floor that keeps the tabs legible, a ceiling at 70vh
+// so the drawer can't swallow the canvas above it.
+const H_KEY = 'pipeguard.builder.consoleHeight'
+const DEFAULT_H = 240
+const MIN_H = 140
+const maxH = () => Math.round((typeof window === 'undefined' ? 900 : window.innerHeight) * 0.7)
+const clampH = (h: number) => Math.max(MIN_H, Math.min(Math.round(h), maxH()))
+
+function loadHeight(): number {
+  try {
+    const raw = localStorage.getItem(H_KEY)
+    if (raw == null) return DEFAULT_H
+    const n = Number(raw)
+    return Number.isFinite(n) ? clampH(n) : DEFAULT_H
+  } catch {
+    return DEFAULT_H
+  }
+}
+function saveHeight(h: number) {
+  try {
+    localStorage.setItem(H_KEY, String(h))
+  } catch {
+    // localStorage unavailable (private mode) — the height just stays session-only.
+  }
+}
+
 export function BuilderConsole(props: ConsoleProps) {
   const [copied, setCopied] = useState(false)
   const [runId, setRunId] = useState<string | null>(null) // the run dir Dry-run resolves against
+  const [height, setHeight] = useState<number>(loadHeight) // drawer height in px; drag the top edge to resize
+
+  // Persist alongside the state change (keyboard nudge / double-click reset go through here).
+  const commitHeight = (h: number) => {
+    const c = clampH(h)
+    setHeight(c)
+    saveHeight(c)
+  }
+
+  // Pointer-drag the top edge: up ⇒ taller, down ⇒ shorter. Uses window listeners (not pointer
+  // capture) so the drag keeps tracking even when the cursor leaves the 8px handle strip; the
+  // final value is persisted once on release rather than on every move frame.
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const startY = e.clientY
+    const startH = height
+    let latest = startH
+    const onMove = (ev: PointerEvent) => {
+      latest = clampH(startH + (startY - ev.clientY))
+      setHeight(latest)
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+      saveHeight(latest)
+    }
+    document.body.style.userSelect = 'none' // don't select the YAML while dragging over it
+    document.body.style.cursor = 'ns-resize'
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  const onHandleKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 48 : 16
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      commitHeight(height + step)
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      commitHeight(height - step)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      commitHeight(maxH())
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      commitHeight(MIN_H)
+    }
+  }
   const tabs: { k: ConsoleTab; l: string }[] = [
     { k: 'validate', l: 'Validate' },
     { k: 'diff', l: 'Diff' },
@@ -103,6 +182,26 @@ export function BuilderConsole(props: ConsoleProps) {
 
   return (
     <div className="shrink-0 border-t border-line bg-card">
+      {/* Top-edge grabber — drag to resize the drawer (up ⇒ taller), double-click to reset,
+          arrow keys to nudge. Only meaningful while the drawer is open. */}
+      {props.open && (
+        <div
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize console panel"
+          aria-valuenow={height}
+          aria-valuemin={MIN_H}
+          aria-valuemax={maxH()}
+          tabIndex={0}
+          title="Drag to resize · double-click to reset"
+          onPointerDown={startDrag}
+          onKeyDown={onHandleKey}
+          onDoubleClick={() => commitHeight(DEFAULT_H)}
+          className="group flex h-2 w-full shrink-0 cursor-ns-resize items-center justify-center bg-card transition-colors hover:bg-accent-weak focus-visible:bg-accent-weak focus-visible:outline-none"
+        >
+          <span className="h-[3px] w-9 rounded-full bg-line-strong transition-colors group-hover:bg-accent group-focus-visible:bg-accent" />
+        </div>
+      )}
       <button onClick={props.onToggle} className="flex h-9 w-full items-center gap-2 px-4 text-left">
         <ShieldCheck size={15} className="text-proceed" />
         <span className="text-[12.5px] font-semibold text-text">Validate &amp; emit console</span>
@@ -113,7 +212,7 @@ export function BuilderConsole(props: ConsoleProps) {
       </button>
 
       {props.open && (
-        <div className="flex h-[240px] min-h-0 border-t border-line">
+        <div className="flex min-h-0 border-t border-line" style={{ height }}>
           {/* left — tabbed checks */}
           <div className="min-w-0 flex-1 overflow-y-auto border-r border-line px-4 py-3.5">
             <div className="mb-3 inline-flex gap-0.5 rounded-lg border border-line bg-card-2 p-0.5">

@@ -1,9 +1,11 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from 'react'
 
 // User preferences that actually take effect + persist (previously the settings dialog was inert):
-//   • theme   — light / dark / system; stamps data-theme on <html> so the CSS dark override applies.
-//   • palette — UIC-7 color-theme family; stamps data-palette on <html>, composed with data-theme.
-//   • density — the decision-card layout (split / brief / dense) the operator defaults to.
+//   • theme       — light / dark / system; stamps data-theme on <html> so the CSS dark override applies.
+//   • palette     — UIC-7 color-theme family; stamps data-palette on <html>, composed with data-theme.
+//   • density     — the decision-card layout (split / brief / dense) the operator defaults to.
+//   • navCollapsed — whether the left nav is collapsed to an icons-only rail, reclaiming horizontal
+//                    space for wide screens (e.g. the Pipeline Builder canvas beside its inspector).
 // Persisted to localStorage so they survive a refresh. This is a demo preference store, not a
 // server-synced profile (a production seam, like the auth session).
 
@@ -19,19 +21,24 @@ type PrefsState = {
   theme: Theme
   density: Density
   palette: Palette
+  navCollapsed: boolean
   setTheme: (t: Theme) => void
   setDensity: (d: Density) => void
   setPalette: (p: Palette) => void
+  setNavCollapsed: (v: boolean) => void
 }
 
+type Persisted = { theme: Theme; density: Density; palette: Palette; navCollapsed: boolean }
+
 const KEY = 'pipeguard.prefs'
-const DEFAULTS: { theme: Theme; density: Density; palette: Palette } = {
+const DEFAULTS: Persisted = {
   theme: 'light',
   density: 'split',
   palette: 'clinical',
+  navCollapsed: false,
 }
 
-function load(): { theme: Theme; density: Density; palette: Palette } {
+function load(): Persisted {
   try {
     return { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(KEY) || '{}') as object) }
   } catch {
@@ -50,6 +57,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => load().theme)
   const [density, setDensityState] = useState<Density>(() => load().density)
   const [palette, setPaletteState] = useState<Palette>(() => load().palette)
+  const [navCollapsed, setNavCollapsedState] = useState<boolean>(() => load().navCollapsed)
 
   // Apply the resolved theme to <html> whenever it changes.
   useEffect(() => {
@@ -72,7 +80,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener('change', onChange)
   }, [theme])
 
-  const persist = (next: { theme: Theme; density: Density; palette: Palette }) => {
+  const persist = (next: Persisted) => {
     try {
       localStorage.setItem(KEY, JSON.stringify(next))
     } catch {
@@ -81,19 +89,25 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
   }
   const setTheme = (t: Theme) => {
     setThemeState(t)
-    persist({ theme: t, density, palette })
+    persist({ theme: t, density, palette, navCollapsed })
   }
   const setDensity = (d: Density) => {
     setDensityState(d)
-    persist({ theme, density: d, palette })
+    persist({ theme, density: d, palette, navCollapsed })
   }
   const setPalette = (p: Palette) => {
     setPaletteState(p)
-    persist({ theme, density, palette: p })
+    persist({ theme, density, palette: p, navCollapsed })
+  }
+  const setNavCollapsed = (v: boolean) => {
+    setNavCollapsedState(v)
+    persist({ theme, density, palette, navCollapsed: v })
   }
 
   return (
-    <PrefsContext.Provider value={{ theme, density, palette, setTheme, setDensity, setPalette }}>
+    <PrefsContext.Provider
+      value={{ theme, density, palette, navCollapsed, setTheme, setDensity, setPalette, setNavCollapsed }}
+    >
       {children}
     </PrefsContext.Provider>
   )

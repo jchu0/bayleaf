@@ -700,9 +700,10 @@ export function PipelineBuilder() {
         const col = depth.get(n.id) ?? 0
         const row = rowOf.get(col) ?? 0
         rowOf.set(col, row + 1)
-        // Column pitch must exceed NODE_W (296) so the wider cards don't overlap horizontally; the row
-        // pitch clears the tallest catalog card (MultiQC ≈291) so stacked parallel nodes don't collide.
-        pos.set(n.id, { x: 60 + col * 360, y: 56 + row * 320 })
+        // Column pitch = NODE_W (320) + ~60 gap so the cards don't overlap horizontally (matches the
+        // seeded spine pitch); the row pitch clears the tallest catalog card (mosdepth ≈284) so stacked
+        // parallel nodes don't collide.
+        pos.set(n.id, { x: 60 + col * 380, y: 56 + row * 340 })
       }
       return ns.map((n) => ({ ...n, ...(pos.get(n.id) ?? { x: n.x, y: n.y }) }))
     })

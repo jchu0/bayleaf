@@ -46,27 +46,28 @@ import {
 // inner plane's getBoundingClientRect() ÷ the CSS `zoom` factor, so every gesture stays true when
 // zoomed (the inner plane uses non-standard CSS `zoom`, not a transform — see §Q4 of the design).
 
-// The content plane. Widened + made taller for the enlarged 296px cards laid out in one row
-// (fastp@40 → MultiQC@2200) with the ingest band + terminal gate to their right (gate right edge
-// ≈3008), and the reference band above the spine — so the plane + minimap scale still frame it all.
-const INNER_W = 3120
-const INNER_H = 560
+// The content plane. Sized for the SPINE + BRANCH layout: the spine (fastp@40 → norm@1560) on one row
+// (y 260), the branch (mosdepth/MultiQC/File-output, y 600) below it, the source band above (y 40), and
+// the ingest + terminal gate to the right (agent right edge ≈2552). Tall + generous so the whole layout
+// fits with headroom and cards can be placed across the full surface (was 560 — cards clamped near y560).
+const INNER_W = 3000
+const INNER_H = 1120
 // Layout landmarks shared by the seeded cards + minimap + centering (kept in ONE place so a re-space
-// updates render, Fit, and the minimap together). Tools sit at TOOL_Y; references in a band above
-// (REF_Y); ingest + gate to the right of MultiQC.
-const REF_Y = 40 // reference source band, above the tool spine (was below at 372; the taller cards would collide)
-const INGEST_X = 2560
-const INGEST_Y = 200
-const GATE_X = 2800
-const GATE_Y = 180
-const AGENT_X = 2800
-const AGENT_Y = 60
+// updates render, Fit, and the minimap together). Spine at y 260, branch at y 600, sources in a top
+// band (REF_Y 40); ingest + gate to the right of the pipeline, at a middle height between the rows.
+const REF_Y = 40 // source band (references + FASTQ input), above the spine
+const INGEST_X = 2040
+const INGEST_Y = 400
+const GATE_X = 2320
+const GATE_Y = 360
+const AGENT_X = 2320
+const AGENT_Y = 200
 const GATE_PORT_Y = GATE_Y + 36 // the gate's non-composable run/ input port (item 4 display connector)
-const TERM_RAIL_Y = 490 // a rail below the card row so the norm → ingest connector clears MultiQC (item 4)
-// Mount/Fit centering target (content coords include the plane's 360/480 margin): center of the
-// full seeded extent (x 40..3008 → ~1524; tools y 180..~471 → ~325).
-const CENTER_X = 1884
-const CENTER_Y = 805
+// Mount/Fit centering target (content coords include the plane's 360/480 margin): matches fitToDag's
+// user-node framing (min_x 40, max_x 1560, y-band 40..600) so mount and Fit agree, nudged right so the
+// terminal cluster peeks in.
+const CENTER_X = 1440
+const CENTER_Y = 860
 // The inner content plane carries a fixed margin (see the plane style below). The dot grid must fill
 // the ENTIRE scroll surface — the plane box PLUS its margin gutters — so the alignment dots never run
 // out when panning past the cards. PAD_X/PAD_Y mirror that margin ('480px 360px') so an oversized dot
@@ -377,21 +378,17 @@ export function BuilderCanvas(props: CanvasProps) {
 
   // Item 4 — non-composable DISPLAY connectors for the terminal cluster (norm/MultiQC → ingest → gate).
   // These are pure SVG, seeded-view only; they are NEVER UserEdges and never touch the wiring model.
-  // norm → ingest dips below the card row (TERM_RAIL_Y) so it clears MultiQC in the single-row layout;
-  // MultiQC → ingest is a short hop into the left edge; ingest → gate lands on the gate's run/ port.
+  // In the spine+branch layout the gate sits between the two rows: norm (spine, upper) enters the ingest
+  // left near its top; MultiQC (branch, lower) rises just left of the File-output sink then enters the
+  // ingest left lower down; ingest → gate lands on the gate's run/ port. No dip needed (MultiQC is no
+  // longer between norm and ingest).
   const termConnectors: string[] = []
   if (showTerminals) {
     const normOut = toolAnchorFull('n_norm', 'out', 'filtered_vcf')
     const mqOut = toolAnchorFull('n_multiqc', 'out', 'multiqc_json')
     const ingY = INGEST_Y + 75
-    // Rail below the TALLEST tool card so the norm → ingest connector always clears MultiQC (whose
-    // height grows with its port count), computed from the same cardHeight the cards render with.
-    const railY = Math.max(
-      TERM_RAIL_Y,
-      24 + Math.max(...TOOLS.map((t) => t.y + cardHeight(t.tool, t.inputs.map((p) => p.kind), t.outputs.map((p) => p.kind)))),
-    )
-    if (normOut) termConnectors.push(`M${normOut.x} ${normOut.y} H${normOut.x + 16} V${railY} H${INGEST_X + 80} V${INGEST_Y + 150}`)
-    if (mqOut) termConnectors.push(`M${mqOut.x} ${mqOut.y} H${mqOut.x + 16} V${ingY} H${INGEST_X}`)
+    if (normOut) termConnectors.push(`M${normOut.x} ${normOut.y} H${INGEST_X - 24} V${INGEST_Y + 45} H${INGEST_X}`)
+    if (mqOut) termConnectors.push(`M${mqOut.x} ${mqOut.y} V${INGEST_Y + 105} H${INGEST_X}`)
     termConnectors.push(`M${INGEST_X + 160} ${ingY} H${INGEST_X + 176} V${GATE_PORT_Y} H${GATE_X - PORT_R}`)
   }
   // Advisory tether gate ↔ agent (agent sits above the gate) — dotted accent, non-composable.
@@ -605,7 +602,7 @@ export function BuilderCanvas(props: CanvasProps) {
                 </button>
               ))}
 
-          <span className="absolute left-10 top-[140px] text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">
+          <span className="absolute left-10 top-[222px] text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">
             Composed tool nodes
           </span>
 
