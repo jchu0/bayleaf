@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, Cable, Minus, Plus, Redo2, Undo2, Wand2, X } from 'lucide-react'
+import { Activity, Cable, Check, Minus, Plus, Redo2, ScrollText, Undo2, Wand2, X } from 'lucide-react'
 import { SelectionActionBar, type AlignKind, type DistributeAxis } from './SelectionActionBar'
 import { BuilderLegend } from './BuilderLegend'
 import {
@@ -15,6 +15,7 @@ import {
   REFS,
   TOOLS,
   V_COLOR,
+  bindingFor,
   boxCols,
   boxPorts,
   cardHeight,
@@ -36,6 +37,7 @@ import {
   type UserNode,
   type VStatus,
 } from './BuilderShared'
+import type { AgentBinding, AgentGrant } from '../types'
 
 // The builder canvas: the seeded germline DAG + reference cards + terminal gate + advisory
 // agent pill + deterministic-ingest band, plus the free-composition layer (user nodes, elbow
@@ -180,6 +182,12 @@ type CanvasProps = {
   connectFrom: string | null
   guides: { x?: number; y?: number } | null // live alignment guides during a single-node drag
   renamingId: string | null // the user node whose name is being inline-edited
+  // Advisory agent→node OBSERVATION bindings (ADR-0001). The screen OWNS them (they persist with the
+  // pipeline) — the canvas only renders them + surfaces the grant popover; it never sets a verdict.
+  agentBindings: AgentBinding[]
+  onAttachAgent: (node: string) => void // attach QC-triage (default grant: outputs)
+  onRemoveBinding: (node: string) => void // detach QC-triage from the node
+  onToggleGrant: (node: string, grant: AgentGrant) => void // flip an observation grant (outputs | logs)
   canUndo: boolean
   canRedo: boolean
   fitNonce: number // bump to re-center (keyboard 'f' / context menu Fit)
@@ -221,6 +229,7 @@ export function BuilderCanvas(props: CanvasProps) {
     connectFrom,
     guides,
     renamingId,
+    agentBindings,
   } = props
   const isView = mode === 'view'
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -235,18 +244,17 @@ export function BuilderCanvas(props: CanvasProps) {
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [wireDrag, setWireDrag] = useState<{ fromNode: string; fromIdx: number; cx: number; cy: number } | null>(null)
   const [hoverEdge, setHoverEdge] = useState<number | null>(null)
-  // Advisory attachments (the QC-triage agent → the tools it observes). Deliberately NOT UserEdges — an
-  // agent is OFF the deterministic critical path (ADR-0001), so its links never live in the typed data
-  // graph and can never influence a verdict. Seeded, and operator-togglable via each tool's advisory badge.
-  const [advisoryAttach, setAdvisoryAttach] = useState<Set<string>>(() => new Set(ADVISORY_AGENT.defaultAttach))
-  const toggleAdvisory = useCallback((toolId: string) => {
-    setAdvisoryAttach((s) => {
-      const next = new Set(s)
-      if (next.has(toolId)) next.delete(toolId)
-      else next.add(toolId)
-      return next
-    })
-  }, [])
+  // Advisory attachments are now the SCREEN-OWNED, PERSISTED `agentBindings` (typed AgentBinding[],
+  // not an ephemeral Set) — deliberately NOT UserEdges, since an agent is OFF the deterministic
+  // critical path (ADR-0001), so its links never live in the typed data graph and can never influence
+  // a verdict. The set of nodes QC-triage currently observes, for the fan-out + badge state:
+  const boundNodeIds = useMemo(
+    () => new Set(agentBindings.filter((b) => b.agent === ADVISORY_AGENT.id).map((b) => b.node)),
+    [agentBindings],
+  )
+  // Which node's grant popover is open (canvas-local, transient UI — never persisted). Clicking a
+  // node's advisory badge opens/closes it; a background press or a switch to another node closes it.
+  const [grantMenuNode, setGrantMenuNode] = useState<string | null>(null)
   // (PASS-6 A) Only the advisory AGENT remains a movable canvas card (ingest + gate left the canvas). Its
   // position is CANVAS-LOCAL state (like the advisory Set), NEVER in the graph — movable ≠ composable
   // (ADR-0001). Seeded from the layout landmark; a drag rewrites x/y; nothing here persists in the version.
@@ -436,7 +444,7 @@ export function BuilderCanvas(props: CanvasProps) {
   // agent → MANY tools: a fan-out port per attached tool, placed nearest that tool (like a multi-out ref).
   // The fan reads the agent's CURRENT (movable) position, so the links track the agent card as it's dragged.
   const attachedTools = showTerminals
-    ? userNodes.filter((n) => advisoryAttach.has(n.id) && n.ins.length > 0 && n.outs.length > 0)
+    ? userNodes.filter((n) => boundNodeIds.has(n.id) && n.ins.length > 0 && n.outs.length > 0)
     : []
   const toolBadgeOf = (n: UserNode) => ({ x: n.x + ADV_BADGE_DX, y: n.y + ADV_BADGE_DY })
   const agentFan = fanPortsToTargets({ x: agentPos.x, y: agentPos.y, w: AGENT_W, h: AGENT_H }, attachedTools.map(toolBadgeOf))
@@ -458,6 +466,7 @@ export function BuilderCanvas(props: CanvasProps) {
   const onPlaneMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return
     if (e.target !== innerRef.current) return // a card/port/edge press is handled by that element
+    setGrantMenuNode(null) // a background press closes any open grant popover
     if (isView) {
       props.onSelect(null)
       return
@@ -563,8 +572,11 @@ export function BuilderCanvas(props: CanvasProps) {
         ref={scrollRef}
         className="absolute inset-0 overflow-auto bg-card-2"
         onMouseDown={(e) => {
-          // A press on the scroll gutter (outside the plane) also clears selection.
-          if (e.target === scrollRef.current) props.onSelect(null)
+          // A press on the scroll gutter (outside the plane) also clears selection + the grant popover.
+          if (e.target === scrollRef.current) {
+            props.onSelect(null)
+            setGrantMenuNode(null)
+          }
         }}
         onScroll={updateVp}
       >
@@ -742,10 +754,11 @@ export function BuilderCanvas(props: CanvasProps) {
               renaming={renamingId === n.id}
               connectMode={connectMode}
               connectFrom={connectFrom}
-              advisoryShown={showTerminals && n.ins.length > 0 && n.outs.length > 0 && (!isView || advisoryAttach.has(n.id))}
+              advisoryShown={showTerminals && n.ins.length > 0 && n.outs.length > 0 && (!isView || boundNodeIds.has(n.id))}
               advisoryEditable={!isView}
-              advisoryOn={advisoryAttach.has(n.id)}
-              onAdvisoryToggle={() => toggleAdvisory(n.id)}
+              advisoryOn={boundNodeIds.has(n.id)}
+              advisoryLogs={bindingFor(agentBindings, n.id)?.grants.includes('logs') ?? false}
+              onBadgeClick={() => setGrantMenuNode((g) => (g === n.id ? null : n.id))}
               onDown={props.onNodeDrag}
               onPortTap={props.onPortTap}
               onStartWireDrag={startWireDrag}
@@ -760,6 +773,30 @@ export function BuilderCanvas(props: CanvasProps) {
               }}
             />
           ))}
+
+          {/* Grant popover for the open node's advisory badge (Edit only). Rendered as a canvas-plane
+              sibling at the node's badge so it pans/zooms with the card. Observation-only (ADR-0001). */}
+          {!isView &&
+            showTerminals &&
+            grantMenuNode &&
+            (() => {
+              const n = userNodes.find((x) => x.id === grantMenuNode)
+              if (!n || n.ins.length === 0 || n.outs.length === 0) return null
+              const binding = bindingFor(agentBindings, n.id)
+              return (
+                <AgentGrantPopover
+                  node={n}
+                  binding={binding}
+                  onAttach={() => props.onAttachAgent(n.id)}
+                  onRemove={() => {
+                    props.onRemoveBinding(n.id)
+                    setGrantMenuNode(null)
+                  }}
+                  onToggleGrant={(g) => props.onToggleGrant(n.id, g)}
+                  onClose={() => setGrantMenuNode(null)}
+                />
+              )
+            })()}
 
           {/* Marquee rectangle (content plane, so it scales with zoom). */}
           {marquee && (
@@ -1315,6 +1352,139 @@ function AdvisoryPortMarker({ x, y }: { x: number; y: number }) {
   )
 }
 
+// Grant popover (Edit) — opened from a node's advisory badge. Manages the QC-triage OBSERVATION
+// binding: attach / detach + the two read grants (outputs default-on, logs opt-in). Honest copy: the
+// binding is advisory/observation-only — it does NOT change the pipeline or set a verdict (ADR-0001).
+// Rendered as a canvas-plane sibling at the node's badge (so it pans/zooms with the card). Stops its
+// own pointer events from reaching the plane (which would clear it). Grants persist with the pipeline.
+function AgentGrantPopover({
+  node,
+  binding,
+  onAttach,
+  onRemove,
+  onToggleGrant,
+  onClose,
+}: {
+  node: UserNode
+  binding: AgentBinding | null
+  onAttach: () => void
+  onRemove: () => void
+  onToggleGrant: (g: AgentGrant) => void
+  onClose: () => void
+}) {
+  const bound = binding != null
+  const has = (g: AgentGrant) => binding?.grants.includes(g) ?? false
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation()
+  const GrantRow = ({ grant, title, sub, icon }: { grant: AgentGrant; title: string; sub: string; icon: React.ReactNode }) => {
+    const on = has(grant)
+    return (
+      <button
+        type="button"
+        onMouseDown={stop}
+        onClick={(e) => {
+          stop(e)
+          onToggleGrant(grant)
+        }}
+        className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-page"
+      >
+        <span
+          className="mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[4px] border"
+          style={{
+            background: on ? 'var(--color-accent)' : 'var(--color-card)',
+            borderColor: on ? 'var(--color-accent)' : 'var(--color-line-strong)',
+          }}
+        >
+          {on && <Check size={10} className="text-white" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1 text-[11px] font-semibold text-text">
+            {icon}
+            {title}
+          </span>
+          <span className="block text-[9.5px] leading-snug text-text-3">{sub}</span>
+        </span>
+      </button>
+    )
+  }
+  return (
+    <div
+      onMouseDown={stop}
+      onClick={stop}
+      className="absolute z-[9] w-[214px] rounded-xl border border-line-strong bg-card p-2 shadow-pop"
+      style={{ left: node.x + NODE_W + 8, top: node.y - 8 }}
+    >
+      <div className="flex items-center gap-1.5 px-1 pb-1.5">
+        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-accent-weak text-accent-strong">
+          <Activity size={11} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[11.5px] font-bold text-text">{ADVISORY_AGENT.name}</span>
+          <span className="block text-[9px] uppercase tracking-[0.3px] text-text-3">advisory · off-gate</span>
+        </span>
+        <button
+          type="button"
+          onMouseDown={stop}
+          onClick={(e) => {
+            stop(e)
+            onClose()
+          }}
+          className="grid h-5 w-5 shrink-0 place-items-center rounded-md text-text-3 hover:bg-page hover:text-text-2"
+          aria-label="Close"
+        >
+          <X size={12} />
+        </button>
+      </div>
+      <p className="px-1 pb-1.5 text-[9.5px] leading-snug text-text-3">
+        Observation-only — reads <span className="font-mono text-text-2">{node.name}</span>. It never changes the pipeline
+        or sets a verdict.
+      </p>
+      {bound ? (
+        <>
+          <div className="border-t border-line pt-1">
+            <GrantRow
+              grant="outputs"
+              title="Outputs"
+              sub="published output artifacts"
+              icon={<span className="h-1.5 w-1.5 rounded-full bg-accent" />}
+            />
+            <GrantRow
+              grant="logs"
+              title="Logs & errors"
+              sub="reads de-identified logs/errors — off by default"
+              icon={<ScrollText size={10} className="text-hold" />}
+            />
+          </div>
+          <button
+            type="button"
+            onMouseDown={stop}
+            onClick={(e) => {
+              stop(e)
+              onRemove()
+            }}
+            className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[11px] font-medium text-text-2 hover:border-escalate-bd hover:bg-escalate-bg hover:text-escalate-fg"
+          >
+            <X size={12} />
+            Detach agent
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onMouseDown={stop}
+          onClick={(e) => {
+            stop(e)
+            onAttach()
+          }}
+          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-accent px-2 py-1.5 text-[11.5px] font-semibold text-white hover:opacity-90"
+        >
+          <Activity size={12} />
+          Attach QC-triage
+        </button>
+      )}
+    </div>
+  )
+}
+
 // User-composed node: identical language to the seeded cards, but draggable + wireable + selectable.
 // Ports carry data-* so drag-to-connect can resolve a drop via elementFromPoint; the name double-clicks
 // into an inline rename. Selection (from the drag/click handler in the screen) shows an accent ring.
@@ -1329,7 +1499,8 @@ function UserCard({
   advisoryShown,
   advisoryEditable,
   advisoryOn,
-  onAdvisoryToggle,
+  advisoryLogs,
+  onBadgeClick,
   onDown,
   onPortTap,
   onStartWireDrag,
@@ -1349,7 +1520,8 @@ function UserCard({
   advisoryShown: boolean
   advisoryEditable: boolean
   advisoryOn: boolean
-  onAdvisoryToggle: () => void
+  advisoryLogs: boolean
+  onBadgeClick: () => void
   onDown: (id: string, e: React.MouseEvent) => void
   onPortTap: (id: string, side: 'in' | 'out', idx: number) => void
   onStartWireDrag: (fromNode: string, fromIdx: number, e: React.MouseEvent) => void
@@ -1511,10 +1683,12 @@ function UserCard({
       {laid.map((p, i) => (
         <PortIndexChip key={`c${i}`} p={p} w={UW} />
       ))}
-      {/* ADVISORY agent-attach point — a small dashed-accent badge hugging the top-right corner, DISTINCT
-          from the half-circle data ports (an advisory link, not a data edge). Toggling attach/detach is
-          EDIT-ONLY (PASS-5 item 1); in View the badge is a read-only indicator (only rendered for ATTACHED
-          tools) — no onClick, no card-drag suppression, so a View press falls through to select the card. */}
+      {/* ADVISORY agent-attach badge — a small dashed-accent badge hugging the top-right corner, DISTINCT
+          from the half-circle data ports (an advisory link, not a data edge). In EDIT a click opens the
+          GRANT POPOVER (attach / grants / detach); in View the badge is a read-only indicator (only
+          rendered for BOUND nodes) — no onClick, so a View press falls through to select the card. A small
+          scroll glyph rides the badge when the 'logs' grant is opted-in, so the PII-bearing grant is visible
+          at a glance without opening the popover. */}
       {advisoryShown && (
         <button
           type="button"
@@ -1523,16 +1697,16 @@ function UserCard({
             advisoryEditable
               ? (e) => {
                   e.stopPropagation()
-                  onAdvisoryToggle()
+                  onBadgeClick()
                 }
               : undefined
           }
           title={
             advisoryEditable
               ? advisoryOn
-                ? 'Advisory agent attached — click to detach'
-                : 'Attach advisory agent (off-gate)'
-              : 'Advisory agent attached (switch to Edit to change)'
+                ? `QC-triage attached${advisoryLogs ? ' · +logs' : ''} — click to manage grants / detach`
+                : 'Attach QC-triage (advisory, off-gate)'
+              : 'QC-triage attached (switch to Edit to change)'
           }
           className="absolute z-[7] grid place-items-center rounded-full"
           style={{
@@ -1548,6 +1722,15 @@ function UserCard({
           }}
         >
           <Activity size={9} />
+          {advisoryOn && advisoryLogs && (
+            <span
+              className="absolute grid place-items-center rounded-full bg-hold text-white"
+              style={{ right: -5, bottom: -5, width: 10, height: 10, boxSizing: 'border-box', border: '1px solid var(--color-card)' }}
+              title="reads de-identified logs/errors (opt-in)"
+            >
+              <ScrollText size={6} />
+            </span>
+          )}
         </button>
       )}
       <CardBoxes laid={laid} />

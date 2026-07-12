@@ -39,15 +39,14 @@ import { BuilderProfileCombobox } from '../components/BuilderProfileCombobox'
 import { BuilderContextMenu, type MenuItem } from '../components/BuilderContextMenu'
 import type { AlignKind, DistributeAxis } from '../components/SelectionActionBar'
 import {
-  ArchivistModal,
   AuthorToolNodeModal,
   CustomScriptInspector,
   NextflowExportModal,
-  PipelineRepairModal,
   RunPipelineModal,
 } from '../components/BuilderModals'
 import { FileBrowser } from '../components/FileBrowser'
 import {
+  ADVISORY_AGENT,
   CUSTOM_NODE_NAME,
   GRAPH_ID,
   ICONS,
@@ -58,6 +57,7 @@ import {
   TOOLS,
   alignOutGlobs,
   curLocMap,
+  defaultBindings,
   duplicateNode,
   germlineTemplate,
   isCustomNode,
@@ -67,6 +67,7 @@ import {
   mergedLoc,
   nodeHeight,
   normalizeSavedNode,
+  reconcileBindings,
   reconcileEdges,
   renameNode,
   savedLocators,
@@ -86,7 +87,7 @@ import {
 import { useTopologyHistory } from '../hooks/useTopologyHistory'
 import { useRole } from '../context/RoleContext'
 import { api } from '../api'
-import type { DiffResult, DryRunResult, FileKind, PipelineGraph } from '../types'
+import type { AgentBinding, AgentGrant, DiffResult, DryRunResult, FileKind, PipelineGraph } from '../types'
 
 // Live alignment-guide snap threshold (content px) + a small module helper: for a dragged node's
 // {left, centerX, right}/{top, middle, bottom} anchors, find the nearest other-node anchor within
@@ -207,6 +208,12 @@ export function PipelineBuilder() {
   const [locEdits, setLocEdits] = useState<LocEdits>({})
   const [refLoc, setRefLoc] = useState<Record<string, string>>({})
 
+  // Advisory agent→node OBSERVATION bindings (ADR-0001). A PERSISTED, typed sibling of the topology —
+  // stored under graph.agent_bindings, rehydrated on load — NOT the compile/run payload (the compiler
+  // never sees it, so the emitted Nextflow is a pure function of {nodes, edges}). Seeded from the
+  // germline template's default attachments; New/Load/Cancel reset it exactly like locEdits/refLoc.
+  const [agentBindings, setAgentBindings] = useState<AgentBinding[]>(() => defaultBindings())
+
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('draft')
   const [version, setVersion] = useState(3)
 
@@ -222,8 +229,6 @@ export function PipelineBuilder() {
   const [moreOpen, setMoreOpen] = useState(false) // toolbar overflow "⋯ More" menu (PASS-3 consolidation)
   const [boundaryOpen, setBoundaryOpen] = useState(false) // "Decision boundary" read-only modal (PASS-6 B)
   const [authorOpen, setAuthorOpen] = useState(false)
-  const [repairOpen, setRepairOpen] = useState(false)
-  const [archivistOpen, setArchivistOpen] = useState(false)
 
   // Server-side file picker (ADR-0020 / files.py). `openBrowse` opens it with a per-field onPick; it
   // returns a server-relative path the caller writes into its type-a-path field (browse is ADDITIVE —
@@ -266,6 +271,8 @@ export function PipelineBuilder() {
     setUserEdges(seed.edges)
     setLocEdits({})
     setRefLoc({})
+    // A template seeds QC-triage's default attachments (its node ids match); a blank canvas has none.
+    setAgentBindings(kind === 'germline' ? defaultBindings() : [])
     setSelected(null)
     resetEditing()
     setVersion(1)
@@ -295,6 +302,9 @@ export function PipelineBuilder() {
     setUserEdges(edges)
     setLocEdits(g.locator_edits ?? {})
     setRefLoc(g.reference_locators ?? {})
+    // Rehydrate the persisted observation bindings, pruned to the loaded nodes (a foreign/older
+    // envelope carries none → empty; reconcileBindings never invents an attachment).
+    setAgentBindings(reconcileBindings(nodes, Array.isArray(g.agent_bindings) ? g.agent_bindings : []))
     setSelected(null)
     resetEditing()
     setConnectMode(false)
@@ -324,6 +334,7 @@ export function PipelineBuilder() {
     setUserEdges([])
     setLocEdits({})
     setRefLoc({})
+    setAgentBindings(defaultBindings())
     setSelected(null)
     resetEditing()
     setConnectMode(false)
@@ -407,6 +418,34 @@ export function PipelineBuilder() {
 
   // ── locator authoring (writes locEdits, marks the graph dirty → back to draft) ──
   const dirtyToDraft = () => setSaveStatus('draft')
+
+  // ── agent-attachment authoring (writes agentBindings, marks dirty) ──
+  // OBSERVATION bindings only — off the deterministic path (ADR-0001), never a data edge or a verdict.
+  // attach seeds the default 'outputs' grant; 'logs' is opt-in (it exposes de-identified subject-id-
+  // bearing logs). Each mutation drops the pipeline back to draft, exactly like a locator edit.
+  const attachAgent = (node: string, agent: string = ADVISORY_AGENT.id) => {
+    if (isView) return
+    setAgentBindings((bs) =>
+      bs.some((b) => b.node === node && b.agent === agent) ? bs : [...bs, { agent, node, grants: ['outputs'] }],
+    )
+    dirtyToDraft()
+  }
+  const removeBinding = (node: string, agent: string = ADVISORY_AGENT.id) => {
+    if (isView) return
+    setAgentBindings((bs) => bs.filter((b) => !(b.node === node && b.agent === agent)))
+    dirtyToDraft()
+  }
+  const toggleGrant = (node: string, grant: AgentGrant, agent: string = ADVISORY_AGENT.id) => {
+    if (isView) return
+    setAgentBindings((bs) =>
+      bs.map((b) => {
+        if (b.node !== node || b.agent !== agent) return b
+        const grants = b.grants.includes(grant) ? b.grants.filter((g) => g !== grant) : [...b.grants, grant]
+        return { ...b, grants }
+      }),
+    )
+    dirtyToDraft()
+  }
   const setLoc = (kind: string, field: 'loc' | 'parser', value: string) => {
     if (!locEditable) return
     setLocEdits((m) => ({ ...m, [kind]: { ...(m[kind] ?? {}), [field]: value } }))
@@ -453,6 +492,11 @@ export function PipelineBuilder() {
           locators: savedLocators(locEdits),
           locator_edits: locEdits,
           reference_locators: refLoc,
+          // Advisory observation bindings ride in the SAME tolerant graph envelope as a SIBLING key.
+          // The Nextflow compiler never dereferences it (proof: api CompileRequest ignores unknown
+          // keys), so a saved pipeline's emitted graph is byte-identical with or without any binding —
+          // it round-trips the authoring surface, it never changes what the pipeline runs (ADR-0001).
+          agent_bindings: agentBindings,
         },
         profile,
       })
@@ -597,6 +641,8 @@ export function PipelineBuilder() {
     hist.record()
     setUserNodes((ns) => ns.filter((n) => !nodeIds.includes(n.id)))
     setUserEdges((es) => es.filter((e) => !nodeIds.includes(e.from.node) && !nodeIds.includes(e.to.node)))
+    // Prune any advisory binding whose node just went away (mirrors the edge reconcile above).
+    setAgentBindings((bs) => bs.filter((b) => !nodeIds.includes(b.node)))
     clearSelection()
     toast(
       `Deleted ${nodeIds.length} node${nodeIds.length === 1 ? '' : 's'}${severed ? ` · ${severed} wire${severed === 1 ? '' : 's'} removed` : ''} — ⌘Z to undo`,
@@ -1053,7 +1099,9 @@ export function PipelineBuilder() {
   const isUsedItem = (heading: string, name: string): boolean => {
     if (name === CUSTOM_NODE_NAME) return true // the add-a-custom-script affordance is always offered
     if (heading === 'Gate') return true
-    if (heading === 'Agents') return name === 'QC-triage' && isLinked
+    // Node-authoring is always offered (it authors a node, it's never part of the graph); QC-triage
+    // reads "used" only when it's riding the seeded/linked canvas it's attached to.
+    if (heading === 'Agents') return name === 'Node-authoring' || (name === 'QC-triage' && isLinked)
     if (heading === 'References') return isLinked || currentNodeNames.has(name)
     return currentNodeNames.has(name)
   }
@@ -1092,11 +1140,14 @@ export function PipelineBuilder() {
       ],
     },
     {
+      // Only NODE-scoped advisory agents live in the Builder palette: QC-triage (attach it to a node
+      // to observe that node's outputs) + Node-authoring (proposes a new tool node). The SYSTEM agents
+      // — Pipeline-repair + Archivist — act on runs / recurring signatures / the whole organization,
+      // NOT on a pipeline node, so they moved to the Agent-triage page where those live (Phase 3).
       heading: 'Agents',
       items: [
-        { name: 'QC-triage', sub: 'advisory · MVP', icon: 'activity', alwaysEnabled: true, onClick: () => setSelected('a_qc_triage') },
-        { name: 'Pipeline-repair', sub: 'advisory · proposes fixes', icon: 'wrench', alwaysEnabled: true, onClick: () => setRepairOpen(true) },
-        { name: 'Archivist', sub: 'advisory · cold storage', icon: 'archive', alwaysEnabled: true, onClick: () => setArchivistOpen(true) },
+        { name: 'QC-triage', sub: 'advisory · attach to a node', icon: 'activity', alwaysEnabled: true, onClick: () => setSelected('a_qc_triage') },
+        { name: 'Node-authoring', sub: 'advisory · authors a node', icon: 'terminal', alwaysEnabled: true, onClick: () => setAuthorOpen(true) },
       ],
     },
     { heading: 'Gate', items: [{ name: 'Decision gate', sub: 'terminal · pinned', icon: 'shield', disabled: true }] },
@@ -1371,6 +1422,10 @@ export function PipelineBuilder() {
           connectFrom={connectFrom}
           guides={guides}
           renamingId={renamingId}
+          agentBindings={agentBindings}
+          onAttachAgent={attachAgent}
+          onRemoveBinding={removeBinding}
+          onToggleGrant={toggleGrant}
           canUndo={hist.canUndo}
           canRedo={hist.canRedo}
           fitNonce={fitNonce}
@@ -1536,8 +1591,6 @@ export function PipelineBuilder() {
           )
         })()}
       {authorOpen && <AuthorToolNodeModal onClose={() => setAuthorOpen(false)} />}
-      {repairOpen && <PipelineRepairModal onClose={() => setRepairOpen(false)} />}
-      {archivistOpen && <ArchivistModal onClose={() => setArchivistOpen(false)} />}
       {newOpen && <NewPipelineModal onClose={() => setNewOpen(false)} onCreate={newPipeline} />}
       {loadOpen && <LoadSavedModal onClose={() => setLoadOpen(false)} onLoad={loadSavedPipeline} />}
       {boundaryOpen && <DecisionBoundaryModal onClose={() => setBoundaryOpen(false)} />}

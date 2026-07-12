@@ -20,7 +20,9 @@ import {
   Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import type { FileKind } from '../types'
+// The agent-attachment contract (AgentBinding/AgentGrant) is canonically defined in types.ts; the
+// canvas + screen import it from there directly (a re-export here trips the react-refresh lint).
+import type { AgentBinding, AgentGrant, FileKind } from '../types'
 
 export const GRAPH_ID = 'PIPE-2026-07-08-GERMLINE-PANEL'
 export const LINKED_RUN = 'RUN-2026-07-07-A'
@@ -852,6 +854,51 @@ export const ADVISORY_AGENT: AdvisoryAgent = {
   defaultAttach: ['n_fastp', 'n_mosdepth', 'n_multiqc'],
 }
 
+// ── Agent-attachment bindings (the persisted OBSERVATION model, ADR-0001) ─────────────────────────
+// A binding attaches an advisory agent to a graph NODE as a read grant — it OBSERVES the node's
+// artifacts, it NEVER carries typed data or sets a verdict. Bindings live in a SIBLING save-envelope
+// key (graph.agent_bindings) that the compiler never dereferences, so the compiled Nextflow is a pure
+// function of {nodes, edges} (invariant proof in the screen's save path). The set of agents that can be
+// node-ATTACHED (distinct from the system agents that act on runs/signatures/orgs, which live on the
+// Agent-triage page): only QC-triage today. Module-private (not exported) — kept off the public
+// surface so oxlint's react-refresh heuristic doesn't misread an exported `new Set()` const as a
+// component export (which would flag every other function in this shared module).
+const ATTACHABLE_AGENT_IDS: ReadonlySet<string> = new Set([ADVISORY_AGENT.id])
+
+// The seeded binding set: QC-triage over its default-attached QC nodes, granting 'outputs' only
+// ('logs' is opt-in, never seeded — it exposes de-identified subject-id-bearing logs). Used on New →
+// From template / initial mount so the seeded germline opens with the same attachments it always had.
+export function defaultBindings(): AgentBinding[] {
+  return ADVISORY_AGENT.defaultAttach.map((node) => ({ agent: ADVISORY_AGENT.id, node, grants: ['outputs'] as AgentGrant[] }))
+}
+
+// Prune any binding whose NODE no longer exists (deleted) or whose AGENT is not an attachable agent —
+// the safety net after a node delete or a foreign/older saved envelope, mirroring reconcileEdges. A
+// binding never resurrects a missing node, and the grants array is normalised to the known vocabulary.
+export function reconcileBindings(ns: UserNode[], bindings: AgentBinding[]): AgentBinding[] {
+  const ids = new Set(ns.map((n) => n.id))
+  const seen = new Set<string>()
+  const out: AgentBinding[] = []
+  for (const b of bindings) {
+    if (!b || typeof b.node !== 'string' || typeof b.agent !== 'string') continue
+    if (!ids.has(b.node) || !ATTACHABLE_AGENT_IDS.has(b.agent)) continue
+    const key = `${b.agent}|${b.node}`
+    if (seen.has(key)) continue // dedup a doubled binding (tolerant read of a foreign envelope)
+    seen.add(key)
+    const grants = (Array.isArray(b.grants) ? b.grants : []).filter(
+      (g): g is AgentGrant => g === 'outputs' || g === 'logs',
+    )
+    // A binding with an empty grants array would be a no-op observer; default it back to 'outputs'.
+    out.push({ agent: b.agent, node: b.node, grants: grants.length ? Array.from(new Set(grants)) : ['outputs'] })
+  }
+  return out
+}
+
+// Look up the binding for one (agent, node) pair — the render/popover key.
+export function bindingFor(bindings: AgentBinding[], node: string, agent: string = ADVISORY_AGENT.id): AgentBinding | null {
+  return bindings.find((b) => b.node === node && b.agent === agent) ?? null
+}
+
 // Place ONE anchor point per target on a rectangle's perimeter, each on the side nearest its target and
 // spread evenly per side so they never overlap — the agent-card fan-out (mirrors the nearest-side port
 // model, but for a non-graph terminal card against arbitrary target points). Returns content-space points.
@@ -1051,6 +1098,10 @@ export type BuilderGraphPayload = {
   edges?: UserEdge[]
   locator_edits?: LocEdits
   reference_locators?: Record<string, string>
+  // Advisory agent→node observation bindings (ADR-0001). A SIBLING key alongside the topology +
+  // locators — the compiler ignores it, so it never changes the emitted pipeline. Optional: a graph
+  // saved before this key existed (or from another schema_version) simply carries none.
+  agent_bindings?: AgentBinding[]
 }
 
 export function mergedLoc(k: string, edits: LocEdits): GiabLoc {

@@ -361,6 +361,21 @@ export type Role = 'viewer' | 'reviewer' | 'approver'
 export type Actor = { id: string; role: Role }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Pipeline-Builder agent-attachment binding (advisory, off-gate — ADR-0001).
+// A binding attaches an ADVISORY agent (QC-triage) to a graph NODE as an OBSERVATION
+// grant: it lets the agent READ that node's artifacts, it NEVER wires a data edge, adds
+// a card, sets a verdict/confidence, or changes what the pipeline runs. It is persisted in
+// a SIBLING envelope key (graph.agent_bindings) that the Nextflow compiler NEVER dereferences
+// — the compile/run payload stays a pure function of {nodes, edges}, so the emitted pipeline
+// is byte-identical with or without any binding (compose ≠ execute).
+//   grants — what the agent may observe:
+//     'outputs' (default, on): the node's published output artifacts.
+//     'logs'    (opt-in, off by default): the node's .command.log/.err. These carry subject-id
+//               PII, so the grant is de-identified + explicitly opt-in, never a default.
+export type AgentGrant = 'outputs' | 'logs'
+export type AgentBinding = { agent: string; node: string; grants: AgentGrant[] }
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Origin / artifact vocabularies (read-only in the client — origin never relabels up).
 // ─────────────────────────────────────────────────────────────────────────────
 export type OriginTag = 'real-giab' | 'synthetic' | 'contrived' | 'unknown'

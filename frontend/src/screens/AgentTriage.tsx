@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Archive, ChevronRight, Wrench } from 'lucide-react'
 import { api } from '../api'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { PageHeader } from '../components/PageHeader'
@@ -9,6 +9,7 @@ import { Truncate } from '../components/Truncate'
 import { AgentComposer } from '../components/AgentComposer'
 import { AgentSourceToggle } from '../components/AgentSourceToggle'
 import { AgentSubjectCard } from '../components/AgentSubjectCard'
+import { ArchivistModal, PipelineRepairModal } from '../components/BuilderModals'
 import { GATE_DOT, GATE_LABEL, VERDICT_DOT, VERDICT_LABEL } from '../verdict'
 import type { RunDetail, TriageNote } from '../types'
 
@@ -26,6 +27,10 @@ export function AgentTriage() {
   // only — the rule engine owns the verdict regardless of this toggle (INV-c).
   const [live, setLive] = useState(false)
   const [page, setPage] = useState(1)
+  // System advisory agents (Phase 3): repair + archivist act on runs / recurring signatures / the
+  // organization — NOT on a single pipeline node — so they launch from here, not the Builder palette.
+  const [repairOpen, setRepairOpen] = useState(false)
+  const [archivistOpen, setArchivistOpen] = useState(false)
 
   useEffect(() => {
     setDetail(null)
@@ -110,6 +115,24 @@ export function AgentTriage() {
           ) : undefined
         }
       />
+
+      {/* System advisory agents — they act on runs / recurring signatures / the whole organization, not
+          on a single pipeline node, so they live on this page (moved out of the Builder palette, Phase 3).
+          Each opens a read-only, cited proposal; advisory + off-gate — neither sets a verdict (ADR-0001). */}
+      <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+        <AgentLauncher
+          icon={<Wrench size={16} strokeWidth={2} />}
+          title="Pipeline-repair"
+          sub="Cited fix proposals for recurring failure signatures"
+          onOpen={() => setRepairOpen(true)}
+        />
+        <AgentLauncher
+          icon={<Archive size={16} strokeWidth={2} />}
+          title="Archivist"
+          sub="Organizes released runs for cold storage"
+          onOpen={() => setArchivistOpen(true)}
+        />
+      </div>
 
       {flagged.length === 0 ? (
         <Empty message="No flagged samples in this run — nothing to triage." />
@@ -211,6 +234,33 @@ export function AgentTriage() {
           )}
         </>
       )}
+
+      {repairOpen && <PipelineRepairModal onClose={() => setRepairOpen(false)} />}
+      {archivistOpen && <ArchivistModal onClose={() => setArchivistOpen(false)} />}
     </div>
+  )
+}
+
+// A launcher card for a system advisory agent — opens its read-only proposal modal. Advisory + off-gate:
+// it never sets a verdict; the honest "advisory" label rides the card.
+function AgentLauncher({ icon, title, sub, onOpen }: { icon: React.ReactNode; title: string; sub: string; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex items-center gap-3 rounded-[11px] border border-line bg-card px-3.5 py-3 text-left transition-colors hover:border-line-strong hover:bg-page"
+    >
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-weak text-accent-strong">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="truncate text-[13px] font-semibold text-text">{title}</span>
+          <span className="shrink-0 rounded bg-card-2 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.3px] text-text-3">
+            advisory
+          </span>
+        </span>
+        <span className="mt-0.5 block truncate text-[11.5px] text-text-2">{sub}</span>
+      </span>
+      <ChevronRight size={16} className="shrink-0 text-text-3" />
+    </button>
   )
 }
