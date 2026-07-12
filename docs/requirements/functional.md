@@ -1195,8 +1195,11 @@ had reserved or listed as *not-yet-built*.
     actually executed; the Slurm profile has never run against a real cluster. Every catalogued
     process now carries the nf-core `[meta, files]` map and fans out per-sample
     (`ProcessSpec.per_sample`, default `True`; MultiQC is the one cross-sample aggregator,
-    `per_sample=False`) — HG002 stays a degenerate fan-out of 1; a true multi-sample driver run
-    (parsing N result dirs into N run dirs) stays deferred. `fastp_html`/`samtools_stats` are
+    `per_sample=False`) — HG002 stays a degenerate fan-out of 1 in the LIVE driver; **the driver's
+    post-run parse of a publish dir into N gate-able run-dir rows is now built (2026-07-11, W4
+    continuation, REQ-F-095) and offline-verified against fixture publish dirs, but a genuinely
+    live multi-sample Nextflow run stays unverified** (no second real sample's reads on disk in
+    this sandbox — see REQ-F-095). `fastp_html`/`samtools_stats` are
     promoted from reserved/unwired to real, wireable optional ports (both are real commands the
     driver already ran); the mosdepth `regions`/`global_dist`/`region_dist` byproducts are wired
     too; MultiQC now ingests all 5 available QC streams (was 3). **This narrows, not closes,**
@@ -1204,7 +1207,8 @@ had reserved or listed as *not-yet-built*.
     updated Notes item 9 below and the REQ-NF-060 addendum. *Trace:*
     [design/nextflow-codegen.md](../design/nextflow-codegen.md),
     [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Realized addendum 2026-07-11),
-    REQ-F-085, [tasks T-129](../planning/tasks.md), [journal 2026-07-11](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
+    REQ-F-085, REQ-F-095, [tasks T-129, T-134](../planning/tasks.md),
+    [journal 2026-07-11](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
 32. **REQ-F-091 — Durable execution-job persistence + restart recovery.** The two execution
     routers (`api/routers/intake.py`'s `POST /api/runs`, `api/routers/pipeline_run.py`'s
     `POST /api/pipelines/run`) persist each background job's status via `api/job_store.py`
@@ -1243,6 +1247,46 @@ had reserved or listed as *not-yet-built*.
     (tool absent/erroring) is recorded, never fatal — capturing provenance must not break a run.
     *Trace:* [REQ-NF-005](../requirements/nonfunctional.md), [tasks T-131](../planning/tasks.md),
     [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
+35. **REQ-F-094 — Per-variant Report table + read-only `GET /api/runs/{id}/variants` (W3
+    continuation).** A new read-only endpoint (`api/main.py`) serves every `VariantCall` a run's
+    `variants.csv` carries, parsed via the SAME `pipeguard.parsers.parse_variant_calls` the
+    route-to-human rule (VAR-RTH-001) already uses — 404 for an unknown run, `[]` (never a 404 or
+    a fabricated row) when a run has no `variants.csv`. `RunReport.tsx` renders it as a paginated
+    table (Sample/Gene/HGVS/ClinVar significance quoted VERBATIM/review status/accession) beneath
+    the route-to-human hero, with its own disclaimer that PipeGuard authors no pathogenicity and
+    sets no verdict here (ADR-0004/ADR-0001). This closes the "no per-variant evidence table" gap
+    REQ-F-087 and [variant-interpretation.md §0 item 3](../design/variant-interpretation.md)
+    used to name — narrower than the full `AnnotatedVariant` model still design-only
+    (no gnomAD population frequency, no inheritance-fit, no call-quality join). +3 tests
+    (`tests/test_run_variants.py`). *Trace:*
+    [ADR-0018 Realized item 5](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11),
+    [design/variant-interpretation.md §0](../design/variant-interpretation.md),
+    REQ-F-087, [tasks T-133](../planning/tasks.md),
+    [journal 2026-07-11](../journal/2026-07-11-w-deferrals.md).
+36. **REQ-F-095 — Multi-sample driver parse: N-sample publish dir → N-row run dir (W4
+    continuation, offline-verified; live multi-sample run stays unverified).**
+    `scripts/run_giab_pipeline.py`'s post-run parse is now genuinely N-sample capable:
+    `discover_samples()` finds every sample from its per-sample `${id}.fastp.json`
+    (dot-anchored + `glob.escape`, so a shared-prefix pair like `S1`/`S10` never cross-captures);
+    `parse_publish_dir()` parses each into a `SampleMetrics`; `write_run_dir_multi()` writes the
+    ONE run dir the gate already discovers, with N rows across every frozen-five CSV — the same
+    "one run dir, N samples" shape `data/mock_run_01` already uses, so `run_gate_from_dir` yields
+    N cards with **zero** read-API or gate change. A partial publish dir (a sample missing one
+    required output) or an empty publish dir fails loud (`sys.exit`), never silently drops a
+    sample or fabricates a metric. A fan-out of 1 (the live HG002 path) is BYTE-IDENTICAL to the
+    pre-fan-out single-sample format. `api/routers/intake.py`'s `IntakeStatus` additively gains a
+    `samples: list[SampleStatus]` field (per-sample `queued|running|complete|failed|lost|
+    skipped` state; an older persisted job with no `samples` key yields `[]`, never an error).
+    **Honest deferral (stated in the commit body verbatim):** this closes the parse/write/gate
+    LOGIC gap only — proven against 7 fixture publish dirs
+    (`tests/test_run_giab_multisample.py`), no Nextflow, no bioconda tools, no network. The LIVE
+    driver still submits a **single-row** samplesheet (only HG002 has real reads on disk in this
+    sandbox), so a genuinely live multi-sample Nextflow run — an N-row sheet driving a real
+    fan-out, parsed by the logic above against Nextflow's real published output — has never been
+    exercised. *Trace:* [design/nextflow-codegen.md §Multi-sample driver
+    parse](../design/nextflow-codegen.md#multi-sample-driver-parse-2026-07-11-w4-continuation),
+    REQ-F-090, REQ-F-067, [tasks T-134](../planning/tasks.md),
+    [journal 2026-07-11](../journal/2026-07-11-w-deferrals.md).
 
 ## Notes / deferred
 
@@ -1290,8 +1334,9 @@ had reserved or listed as *not-yet-built*.
    Container images are named per the nf-core biocontainer convention but only the `conda`
    profile has been live-verified. **Also narrowed (REQ-F-090):** every catalogued process now
    fans out per-sample via the nf-core `[meta, files]` map, but the live intake driver still runs
-   one sample (HG002) at a time — a true multi-sample driver run (N result dirs → N run dirs)
-   remains deferred.
+   one sample (HG002) at a time — the driver's post-run PARSE of a publish dir into N run-dir rows
+   is now built and offline-verified (REQ-F-095), but a genuinely live multi-sample Nextflow run
+   remains deferred/unverified.
 
 ---
 

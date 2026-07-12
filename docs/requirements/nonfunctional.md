@@ -206,6 +206,19 @@ links to [evaluation.md](../quality/evaluation.md).
    intake / 1800s Builder-run, diverged). *Trace:* [functional.md REQ-F-092](functional.md),
    [design/nextflow-codegen.md](../design/nextflow-codegen.md),
    [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
+6. **REQ-NF-045 — Multi-sample publish-dir parse fails loud, never fabricates a sample
+   (2026-07-11, W4 continuation).** `scripts/run_giab_pipeline.py`'s `discover_samples`/
+   `parse_publish_dir` treat a partial per-sample output set (a sample missing one of its four
+   required published files) and an empty publish dir as hard `sys.exit` errors, naming the
+   sample and the missing pattern — never a silently-dropped sample, never a fabricated metric.
+   Sample-id matching is dot-prefix-anchored + `glob.escape`d so a shared-prefix pair (`S1`/`S10`)
+   can never cross-capture another sample's files. Offline-verified against fixture publish dirs
+   (`tests/test_run_giab_multisample.py`, 7 cases); the live multi-sample Nextflow run this guard
+   would protect has not itself been exercised (see [functional.md REQ-F-095](functional.md)).
+   *Trace:* [design/nextflow-codegen.md §Multi-sample driver
+   parse](../design/nextflow-codegen.md#multi-sample-driver-parse-2026-07-11-w4-continuation),
+   REQ-NF-041, [tasks T-134](../planning/tasks.md),
+   [journal 2026-07-11](../journal/2026-07-11-w-deferrals.md).
 
 ## Maintainability, type-safety & testing
 

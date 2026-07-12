@@ -5,7 +5,7 @@
 | **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043) + pluggable **pipeline-graph store BUILT (T-049)** + pluggable **share-egress-audit store BUILT (2026-07-11, ADR-0018 D3)** + a **durable job store BUILT (2026-07-11, T-131, jsonl\|sqlite only — no Postgres adapter, by design)**, all OFF by default; **live-Postgres integration test BUILT + verified green** (`tests/test_persistence_postgres_live.py`, compose-gated + skip-safe); connection pooling + read-from-projection deferred |
 | **Date** | 2026-07-09 (MST) · updated 2026-07-11 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](ADR-0018-variant-interpretation-advisory-evidence.md) (share-egress sink, item 6), [tasks.md](../planning/tasks.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md) |
+| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](ADR-0018-variant-interpretation-advisory-evidence.md) (share-egress sink, Realized item 3 — corrected from a stale "item 6" cross-reference, 2026-07-11), [tasks.md](../planning/tasks.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md) |
 
 ## Context
 

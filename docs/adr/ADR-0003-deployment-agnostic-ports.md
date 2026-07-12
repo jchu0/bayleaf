@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Accepted · Realized (event-bus / run-store / notify / artifact-store ports + metric-registry seam built; **Nextflow compute is now executable** — a card-graph→Nextflow compiler + a Nextflow-first intake driver, plus a baked-in `standard`/`slurm` executor-profile layer (W4) — the `slurm` profile is CONFIG-verified, not CLUSTER-verified; job-runner + AWS-Batch/HealthOmics compute adapters stay wishlist) |
-| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) · updated 2026-07-09 (MST) · updated 2026-07-11 (MST) · updated 2026-07-11 (MST, W4 executor profiles) |
+| **Date** | 2026-07-07 (MST) · updated 2026-07-08 (MST) · updated 2026-07-09 (MST) · updated 2026-07-11 (MST) · updated 2026-07-11 (MST, W4 executor profiles) · updated 2026-07-11 (MST, W4 continuation — N-sample driver parse) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0016](ADR-0016-postgres-port.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (the approval gate W1 adds to the execution path this ADR realizes), [design/architecture.md](../design/architecture.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0016](ADR-0016-postgres-port.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (the approval gate W1 adds to the execution path this ADR realizes), [design/architecture.md](../design/architecture.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 w-deferrals](../journal/2026-07-11-w-deferrals.md) |
 
 ## Context
 
@@ -143,8 +143,17 @@ executor profile now exists, though it has not been run against a real cluster. 
    the nf-core `[meta, files]` map and runs once per samplesheet row (`ProcessSpec.per_sample`,
    default `True`; `MultiQC` is the one cross-sample aggregator). `main.nf`'s reads channel is
    built from a samplesheet (`--input samplesheet.csv`), not a bare `--read1`/`--read2` pair. The
-   live intake driver still submits a **one-row** sheet (HG002) — a degenerate fan-out of 1; a
-   true multi-sample driver run (N result dirs → N gate-able run dirs) is not built.
+   live intake driver still submits a **one-row** sheet (HG002) — a degenerate fan-out of 1.
+   **Narrowed 2026-07-11 (W4 continuation, commit `9ab7fca`):** the driver's POST-run parse
+   (turning a publish dir into gate-able run-dir rows) is now genuinely N-sample capable —
+   `discover_samples`/`parse_publish_dir`/`write_run_dir_multi` turn N per-sample published
+   outputs into one run dir with N frozen-five rows, offline-verified against fixture publish
+   dirs (7 tests, `tests/test_run_giab_multisample.py`). What remains not built is the LIVE half:
+   the driver still hands Nextflow a single-row sheet (no second real sample's reads on disk in
+   this sandbox), so a genuinely live multi-sample run — an N-row sheet through a real Nextflow
+   fan-out, parsed by the logic above against Nextflow's real output — has never been exercised.
+   See [design/nextflow-codegen.md §Multi-sample driver
+   parse](../design/nextflow-codegen.md#multi-sample-driver-parse-2026-07-11-w4-continuation).
 4. **Honest limit, stated precisely: CONFIG-verified, not CLUSTER-verified.** This sandbox (and
    the maintainer's local verification environment) has no `sbatch` on `PATH`, so every live run
    to date — including the HG002 verification the "Realized (2026-07-11)" section above

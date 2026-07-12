@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Built (2026-07-11, T-123, commits `10f1816`→`e4ba174`); **extended the same day** (T-129, "W4," commit `5f0d5ec`) with executor profiles, per-sample fan-out, and full QC port wiring; **hardened the same day** (T-131, commit `595815e`) with pre-flight guards + per-run version capture |
+| **Status** | Built (2026-07-11, T-123, commits `10f1816`→`e4ba174`); **extended the same day** (T-129, "W4," commit `5f0d5ec`) with executor profiles, per-sample fan-out, and full QC port wiring; **hardened the same day** (T-131, commit `595815e`) with pre-flight guards + per-run version capture; **the driver's post-run parse extended to genuine multi-sample later the same day** (W4 continuation, T-134, commit `9ab7fca`) — offline-verified against fixture publish dirs; the live multi-sample Nextflow run stays unverified, see §Multi-sample driver parse below |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide, AI advisory — this module sets no verdict), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; this doc REALIZES its "Nextflow carries compute portability" decision), [ADR-0016](../adr/ADR-0016-postgres-port.md) (the durable job store the intake driver's launch now persists into, item 8), [design/architecture.md](architecture.md) (component map), [data/nf-core-conventions.md](../data/nf-core-conventions.md) (the vocabulary this catalog adopts), [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) (the card graph this compiles), [design/builder-cards/](builder-cards/) (the per-tool port specs the catalog mirrors), [planning/tasks.md](../planning/tasks.md) (T-123, T-129, T-131), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide, AI advisory — this module sets no verdict), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; this doc REALIZES its "Nextflow carries compute portability" decision), [ADR-0016](../adr/ADR-0016-postgres-port.md) (the durable job store the intake driver's launch now persists into, item 8), [design/architecture.md](architecture.md) (component map), [data/nf-core-conventions.md](../data/nf-core-conventions.md) (the vocabulary this catalog adopts), [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) (the card graph this compiles), [design/builder-cards/](builder-cards/) (the per-tool port specs the catalog mirrors), [planning/tasks.md](../planning/tasks.md) (T-123, T-129, T-131, T-134), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 w-deferrals](../journal/2026-07-11-w-deferrals.md) |
 
 ## Overview
 
@@ -151,11 +151,60 @@ too), so an unknown card still wires into a fan-out graph rather than breaking i
 
 **Honest scope.** The seeded germline chain and the live intake driver still hand the pipeline a
 **one-row** samplesheet (HG002) — a degenerate fan-out of 1. The emitted output filenames
-(`${meta.id}.*` = `HG002.*`) are byte-identical to the pre-fan-out driver, so the existing
-frozen-five CSV parse (`run_giab_pipeline.py`) is unchanged. A true **multi-sample** driver run —
-submitting an N-row samplesheet and parsing N result directories into N gate-able run dirs — is
-not built; the fan-out is wired at the compiler/pipeline level, not yet exercised at the driver
-level with more than one real sample.
+(`${meta.id}.*` = `HG002.*`) are byte-identical to the pre-fan-out driver. A true **multi-sample**
+driver run — submitting an N-row samplesheet to a real Nextflow invocation and parsing N result
+directories — remains unverified live (no second real sample's reads on disk in this sandbox); see
+[§Multi-sample driver parse](#multi-sample-driver-parse-2026-07-11-w4-continuation) below for what
+changed and what did not.
+
+## Multi-sample driver parse (2026-07-11, W4 continuation)
+
+`scripts/run_giab_pipeline.py`'s POST-run parse (the step that turns a Nextflow publish dir into
+the gate-able run-dir CSVs) is now genuinely **N-sample capable**, closing the "a true
+multi-sample driver run … is not built" gap the paragraph above used to carry — narrowed, not
+closed, since the LIVE multi-sample Nextflow run is still unverified (see below).
+
+1. **`discover_samples(results)`** finds every sample the publish dir actually holds, from its
+   per-sample `${id}.fastp.json` (the fan-out's canonical first-stage artifact) — sorted, so the
+   run-dir row order is stable. An empty publish dir (`glob` finds no `*.fastp.json`) is a loud
+   `sys.exit`, never a silent zero-sample run.
+2. **`_one_for(results, sample, pattern)`** anchors each sample's file match with a **dot prefix**
+   (`glob.escape(sample) + "."`), so a shared-prefix pair like `S1`/`S10` can never cross-capture —
+   `S1.*` cannot match `S10.…` because the character after `S1` is `0`, not `.`. A sample present
+   in the publish dir but missing one of its required per-sample outputs (`fastp.json` /
+   `mosdepth.summary.txt` / `thresholds.bed.gz` / `norm.vcf.gz`) fails loud, naming the sample and
+   the missing pattern — never a silently-dropped sample or a fabricated metric.
+3. **`parse_publish_dir(results) -> list[SampleMetrics]`** runs `parse_sample` over every
+   discovered id, reusing the existing per-file parsers (`parse_fastp`/`parse_mosdepth`/
+   `count_variants`) unchanged.
+4. **`write_run_dir_multi(cfg, samples)`** writes the **one** run dir the read-API/gate already
+   discover (`data/<run_id>/`), with **N rows** across every frozen-five CSV
+   (`SampleSheet.csv`/`sample_metadata.csv`/`demux_stats.csv`/`qc_metrics.csv`) — the same "one
+   sequencing run → one run dir → N samples" shape `data/mock_run_01` (S1..S5) already uses, so
+   `run_gate_from_dir` yields N cards with **zero** read-API or gate change. `demux_stats.csv`'s
+   `% Reads` becomes each sample's real share of the run's total reads (100% for a lone sample,
+   unchanged for N=1). A **fan-out of 1** (the live HG002 driver) still emits BYTE-IDENTICAL
+   output to the pre-fan-out single-sample format — pinned by
+   `test_single_sample_run_dir_is_byte_identical_to_pre_fanout_format`. The scalar `write_run_dir`
+   wrapper the offline preflight test calls is kept, now delegating to `write_run_dir_multi`.
+
+**Verification — offline only, against fixture publish dirs, not a live Nextflow run.**
+`tests/test_run_giab_multisample.py` (7 cases) builds small hand-crafted publish dirs (fastp JSON,
+mosdepth summary/thresholds, a norm VCF, per sample) and asserts: an N-sample dir → one run dir
+with N gated rows; a fan-out of 1 is byte-identical to the pre-fan-out format; a partial publish
+dir (one sample missing one output) and an empty publish dir both fail loud; `S1`/`S10` never
+cross-capture; `demux_stats.csv`'s `% Reads` is each sample's real share. No Nextflow, no bioconda
+tools, no network — pure functions of on-disk fixtures, so this runs in the default sandboxed dev
+environment.
+
+**Honest deferral, stated precisely.** The parse/write/gate LOGIC above is proven against fixture
+publish dirs; a genuinely **live** multi-sample Nextflow run is not — this sandbox (and the
+maintainer's local verification environment) has no second real sample's panel reads on disk, so
+the live driver (`run_nextflow()`) still writes a **single-row** samplesheet (`sample,fastq_1,
+fastq_2\nHG002,…`) and every live run to date has been a fan-out of 1. Handing the driver an
+N-row samplesheet with real multi-sample reads, and confirming the parse above operates
+correctly on Nextflow's REAL published output (not just the fixture shape this test builds), is
+the next step, not yet taken.
 
 ## Executor profiles: local-serial / Slurm (W4, `nextflow.config` / the intake driver)
 
@@ -317,19 +366,23 @@ see [functional.md REQ-F-092/REQ-F-093](../requirements/functional.md) and
 | `test_repeated_tool_is_aliased` | Two nodes naming the same tool alias to distinct calls sharing one module. |
 | `test_generated_germline_stub_runs` | **Machine-gated, skip-safe** (mirrors the Postgres-live pattern): if `nextflow` is on `PATH`, the generated pipeline must validate end-to-end via `-stub-run` with placeholder inputs; absent Nextflow → skip, never fail. |
 | `tests/test_nextflow_api.py` (4 tests) | `POST /api/pipelines/compile` — JSON preview, `.zip` download, a 422 on a cycle/empty graph. |
+| `tests/test_run_giab_multisample.py` (7 tests, NEW, W4 continuation) | Offline, fixture-publish-dir proof of the multi-sample parse: N-sample dir → N gated run-dir rows; fan-out-of-1 byte-identical to the pre-fan-out format; partial/empty publish dir fails loud; `S1`/`S10` prefix anchoring; `demux_stats.csv` `% Reads` share. No `nextflow` involved — see [§Multi-sample driver parse](#multi-sample-driver-parse-2026-07-11-w4-continuation). |
 
 Census (verified `uv run pytest --collect-only -q` + `git ls-files 'tests/*.py' | wc -l`, updated
-2026-07-11 after the P3-backlog session, T-131/T-132, in a sandbox with `nextflow` NOT on `PATH`):
-**507 tests collected across 35 files** (was 471/33 after W4/E2E, 427/29 before that) — **501
-passed / 6 skipped** here (the `test_nextflow_compile.py` live `-stub-run` skip above plus
-`test_e2e_pipeline.py`'s env-gated live-stub check, both absent `nextflow`); on a machine with
-`nextflow` on `PATH` both run instead, giving a computed **503 passed / 4 skipped** (arithmetic
-from the two skip reasons above — not independently re-run in this sandbox, which has no
-`nextflow`). Either way the compiler/wiring/drift/placeholder tests run unconditionally offline,
-with no `nextflow` binary required. `test_nextflow_compile.py` itself stayed at 15 cases this
-session (unchanged by T-131/T-132); the two new files this session,
-`tests/test_job_store.py` (12) and `tests/test_run_giab_preflight.py` (16), cover the durable job
-store and the four preflight guards above, both pure-offline with no `nextflow` on `PATH` needed.
+2026-07-11 after the W3/W4-continuation session, T-133/T-134, in a sandbox with `nextflow` NOT on
+`PATH`): **517 tests collected across 37 files** (was 507/35 after the P3-backlog session,
+471/33 after W4/E2E, 427/29 before that) — **511 passed / 6 skipped** here (the
+`test_nextflow_compile.py` live `-stub-run` skip above plus `test_e2e_pipeline.py`'s env-gated
+live-stub check, both absent `nextflow`; the two new files this session — `test_run_variants.py`
+(3) and `test_run_giab_multisample.py` (7) — are both pure-offline, no `nextflow` needed, so they
+add to the pass count, not the skip count); on a machine with `nextflow` on `PATH` both env-gated
+checks run instead, giving a computed **513 passed / 4 skipped** (arithmetic from the two skip
+reasons — not independently re-run in this sandbox). Either way the compiler/wiring/drift/
+placeholder tests, and the new multi-sample-parse tests, run unconditionally offline, with no
+`nextflow` binary required. `test_nextflow_compile.py` itself stayed at 15 cases this session
+(unchanged); `tests/test_job_store.py` (12) and `tests/test_run_giab_preflight.py` (16) from the
+prior P3-backlog session cover the durable job store and the four preflight guards above, both
+pure-offline with no `nextflow` on `PATH` needed.
 
 ## Limitations (recorded in the open, not hidden)
 
@@ -346,12 +399,18 @@ store and the four preflight guards above, both pure-offline with no `nextflow` 
 3. **Container images are named, not pulled/verified.** Each `ProcessSpec.container` names a
    plausible biocontainer image (nf-core convention); none has been pulled or run in this repo —
    only the `conda` profile has been live-verified.
-4. **The intake driver is still single-sample, HG002-fixture-scoped** (unchanged by this landing;
-   see [functional.md REQ-F-067](../requirements/functional.md) for that boundary) — **though the
-   compiled pipeline itself now fans out per-sample (W4)**: every catalogued process carries the
-   nf-core `[meta, files]` map and would run once per samplesheet row given a multi-row sheet.
-   HG002 stays a degenerate fan-out of 1; parsing N result directories into N gate-able run dirs
-   for a real multi-sample submission is not built.
+4. **The LIVE intake driver still runs a single-sample fan-out of 1** (narrowed 2026-07-11, W4
+   continuation — was "not built," now "built offline, unverified live"; see
+   [functional.md REQ-F-067](../requirements/functional.md) for the fixture-scope boundary and
+   [functional.md REQ-F-095](../requirements/functional.md) for the parse itself). The compiled
+   pipeline fans out per-sample (W4, above): every catalogued process carries the nf-core
+   `[meta, files]` map. **The driver's post-run parse is now genuinely N-sample capable**
+   (`discover_samples`/`parse_publish_dir`/`write_run_dir_multi`, [§Multi-sample driver
+   parse](#multi-sample-driver-parse-2026-07-11-w4-continuation)) and is proven against fixture
+   publish dirs (7 offline tests) — but the driver still hands Nextflow a **one-row** samplesheet
+   (only HG002 has real reads on disk in this sandbox), so a genuinely live multi-sample run
+   (N-row sheet → a real Nextflow fan-out → the parse above run against Nextflow's real output)
+   has never been exercised.
 5. **No `nextflow_schema.json`/`pipeline_info/` round-trip.** The driver parses each process's
    published QC file directly (fastp.json, mosdepth summary) rather than ingesting Nextflow's own
    `pipeline_info/` provenance manifest (`software_versions.yml`, `execution_trace_*.txt`, …) —

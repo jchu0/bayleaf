@@ -518,7 +518,11 @@ Every finding and verdict is labelled with the gate it came from:
      signed JWT) returning the same `Actor`; every `require_role(...)` gate and `actor.id` capture
      keeps working unchanged (a single chokepoint to harden). Wholly OFF the gate: it can gate who
      may *write* product state, never a verdict / finding / confidence / rule (ADR-0001).
-   - **Runs read-API.** `GET /api/runs` (+ `/{id}`, `/{id}/cards/{sample}`, `/{id}/artifacts`, and
+   - **Runs read-API.** `GET /api/runs` (+ `/{id}`, `/{id}/cards/{sample}`, `/{id}/artifacts`,
+     `/{id}/variants` — read-only, every `VariantCall` a run's `variants.csv` carries via the SAME
+     `parse_variant_calls` the route-to-human rule uses, `[]` when absent, 404 for an unknown run;
+     added 2026-07-11, W3 continuation, backs `RunReport.tsx`'s per-variant table — see
+     [functional.md REQ-F-094](../requirements/functional.md) — and
      now `/{id}/artifacts/{name}` — a traversal-hardened download, `FileResponse`, name must be a
      bare filename resolving inside the run dir; `RunArtifact` gained a `url` field pointing at it,
      closing the earlier "no download URL" deferral, T-077 `71a06d6`). **View vs. download split
@@ -805,6 +809,27 @@ Every finding and verdict is labelled with the gate it came from:
      — now server-paged — run as a scrolling bar; T-100's chart-vs-pager framing is unaffected).
      Verified: 501 passed / 6 skipped (+1 test), ruff+mypy clean, tsc+oxlint clean (whole project),
      ADR-0001 held (no verdict/confidence touched by either wave).
+   - **W3 + W4 deferred-slice continuations (2026-07-11, commits `fec0f83`/`9ab7fca`,
+     [journal](../journal/2026-07-11-w-deferrals.md)) — two independent, offline-only slices, no
+     verdict/gate/ADR-0001 boundary changed.** **W3 continuation (T-133):** the new read-only
+     `GET /api/runs/{run_id}/variants` above + `RunReport.tsx`'s per-variant table close the "no
+     per-variant evidence table" gap T-128's Report tab left open — see
+     [ADR-0018 Realized item 5](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11).
+     **W4 continuation (T-134):** `scripts/run_giab_pipeline.py`'s post-run parse
+     (`discover_samples`/`parse_publish_dir`/`write_run_dir_multi`) is now genuinely N-sample
+     capable — one publish dir with N per-sample outputs now becomes one run dir with N
+     frozen-five rows, matching `data/mock_run_01`'s existing "one run dir, N samples" shape, so
+     `run_gate_from_dir` yields N cards with zero read-API/gate change. Sample-id matching is
+     dot-anchored + `glob.escape`d (no `S1`/`S10` cross-capture); a partial or empty publish dir
+     fails loud. `api/routers/intake.py`'s `IntakeStatus` gains an additive
+     `samples: list[SampleStatus]`. **Honestly deferred:** this is proven offline against fixture
+     publish dirs only — the LIVE driver still submits a single-row (HG002-only) samplesheet, so a
+     genuinely live multi-sample Nextflow run remains unverified. See
+     [design/nextflow-codegen.md §Multi-sample driver
+     parse](nextflow-codegen.md#multi-sample-driver-parse-2026-07-11-w4-continuation),
+     [functional.md REQ-F-094/REQ-F-095](../requirements/functional.md). Verified: 517 tests
+     collected / 37 files (was 507/35), 511 passed / 6 skipped in this sandbox (no `nextflow` on
+     `PATH`), ruff+mypy clean.
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
@@ -882,7 +907,7 @@ config override, notably, records intent without mutating the live runbook.
 | Durable job store (off-gate execution bookkeeping) | `PIPEGUARD_JOB_STORE=jsonl\|sqlite` (`api/job_store.py`, 2026-07-11, T-131); replaces the intake/Builder-run routers' in-memory `_jobs` dicts so a submitted-run job survives a backend restart (`lost` if no result dir on disk, else `complete`) — degrade-to-JSONL. **No Postgres adapter, by design**: node-local scratch bookkeeping, not shared product state (ADR-0016 item 8). Also hosts the shared, process-group-aware `run_driver()` (one `DRIVER_TIMEOUT_S`, `killpg` reaps the whole Nextflow/JVM subtree on timeout) and the atomic dup-run-id reservation both routers now share | JSONL |
 | Auth / identity (off-gate) | `api/auth.py` `current_actor()` header-shim (`X-PipeGuard-Actor`/`-Role`) → swap for a verified IdP (OIDC / signed JWT) returning the same `Actor`; one chokepoint, downstream `require_role(...)` unchanged (ADR-0010/0017) | permissive dev shim (`id=dev`, `role=approver`) |
 | Pipeline codegen (compose, never execute) | `pipeguard.nextflow.compile_graph()` — a card graph → Nextflow bundle; `POST /api/pipelines/compile` (JSON/`.zip`); curated catalog, uncatalogued tool → a labelled placeholder ([design/nextflow-codegen.md](nextflow-codegen.md), T-123) | pure text codegen, no execution |
-| Intake execution driver | `scripts/run_giab_pipeline.py`, triggered by `POST /api/runs`; **Nextflow-first as of 2026-07-11** — runs `pipelines/germline/main.nf` via `nextflow run` (was: called fastp/bwa-mem2/samtools/… directly). **Pre-flight-guarded + version-captured as of 2026-07-11 (T-131):** FASTQ pairing/format, reference/panel-BED contig naming, and reference-index sidecars are asserted (loud `sys.exit`, never a silent bad result) BEFORE the Nextflow launch; every run now also writes a `versions.txt` snapshot of the resolved tool/Nextflow versions on `PATH` — provenance capture only, not a re-pin ([nextflow-codegen.md §Pre-flight guards](nextflow-codegen.md#pre-flight-guards--version-capture-2026-07-11-t-131)) | local `-profile conda`, HG002-fixture-scoped |
+| Intake execution driver | `scripts/run_giab_pipeline.py`, triggered by `POST /api/runs`; **Nextflow-first as of 2026-07-11** — runs `pipelines/germline/main.nf` via `nextflow run` (was: called fastp/bwa-mem2/samtools/… directly). **Pre-flight-guarded + version-captured as of 2026-07-11 (T-131):** FASTQ pairing/format, reference/panel-BED contig naming, and reference-index sidecars are asserted (loud `sys.exit`, never a silent bad result) BEFORE the Nextflow launch; every run now also writes a `versions.txt` snapshot of the resolved tool/Nextflow versions on `PATH` — provenance capture only, not a re-pin ([nextflow-codegen.md §Pre-flight guards](nextflow-codegen.md#pre-flight-guards--version-capture-2026-07-11-t-131)). **Post-run parse is N-sample capable as of 2026-07-11 (W4 continuation, T-134):** `discover_samples`/`parse_publish_dir`/`write_run_dir_multi` turn a publish dir with N per-sample outputs into one run dir with N frozen-five rows, offline-verified against fixture publish dirs — but the driver still submits a single-row (HG002-only) samplesheet, so a live multi-sample run stays unverified | local `-profile conda`, HG002-fixture-scoped (single-row samplesheet; the post-run PARSE is N-sample capable, the live RUN is not yet exercised beyond N=1) |
 | Deployment | ports & adapters; Nextflow now **executable** for local compute (codegen + the intake driver, above); Slurm/AWS-Batch/HealthOmics executor config stays wishlist (ADR-0003) | local |
 
 Unlike the AI/notify seams (off by default, adapter-swapped at the edge), the **metric registry

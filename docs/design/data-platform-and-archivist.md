@@ -5,7 +5,7 @@
 | **Status** | Draft — for maintainer review |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [design/architecture.md](architecture.md) · [design/agents.md](agents.md) · [design/variant-interpretation.md](variant-interpretation.md) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) · [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md) · [ADR-0015](../adr/ADR-0015-layered-data-contract.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) · [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) · [data/provenance.md](../data/provenance.md) · [data/schemas.md](../data/schemas.md) · [data/metric_registry.md](../data/metric_registry.md) · [data/strategy.md](../data/strategy.md) · [planning/tasks.md](../planning/tasks.md) · [journal/2026-07-09-giab-e2e-pipeline.md](../journal/2026-07-09-giab-e2e-pipeline.md) · [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md) · [journal/2026-07-10-admin-settings-builder-wiring.md](../journal/2026-07-10-admin-settings-builder-wiring.md) · [journal/2026-07-10-builder-modals-and-run-selector.md](../journal/2026-07-10-builder-modals-and-run-selector.md) · [journal/2026-07-10-batch8-theme-monitoring-recharts.md](../journal/2026-07-10-batch8-theme-monitoring-recharts.md) · [journal/2026-07-10-settings-agent-table.md](../journal/2026-07-10-settings-agent-table.md) · [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md) · [journal/2026-07-10-frontend-wave9.md](../journal/2026-07-10-frontend-wave9.md) · [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md) · [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md) · [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md) · [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) · [design/nextflow-codegen.md](nextflow-codegen.md) |
+| **Related** | [design/architecture.md](architecture.md) · [design/agents.md](agents.md) · [design/variant-interpretation.md](variant-interpretation.md) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) · [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md) · [ADR-0015](../adr/ADR-0015-layered-data-contract.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) · [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) · [data/provenance.md](../data/provenance.md) · [data/schemas.md](../data/schemas.md) · [data/metric_registry.md](../data/metric_registry.md) · [data/strategy.md](../data/strategy.md) · [planning/tasks.md](../planning/tasks.md) · [journal/2026-07-09-giab-e2e-pipeline.md](../journal/2026-07-09-giab-e2e-pipeline.md) · [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md) · [journal/2026-07-10-admin-settings-builder-wiring.md](../journal/2026-07-10-admin-settings-builder-wiring.md) · [journal/2026-07-10-builder-modals-and-run-selector.md](../journal/2026-07-10-builder-modals-and-run-selector.md) · [journal/2026-07-10-batch8-theme-monitoring-recharts.md](../journal/2026-07-10-batch8-theme-monitoring-recharts.md) · [journal/2026-07-10-settings-agent-table.md](../journal/2026-07-10-settings-agent-table.md) · [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md) · [journal/2026-07-10-frontend-wave9.md](../journal/2026-07-10-frontend-wave9.md) · [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md) · [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md) · [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md) · [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) · [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) · [design/nextflow-codegen.md](nextflow-codegen.md) |
 
 > **Draft for review.** Produced by a multi-agent design workflow (four design perspectives +
 > three adversarial critiques — scope-realism, guardrails, over-engineering — then synthesized)
@@ -281,6 +281,30 @@ staged one.
 inputs. Appendix C's tool-output catalog and its "PipeGuard runs no alignment and no
 variant-calling of its own" framing predate this script (2026-07-08) and describe
 `gate_giab.py`'s narrower BAM-slice-only path; see the ★ notes added there.
+
+### 3.2.2 (2026-07-11, W4 continuation) The one-run-dir-per-flowcell shape now holds for N samples too
+
+`run_giab_pipeline.py`'s POST-run parse (§3.2.1) is now genuinely N-sample capable, which is
+directly relevant to this section's "one sequencing run → one run dir" framing:
+`discover_samples()` + `parse_publish_dir()` find and parse every sample the Nextflow publish dir
+holds (sample-id matching is dot-prefix-anchored + `glob.escape`d, so `S1` never cross-captures
+`S10`'s files), and `write_run_dir_multi()` writes **one** `data/<run_id>/` dir carrying **N**
+rows across every frozen-five CSV — exactly the `data/mock_run_01` (S1..S5, one dir) shape this
+doc's §3.1 "two tiers of on-disk state" already describes, not a new layout. A partial or empty
+publish dir fails loud, never silently drops a sample or fabricates a row. **The frozen five-CSV
+contract itself is unchanged** (§3.3 stays accurate verbatim) — this is a driver-side capability
+(N inputs → N rows in the SAME files), not a schema change, so it needed **zero** producing-format
+change, only a smarter reader on the way in. **Honest scope, matching REQ-F-095:** proven only
+against fixture publish dirs (7 offline tests, `tests/test_run_giab_multisample.py`) — the live
+driver still submits a single-row (HG002-only) samplesheet, so a genuinely live multi-sample
+Nextflow run remains unverified; see [design/nextflow-codegen.md §Multi-sample driver
+parse](nextflow-codegen.md#multi-sample-driver-parse-2026-07-11-w4-continuation).
+
+Separately (W3 continuation, same day): a new read-only `GET /api/runs/{run_id}/variants`
+(`api/main.py`) joins the "already built" read surfaces this doc catalogs — every `VariantCall` a
+run's `variants.csv` carries, served verbatim via the same `parse_variant_calls` the route-to-human
+rule uses. No new persistence, no new store — a direct re-parse per request, like the export
+endpoint in §2.1(a) above. See [functional.md REQ-F-094](../requirements/functional.md).
 
 ### 3.3 Ingest mapping — artifact → disposition (frozen)
 

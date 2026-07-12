@@ -78,9 +78,15 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > `clinvar_accession` · `clinvar_version`. **Clinical significance is stored VERBATIM** — the
 > parser and the rule that reads it never normalize or reclassify the string; PipeGuard authors no
 > pathogenicity of its own (ADR-0004). `variant_calls` is folded into `RunArtifacts.sample_ids()`
-> (a sample present only via an annotated variant still gets evaluated). **Empty for every run
-> today** (no `variants.csv` ships in any committed fixture); it feeds **only** the off-by-default
-> route-to-human rule below — it sets no verdict by itself.
+> (a sample present only via an annotated variant still gets evaluated). Empty for every
+> committed fixture except `data/RUN-2026-07-11-CLINVAR-RTH/` (a contrived, verbatim-cited
+> ClinVar spike); it feeds the off-by-default route-to-human rule below (no verdict by itself)
+> **and, additively (2026-07-11, W3 continuation), a read-only wire projection:**
+> `GET /api/runs/{run_id}/variants` (`api/main.py`) re-parses the same `variants.csv` via the
+> SAME `parse_variant_calls` and returns the list verbatim — 404 for an unknown run, `[]` for a
+> run with no `variants.csv`. `frontend/src/types.ts`'s `VariantCall` mirrors the seven fields
+> above exactly (`sample_id` required, the rest nullable); `RunReport.tsx`'s per-variant table
+> renders it. See [functional.md REQ-F-094](../requirements/functional.md).
 >
 > **Route-to-human policy (`runbook.RouteToHumanPolicy`, ADR-0018 D2).** A `Runbook.route_to_human`
 > field, **OFF BY DEFAULT** (`significances: tuple[str, ...] = ()`  — an empty tuple is
@@ -275,7 +281,15 @@ gitignored `share.events.jsonl` rather than the gate's own `EventLedger`)*.
    records above). `lost` is a restart-recovery terminal status: a job whose owning process died
    with no result dir on disk. Persisted via the SAME jsonl/sqlite pluggable-store shape as the
    product stores above, but deliberately with **no Postgres backend** (node-local scratch, not
-   shared product state) — see [ADR-0016 item 8](../adr/ADR-0016-postgres-port.md).
+   shared product state) — see [ADR-0016 item 8](../adr/ADR-0016-postgres-port.md). **Additive,
+   2026-07-11 (W4 continuation):** `IntakeStatus` (`api/routers/intake.py`) gains
+   `samples: list[SampleStatus]` — `{sample: str, status: str}` per submitted sample, mirroring
+   the run-level `status` for every `processed` sample (`queued`→`running`→`complete`/`failed`)
+   while a `skipped` sample (no panel reads on disk) is frozen at `skipped`. An older persisted
+   job with no `samples` key yields `[]`, not an error — the field is additive, so nothing that
+   read the pre-existing `processed_samples`/`skipped_samples` string lists breaks. This is
+   per-sample UI progress, not a new ledger/DB record; see
+   [functional.md REQ-F-095](../requirements/functional.md).
 
 > **`frontend/src/types.ts` is a hand-maintained TypeScript mirror of this contract, not generated.**
 > It can drift behind the pydantic source of truth above — a 2026-07-11 sweep (T-132) found and

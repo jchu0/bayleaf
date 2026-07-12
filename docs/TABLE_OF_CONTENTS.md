@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-11 (MST) |
+| **Last updated** | 2026-07-11 (MST), W3/W4 deferred-slice continuations (T-133/T-134) |
 | **Audience** | all (contributors and Claude Code) |
 
 **Start here.** This index is the map of what exists — and its
@@ -42,14 +42,14 @@ Status legend: ✅ written · 🚧 in progress · 📝 planned.
 | [design/agent-authoring-contract.md](design/agent-authoring-contract.md) | ✅ | Boundaries MD for how an *authoring* agent (card/tool authoring, or the general convention for adding a 7th/8th advisory agent) is built and constrained — what templates it may fill, Nextflow-integration rules, UI dos/don'ts; the node-authoring agent's `GET /api/builder/node-proposal` is its first realized instance |
 | [design/data-platform-and-archivist.md](design/data-platform-and-archivist.md) | ✅ | Data-platform + export + run-browser + Archivist agent design (draft for review; tiered already-built / build-now / target-state) |
 | [design/node-authoring-agent.md](design/node-authoring-agent.md) | ✅ | Roster agent #5 — **built (T-046), narrower than proposed**: retrieval over an 11-card curated corpus from a natural-language request (not the originally-proposed dropped-doc parser); core-only, no `api/` endpoint or Builder wiring yet |
-| [design/variant-interpretation.md](design/variant-interpretation.md) | 🚧 | Variant interpretation & reporting design (ADR-0018) — advisory ClinVar/gnomAD evidence + review-ordering + a cited `RunReport` + a PHI-scrub Share window; two pieces built and (2026-07-11) demonstrated end-to-end (route-to-human `VAR-RTH-001` fires against a committed run; the conservative de-id module is wired to a narrower-than-designed `POST /api/runs/{id}/share` egress), the rest (agent, report, the full Share window) still design-only |
+| [design/variant-interpretation.md](design/variant-interpretation.md) | 🚧 | Variant interpretation & reporting design (ADR-0018) — advisory ClinVar/gnomAD evidence + review-ordering + a cited `RunReport` + a PHI-scrub Share window; four pieces built and (2026-07-11) demonstrated end-to-end (route-to-human `VAR-RTH-001` fires against a committed run; the conservative de-id module is wired to a narrower-than-designed `POST /api/runs/{id}/share` egress; a `RunReport` view; a read-only `GET /api/runs/{id}/variants` per-variant table over the `VariantCall`/ClinVar fields only), the rest (agent, the full `api/report.py` projection, gnomAD/inheritance-fit evidence, the full Share window) still design-only |
 | [design/frontend/frontend-design-brief.md](design/frontend/frontend-design-brief.md) | ✅ | UI design brief (v1 + v2 additions) — the stable spec |
 | [design/frontend/pipeline-builder-brief.md](design/frontend/pipeline-builder-brief.md) | ✅ | Wishlist #11 flagship — pipeline-builder design handoff (node/agent canvas → run-layout config), paste-and-go for a design tool |
 | [design/frontend/handoffs/](design/frontend/handoffs/) | ✅ | Dated review→design handoff deltas (episodic) |
 | [design/frontend/](design/frontend/) | ✅ | Frontend prototype (`PipeGuard.html`) + design README |
 | [design/ui-conventions.md](design/ui-conventions.md) | ✅ | Durable cross-cutting UI/product convention registry (`UIC-N` ids) — the single place a maintainer rule is recorded once and implemented against |
 | [design/builder-cards/](design/builder-cards/) | ✅ | Pipeline-Builder card-design convention (`README.md`) + 7 per-tool port specs, grounded in real tool I/O — a **design target** the shipped `BuilderCanvas` implements a subset of (see its §5) |
-| [design/nextflow-codegen.md](design/nextflow-codegen.md) | ✅ | Card-graph → Nextflow (DSL2) compiler (`src/pipeguard/nextflow/`): the tool catalog, wiring rules, the reference-index staging, the `pipelines/germline/` drift-guarded reference pipeline, the `POST /api/pipelines/compile` + Builder "Export to Nextflow" UI, and the now-Nextflow-first intake driver — realizes [ADR-0003](adr/ADR-0003-deployment-agnostic-ports.md) |
+| [design/nextflow-codegen.md](design/nextflow-codegen.md) | ✅ | Card-graph → Nextflow (DSL2) compiler (`src/pipeguard/nextflow/`): the tool catalog, wiring rules, the reference-index staging, the `pipelines/germline/` drift-guarded reference pipeline, the `POST /api/pipelines/compile` + Builder "Export to Nextflow" UI, and the now-Nextflow-first intake driver — realizes [ADR-0003](adr/ADR-0003-deployment-agnostic-ports.md); the driver's post-run parse is now N-sample capable offline (2026-07-11, W4 continuation), live multi-sample run still unverified |
 
 > **Consolidated, not split.** The system-view slices once planned as separate docs
 > (system-context, components, data-flow, interfaces, storage, workflows, deployment,

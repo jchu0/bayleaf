@@ -2,21 +2,21 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed (design; **three components now built end-to-end against a committed run**, see §0) |
+| **Status** | Proposed (design; **four components now built end-to-end against a committed run**, see §0) |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (the decision + [Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11)), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported`), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [qc_metrics.md](../data/qc_metrics.md) (§Route-to-human policy), [schemas.md](../data/schemas.md) (`VariantCall`), [provenance.md](../data/provenance.md), [architecture.md](architecture.md), [data-platform-and-archivist.md](data-platform-and-archivist.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md) |
+| **Related** | [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (the decision + [Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11)), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported`), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [qc_metrics.md](../data/qc_metrics.md) (§Route-to-human policy), [schemas.md](../data/schemas.md) (`VariantCall`, `GET /api/runs/{id}/variants`), [provenance.md](../data/provenance.md), [architecture.md](architecture.md), [data-platform-and-archivist.md](data-platform-and-archivist.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) |
 
 ## 0. Build status update (2026-07-11, after the maintainer's D1/D2/D3 sign-off)
 
 The maintainer signed off on ADR-0018 and its three open questions (see the ADR's
 [Maintainer decisions](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#maintainer-decisions-2026-07-10-sign-off)).
-Three pieces of this design are now **BUILT and demonstrated end-to-end against a committed run**
+Four pieces of this design are now **BUILT and demonstrated end-to-end against a committed run**
 (2026-07-10 landed the rule/module in isolation; 2026-07-11 wired each to a real, runnable path,
-and — same day, a separate slice, W3 — a Report tab shipped over the already-wired data) —
-everything else below (the interpretation agent, the full Share window, the ClinVar/gnomAD fetch
-scripts, gnomAD AF surfacing, inheritance-fit, the review-ordering tier) remains design-only, not
-built:
+and — same day, two further slices, W3 and its continuation — a Report tab and then a per-variant
+evidence table shipped over the already-wired data) — everything else below (the interpretation
+agent, the full Share window, the ClinVar/gnomAD fetch scripts, gnomAD AF surfacing,
+inheritance-fit, the review-ordering tier) remains design-only, not built:
 
 1. **Route-to-human (D2) — BUILT, fires end-to-end (2026-07-11).** `models.VariantCall` +
    `parsers.parse_variant_calls` (reads `variants.csv`) + `runbook.RouteToHumanPolicy` +
@@ -52,18 +52,37 @@ built:
    narrower than the design:** it is built entirely over `detail` (cards + events) already on the
    wire — no new `api/report.py` projection, no `ReportStore`, no draft→approve/sign-off write
    path, no persisted/immutable report artifact (a reload re-derives the same report from the
-   same already-decided cards rather than reading back a signed snapshot). There is also still
-   **no per-variant evidence table** (ClinVar/gnomAD/inheritance-fit per candidate, §1 item 1's
-   `AnnotatedVariant`) — only the route-to-human hits a run's rules already flagged. The same
-   commit also fixed a real honesty bug in the Lineage DAG: a fired route-to-human ESCALATE used
-   to render the review node as "skipped" (no VCF artifact) even though the rules had already
-   escalated the sample — a fired gate now wins over the no-artifact default. See
+   same already-decided cards rather than reading back a signed snapshot). The same commit also
+   fixed a real honesty bug in the Lineage DAG: a fired route-to-human ESCALATE used to render the
+   review node as "skipped" (no VCF artifact) even though the rules had already escalated the
+   sample — a fired gate now wins over the no-artifact default. See
    [functional.md REQ-F-087/REQ-F-088](../requirements/functional.md),
    [tasks T-128](../planning/tasks.md).
-4. Sections §1/§3–§6 below describe the **full** design (the interpretation agent, the
-   `api/report.py`/`ReportStore`/sign-off lifecycle, the Share window, fetch scripts,
-   gnomAD/inheritance evidence) as originally proposed — still entirely unbuilt except for the
-   three narrower pieces above.
+4. **The per-variant evidence table — BUILT the same day, later (W3 continuation, commit
+   `fec0f83`), closing the "no per-variant evidence table" gap item 3 above used to carry.** A
+   new read-only `GET /api/runs/{run_id}/variants` (`api/main.py`) serves every `VariantCall` a
+   run's `variants.csv` carries, parsed via the SAME `pipeguard.parsers.parse_variant_calls` the
+   gate's route-to-human rule already uses (404 unknown run, `[]` when no `variants.csv` — an
+   honest empty state, not fabricated rows). `RunReport.tsx` renders it as a paginated table
+   (Sample · Gene · HGVS · ClinVar significance quoted VERBATIM · review status · accession)
+   beneath the route-to-human hero, with its own disclaimer that PipeGuard authors no
+   pathogenicity and sets no verdict here. **This is still narrower than §1 item 1's full
+   `AnnotatedVariant`:** the table surfaces only the `VariantCall` fields already in the D2
+   model (ClinVar classification/review-status/accession/version) — there is no gnomAD
+   population-frequency column, no inheritance-fit, and no call-quality join; a variant present
+   in `variants.csv` but never armed against the route-to-human policy still shows here (the
+   table is unconditional on the rule firing, unlike the hero panel above, which shows only a
+   fired route-to-human hit). Live-verified: the committed `RUN-2026-07-11-CLINVAR-RTH` fixture's
+   single BRCA1 `c.68_69del` row renders "Pathogenic" verbatim; `mock_run_01` (no `variants.csv`)
+   renders the honest empty state. +3 tests (`tests/test_run_variants.py`). See
+   [ADR-0018 Realized item 5](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11),
+   [functional.md REQ-F-094](../requirements/functional.md),
+   [tasks T-133](../planning/tasks.md),
+   [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md).
+5. Sections §1/§3–§6 below describe the **full** design (the interpretation agent, the
+   `api/report.py`/`ReportStore`/sign-off lifecycle, the Share window, fetch scripts, gnomAD/
+   inheritance evidence) as originally proposed — still entirely unbuilt except for the four
+   narrower pieces above.
 
 ## Overview
 
@@ -174,7 +193,9 @@ this build" until an annotated VCF is present (P4) is also **still unbuilt**.
 **MVP slice (compose-only, cited, advisory — buildable over existing seams):**
 1. Read an externally-produced **annotated VCF** → `AnnotatedVariant` (tolerant parser; a missing field is a signal).
 2. Surface per-variant **cited evidence** (ClinVar verbatim + gnomAD AF + inheritance-fit + call-quality) in the
-   variant provenance stage + an advisory panel; register `variant.gnomad_af`.
+   variant provenance stage + an advisory panel; register `variant.gnomad_af`. **A ClinVar-only slice of this —
+   the `VariantCall` fields with no gnomAD/inheritance-fit/call-quality join — shipped 2026-07-11 as the
+   RunReport's per-variant table (§0 item 4);** the fuller joined evidence panel stays deferred.
 3. **Review-ordering tier** as labelled heuristic evidence — no classification, no gate movement.
 4. `RunReport` projection + the draft→approve sign-off + HTML download.
 5. Share window MVP: report/`/api/export` scope; local staged dir; the existing `deid.py` policy; scrub preview;

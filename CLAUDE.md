@@ -195,7 +195,10 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    via `require_role` capturing `submitted_by`, → a pluggable `PipelineGraphStore` — a
    tolerant versioned envelope reserving a draft→approve+RBAC lifecycle, T-049; both
    jsonl/sqlite/postgres) + the artifacts + **windowed-monitoring** endpoints
-   (`GET /api/runs/{id}/artifacts`, `GET /api/monitoring`) + a traversal-hardened artifact
+   (`GET /api/runs/{id}/artifacts`; `GET /api/monitoring` now server-side `page`/`limit`-paginated on
+   `runs[]`, T-072) + `GET /api/runs/{id}/variants` (T-133, W3 continuation: a read-only per-variant
+   list parsed via `parse_variant_calls`, powering the RunReport variant table — ClinVar quoted
+   verbatim, no authored pathogenicity) + a traversal-hardened artifact
    **download** (`GET /api/runs/{id}/artifacts/{name}` → `FileResponse`; `RunArtifact.url` now
    populated, T-077 — the old "no download URL" deferral is closed) + **advisory agent reads** (off-gate,
    read-only: `GET /api/monitoring/signatures/{signature}/repair`, `GET /api/runs/{id}/archive-digest`,
@@ -220,7 +223,13 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    it runs `nextflow run pipelines/germline/main.nf` (the committed reference pipeline, exactly
    what the compiler above emits for the seeded graph) via `subprocess.run`, then parses the
    PUBLISHED QC outputs into the frozen-five run dir; needs `nextflow` + a JRE + the bioconda
-   tools on PATH, injected via `PIPEGUARD_BIOCONDA_BIN`. Also new: `POST /api/pipelines/compile`
+   tools on PATH, injected via `PIPEGUARD_BIOCONDA_BIN`. The parse is now **multi-sample** (T-134,
+   W4 continuation): `discover_samples()`/`write_run_dir_multi()` discover every published
+   `<meta.id>.*` sample and write **one run dir with N frozen-five rows** (the existing
+   `data/<run>/` contract → the gate yields N cards unchanged), dot-anchored globbing so `S1`≠`S10`,
+   fail-loud on a partial dir; a fan-out of 1 (HG002) stays byte-identical — **the multi-sample
+   *live* Nextflow run is offline-proven vs fixture publish dirs but env-gated/unverified** (only
+   HG002 has reads on disk). `IntakeStatus` now carries an additive per-sample `SampleStatus` list. Also new: `POST /api/pipelines/compile`
    (`api/routers/nextflow.py`, stateless/off-gate) compiles the Builder's live graph → the same
    bundle as JSON (preview) or a `.zip`, surfaced by a Builder "Export to Nextflow" toolbar button
    (`NextflowExportModal`) — a cycle/bad/empty graph 422s with the compiler's reason. A

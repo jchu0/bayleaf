@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted (maintainer sign-off 2026-07-10 MST; three open questions decided — see [Maintainer decisions](#maintainer-decisions-2026-07-10-sign-off)); D2 + D3 built end-to-end against a committed run, plus a narrower `RunReport` view (W3) — see [Realized](#realized-2026-07-11) |
+| **Status** | Accepted (maintainer sign-off 2026-07-10 MST; three open questions decided — see [Maintainer decisions](#maintainer-decisions-2026-07-10-sign-off)); D2 + D3 built end-to-end against a committed run, plus a narrower `RunReport` view (W3) and its per-variant evidence table (W3 continuation) — see [Realized](#realized-2026-07-11) |
 | **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST) |
 | **Deciders** | maintainer (signed off 2026-07-10), design pass (4 parallel memos, 2026-07-10) |
-| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md) (three-gate model), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md) (GIAB benchmark / no invented pathogenicity), [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) (advisory agent scoping), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md) (self-contained records), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported` event), [ADR-0016](ADR-0016-postgres-port.md) (pluggable-store family the share sink now matches), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [data/provenance.md](../data/provenance.md), [design/variant-interpretation.md](../design/variant-interpretation.md), [journal 2026-07-11 d2-d3](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 share-store persistence](../journal/2026-07-11-share-store-persistence.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md) (three-gate model), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md) (GIAB benchmark / no invented pathogenicity), [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) (advisory agent scoping), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md) (self-contained records), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported` event), [ADR-0016](ADR-0016-postgres-port.md) (pluggable-store family the share sink now matches), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [data/provenance.md](../data/provenance.md), [design/variant-interpretation.md](../design/variant-interpretation.md), [journal 2026-07-11 d2-d3](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 share-store persistence](../journal/2026-07-11-share-store-persistence.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 w-deferrals](../journal/2026-07-11-w-deferrals.md) |
 
 ## Context
 
@@ -227,12 +227,32 @@ committed run" / "not yet wired to any egress endpoint"). Verified by reading `a
    quoting ClinVar significance VERBATIM, per-sample gate outcomes + cited evidence, a sign-off
    footer stating human sign-off is a labelled seam, not a button. Built entirely over `detail`
    (cards + events) already on the wire — no `api/report.py` projection, no `ReportStore`, no
-   draft→approve/sign-off write path, no persisted report artifact, and still no per-variant
-   evidence table. The same commit fixed an honesty bug in the Lineage DAG: a fired route-to-human
-   ESCALATE used to render the review node "skipped" (no VCF artifact) despite the rules having
-   already escalated the sample — a fired gate now wins over the no-artifact default. See
+   draft→approve/sign-off write path, no persisted report artifact. The same commit fixed an
+   honesty bug in the Lineage DAG: a fired route-to-human ESCALATE used to render the review node
+   "skipped" (no VCF artifact) despite the rules having already escalated the sample — a fired
+   gate now wins over the no-artifact default. See
    [design/variant-interpretation.md §0 item 3](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off).
-5. **What is genuinely still unbuilt**, per [design/variant-interpretation.md §0](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off):
+5. **The per-variant evidence table (W3 continuation, commit `fec0f83`, later the same day) —
+   closes item 4's "still no per-variant evidence table" gap.** A new read-only
+   `GET /api/runs/{run_id}/variants` (`api/main.py`) serves every `VariantCall` a run's
+   `variants.csv` carries, parsed via the SAME `pipeguard.parsers.parse_variant_calls` the
+   route-to-human rule already uses (404 unknown run; `[]` when no `variants.csv` — an honest
+   empty state, never a fabricated row; the same ClinVar value already served through `card`
+   findings for a fired route-to-human hit, so this is no new field exposure). `RunReport.tsx`
+   renders it as a paginated table (Sample · Gene · HGVS · ClinVar significance quoted VERBATIM ·
+   review status · accession) beneath the route-to-human hero, with its own disclaimer that
+   PipeGuard authors no pathogenicity and sets no verdict here (ADR-0001/G3/G4 held — a read
+   surface only). **Narrower than the full `AnnotatedVariant` model (Decision 2 / §1 item 1):**
+   only the `VariantCall`/D2 fields ship — ClinVar classification, review status, accession,
+   version — with no gnomAD population-frequency column, no inheritance-fit, and no call-quality
+   join; the table is unconditional on the route-to-human rule firing (any row in `variants.csv`
+   shows, whether or not it is armed), unlike the hero panel above. +3 tests
+   (`tests/test_run_variants.py`); live-verified against `RUN-2026-07-11-CLINVAR-RTH` (BRCA1
+   `c.68_69del` "Pathogenic" renders verbatim) and `mock_run_01` (no `variants.csv` → honest empty
+   state). See
+   [design/variant-interpretation.md §0 item 4](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off),
+   [functional.md REQ-F-094](../requirements/functional.md), [tasks T-133](../planning/tasks.md).
+6. **What is genuinely still unbuilt**, per [design/variant-interpretation.md §0](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off):
    the interpretation agent, the `api/report.py`/`ReportStore`/sign-off lifecycle, the full Share
    window (scope/location/security-level), gnomAD AF / inheritance-fit evidence, the
    review-ordering tier, and the ClinVar/gnomAD fetch scripts.

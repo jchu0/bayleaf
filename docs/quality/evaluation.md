@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
+| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006, EVAL-009), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress, per-variant table EVAL-013), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) (EVAL-009, EVAL-013), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
 
 ## Overview
 
@@ -19,40 +19,42 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **507 tests across 35 files** — collection verified via
-`uv run pytest --collect-only -q` (507 collected) + `git ls-files 'tests/*.py' | wc -l` (35), both
-re-run 2026-07-11 after the P3-backlog session (T-131/T-132; was 471/33 after the earlier
-audit/hardening/W1-W4/E2E session, 427/29 before that). Pass/skip count depends on whether
-`nextflow` is on `PATH` (two machine-gated live checks join the existing Postgres live-integration
-pattern: `test_nextflow_compile.py`'s `test_generated_germline_stub_runs`, EVAL-006, and
-`test_e2e_pipeline.py::test_approved_germline_pipeline_stub_runs_live`, EVAL-007): **501 pass / 6
+The offline suite is **517 tests across 37 files** — collection verified via
+`uv run pytest --collect-only -q` (517 collected) + `git ls-files 'tests/*.py' | wc -l` (37), both
+re-run 2026-07-11 after the W3/W4-deferred-slice continuation session (T-133/T-134; was 507/35
+after the P3-backlog session, 471/33 after the earlier audit/hardening/W1-W4/E2E session, 427/29
+before that). Pass/skip count depends on whether `nextflow` is on `PATH` (two machine-gated live
+checks join the existing Postgres live-integration pattern: `test_nextflow_compile.py`'s
+`test_generated_germline_stub_runs`, EVAL-006, and
+`test_e2e_pipeline.py::test_approved_germline_pipeline_stub_runs_live`, EVAL-007): **511 pass / 6
 skip** when `nextflow` is absent (this repo's default sandboxed dev/CI environment — verified here
-via `uv run pytest -q`), a **computed 503 pass / 4 skip** when it is present (arithmetic from the
+via `uv run pytest -q`), a **computed 513 pass / 4 skip** when it is present (arithmetic from the
 two `nextflow`-gated skip reasons — the maintainer's local `hackathon` conda env with Nextflow
-26.04 + a JRE was not re-run live for this specific session; the prior 465→467 delta established
-the same +2 pattern). Either way every non-live test runs unconditionally. By collected size:
-`test_api` (44, +1 this session for `GET /api/monitoring`'s `page`/`limit` on `runs[]`, T-132),
-`test_notify` (36), `test_synthetic` (33), `test_fetch_giab` (32), `test_gate` (30),
-`test_review_queue` (19), `test_node_author` (19, the advisory node-authoring agent, T-046),
-`test_persistence` (17), `test_metrics` (17), `test_archivist` (17, the advisory
-archivist/librarian agent), `test_triage` (16), `test_run_giab_preflight` (16, NEW this
-session — the four pre-flight guards in `scripts/run_giab_pipeline.py`: FASTQ pairing/format,
-contig naming, reference-index sidecars, plus the resolved-version capture, T-131),
-`test_pipeline_repair` (16, the advisory pipeline-repair agent), `test_nextflow_compile` (15),
-`test_card_readout` (14), `test_settings` (13, config-override authoring), `test_auth` (13, +3
-this session for `PIPEGUARD_AUTH_STRICT` + the one-shot permissive-auth warning, T-131),
-`test_safe_harbor` (12, +4 this session for case-insensitive field matching + the 18-class
-honest-labeling note, T-131), `test_pipeline_run` (12, the Pipeline-Builder Run endpoint),
-`test_job_store` (12, NEW this session — the durable jsonl/sqlite job store + the shared
-process-group-aware driver launch, T-131), `test_pipeline_lifecycle` (11,
-submit/approve/dry-run/diff), `test_route_to_human` (10, the off-by-default route-to-human gate
-rule VAR-RTH-001, ADR-0018 D2), `test_e2e_pipeline` (10, the offline acceptance test threading
-sheet→intake→the W1 approval gate→report/provenance, EVAL-007), `test_gate_notify` (9),
-`test_artifacts_s3` (9), `test_pipelines` (8, the Pipeline Builder save/version store),
-`test_execution_trace` (8, the structured execution-trace feed →
+26.04 + a JRE was not re-run live for this specific session; the two new files this session are
+both pure-offline and add only to the pass count). Either way every non-live test runs
+unconditionally. By collected size:
+`test_api` (44), `test_notify` (36), `test_synthetic` (33), `test_fetch_giab` (32),
+`test_gate` (30), `test_review_queue` (19), `test_node_author` (19, the advisory
+node-authoring agent, T-046), `test_persistence` (17), `test_metrics` (17), `test_archivist` (17,
+the advisory archivist/librarian agent), `test_triage` (16), `test_run_giab_preflight` (16, the
+four pre-flight guards in `scripts/run_giab_pipeline.py`, T-131), `test_pipeline_repair` (16, the
+advisory pipeline-repair agent), `test_nextflow_compile` (15), `test_card_readout` (14),
+`test_settings` (13, config-override authoring), `test_auth` (13), `test_safe_harbor` (12),
+`test_pipeline_run` (12, the Pipeline-Builder Run endpoint), `test_job_store` (12, the durable
+jsonl/sqlite job store + the shared process-group-aware driver launch, T-131),
+`test_pipeline_lifecycle` (11, submit/approve/dry-run/diff), `test_route_to_human` (10, the
+off-by-default route-to-human gate rule VAR-RTH-001, ADR-0018 D2), `test_e2e_pipeline` (10, the
+offline acceptance test threading sheet→intake→the W1 approval gate→report/provenance, EVAL-007),
+`test_gate_notify` (9), `test_artifacts_s3` (9),
+`test_run_giab_multisample` (7, NEW this session — the W4-continuation multi-sample driver
+parse: N-sample fixture publish dir → N gated run-dir rows, byte-identical fan-out-of-1, fail-loud
+on partial/empty, `S1`/`S10` prefix anchoring, T-134, EVAL-009), `test_pipelines` (8, the Pipeline
+Builder save/version store), `test_execution_trace` (8, the structured execution-trace feed →
 EXEC-001), `test_artifacts` (7), `test_share_store` (6, the pluggable jsonl/sqlite/postgres
 share-egress-audit sink, ADR-0016/ADR-0018 D3), `test_node_author_api` (6, the W2 read-only
 `GET /api/builder/node-proposal` endpoint),
+`test_run_variants` (3, NEW this session — the W3-continuation per-variant Report endpoint,
+`GET /api/runs/{id}/variants`, T-133, EVAL-013),
 `test_share_egress` (5, the de-identified share/report egress endpoint, ADR-0018 D3),
 `test_metrics_mapping` (5),
 `test_persistence_postgres_live` (4), `test_nextflow_api` (4, the `POST /api/pipelines/compile`
@@ -61,9 +63,10 @@ auto-detection unit) — all
 runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `test_api` and
 `test_triage` suites need the api/claude extras to import FastAPI, while `test_execution_trace`,
 `test_route_to_human`, `test_safe_harbor`, `test_share_egress`, `test_share_store`,
-`test_job_store`, `test_run_giab_preflight`, `test_nextflow_compile`, `test_e2e_pipeline`, and the
+`test_job_store`, `test_run_giab_preflight`, `test_run_giab_multisample`, `test_run_variants`,
+`test_nextflow_compile`, `test_e2e_pipeline`, and the
 agent suites run pure-offline over the core + pydantic, `test_share_egress`/`test_nextflow_api`/
-`test_e2e_pipeline` via a `TestClient`).
+`test_e2e_pipeline`/`test_run_variants` via a `TestClient`).
 
 ## What "good" means (principles)
 
@@ -313,6 +316,47 @@ test:** the actual `os.killpg` timeout-reap behavior (only the shared-constant/s
 guarantee is), and the FASTQ-pairing guard's O(reads) cost has not been benchmarked at real
 panel/WGS scale.
 
+### EVAL-009 — Multi-sample driver parse: N-sample publish dir → N gated run-dir rows (W4 continuation)
+
+| Field | Value |
+|---|---|
+| **Target** | `scripts/run_giab_pipeline.py`'s post-run parse (`discover_samples`, `parse_publish_dir`, `write_run_dir_multi`) |
+| **Type** | Deterministic (offline, fixture-driven; no live Nextflow involved) |
+| **Automated?** | Yes — `test_run_giab_multisample.py` (7 tests), pure-offline |
+
+**Definition of good.** A publish dir carrying N per-sample outputs (`${id}.fastp.json` +
+mosdepth summary/thresholds + a norm VCF, per sample) parses into **one** run dir with N rows
+across every frozen-five CSV, gate-able by the unchanged `run_gate_from_dir` into N cards with
+zero read-API/gate change — the same "one run dir, N samples" shape `data/mock_run_01` already
+uses. A fan-out of 1 (the shape every live run has taken to date) is **byte-identical** to the
+pre-fan-out single-sample format — a hard regression pin. Sample-id matching is dot-prefix-
+anchored + `glob.escape`d so a shared-prefix pair (`S1`/`S10`) can never cross-capture another
+sample's files. A partial publish dir (a sample present but missing one of its four required
+outputs) and an empty publish dir both fail loud (`SystemExit`, naming the sample/pattern) —
+never a silently-dropped sample, never a fabricated metric. `demux_stats.csv`'s `% Reads` is each
+sample's real share of the run's total reads.
+
+**Method.** Build small hand-crafted publish dirs per test case (fastp JSON, mosdepth summary,
+gzipped thresholds BED, a gzipped norm VCF) with `_write_sample_outputs()`, a `skip=` param
+letting a test omit one output kind to construct the partial-dir case. Assert the discovered
+sample-id order, the row counts in each frozen-five CSV, the exact byte-for-byte content of the
+fan-out-of-1 case, and that `SystemExit` is raised (with a message matching the missing sample and
+reason) for the partial/empty cases. No Nextflow, no bioconda tools, no network — runs in this
+repo's default sandboxed environment.
+
+**Known failure modes.** A regression that silently dropped a partial sample instead of failing
+loud would be caught by `test_partial_publish_dir_fails_loud`; a regression in the dot-anchoring
+that let `S1` match `S10`'s files would be caught by
+`test_sample_id_prefix_is_anchored_no_cross_capture` (distinct `total_reads` per sample makes a
+mixup observable). **Not covered by an automated test — stated as an honest, explicit deferral,
+not a silent gap:** a genuinely LIVE multi-sample Nextflow run. This case proves the parse/write/
+gate logic against fixture publish dirs; it does not prove Nextflow's REAL published output for
+an N-row samplesheet matches the shape these fixtures assume, because no second real sample's
+panel reads exist on disk in this sandbox — the live driver (`run_nextflow()`) still writes a
+single-row (HG002-only) samplesheet. See [design/nextflow-codegen.md §Multi-sample driver
+parse](../design/nextflow-codegen.md#multi-sample-driver-parse-2026-07-11-w4-continuation) and
+the "What we do not yet verify" item below.
+
 ## Failure-mode cases (synthetic)
 
 ### EVAL-010 — Each contrived fault reaches its intended verdict
@@ -407,6 +451,38 @@ verdicts — prevented structurally (empty tuple ⇒ `.armed is False`) and pinn
 normalized or reclassified `clinvar_significance` before quoting it would risk PipeGuard
 authoring pathogenicity — pinned by `test_armed_pathogenic_routes_to_human` asserting the quoted
 value is verbatim.
+
+### EVAL-013 — Per-variant Report endpoint: read-only, ClinVar verbatim, honest empty state (W3 continuation)
+
+| Field | Value |
+|---|---|
+| **Target** | `GET /api/runs/{run_id}/variants` (`api/main.py`) — the same `pipeguard.parsers.parse_variant_calls` EVAL-012 exercises, now also served over the wire |
+| **Type** | Failure-mode / read-contract |
+| **Automated?** | Yes — `test_run_variants.py` (3 tests): `test_variants_served_for_clinvar_run`, `test_variants_empty_for_run_without_variants_csv`, `test_variants_unknown_run_is_404` |
+
+**Definition of good.** The endpoint is a pure read projection — it authors no verdict, sets no
+confidence, and every ClinVar field renders exactly as the parser returned it (VERBATIM, never
+normalized/reclassified, ADR-0004). A run whose `variants.csv` carries a row serves it with every
+field intact; a run with no `variants.csv` returns `[]` (an honest empty state — a missing
+annotation is a signal, not an error, never a fabricated row); an unknown run id is a 404,
+mirroring `get_run`/`get_card`'s existing read pattern (no new exposure — the same ClinVar value
+this endpoint serves was already reachable through a fired route-to-human `card.findings`
+citation, EVAL-012).
+
+**Method.** Hit the endpoint via `TestClient` against the committed `RUN-2026-07-11-CLINVAR-RTH`
+fixture and assert every field of its single BRCA1 `c.68_69del` row matches `variants.csv`
+verbatim (`clinvar_significance == "Pathogenic"`, the exact accession/review-status/version);
+assert `mock_run_01` (no `variants.csv`) returns `200` with an empty list, not a 404; assert an
+unknown run id (`NOPE`) 404s.
+
+**Known failure modes.** A regression that normalized/reclassified `clinvar_significance` before
+serving it would be caught by the exact-string assertion in
+`test_variants_served_for_clinvar_run`; a regression that 404'd a variant-less run instead of
+returning `[]` (conflating "no annotation" with "unknown run") would be caught by
+`test_variants_empty_for_run_without_variants_csv`. **Not covered:** the fuller
+`AnnotatedVariant` evidence join (gnomAD AF, inheritance-fit, call-quality) design-only per
+[design/variant-interpretation.md §0 item 4](../design/variant-interpretation.md) — this case
+covers only the `VariantCall`/D2 fields that shipped.
 
 ## Faithfulness cases (AI narrates, never decides)
 
@@ -689,6 +765,15 @@ timeout, a11y attributes, a Pager/Tabs migration, and server-side monitoring pag
    subprocess/Nextflow driver end to end**; that remains verified only manually (T-063's
    real-GIAB run) plus the env-gated live-stub checks (EVAL-006/EVAL-007). Tracked as a narrower
    open gap than before, not silently assumed fully covered ([risks.md](risks.md) RISK-034).
+5. **A genuinely LIVE multi-sample Nextflow run is unverified (2026-07-11, W4 continuation,
+   EVAL-009).** The driver's post-run PARSE (publish dir → N run-dir rows) is proven against
+   fixture publish dirs, offline — but no test, and no manual run, has driven a real
+   multi-sample-samplesheet Nextflow invocation and confirmed the parse holds against Nextflow's
+   REAL published output. The live driver still submits a single-row (HG002-only) samplesheet,
+   because no second real sample's panel reads exist on disk in this sandbox. This is named as an
+   open gap, not silently assumed covered by EVAL-009's offline fixture proof — see
+   [design/nextflow-codegen.md §Multi-sample driver
+   parse](../design/nextflow-codegen.md#multi-sample-driver-parse-2026-07-11-w4-continuation).
 
 ---
 
