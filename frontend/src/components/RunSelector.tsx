@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { ChevronDown, Loader2, Search } from 'lucide-react'
 import { api } from '../api'
 import { RUN_STATUS_META } from '../verdict'
@@ -40,6 +40,10 @@ export function RunSelector({
   const [fetched, setFetched] = useState<RunSummary[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
+  // Keyboard active-descendant: the highlighted option index within `matches` (arrow keys move it).
+  const [active, setActive] = useState(0)
+  const listboxId = useId()
+  const optionId = (i: number) => `${listboxId}-opt-${i}`
 
   // Lazy self-fetch on first open (only when no list is injected). Honest on failure: no rows.
   // `error` is in the guard AND deps so a failed fetch settles into a STABLE "Couldn't load runs"
@@ -68,10 +72,13 @@ export function RunSelector({
       : runs
     return filtered.slice(0, maxRows)
   }, [runs, q, maxRows])
+  // Clamp the highlight into the current match range (a filter can shrink the list under `active`).
+  const activeIdx = matches.length ? Math.min(active, matches.length - 1) : 0
 
   function close() {
     setOpen(false)
     setQuery('')
+    setActive(0)
     setError(false) // clear a prior fetch failure so reopening the picker retries
   }
   function pick(id: string) {
@@ -85,6 +92,10 @@ export function RunSelector({
         type="button"
         disabled={disabled}
         onClick={() => (open ? close() : setOpen(true))}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? listboxId : undefined}
+        aria-label={value ? `Selected run ${value}. Change run` : placeholder}
         className={`flex items-center gap-1.5 rounded-lg border border-line bg-card-2 px-2.5 py-1 font-mono text-[12px] text-text hover:border-line-strong ${
           disabled ? 'cursor-not-allowed opacity-50' : ''
         }`}
@@ -109,16 +120,34 @@ export function RunSelector({
               <input
                 autoFocus
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value)
+                  setActive(0) // reset the highlight when the match set changes
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') close()
-                  else if (e.key === 'Enter' && matches.length) pick(matches[0].run_id)
+                  else if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    setActive((a) => Math.min(a + 1, matches.length - 1))
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setActive((a) => Math.max(a - 1, 0))
+                  } else if (e.key === 'Enter' && matches.length) {
+                    e.preventDefault()
+                    pick(matches[activeIdx].run_id)
+                  }
                 }}
                 placeholder="Search runs by id or platform…"
+                role="combobox"
+                aria-expanded={open}
+                aria-controls={listboxId}
+                aria-autocomplete="list"
+                aria-activedescendant={matches.length ? optionId(activeIdx) : undefined}
+                aria-label="Search runs by id or platform"
                 className="min-w-0 flex-1 bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-3"
               />
             </div>
-            <div className="max-h-[280px] overflow-y-auto p-1.5">
+            <div className="max-h-[280px] overflow-y-auto p-1.5" role="listbox" id={listboxId} aria-label="Runs">
               {loading && !runs.length ? (
                 <div className="flex items-center gap-2 px-2.5 py-3 text-[12px] text-text-3">
                   <Loader2 size={13} className="animate-spin" /> Loading runs…
@@ -127,15 +156,19 @@ export function RunSelector({
                 <div className="px-3 py-5 text-center text-[12px] text-text-2">Couldn’t load runs.</div>
               ) : (
                 <>
-                  {matches.map((r) => {
+                  {matches.map((r, i) => {
                     const meta = RUN_STATUS_META[r.status]
                     return (
                       <button
                         key={r.run_id}
                         type="button"
+                        role="option"
+                        id={optionId(i)}
+                        aria-selected={r.run_id === value}
                         onClick={() => pick(r.run_id)}
+                        onMouseEnter={() => setActive(i)}
                         className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-card-2 ${
-                          r.run_id === value ? 'bg-card-2' : ''
+                          i === activeIdx || r.run_id === value ? 'bg-card-2' : ''
                         }`}
                       >
                         <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${meta.dot}`} />

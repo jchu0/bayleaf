@@ -54,7 +54,7 @@ export function Settings() {
                 How much QC and metadata detail each card surfaces by default.
               </p>
             </div>
-            <SegmentedControl options={PROFILE_OPTIONS} value={profile} onChange={setProfile} />
+            <SegmentedControl options={PROFILE_OPTIONS} value={profile} onChange={setProfile} label="Operator profile detail" />
           </div>
         </section>
 

@@ -483,6 +483,7 @@ export function Submit() {
         <SegmentedControl<'upload' | 'basespace'>
           value={method}
           onChange={setMethod}
+          label="Submission method"
           options={[
             {
               value: 'upload',
@@ -611,8 +612,11 @@ export function Submit() {
               </div>
               <div className="mt-[15px] flex flex-col gap-[13px]">
                 <div>
-                  <label className="mb-[5px] block text-[11px] font-semibold text-text-2">Region</label>
+                  <label htmlFor="basespace-region" className="mb-[5px] block text-[11px] font-semibold text-text-2">
+                    Region
+                  </label>
                   <select
+                    id="basespace-region"
                     value={baseRegion}
                     onChange={(e) => setBaseRegion(e.target.value)}
                     className="w-full cursor-pointer rounded-lg border border-line-strong bg-card px-[11px] py-2 text-[12.5px] text-text outline-none"
@@ -625,15 +629,19 @@ export function Submit() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-[5px] block text-[11px] font-semibold text-text-2">Access token</label>
+                  <label htmlFor="basespace-token" className="mb-[5px] block text-[11px] font-semibold text-text-2">
+                    Access token
+                  </label>
                   <input
+                    id="basespace-token"
+                    aria-describedby="basespace-token-hint"
                     type="password"
                     value={baseToken}
                     onChange={(e) => setBaseToken(e.target.value)}
                     placeholder="Paste a BaseSpace API access token"
                     className="w-full rounded-lg border border-line-strong bg-card px-[11px] py-2 font-mono text-[12.5px] text-text outline-none"
                   />
-                  <div className="mt-[5px] text-[10px] text-text-3">
+                  <div id="basespace-token-hint" className="mt-[5px] text-[10px] text-text-3">
                     Held for this session only. Use a scoped token (read + run access) — never your account password.
                   </div>
                 </div>
@@ -744,15 +752,21 @@ export function Submit() {
         <div className="grid grid-cols-4 gap-[13px] px-[18px] py-4">
           {RUN_FIELDS.map((f) => (
             <div key={f.key}>
-              <label className="mb-[5px] block text-[11px] font-semibold text-text-2">{f.label}</label>
+              <label htmlFor={`run-${f.key}`} className="mb-[5px] block text-[11px] font-semibold text-text-2">
+                {f.label}
+              </label>
               <input
+                id={`run-${f.key}`}
+                aria-describedby={`run-${f.key}-hint`}
                 value={loaded ? meta[f.key] : ''}
                 onChange={(e) => setField(f.key, e.target.value)}
                 readOnly={!loaded}
                 placeholder={loaded ? '' : 'Populates on import'}
                 className={INPUT_CLS}
               />
-              <div className="mt-1 text-[10px] text-text-3">{f.hint}</div>
+              <div id={`run-${f.key}-hint`} className="mt-1 text-[10px] text-text-3">
+                {f.hint}
+              </div>
             </div>
           ))}
         </div>
@@ -866,7 +880,12 @@ export function Submit() {
                 </div>
                 <div className="font-mono text-[11.5px] text-text-3">{i + 1}</div>
                 <div className="min-w-0">
-                  <input value={s.sample} onChange={(e) => patchSample(i, { sample: e.target.value })} className={INPUT_CLS} />
+                  <input
+                    value={s.sample}
+                    onChange={(e) => patchSample(i, { sample: e.target.value })}
+                    aria-label={`Sample name, row ${i + 1}`}
+                    className={INPUT_CLS}
+                  />
                   <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                     {subject && (
                       <span className="truncate font-mono text-[9.5px] text-text-3" title={`Subject ${subject}`}>
@@ -891,6 +910,7 @@ export function Submit() {
                 <select
                   value={s.type}
                   onChange={(e) => patchSample(i, { type: e.target.value })}
+                  aria-label={`Sample type, row ${i + 1}`}
                   className="w-full rounded-[7px] border border-line-strong bg-card-2 px-[9px] py-[7px] font-mono text-[11.5px] text-text-2 outline-none focus:border-accent"
                 >
                   {[...new Set([...SAMPLE_TYPES, s.type])].filter(Boolean).map((t) => (
@@ -899,9 +919,9 @@ export function Submit() {
                     </option>
                   ))}
                 </select>
-                <input value={s.i7} onChange={(e) => patchSample(i, { i7: e.target.value })} className={INPUT_CLS} />
-                <input value={s.i5} onChange={(e) => patchSample(i, { i5: e.target.value })} className={INPUT_CLS} />
-                <input value={s.study} onChange={(e) => patchSample(i, { study: e.target.value })} className={INPUT_CLS} />
+                <input value={s.i7} onChange={(e) => patchSample(i, { i7: e.target.value })} aria-label={`i7 index, row ${i + 1}`} className={INPUT_CLS} />
+                <input value={s.i5} onChange={(e) => patchSample(i, { i5: e.target.value })} aria-label={`i5 index, row ${i + 1}`} className={INPUT_CLS} />
+                <input value={s.study} onChange={(e) => patchSample(i, { study: e.target.value })} aria-label={`Study, row ${i + 1}`} className={INPUT_CLS} />
               </div>
             )
           })
@@ -1062,6 +1082,7 @@ export function Submit() {
                 <SegmentedControl<'attention' | 'all'>
                   value={joinFilter}
                   onChange={setJoinFilter}
+                  label="Filter identity-join rows"
                   options={[
                     { value: 'attention', label: `Needs attention · ${join.blocking}` },
                     { value: 'all', label: `All · ${join.rows.length}` },

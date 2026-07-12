@@ -58,7 +58,10 @@ export function Pager({
           </div>
         )}
         {pages > 1 && (
-          <div className="flex items-center gap-1">
+          // nav landmark so AT users can jump to the pager; aria-current marks the active page. The
+          // prev/next buttons use the native `disabled` attribute, which already conveys the disabled
+          // state to assistive tech (aria-disabled would be redundant on top of it).
+          <nav className="flex items-center gap-1" aria-label="Pagination">
             <button
               type="button"
               onClick={() => onPage(Math.max(1, cur - 1))}
@@ -73,6 +76,8 @@ export function Pager({
                 key={n}
                 type="button"
                 onClick={() => onPage(n)}
+                aria-current={n === cur ? 'page' : undefined}
+                aria-label={`Page ${n}`}
                 className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] transition-colors ${
                   n === cur
                     ? 'bg-accent font-semibold text-white'
@@ -91,7 +96,7 @@ export function Pager({
             >
               ›
             </button>
-          </div>
+          </nav>
         )}
       </div>
     </div>

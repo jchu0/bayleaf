@@ -312,33 +312,33 @@ export function Accession() {
                       />
                     </div>
                     <div className="font-mono text-[11.5px] text-text-3">{i + 1}</div>
-                    <input value={r.subjectId} onChange={(e) => patch(i, { subjectId: e.target.value })} className={INPUT_CLS} placeholder="SUBJ-…" />
-                    <input value={r.sampleId} onChange={(e) => patch(i, { sampleId: e.target.value })} className={INPUT_CLS} placeholder="HG002" />
-                    <select value={r.tissue} onChange={(e) => patch(i, { tissue: e.target.value })} className={SELECT_CLS}>
+                    <input value={r.subjectId} onChange={(e) => patch(i, { subjectId: e.target.value })} aria-label={`Subject ID, row ${i + 1}`} className={INPUT_CLS} placeholder="SUBJ-…" />
+                    <input value={r.sampleId} onChange={(e) => patch(i, { sampleId: e.target.value })} aria-label={`Sample ID, row ${i + 1}`} className={INPUT_CLS} placeholder="HG002" />
+                    <select value={r.tissue} onChange={(e) => patch(i, { tissue: e.target.value })} aria-label={`Tissue, row ${i + 1}`} className={SELECT_CLS}>
                       {[...new Set([...TISSUES, r.tissue])].filter(Boolean).map((t) => (
                         <option key={t} value={t}>
                           {t}
                         </option>
                       ))}
                     </select>
-                    <select value={r.sex ?? ''} onChange={(e) => patch(i, { sex: e.target.value as Sex })} className={SELECT_CLS}>
+                    <select value={r.sex ?? ''} onChange={(e) => patch(i, { sex: e.target.value as Sex })} aria-label={`Sex, row ${i + 1}`} className={SELECT_CLS}>
                       {SEXES.map((s) => (
                         <option key={s.value} value={s.value}>
                           {s.label}
                         </option>
                       ))}
                     </select>
-                    <select value={r.consent ?? ''} onChange={(e) => patch(i, { consent: e.target.value as Consent })} className={SELECT_CLS}>
+                    <select value={r.consent ?? ''} onChange={(e) => patch(i, { consent: e.target.value as Consent })} aria-label={`Consent, row ${i + 1}`} className={SELECT_CLS}>
                       {CONSENTS.map((c) => (
                         <option key={c.value} value={c.value}>
                           {c.label}
                         </option>
                       ))}
                     </select>
-                    <input type="date" value={r.collectedOn ?? ''} onChange={(e) => patch(i, { collectedOn: e.target.value })} className={INPUT_CLS} title="Collection date — not date of birth (DOB is PHI, not collected)" />
-                    <input value={r.accessionId ?? ''} onChange={(e) => patch(i, { accessionId: e.target.value })} className={INPUT_CLS} placeholder="ACC-…" />
-                    <input value={r.site ?? ''} onChange={(e) => patch(i, { site: e.target.value })} className={INPUT_CLS} />
-                    <input value={r.notes ?? ''} onChange={(e) => patch(i, { notes: e.target.value })} className={INPUT_CLS} />
+                    <input type="date" value={r.collectedOn ?? ''} onChange={(e) => patch(i, { collectedOn: e.target.value })} aria-label={`Collected on, row ${i + 1}`} className={INPUT_CLS} title="Collection date — not date of birth (DOB is PHI, not collected)" />
+                    <input value={r.accessionId ?? ''} onChange={(e) => patch(i, { accessionId: e.target.value })} aria-label={`Accession number, row ${i + 1}`} className={INPUT_CLS} placeholder="ACC-…" />
+                    <input value={r.site ?? ''} onChange={(e) => patch(i, { site: e.target.value })} aria-label={`Site or study, row ${i + 1}`} className={INPUT_CLS} />
+                    <input value={r.notes ?? ''} onChange={(e) => patch(i, { notes: e.target.value })} aria-label={`Notes, row ${i + 1}`} className={INPUT_CLS} />
                   </div>
                 )
               })}

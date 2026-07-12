@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 
 // FRAMED tabs — the canonical VIEW-SELECTOR across the app (G5, UIC-2). Each tab is a top-rounded
 // shape with top/side borders sitting on a shared baseline; the ACTIVE tab connects to the content
@@ -23,16 +23,40 @@ export function Tabs<T extends string>({
   onChange: (value: T) => void
   className?: string
 }) {
+  // Roving-tabindex refs so ArrowLeft/Right (+ Home/End) move focus between tabs per the WAI-ARIA
+  // tabs pattern. Only the active tab is in the Tab sequence; arrows move focus AND select
+  // (automatic activation — these are cheap view switches).
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const activeIdx = items.findIndex((it) => it.value === value)
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    let next: number | null = null
+    if (e.key === 'ArrowRight') next = (activeIdx + 1 + items.length) % items.length
+    else if (e.key === 'ArrowLeft') next = (activeIdx - 1 + items.length) % items.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = items.length - 1
+    if (next === null || !items[next]) return
+    e.preventDefault()
+    onChange(items[next].value)
+    btnRefs.current[next]?.focus()
+  }
   return (
-    <div className={`flex items-end gap-1 overflow-x-auto border-b border-line ${className ?? ''}`} role="tablist">
-      {items.map((it) => {
+    <div
+      className={`flex items-end gap-1 overflow-x-auto border-b border-line ${className ?? ''}`}
+      role="tablist"
+      onKeyDown={onKeyDown}
+    >
+      {items.map((it, i) => {
         const active = it.value === value
         return (
           <button
             key={it.value}
+            ref={(el) => {
+              btnRefs.current[i] = el
+            }}
             type="button"
             role="tab"
             aria-selected={active}
+            tabIndex={active ? 0 : -1}
             onClick={() => onChange(it.value)}
             // -mb-px overlaps the container baseline; on the active tab a card-colored bottom border
             // paints over it so the tab merges into the content card (a real "connected" tab).
