@@ -39,7 +39,8 @@ from __future__ import annotations
 
 import hashlib
 import os
-from collections.abc import Mapping
+import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -187,3 +188,58 @@ def default_policy() -> DeidPolicy:
 # `Sample`, in header order. `submitted_by` is joined so the policy can *demonstrably*
 # DROP it (proven by the export tests), not merely omit it.
 IDENTITY_FIELDS: list[str] = ["subject_id", "tissue", "submitted_by"]
+
+
+# --- Free-text scrub (the node-log-observation seam, ADR-0012 least-privilege) ---------------
+#
+# The structured `redact` above shapes a row of named fields; a tool's `.command.log`/`.command.err`
+# is FREE TEXT, so an agent that is granted a bound node's logs needs a text-level scrub before the
+# tail leaves the machine. This is the SAME honesty posture as the rest of the module — a demo
+# heuristic, explicitly **NOT** HIPAA de-identification or a validated NLP PHI scrubber (which stays
+# documented-only, data-platform §2.1d). It does two conservative things:
+#
+#   1. Replaces every occurrence of a KNOWN sensitive literal (the run's subject ids from
+#      `sample_metadata.csv`, the operator `submitted_by`) with a salted pseudonym — so a subject id
+#      that a tool echoed into a path or a log line is pseudonymized, never emitted raw.
+#   2. Redacts a few generic PII shapes (email addresses; 6+-digit runs that could be an MRN / DOB /
+#      SSN / accession) with a fixed marker. The 6-digit floor is deliberately conservative so it
+#      does not shred ordinary small metric integers a log legitimately prints.
+#
+# It never touches a verdict, finding, confidence, or gate input (ADR-0001) — it only shapes text on
+# the read-API egress path.
+
+# A generic email address.
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# A run of 6+ digits (MRN / DOB-as-digits / SSN / accession-ish). Conservative: a shorter run (a
+# coverage depth, a small count) is left alone so a log stays readable.
+_LONG_DIGITS_RE = re.compile(r"\b\d{6,}\b")
+# What a redacted generic-PII match becomes (distinct from a pseudonym so a reader can tell the two
+# apart: a KNOWN literal is pseudonymized + stable; an unknown-shape match is opaquely redacted).
+_TEXT_REDACTED = "[redacted]"
+# Ignore a too-short "sensitive" literal — pseudonymizing a 1-char token would corrupt a log
+# wholesale and leak nothing meaningful. A real subject/operator id is well over this floor.
+_MIN_SENSITIVE_LEN = 3
+
+
+def scrub_text(
+    text: str, *, sensitive: Iterable[str] = (), policy: DeidPolicy | None = None
+) -> str:
+    """De-identify one free-text line/blob for the node-log observation grant (see module note).
+
+    ``sensitive`` are KNOWN literals (subject ids, operator handles) to pseudonymize wherever they
+    appear; longer literals are replaced first so a shorter substring can't pre-empt a longer id.
+    Generic email/long-digit shapes are then redacted with a fixed marker. Pure text→text; a real
+    NLP PHI scrubber is a documented seam, not this. ``policy`` supplies the pseudonymization salt
+    (defaults to :func:`default_policy`)."""
+    active = policy or default_policy()
+    out = text
+    # Longest-first so "SUBJ-00042" is pseudonymized before a bare "SUBJ" substring could match it.
+    for token in sorted(
+        {s.strip() for s in sensitive if s and len(s.strip()) >= _MIN_SENSITIVE_LEN},
+        key=len,
+        reverse=True,
+    ):
+        out = out.replace(token, _pseudonymize(token, active.salt))
+    out = _EMAIL_RE.sub(_TEXT_REDACTED, out)
+    out = _LONG_DIGITS_RE.sub(_TEXT_REDACTED, out)
+    return out

@@ -375,6 +375,38 @@ export type Actor = { id: string; role: Role }
 export type AgentGrant = 'outputs' | 'logs'
 export type AgentBinding = { agent: string; node: string; grants: AgentGrant[] }
 
+// PHASE 4 — a bound agent's SCOPED READ of a node's published outputs
+// (GET /api/runs/{run_id}/nodes/{node_id}/observations?grants=outputs[,logs]). Advisory,
+// read-only, off the gate (ADR-0001) and node-scoped/least-privilege (ADR-0012): 'outputs' lists
+// the node's published artifacts; 'logs' (opt-in) adds the DE-IDENTIFIED tail of the node's task
+// logs. `source: 'none'` + a `note` is the honest-empty state (a fixture-only run, or an
+// authored-pipeline node id that didn't resolve) — never a fabricated output.
+export type NodeObservationArtifact = {
+  name: string
+  relpath: string
+  kind: string | null
+  size_bytes: number
+}
+export type NodeLogTail = {
+  stream: 'stdout' | 'stderr'
+  relpath: string
+  lines: string[] // scrubbed tail — subject ids + generic PII redacted
+  truncated: boolean
+  deid_policy: string
+}
+export type NodeObservation = {
+  run_id: string
+  node_id: string
+  tool: string | null
+  process: string | null
+  grants: AgentGrant[]
+  advisory: true
+  source: 'nextflow-publish' | 'none'
+  outputs: NodeObservationArtifact[]
+  logs: NodeLogTail[]
+  note: string | null
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Origin / artifact vocabularies (read-only in the client — origin never relabels up).
 // ─────────────────────────────────────────────────────────────────────────────

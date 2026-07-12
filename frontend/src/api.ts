@@ -6,6 +6,7 @@
 
 import type {
   Actor,
+  AgentGrant,
   AgentProposal,
   ArchiveDigest,
   CardReadout,
@@ -21,6 +22,7 @@ import type {
   MonitoringMetrics,
   MonitoringWindow,
   NextflowGraphBody,
+  NodeObservation,
   NodeProposal,
   PipelineGraph,
   PipelineRunStatus,
@@ -248,6 +250,14 @@ export const api = {
   // (ADR-0004); backs the RunReport's full per-variant table. Empty array for a run with no
   // variants.csv (a missing annotation is a signal, not an error).
   variants: (runId: string) => get<VariantCall[]>(`/api/runs/${enc(runId)}/variants`),
+  // PHASE 4 — a bound advisory agent's SCOPED READ of one node's published outputs for a run
+  // (payoff for the Wave-2 AgentBinding grant model). READ-only, off the gate: 'outputs' (default)
+  // lists the node's published artifacts; 'logs' (opt-in) adds the DE-IDENTIFIED task-log tail.
+  // Backs the future grant-popover / agent-triage "what the agent sees" view.
+  nodeObservations: (runId: string, nodeId: string, grants: AgentGrant[] = ['outputs']) =>
+    get<NodeObservation>(
+      `/api/runs/${enc(runId)}/nodes/${enc(nodeId)}/observations?grants=${enc(grants.join(','))}`,
+    ),
   triage: (runId: string, sampleId: string) =>
     get<TriageNote>(`/api/runs/${enc(runId)}/cards/${enc(sampleId)}/triage`),
 
