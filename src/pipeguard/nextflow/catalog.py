@@ -239,11 +239,13 @@ PROCESS_CATALOG: dict[str, ProcessSpec] = {spec.tool: spec for spec in _SPECS}
 
 # No-input SOURCE cards (the Builder's References section): each emits a reference artifact from a
 # `params.<x>` file path rather than from an upstream process. Mapped kind → params key so the
-# compiler can build a value channel for it. Not full processes — they have no command.
+# compiler can build a value channel for it. Not full processes — they have no command. Only the two
+# references the germline chain actually consumes are mapped; the retired Truth VCF node's benchmark
+# reference is intentionally omitted — the `truth_vcf` KIND stays in the wider vocabulary (a generic
+# File-input source can still emit it), but nothing in the catalogued chain consumes it as a ref.
 REFERENCE_PARAM: dict[str, str] = {
     "reference_fasta": "reference",
     "panel_bed": "panel_bed",
-    "truth_vcf": "truth_vcf",
 }
 
 # Reference params whose file carries a SIDECAR INDEX that must be staged alongside it (a FASTA

@@ -179,12 +179,12 @@ export type Ref = { id: string; label: string; kind: string; file: string; x: nu
 // B): fasta→bwa (x420); Panel BED at x1150 — NOT over its primary consumer's column (x800), because an
 // occlusion-scoring relaxation (minimise edges routed BEHIND a non-endpoint card) found that stacking it
 // over markdup put its panel_bed→mosdepth wire behind markdup AND put it on the fasta→call/norm lanes;
-// moving it right (above the markdup·call gap / call) clears 3 of the layout's occlusions at once. Truth
-// VCF parked over norm (x1560, unwired). Pitch matches the tool spine (NODE_W 320 + ~60 gap).
+// moving it right (above the markdup·call gap / call) clears 3 of the layout's occlusions at once. Pitch
+// matches the tool spine (NODE_W 320 + ~60 gap). (The old unwired Truth VCF benchmark source was retired;
+// a truth/benchmark VCF is now a generic typed 'File input' — see BTOOLSPEC below.)
 export const REFS: Ref[] = [
   { id: 'r_fasta', label: 'Reference genome', kind: 'reference_fasta', file: 'reference/GRCh38.fa', x: 420 },
   { id: 'r_bed', label: 'Panel BED', kind: 'panel_bed', file: 'reference/panel.bed', x: 1150 },
-  { id: 'r_truth', label: 'Truth VCF', kind: 'truth_vcf', file: 'HG002…benchmark.vcf.gz', x: 1560 },
 ]
 
 export const GATE_CHECKPOINTS = [
@@ -220,25 +220,32 @@ export const BTOOLSPEC: Record<string, { version: string; icon: IconKey; ins: st
   'bcftools call': { version: '1.20', icon: 'dna', ins: ['bam', 'reference_fasta', 'panel_bed'], outs: ['vcf'] },
   'bcftools norm': { version: '1.20', icon: 'funnel', ins: ['vcf', 'reference_fasta'], outs: ['filtered_vcf'] },
   'MultiQC': { version: '1.21', icon: 'layers', ins: ['fastp_json', 'markdup_metrics', 'samtools_stats', 'mosdepth_summary', 'mosdepth_thresholds'], outs: ['multiqc_json'] },
-  'NGSCheckMate': { version: '1.0.1', icon: 'bars', ins: ['bam'], outs: ['ngscheckmate'] },
   // Reference SOURCES — no inputs; each emits ONE output port PER consumer (same kind, distinct idx)
   // so every consumer edge is a clean one-to-one wire instead of many edges branching off one port
-  // (the "tangled mess"): fasta → bwa/call/norm (3 outs), panel BED → mosdepth/call (2 outs), truth
-  // VCF → benchmarking (1, unwired). Typed wiring keeps a fasta from landing on a fastq port.
+  // (the "tangled mess"): fasta → bwa/call/norm (3 outs), panel BED → mosdepth/call (2 outs). Typed
+  // wiring keeps a fasta from landing on a fastq port.
   'Reference FASTA': { version: 'GRCh38', icon: 'db', ins: [], outs: ['reference_fasta', 'reference_fasta', 'reference_fasta'] },
   'Panel BED': { version: 'panel', icon: 'db', ins: [], outs: ['panel_bed', 'panel_bed'] },
-  'Truth VCF': { version: 'v4.2.1', icon: 'db', ins: [], outs: ['truth_vcf'] },
-  // Primary-lane INPUT source (raw FASTQ folder) + a file-OUTPUT sink (a report/artifact destination),
-  // so the graph closes on both ends: source → tools → sink (ADR-0019 slice 1c). Both compose ≠ execute.
+  // Primary-lane INPUT source (raw FASTQ folder) + a GENERIC typed 'File input' (emits ONE artifact
+  // kind the operator picks — makeUserNode honours the chosen kind, e.g. a vcf / truth_vcf / bam to
+  // re-analyse; the inspector's per-port kind picker retypes it) + a file-OUTPUT sink, so the graph
+  // closes on both ends: source → tools → sink (ADR-0019 slice 1c). All three compose ≠ execute — a
+  // source emits an artifact, it never runs a tool. 'File input' defaults to fastq (overridden per node).
   'FASTQ input': { version: 'folder', icon: 'db', ins: [], outs: ['fastq'] },
+  'File input': { version: 'file', icon: 'db', ins: [], outs: ['fastq'] },
   'File output': { version: 'file', icon: 'archive', ins: ['multiqc_json'], outs: [] },
 }
 
 export function makeUserNode(name: string, kind: string, index: number): UserNode {
   const spec = BTOOLSPEC[name] ?? { version: 'v1.0', icon: 'merge' as IconKey, ins: [kind], outs: [kind] }
+  // 'File input' is the GENERIC typed source: it emits whichever ONE artifact kind the operator picks
+  // (fastq / vcf / bam / reference_fasta / truth_vcf / …), so a re-analysis input (e.g. a VCF or truth
+  // VCF to re-gate) is a plain typed source card rather than a bespoke palette node. Every other
+  // catalogued node keeps its fixed BTOOLSPEC ports. compose ≠ execute: a source emits, never runs.
+  const outs = name === 'File input' ? [kind] : spec.outs
   const x = 150 + (index % 3) * 200
   const y = 80 + Math.floor(index / 3) * 160
-  return { id: `u${Date.now().toString(36)}${index}`, name, kind, version: spec.version, icon: spec.icon, ins: spec.ins, outs: spec.outs, x, y }
+  return { id: `u${Date.now().toString(36)}${index}`, name, kind, version: spec.version, icon: spec.icon, ins: spec.ins, outs, x, y }
 }
 
 // ── On-canvas editing helpers (PB2) ────────────────────────────────────────
@@ -390,8 +397,10 @@ export const CARD_PORTS: Record<string, CardPort[]> = {
     { kind: 'panel_bed', dir: 'out', side: 'right', state: 'required' },
     { kind: 'panel_bed', dir: 'out', side: 'right', state: 'required' },
   ],
-  'Truth VCF': [{ kind: 'truth_vcf', dir: 'out', side: 'right', state: 'reserved' }],
   'FASTQ input': [{ kind: 'fastq', dir: 'out', side: 'right', state: 'required' }],
+  // 'File input' has NO fixed catalog entry: its single output port kind is dynamic (whatever the
+  // operator picks), and cardPortList falls back to {required, portSide(kind,'out')} for it — so the
+  // one port renders correctly for any chosen artifact kind.
   'File output': [{ kind: 'multiqc_json', dir: 'in', side: 'left', state: 'required' }],
 }
 
@@ -779,8 +788,8 @@ export function germlineTemplate(): { nodes: UserNode[]; edges: UserEdge[] } {
   }))
   // Reference SOURCES as first-class editable nodes (ins:[]) so the WHOLE pipeline — sources + tools —
   // is one editable, saveable graph (ADR-0019 slice 1a). Positioned in the top reference band (y ≈ REF_Y),
-  // x aligned over their primary consumer (mirrors the static REFS layout). Truth VCF stays unwired.
-  const SRC_NAME: Record<string, string> = { r_fasta: 'Reference FASTA', r_bed: 'Panel BED', r_truth: 'Truth VCF' }
+  // x aligned over their primary consumer (mirrors the static REFS layout).
+  const SRC_NAME: Record<string, string> = { r_fasta: 'Reference FASTA', r_bed: 'Panel BED' }
   const REF_Y = 40
   const sourceNodes: UserNode[] = REFS.map((r) => {
     const name = SRC_NAME[r.id] ?? r.label
@@ -854,17 +863,26 @@ export const GIAB_LOC: GiabLoc[] = [
   { k: 'multiqc_json', field: 'path', loc: 'multiqc_data/multiqc_data.json', parser: 'null', required: false, role: 'output', on: 'error' },
   { k: 'reference_fasta', field: 'path', loc: 'reference/GRCh38.fa', parser: 'null', required: true, role: 'reference', on: 'error' },
   { k: 'panel_bed', field: 'path', loc: 'reference/panel.bed', parser: 'null', required: true, role: 'reference', on: 'error' },
-  { k: 'truth_vcf', field: 'path', loc: 'reference/HG002_benchmark.vcf.gz', parser: 'null', required: false, role: 'reference', on: 'error' },
 ]
 export const ON_CYCLE: Record<OnMultiple, OnMultiple> = { first: 'all', all: 'error', error: 'first' }
 
-// The typed port-kind vocabulary the inspector offers — the UNION of every BTOOLSPEC in/out kind
-// and every emitted locator kind. Manual port editing is constrained to this set so a hand-authored
-// node can never invent a kind the wiring/locators don't understand (mirrors the "flagged, never
-// invented" ethos of the author-node flow). NOTE: declared AFTER GIAB_LOC — it reads GIAB_LOC at
-// module-init, so it must not be hoisted above that const (would be a temporal-dead-zone crash).
+// Known artifact kinds with NO seeded palette node or emitted locator, kept OFFERABLE so a generic
+// 'File input' source (or a hand-composed node) can still stand in for a retired named source — e.g. a
+// truth/benchmark VCF or an identity report to re-gate. Mirrors the backend node_author ARTIFACT_KINDS
+// literal (src/pipeguard/node_author/models.py), which also carries truth_vcf + ngscheckmate after the
+// Truth VCF / NGSCheckMate palette nodes were removed; the two vocabularies stay in sync.
+const EXTRA_VOCAB_KINDS = ['truth_vcf', 'ngscheckmate']
+// The typed port-kind vocabulary the inspector offers — the UNION of every BTOOLSPEC in/out kind,
+// every emitted locator kind, and EXTRA_VOCAB_KINDS. Manual port editing is constrained to this set so
+// a hand-authored node can never invent a kind the wiring/locators don't understand (mirrors the
+// "flagged, never invented" ethos of the author-node flow). NOTE: declared AFTER GIAB_LOC — it reads
+// GIAB_LOC at module-init, so it must not be hoisted above that const (would be a temporal-dead-zone crash).
 export const ARTIFACT_KINDS: string[] = Array.from(
-  new Set([...Object.values(BTOOLSPEC).flatMap((s) => [...s.ins, ...s.outs]), ...GIAB_LOC.map((g) => g.k)]),
+  new Set([
+    ...Object.values(BTOOLSPEC).flatMap((s) => [...s.ins, ...s.outs]),
+    ...GIAB_LOC.map((g) => g.k),
+    ...EXTRA_VOCAB_KINDS,
+  ]),
 ).sort()
 
 // Per-kind locator edits (path/parser/on_multiple/required). Origin is NEVER editable — it is
@@ -979,7 +997,6 @@ export function dryRows(edits: LocEdits): DryRow[] {
     let detail = 'run/' + m.loc.replace('*', 'HG002')
     if (g.k === 'fastq') detail = '2 files · run/fastq/HG002_R{1,2}_001.fastq.gz'
     if (g.k === 'multiqc_json') { status = 'ambiguous'; detail = '2 candidates under run/multiqc_data/' }
-    if (g.k === 'truth_vcf') { status = 'missing'; detail = 'no match — optional, skipped' }
     return { kind: g.k, status, detail }
   })
 }
