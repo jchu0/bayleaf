@@ -762,7 +762,7 @@ export function NextflowExportModal({ graph, onClose }: { graph: NextflowGraphBo
                 <span>
                   This bundle includes an <strong>operator-authored custom process</strong> — open its{' '}
                   <span className="font-mono">modules/…</span> file to review the verbatim script. It runs on the compute host;
-                  production needs sandboxing (ADR-0020). PipeGuard transcribed it (compose ≠ execute).
+                  production needs sandboxing (ADR-0020). bayleaf transcribed it (compose ≠ execute).
                 </span>
               </div>
             )}
@@ -1193,7 +1193,7 @@ export function CustomScriptInspector({
         <div className="mb-4 flex items-start gap-2 rounded-[10px] border border-hold-bd bg-hold-bg px-3 py-2.5 text-[11px] leading-relaxed text-hold-fg">
           <TriangleAlert size={14} className="mt-0.5 shrink-0" />
           <span>
-            <strong>{CUSTOM_SAFETY_LABEL}.</strong> PipeGuard transcribes your script verbatim into the emitted Nextflow —{' '}
+            <strong>{CUSTOM_SAFETY_LABEL}.</strong> bayleaf transcribes your script verbatim into the emitted Nextflow —{' '}
             it never authors or vets the command (compose ≠ execute). It reaches a compute host <strong>only</strong> once a
             saved pipeline is approved (the run gate, ADR-0020). This card sets no verdict.
           </span>
@@ -1267,7 +1267,7 @@ export function CustomScriptInspector({
           />
           <p className="mt-1 text-[10px] leading-snug text-text-3">
             Reference a wired input by its port kind (<span className="font-mono">${'{'}vcf{'}'}</span>) and the sample as{' '}
-            <span className="font-mono">${'{'}meta.id{'}'}</span>. A blank body is rejected — PipeGuard never fabricates a command.
+            <span className="font-mono">${'{'}meta.id{'}'}</span>. A blank body is rejected — bayleaf never fabricates a command.
           </p>
         </div>
 
@@ -1314,7 +1314,7 @@ export function CustomScriptInspector({
         <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">Locators</div>
         {locators.length === 0 ? (
           <p className="text-[11px] text-text-3">
-            No emitted locator for this node’s output kinds. Give it an output kind PipeGuard ingests (e.g.{' '}
+            No emitted locator for this node’s output kinds. Give it an output kind bayleaf ingests (e.g.{' '}
             <span className="font-mono">filtered_vcf</span>) to author a path here.
           </p>
         ) : (
