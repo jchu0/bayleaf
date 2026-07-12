@@ -13,6 +13,11 @@ Covers the two things ``POST /api/runs`` gained on top of the seeded-germline de
 Offline + deterministic: the background driver (``_run_pipeline``) is monkeypatched to a capturing
 no-op, so no thread runs Nextflow; the driver-argv construction is exercised directly against a
 seeded job record with ``run_driver`` captured. Never runs ``nextflow``.
+
+WS-09 (submit-time fail-fast): an authored pipeline is validated at SUBMIT against what intake can
+actually run — its required external inputs must all be HG002 defaults intake supplies, and its
+declared outputs must satisfy the frozen-five parse contract — so a non-gate-able graph is a 422 up
+front instead of a full compute burn that dies at parse. These are asserted here.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from scripts.seed_approved_germline import germline_graph_dict
 
 import api.routers.intake as intake
 from api.job_store import KIND_INTAKE
@@ -36,14 +42,68 @@ _ORIGINAL_RUN_PIPELINE = intake._run_pipeline
 _REVIEWER = {"X-PipeGuard-Role": "reviewer", "X-PipeGuard-Actor": "a.rivera"}
 _VIEWER = {"X-PipeGuard-Role": "viewer", "X-PipeGuard-Actor": "v"}
 
-# A minimal compilable authored graph (fastp → bwa-mem2), distinct from the germline default.
-_GRAPH: dict[str, Any] = {
+# The default authored graph for the happy-path tests: the FULL germline chain (produces the
+# frozen-five outputs the post-run parse needs + consumes only HG002-default inputs), so it clears
+# the WS-09 submit-time gate exactly like the committed reference does.
+_GRAPH: dict[str, Any] = germline_graph_dict()
+
+# A minimal compilable authored graph (fastp → bwa-mem2) that produces NO mosdepth/norm outputs, so
+# it can't yield a gate-able card — the shape WS-09 rejects at submit.
+_NONGERMLINE_GRAPH: dict[str, Any] = {
     "nodes": [
         {"id": "n_fastp", "name": "fastp", "ins": ["fastq"], "outs": ["fastp_json", "fastq"]},
         {"id": "n_bwa", "name": "bwa-mem2", "ins": ["fastq", "reference_fasta"], "outs": ["bam"]},
     ],
     "edges": [{"from": {"node": "n_fastp", "idx": 1}, "to": {"node": "n_bwa", "idx": 0}}],
 }
+
+
+def _graph_faking_outputs_via_custom() -> dict[str, Any]:
+    """A catalogued fastp plus CUSTOM nodes that merely *declare* the mosdepth/norm output kinds. A
+    custom body publishes to ``results/custom``, not the ``results/`` the parser globs, so this
+    graph still can't yield a gate-able card — the submit gate must reject it, NOT be fooled by the
+    declared kinds (an anti-scaffold guard: crediting node ``outs`` instead of catalogued spec
+    outputs would let this false-pass)."""
+    return {
+        "nodes": [
+            {"id": "n_fastp", "name": "fastp", "ins": ["fastq"], "outs": ["fastp_json", "fastq"]},
+            {
+                "id": "n_fake_cov",
+                "name": "custom-cov",
+                "ins": ["fastq"],
+                "outs": ["mosdepth_summary", "mosdepth_thresholds"],
+                "script": "echo cov",
+            },
+            {
+                "id": "n_fake_vcf",
+                "name": "custom-vcf",
+                "ins": ["fastq"],
+                "outs": ["filtered_vcf"],
+                "script": "echo vcf",
+            },
+        ],
+        "edges": [
+            {"from": {"node": "n_fastp", "idx": 1}, "to": {"node": "n_fake_cov", "idx": 0}},
+            {"from": {"node": "n_fastp", "idx": 1}, "to": {"node": "n_fake_vcf", "idx": 0}},
+        ],
+    }
+
+
+def _graph_needing_unsupported_input() -> dict[str, Any]:
+    """The germline chain (so it PASSES the parse contract) plus a custom stage that consumes a
+    ``truth_vcf`` external input intake can't supply — so ONLY the input-parity check can reject it,
+    making the test unambiguous about which guard fired."""
+    g = germline_graph_dict()
+    g["nodes"].append(
+        {
+            "id": "n_concordance",
+            "name": "custom-concordance",
+            "ins": ["truth_vcf"],
+            "outs": ["report"],
+            "script": "echo concordance",  # a non-empty body ⇒ a custom process, not a placeholder
+        }
+    )
+    return g
 
 
 class _FakeStore:
@@ -66,14 +126,16 @@ class _FakeStore:
         return record
 
 
-def _record(name: str, version: int, *, approved: bool) -> dict[str, Any]:
+def _record(
+    name: str, version: int, *, approved: bool, graph: dict[str, Any] | None = None
+) -> dict[str, Any]:
     rec: dict[str, Any] = {
         "id": f"{name}-{version}",
         "name": name,
         "version": version,
         "schema_version": "builder/0.1",
         "created_at": "2026-07-12T00:00:00+00:00",
-        "graph": _GRAPH,
+        "graph": _GRAPH if graph is None else graph,
         "status": "approved" if approved else "draft",
     }
     if approved:
@@ -141,6 +203,68 @@ def test_authored_pipeline_unknown_name_is_409(env: dict[str, Any]) -> None:
     _seed_store(env["monkeypatch"])  # empty store
     resp = _submit(run_name="RUN-AUTHORED-UNK", pipeline="never-saved")
     assert resp.status_code == 409 and "no approved version" in resp.json()["detail"]
+
+
+def test_nongermline_authored_pipeline_rejected_at_submit(env: dict[str, Any]) -> None:
+    """WS-09 #1: an approved authored pipeline whose outputs can't satisfy the frozen-five parse
+    contract is rejected at SUBMIT (422) BEFORE any compute — not left to run to completion in
+    Nextflow then die at parse. fastp→bwa-mem2 produces no mosdepth/norm outputs, so it can never
+    yield a gate-able card; the germline reference (which does) still passes submit."""
+    _seed_store(
+        env["monkeypatch"],
+        _record("aln-only", 1, approved=True, graph=_NONGERMLINE_GRAPH),
+        _record("germline-ref", 1, approved=True),  # default graph = the full germline chain
+    )
+    resp = _submit(run_name="RUN-NONGERMLINE", pipeline="aln-only")
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    # Names the missing output kind(s) the parse requires — an actionable, honest message.
+    assert "mosdepth_summary" in detail and "filtered_vcf" in detail
+    assert env["fired"] == []  # rejected up front — no driver thread, no compute burn
+    # Nothing was half-registered: the 422 fires before the run id is reserved.
+    assert intake.get_job_store().get("RUN-NONGERMLINE", KIND_INTAKE) is None
+    # The germline reference DOES pass submit (202) and fires — only the bad shape is refused.
+    ok = _submit(run_name="RUN-GERMLINE-OK", pipeline="germline-ref")
+    assert ok.status_code == 202 and "RUN-GERMLINE-OK" in env["fired"]
+
+
+def test_custom_nodes_declaring_required_kinds_do_not_fool_the_parse_gate(
+    env: dict[str, Any],
+) -> None:
+    """Anti-scaffold guard for WS-09 #1: the parse gate credits only CATALOGUED spec outputs (which
+    publish to ``results/``), never a custom node's merely-declared kinds (which publish to
+    ``results/custom``). A graph that fakes the mosdepth/norm outputs via custom nodes is still a
+    422 — the live parse would find nothing gate-able, so the gate must too."""
+    _seed_store(
+        env["monkeypatch"],
+        _record("fake-outputs", 1, approved=True, graph=_graph_faking_outputs_via_custom()),
+    )
+    resp = _submit(run_name="RUN-FAKE-OUT", pipeline="fake-outputs")
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    assert "mosdepth_summary" in detail and "filtered_vcf" in detail
+    assert env["fired"] == []
+
+
+def test_intake_rejects_authored_graph_with_unfilled_inputs(env: dict[str, Any]) -> None:
+    """WS-09 #2: intake refuses (422) an authored graph whose required inputs it can't supply —
+    parity with the Builder-Run path's ``required_inputs`` validation. Intake only ever supplies the
+    HG002 germline defaults (fastq / reference_fasta / panel_bed); a graph needing a ``truth_vcf``
+    would otherwise fall back to those defaults and process the WRONG inputs (wrong-but-runs). A
+    valid germline submit whose inputs are all defaults still succeeds."""
+    _seed_store(
+        env["monkeypatch"],
+        _record("needs-truth", 1, approved=True, graph=_graph_needing_unsupported_input()),
+        _record("germline-ref", 1, approved=True),
+    )
+    resp = _submit(run_name="RUN-UNFILLED", pipeline="needs-truth")
+    assert resp.status_code == 422
+    assert "truth_vcf" in resp.json()["detail"]  # names the input intake can't supply
+    assert env["fired"] == []  # rejected before any driver thread
+    assert intake.get_job_store().get("RUN-UNFILLED", KIND_INTAKE) is None
+    # Parity: a germline submit (all inputs are HG002 defaults) still fires.
+    ok = _submit(run_name="RUN-INPUT-OK", pipeline="germline-ref")
+    assert ok.status_code == 202 and "RUN-INPUT-OK" in env["fired"]
 
 
 def test_run_driver_argv_carries_pipeline_when_authored(env: dict[str, Any]) -> None:
@@ -254,6 +378,26 @@ def test_schedule_parks_with_scheduled_at_and_does_not_fire(env: dict[str, Any])
     rel = client.post("/api/runs/RUN-SCHED/release", headers=_REVIEWER)
     assert rel.status_code == 202 and rel.json()["status"] == "running"
     assert env["fired"] == ["RUN-SCHED"]
+
+
+def test_scheduled_run_is_honest_manual_release_only(env: dict[str, Any]) -> None:
+    """WS-09 #3 (MED — honesty): a ``schedule`` run is NOT auto-fired at its time (no background
+    scheduler exists). Its status stays truthfully ``scheduled`` across repeated polls — never an
+    eternal spinner that silently claims it will run — and the ONLY way it advances is an explicit
+    manual release. This freezes the honest labeling so a half-scheduler can't regress in."""
+    past = "2000-01-01T00:00:00+00:00"  # already elapsed — an auto-scheduler would have fired it
+    resp = _submit(run_name="RUN-SCHED-HONEST", mode="schedule", scheduled_at=past)
+    assert resp.status_code == 202 and resp.json()["status"] == "scheduled"
+    assert env["fired"] == []
+    # Repeated polls keep reporting `scheduled` — the elapsed time never auto-transitions the run.
+    for _ in range(3):
+        status = client.get("/api/runs/RUN-SCHED-HONEST/intake-status").json()
+        assert status["status"] == "scheduled" and status["scheduled_at"] == past
+    assert env["fired"] == []  # still not fired after elapsed-time polls — no auto-release
+    # Only a manual release advances it (the documented, honest counterpart to auto-scheduling).
+    rel = client.post("/api/runs/RUN-SCHED-HONEST/release", headers=_REVIEWER)
+    assert rel.status_code == 202 and rel.json()["status"] == "running"
+    assert env["fired"] == ["RUN-SCHED-HONEST"]
 
 
 def test_schedule_without_scheduled_at_is_422(env: dict[str, Any]) -> None:

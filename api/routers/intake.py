@@ -36,6 +36,8 @@ from pydantic import BaseModel, ConfigDict
 
 from api.auth import Actor, require_role
 from api.authored_pipeline import (
+    check_inputs_suppliable,
+    check_parse_contract,
     compile_record,
     materialize_bundle,
     resolve_approved,
@@ -60,6 +62,12 @@ _SCRIPT = _REPO / "scripts" / "run_giab_pipeline.py"
 # run would need the other GIAB reads fetched + a multi-sample pipeline — out of scope.
 _FIXTURE_SAMPLES = {"HG002"}
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+# The external input KINDS intake can actually supply: it always hands the driver the fixed HG002
+# germline defaults (reads + reference + panel BED — see ``scripts/run_giab_pipeline.py``), with no
+# operator input picker. An authored pipeline whose ``required_inputs`` exceeds this set can't run
+# here (it would silently fall back to the HG002 defaults), so it is rejected at submit (WS-09 #2).
+_INTAKE_SUPPLIABLE_KINDS: frozenset[str] = frozenset({"fastq", "reference_fasta", "panel_bed"})
 
 # Run ids THIS process has reserved (a thread was — or is about to be — launched for them). Guarded
 # by ``_lock``. It serves two jobs: (1) the ATOMIC duplicate-run-id guard — a run id is claimed here
@@ -250,9 +258,17 @@ def _prepare_authored_pipeline(run_id: str, name: str, version: int | None) -> s
     The SAME approval gate as ``POST /api/pipelines/run`` (ADR-0014/0021): a 409 if the name has no
     approved version, a 422 if the approved graph won't compile / has no tool node. Returns the path
     to the compiled ``main.nf`` the driver runs via ``--pipeline``. Never a raw client graph.
+
+    WS-09 fail-fast: before materializing, validate the compiled graph against what intake can
+    actually run — its required external inputs must all be HG002 defaults intake supplies
+    (:func:`check_inputs_suppliable`), and its declared outputs must satisfy the frozen-five parse
+    contract (:func:`check_parse_contract`). Either fails with a 422 UP FRONT, so a non-gate-able or
+    unfillable authored graph never launches a full Nextflow compute that would die at parse.
     """
     record = resolve_approved(get_pipeline_store(), name, version)
-    _graph, bundle = compile_record(record, name)
+    graph, bundle = compile_record(record, name)
+    check_inputs_suppliable(graph, name, _INTAKE_SUPPLIABLE_KINDS)
+    check_parse_contract(graph, name)
     main_nf = materialize_bundle(bundle, _NF_RUNS / run_id / "pipeline")
     return str(main_nf)
 
@@ -267,7 +283,11 @@ def submit_run(
     ``mode`` decides whether the driver fires now (``immediate``), is parked for a manual release
     (``hold``), or is scheduled (``schedule`` + ``scheduled_at``, released manually — auto-release
     is a deferred seam). Running a non-default authored pipeline still requires reviewer/approver
-    (the endpoint gate). compose ≠ execute holds at the core — only the driver shells out."""
+    (the endpoint gate). An authored pipeline is validated at SUBMIT against what intake can run —
+    its required inputs must be HG002 defaults intake supplies AND its outputs must satisfy the
+    frozen-five parse contract — so a non-gate-able / unfillable graph is a 422 up front, never a
+    full compute that dies at parse (WS-09). compose ≠ execute holds at the core — only the driver
+    shells out."""
     run_id = body.run_name.strip()
     if not _RUN_ID_RE.match(run_id):
         run_id = re.sub(r"[^A-Za-z0-9._-]+", "-", body.run_name).strip("-") or "RUN"
