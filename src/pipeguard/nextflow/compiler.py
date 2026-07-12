@@ -28,15 +28,40 @@ class CompileError(ValueError):
 
 @dataclass
 class NfNode:
-    """One Builder card: a tool + its ordered input/output artifact-kinds."""
+    """One Builder card: a tool + its ordered input/output artifact-kinds.
+
+    A card MAY also carry an operator-authored custom Nextflow process body. When a HUMAN operator
+    supplies a non-empty ``script`` (via the Builder's custom-script card), this node is a CUSTOM
+    PROCESS: the compiler renders that body VERBATIM, wired from this node's own ``ins``/``outs``
+    exactly like a catalogued tool, and NEVER consults the tool catalog for it (ADR-0020). The
+    optional ``container``/``conda`` are the operator's own packaging for that body. These fields
+    are absent (``None``) for every ordinary catalogued/uncatalogued card, so the change is purely
+    additive — the seeded germline chain carries none and its compiled output is byte-identical.
+    """
 
     id: str
     tool: str
     ins: list[str] = field(default_factory=list)
     outs: list[str] = field(default_factory=list)
+    # Operator-authored custom process (optional). A non-empty `script` ⇒ a CUSTOM PROCESS.
+    script: str | None = None  # verbatim Nextflow `script:` body; never rewritten/fabricated
+    container: str | None = None  # operator's container image for the custom body (else omitted)
+    conda: str | None = None  # operator's conda spec for the custom body (else omitted)
+
+    def is_custom(self) -> bool:
+        """True when the operator supplied a NON-EMPTY custom Nextflow body — this node renders
+        verbatim from its own ``script``/``ins``/``outs`` and the tool catalog is NOT consulted for
+        it (ADR-0020). A blank/whitespace-only ``script`` is deliberately NOT custom here: it is a
+        misauthored card the compiler rejects (see ``compile_graph``), never a fabricated
+        command."""
+        return bool(self.script and self.script.strip())
 
     def is_source(self) -> bool:
-        """A no-input node emitting only reference kinds — a params-backed source, not a process."""
+        """A no-input node emitting only reference kinds — a params-backed source, not a process.
+        A custom process is never a source: it carries a real command and always renders as a
+        process, even if it happens to have no inputs (e.g. an operator-authored fetch step)."""
+        if self.is_custom():
+            return False
         return not self.ins and bool(self.outs) and all(o in REFERENCE_PARAM for o in self.outs)
 
 
@@ -124,6 +149,18 @@ def compile_graph(graph: NfGraph) -> NextflowBundle:
     nodes = {n.id: n for n in graph.nodes}
     if len(nodes) != len(graph.nodes):
         raise CompileError("duplicate node id in graph")
+
+    # A custom-script card whose body is blank: NEVER fabricate a command — fail loud so a reviewer
+    # must supply a real operator-authored body (ADR-0020 safety pin [b]). `script is not None` is
+    # the "operator declared a custom card" signal; a non-blank body renders verbatim (is_custom),
+    # a blank one is a misauthored card. This is distinct from an uncatalogued-AND-no-script node
+    # (`script is None`), which stays the existing labelled placeholder — never rejected.
+    for n in graph.nodes:
+        if n.script is not None and not n.script.strip():
+            raise CompileError(
+                f"custom node '{n.id}' ({n.tool}) declares an empty script — a custom process "
+                "needs an operator-authored body; PipeGuard never fabricates a command"
+            )
 
     # Validate every edge references real nodes/ports (a missing endpoint is a bug, not a drop).
     incoming: dict[tuple[str, int], tuple[str, int]] = {}
@@ -214,12 +251,76 @@ def _topo_order(
 
 # ── renderers ─────────────────────────────────────────────────────────────────────────────────
 def _render_module(tool: str, nodes: dict[str, NfNode]) -> str:
+    # An operator-authored custom node for this tool WINS over the catalog: its verbatim body is
+    # rendered and the catalog is never consulted for it (a HUMAN authored this command, ADR-0020).
+    # Checked first so a custom card can even reuse a catalogued tool name without silently
+    # inheriting the curated command.
+    custom = next((n for n in nodes.values() if n.tool == tool and n.is_custom()), None)
+    if custom is not None:
+        return _render_custom(custom)
     spec = catalog_entry(tool)
     if spec:
         return _render_catalogued(spec)
     # Placeholder for an uncatalogued tool: real wiring, no fabricated command.
     node = next(n for n in nodes.values() if n.tool == tool)
     return _render_placeholder(tool, node)
+
+
+def _custom_input_decl(kind: str) -> str:
+    """The Nextflow input declaration for one custom-process input port. A reference kind stays a
+    shared, meta-free value channel (an indexed FASTA arrives as a ``[file, sidecars]`` tuple,
+    matching the compiler's ``ch_<param>`` staging); any other kind is a per-sample artifact whose
+    meta rides alongside the operator's named path variable. The variable is named after the port
+    KIND (``path(vcf)``, referenced as ``${vcf}``) so an operator's script can address its inputs by
+    a predictable name — the same vocabulary the edges wire by, so nothing has to be renamed."""
+    if kind in REFERENCE_PARAM:
+        if REFERENCE_PARAM[kind] in INDEXED_REFERENCE_PARAMS:
+            return f"tuple path({kind}), path({kind}_idx)"
+        return f"path {kind}"
+    return _with_meta(f"path({kind})")
+
+
+def _render_custom(node: NfNode) -> str:
+    """Render an OPERATOR-AUTHORED custom process from the node's OWN verbatim ``script`` + typed
+    ``ins``/``outs`` — the tool catalog is NEVER consulted (ADR-0020).
+
+    WHY the honest header + ``label``: a custom body runs whatever the operator wrote on the compute
+    host; it is not a curated, allowlisted, or PipeGuard-vetted command. The emitted process
+    self-documents that (a) it is operator-authored, (b) production needs sandboxing/allowlisting,
+    (c) PipeGuard only transcribed the text (compose ≠ execute — nothing runs here). The command
+    body is emitted byte-for-byte (only re-indented into the triple-quote block, as the catalogued
+    path does); PipeGuard never rewrites or fabricates it. Ports are meta-threaded and wired exactly
+    like a catalogued per-sample process, so a custom card drops into a fan-out graph unchanged. An
+    output kind outside the known artifact vocabulary is still allowed and wired by its raw name
+    (``emit: <kind>``), matching the edge wiring — the compiler never crashes on a novel kind."""
+    proc = _proc_name(node.tool)
+    in_decls = "\n    ".join(_custom_input_decl(k) for k in node.ins) or "val _unused"
+    # We cannot know the operator's output filenames from the typed model, so each declared output
+    # captures the process work dir permissively (`path("*")`); the operator's script is responsible
+    # for producing the artifacts. meta rides so a downstream per-sample process stays wired.
+    out_lines = [_with_meta('path("*")') + f", emit: {kind}" for kind in node.outs]
+    out_decls = "\n    ".join(out_lines) or (_with_meta('path("*")') + ", emit: out")
+    touches = " ".join(f"{kind}.stub" for kind in node.outs) or "out.stub"
+    conda_line = f"    conda '{node.conda}'\n" if node.conda else ""
+    container_line = f"    container '{node.container}'\n" if node.container else ""
+    body = _indent((node.script or "").strip())  # is_custom() guarantees a non-empty body
+    return (
+        "// operator-authored custom process — runs on the compute host; production needs\n"
+        "// sandboxing/allowlisting; not a curated/catalogued tool. PipeGuard transcribed this\n"
+        "// operator body verbatim (compose ≠ execute) — it did not author or vet the command\n"
+        "// (ADR-0020).\n"
+        f"process {proc} {{\n"
+        f'    tag "${{meta.id}}"\n'
+        f"    label 'operator_authored'\n"
+        f"{conda_line}"
+        f"{container_line}"
+        f"    publishDir \"${{params.outdir}}/custom\", mode: 'copy'\n\n"
+        f"    input:\n    {in_decls}\n\n"
+        f"    output:\n    {out_decls}\n\n"
+        f'    script:\n    """\n    {body}\n    """\n\n'
+        f'    stub:\n    """\n    touch {touches}\n    """\n'
+        f"}}\n"
+    )
 
 
 def _render_catalogued(spec: ProcessSpec) -> str:

@@ -202,9 +202,24 @@ class RunStatusOut(BaseModel):
 
 
 def _to_graph(req: CompileRequest) -> NfGraph:
+    # Thread any operator-authored custom-script fields through (the stored graph round-trips them,
+    # ADR-0020) so an APPROVED custom pipeline actually runs the operator's body here — this is the
+    # execution point ADR-0020 safety [i] names (only an approver-blessed graph reaches this gate).
+    # Absent on ordinary catalogued nodes, so the germline/approved-baseline path is byte-unchanged.
     return NfGraph(
         name=req.name,
-        nodes=[NfNode(id=n.id, tool=n.name, ins=list(n.ins), outs=list(n.outs)) for n in req.nodes],
+        nodes=[
+            NfNode(
+                id=n.id,
+                tool=n.name,
+                ins=list(n.ins),
+                outs=list(n.outs),
+                script=n.script,
+                container=n.container,
+                conda=n.conda,
+            )
+            for n in req.nodes
+        ],
         edges=[NfEdge(e.src.node, e.src.idx, e.to.node, e.to.idx) for e in req.edges],
     )
 

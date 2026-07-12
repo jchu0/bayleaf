@@ -23,12 +23,23 @@ router = APIRouter(prefix="/api", tags=["nextflow"])
 
 
 class CompileNode(BaseModel):
-    """One Builder card: `name` is the tool (a catalog key); `ins`/`outs` are kind ports."""
+    """One Builder card: `name` is the tool (a catalog key); `ins`/`outs` are kind ports.
+
+    A card MAY additionally carry an operator-authored custom Nextflow process body — a HUMAN
+    provides `script` (a verbatim `script:` body) plus optional `container`/`conda` packaging. A
+    non-empty `script` makes this a CUSTOM PROCESS: the compiler renders the operator's command
+    directly, wired from `ins`/`outs` like any card, and never consults the tool catalog for it
+    (ADR-0020). These three fields are optional and additive — an existing catalogued/uncatalogued
+    card omits them, so the pre-existing wire shape is unchanged.
+    """
 
     id: str
     name: str
     ins: list[str] = Field(default_factory=list)
     outs: list[str] = Field(default_factory=list)
+    script: str | None = None
+    container: str | None = None
+    conda: str | None = None
 
 
 class CompilePort(BaseModel):
@@ -66,7 +77,20 @@ def _sanitize(name: str) -> str:
 def _to_graph(req: CompileRequest) -> NfGraph:
     return NfGraph(
         name=_sanitize(req.name),
-        nodes=[NfNode(id=n.id, tool=n.name, ins=list(n.ins), outs=list(n.outs)) for n in req.nodes],
+        nodes=[
+            # Thread the operator-authored custom fields (if any) straight through — the compiler
+            # decides custom-vs-catalogued from a non-empty `script` (ADR-0020).
+            NfNode(
+                id=n.id,
+                tool=n.name,
+                ins=list(n.ins),
+                outs=list(n.outs),
+                script=n.script,
+                container=n.container,
+                conda=n.conda,
+            )
+            for n in req.nodes
+        ],
         edges=[NfEdge(e.src.node, e.src.idx, e.to.node, e.to.idx) for e in req.edges],
     )
 

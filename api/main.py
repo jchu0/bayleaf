@@ -51,6 +51,7 @@ from .feedback import FEEDBACK_SCHEMA_VERSION, FeedbackAck, FeedbackIn
 from .feedback_store import get_feedback_store
 from .pipeline import PipelineGraph, PipelineGraphAck, PipelineGraphIn
 from .pipeline_store import get_pipeline_store
+from .routers.files import router as files_router
 from .routers.intake import router as intake_router
 from .routers.nextflow import router as nextflow_router
 from .routers.node_author import router as node_author_router
@@ -99,6 +100,7 @@ app.include_router(intake_router)
 app.include_router(nextflow_router)
 app.include_router(pipeline_run_router)
 app.include_router(node_author_router)
+app.include_router(files_router)
 
 
 class RunSummary(BaseModel):

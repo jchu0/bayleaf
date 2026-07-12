@@ -77,6 +77,57 @@ def test_compile_zip_download() -> None:
     assert any(n.endswith("modules/fastp.nf") for n in names)
 
 
+def test_compile_accepts_an_operator_authored_custom_script_node() -> None:
+    """A POSTed node carrying `script` (+ container/conda) compiles to a REAL operator-authored
+    Nextflow process, wired from its typed ports like any card — so the Builder can post a
+    custom-script card and get real Nextflow back (ADR-0020). The three extra fields are additive:
+    the existing catalogued nodes in the same body still compile unchanged."""
+    body: dict[str, Any] = {
+        "name": "clinvar annot",
+        "nodes": [
+            {
+                "id": "n_call",
+                "name": "bcftools call",
+                "ins": ["bam", "reference_fasta", "panel_bed"],
+                "outs": ["vcf"],
+            },
+            {
+                "id": "n_annot",
+                "name": "bcftools annotate",
+                "ins": ["vcf"],
+                "outs": ["vcf"],
+                "script": "bcftools annotate -a clinvar.vcf.gz -c INFO/CLNSIG $vcf",
+                "container": "quay.io/biocontainers/bcftools:1.20--h8b25389_0",
+                "conda": "bioconda::bcftools=1.20",
+            },
+        ],
+        "edges": [{"from": {"node": "n_call", "idx": 0}, "to": {"node": "n_annot", "idx": 0}}],
+    }
+    resp = client.post("/api/pipelines/compile", json=body)
+    assert resp.status_code == 200
+    data = resp.json()
+    module = data["files"]["modules/bcftools_annotate.nf"]
+    # The operator's command is in the emitted bundle, verbatim, honestly labelled.
+    assert "bcftools annotate -a clinvar.vcf.gz -c INFO/CLNSIG $vcf" in module
+    assert "label 'operator_authored'" in module
+    assert "conda 'bioconda::bcftools=1.20'" in module
+    # Wired from the typed edge exactly like a catalogued tool.
+    assert "BCFTOOLS_ANNOTATE(BCFTOOLS_CALL.out.vcf)" in data["main_nf"]
+
+
+def test_compile_rejects_a_blank_custom_script_with_a_422() -> None:
+    """A custom card whose body is blank is a 422 with the compiler's reason — never a fabricated
+    command (ADR-0020 safety pin [b]); the same tolerant-boundary posture as a cycle/empty graph."""
+    body = {
+        "name": "blank",
+        "nodes": [{"id": "x", "name": "mystery", "ins": ["vcf"], "outs": ["vcf"], "script": "   "}],
+        "edges": [],
+    }
+    resp = client.post("/api/pipelines/compile", json=body)
+    assert resp.status_code == 422
+    assert "empty script" in resp.json()["detail"]
+
+
 def test_empty_graph_is_422() -> None:
     resp = client.post("/api/pipelines/compile", json={"name": "empty", "nodes": [], "edges": []})
     assert resp.status_code == 422
