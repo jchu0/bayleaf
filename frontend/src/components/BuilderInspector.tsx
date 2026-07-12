@@ -114,7 +114,6 @@ export function BuilderInspector(props: InspectorProps) {
           onAddPort={props.onAddPort}
           onRemovePort={props.onRemovePort}
           onSetPortKind={props.onSetPortKind}
-          onDelete={props.onDeleteNode}
           onSetLoc={props.onSetLoc}
           onToggleRequired={props.onToggleRequired}
           onCycleOnMultiple={props.onCycleOnMultiple}
@@ -139,18 +138,28 @@ export function BuilderInspector(props: InspectorProps) {
         />
       ) : null}
 
-      {/* Card-edit Save — commits THIS selected card's edits (name/ports/locators are already live in
-          the draft; this pins a confirm affordance, distinct from the toolbar Save that persists the
-          whole pipeline as a new version). Edit-only + only for an editable subject (not gate/agent). */}
+      {/* Card-edit action row — Delete node (user nodes only; tools/references aren't deletable) beside
+          Save. Save commits THIS selected card's edits (name/ports/locators are already live in the
+          draft; this pins a confirm affordance, distinct from the toolbar Save that persists the whole
+          pipeline as a new version). Edit-only + only for an editable subject (not gate/agent). */}
       {!props.isView && (userNode || tool || reference) && (
-        <div className="shrink-0 border-t border-line p-3">
+        <div className="flex shrink-0 items-center gap-2 border-t border-line p-3">
+          {userNode && (
+            <button
+              onClick={() => props.onDeleteNode(userNode.id)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-1.5 text-[12.5px] font-medium text-escalate-fg hover:opacity-90"
+            >
+              <Trash2 size={13} />
+              Delete node
+            </button>
+          )}
           <button
             onClick={props.onSaveCard}
             title="Apply this card's edits to the draft (the toolbar Save persists the whole pipeline)"
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-white shadow-card transition-opacity hover:opacity-90"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-white shadow-card transition-opacity hover:opacity-90"
           >
             <Save size={13} />
-            Save card
+            Save
           </button>
         </div>
       )}
@@ -246,7 +255,6 @@ function UserNodeInspector({
   onAddPort,
   onRemovePort,
   onSetPortKind,
-  onDelete,
   onSetLoc,
   onToggleRequired,
   onCycleOnMultiple,
@@ -260,7 +268,6 @@ function UserNodeInspector({
   onAddPort: (id: string, dir: 'ins' | 'outs', kind: string) => void
   onRemovePort: (id: string, dir: 'ins' | 'outs', idx: number) => void
   onSetPortKind: (id: string, dir: 'ins' | 'outs', idx: number, kind: string) => void
-  onDelete: (id: string) => void
   onSetLoc: (kind: string, field: 'loc' | 'parser', value: string) => void
   onToggleRequired: (kind: string) => void
   onCycleOnMultiple: (kind: string) => void
@@ -321,16 +328,6 @@ function UserNodeInspector({
         onToggleRequired={onToggleRequired}
         onCycleOnMultiple={onCycleOnMultiple}
       />
-
-      {!isView && (
-        <button
-          onClick={() => onDelete(node.id)}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-1.5 text-[12.5px] font-medium text-escalate-fg hover:opacity-90"
-        >
-          <Trash2 size={13} />
-          Delete node
-        </button>
-      )}
     </div>
   )
 }

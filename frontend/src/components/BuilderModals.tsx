@@ -1408,28 +1408,27 @@ export function CustomScriptInspector({
           ))
         )}
 
-        {!isView && (
+      </div>
+
+      {/* Card-edit action row — Delete node beside Save. Save commits THIS custom card's edits (already
+          live in the draft); distinct from the toolbar Save that persists the whole pipeline as a new
+          version. Edit-only. */}
+      {!isView && (
+        <div className="flex shrink-0 items-center gap-2 border-t border-line p-3">
           <button
             onClick={() => onDelete(node.id)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-1.5 text-[12.5px] font-medium text-escalate-fg hover:opacity-90"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-1.5 text-[12.5px] font-medium text-escalate-fg hover:opacity-90"
           >
             <Trash2 size={13} />
             Delete node
           </button>
-        )}
-      </div>
-
-      {/* Card-edit Save — commits THIS custom card's edits (already live in the draft); distinct from
-          the toolbar Save that persists the whole pipeline as a new version. Edit-only. */}
-      {!isView && (
-        <div className="shrink-0 border-t border-line p-3">
           <button
             onClick={onSaveCard}
             title="Apply this card's edits to the draft (the toolbar Save persists the whole pipeline)"
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-white shadow-card transition-opacity hover:opacity-90"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-white shadow-card transition-opacity hover:opacity-90"
           >
             <Save size={13} />
-            Save card
+            Save
           </button>
         </div>
       )}
