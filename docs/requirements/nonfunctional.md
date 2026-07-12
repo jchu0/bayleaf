@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
+| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
 
 ## Overview
 
@@ -161,6 +161,26 @@ links to [evaluation.md](../quality/evaluation.md).
    REQ-NF-020, REQ-NF-023, [architecture.md](../design/architecture.md) §Swappable seams (Auth /
    identity row), [tasks T-131](../planning/tasks.md),
    [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
+8. **REQ-NF-027 — The server-side file browser is allowlisted and traversal-hardened (`GET
+   /api/files`, 2026-07-11, branch `feat/custom-script-io`, ADR-0020).** `api/routers/files.py`
+   lists directory metadata for the Builder's "Browse…" data picker (REQ-F-099) with two hard
+   boundaries, both pinned by `tests/test_files_api.py`: (a) **allowlist, not free filesystem
+   access** — `root` is a *key* into a small configured map (`PIPEGUARD_BROWSE_ROOTS`, default
+   `{"data": <repo>/data}`), never a raw path, so a caller can only ever browse a root an operator
+   deliberately exposed; an unknown key is a 404. (b) **traversal-hardening**, mirroring the
+   pre-existing artifact-download idiom in `api/main.py`: a `..` path component or a leading `/`
+   (absolute path) is rejected **before** the filesystem is touched (400); the requested
+   `root/path` is then `resolve()`-d and asserted to remain inside the resolved root — a symlink
+   *inside* the root that points *outside* it (a case the pre-checks cannot see, since the path
+   spelling itself is clean) is caught only at this resolve-and-assert step and rejected (403).
+   Every rejection path is asserted to **provably never leak** the out-of-root content (the test
+   suite plants a sentinel file outside the sandboxed root and asserts it never appears in any
+   response body, including the 400/403 error detail). The endpoint returns metadata only
+   (name/size/an extension-inferred kind) — it never reads or serves file bytes, never runs a
+   tool, and never touches a verdict/finding/confidence (ADR-0001/0003). Auth is the lowest role
+   (`viewer` and above) — allowlisted browsing is read-only, but not anonymous. *Trace:*
+   [functional.md REQ-F-099](functional.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md),
+   [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md).
 
 ## Performance & cost
 

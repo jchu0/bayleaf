@@ -188,8 +188,11 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    (`PIPEGUARD_NODE_AUTHOR_MODEL`, default mid/Sonnet), stub-default, degrade-to-stub on any error
    (incl. a safety refusal). **Narrower than the roster's original design** (see
    [node-authoring-agent.md](../design/node-authoring-agent.md) "What actually shipped"): the
-   corpus is a fixed **11 curated cards** (this pipeline's own 7 tools + 3 reference nodes,
-   `src/pipeguard/node_author/knowledge/tool_cards.jsonl`), not a parser over a dropped
+   corpus is a fixed **10 curated cards** (this pipeline's own 7 tools + 2 reference nodes — was 11
+   cards / 3 reference nodes until Branch A of the custom-script-card effort, 2026-07-11, retired
+   the unwired Truth VCF reference-node card; see REQ-F-098 below and
+   [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md)),
+   `src/pipeguard/node_author/knowledge/tool_cards.jsonl`, not a parser over a dropped
    `nextflow_schema.json`/`--help`/README, so the agent can only propose a tool already known to
    the corpus via `propose_node()` — it does not yet onboard a genuinely new/arbitrary tool through
    its main retrieval path. `GET /api/builder/node-proposal` + Pipeline-Builder wiring now exist
@@ -1306,7 +1309,7 @@ had reserved or listed as *not-yet-built*.
     lists accepted entries (optional `tool`/`status` filters). A companion
     `src/pipeguard/node_author/importer.py` (`import_from_nextflow_schema`) deterministically parses
     an nf-core `nextflow_schema.json` into a `NodeProposal` for a tool **NOT** already in the
-    curated 11-card corpus — the structured, lowest-injection-risk half of the doc-drop importer
+    curated 10-card corpus (was 11, see REQ-F-025 / REQ-F-098) — the structured, lowest-injection-risk half of the doc-drop importer
     REQ-F-025 notes is unbuilt; a `format: file-path` param maps to a real `ARTIFACT_KINDS` kind
     only on a confident, conservative name/pattern match, else a `reserved` slot (never invented).
     +34 tests (`test_library_store.py`, `test_node_author_accept_api.py`,
@@ -1337,6 +1340,69 @@ had reserved or listed as *not-yet-built*.
     caveat still holds). *Trace:* [design/ui-conventions.md](../design/ui-conventions.md) UIC-19,
     [nonfunctional.md REQ-NF-070](nonfunctional.md), [tasks T-136](../planning/tasks.md),
     [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md).
+39. **REQ-F-098 — Operator-authored custom-script Nextflow processes ([ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md),
+    2026-07-11, branch `feat/custom-script-io`).** A Builder card MAY carry a **human-authored**
+    verbatim Nextflow `script:` body (plus optional `container`/`conda` packaging) — a third path
+    alongside a catalogued tool and an uncatalogued placeholder. `NfNode`
+    (`src/pipeguard/nextflow/compiler.py`) gains optional `script`/`container`/`conda` fields,
+    absent on every ordinary card; a non-empty `script` marks the node `is_custom()`, and
+    `_render_module` checks for it **before** the catalog, so the operator's body wins even if the
+    card's tool name collides with a catalogued one — the catalog is never consulted for a custom
+    node. The body is emitted **byte-for-byte** (only re-indented), never rewritten or fabricated;
+    it is wired from the node's own typed `ins`/`outs` exactly like a catalogued per-sample process
+    (meta-threaded). A **blank/whitespace** script is a `CompileError` (a 422 at
+    `POST /api/pipelines/compile`) — PipeGuard never fabricates a command; an uncatalogued node with
+    **no** script (`script is None`) is unaffected and keeps its existing labelled placeholder. The
+    emitted process carries an honest header comment + `label 'operator_authored'` naming it
+    operator-authored, not curated, and stating production needs sandboxing/allowlisting.
+    `POST /api/pipelines/compile` (`api/routers/nextflow.py`) and `POST /api/pipelines/run`
+    (`api/routers/pipeline_run.py`) both thread the three fields through additively — the seeded
+    germline chain carries none, so its compiled output stays byte-identical (the drift guard
+    holds). The Builder gains a **"Custom script"** palette card (amber/`warn`-toned) and a
+    dedicated `CustomScriptInspector` (`BuilderModals.tsx`) — label, typed input/output ports
+    (from the same `ARTIFACT_KINDS` vocabulary, never free-invented), the `script:` textarea, a
+    runtime toggle (container OR conda — only the active one is sent), and locator authoring with a
+    server-side Browse picker (REQ-F-099). **Four-way safety (ADR-0020):** (i) a custom script
+    reaches a compute host only inside a SAVED, APPROVED pipeline via the pre-existing W1
+    `POST /api/pipelines/run` gate (the stateless `/compile` path emits text only); (ii) the honest
+    header/label above; (iii) agents stay metadata-only — `NodeProposal`/`PortSpec` carry no command
+    field, so this card is the human-authoring surface
+    [agent-authoring-contract.md](../design/agent-authoring-contract.md) already presupposed; (iv)
+    the core (`src/pipeguard/`) still never executes — only the out-of-core drivers shell out,
+    unchanged. 9 tests (`tests/test_nextflow_custom_process.py`, pure-offline: verbatim rendering +
+    label, catalog-bypass-on-collision, blank-script rejection, uncatalogued-placeholder unchanged,
+    a novel output kind wired by name, compose≠execute, germline-drift-green) + 2 more in
+    `tests/test_nextflow_api.py` (a custom node compiles over the wire; a blank script 422s).
+    **Honest deferral:** the custom script itself runs with **no PipeGuard-side runtime
+    sandbox/allowlist** — safety is the approval gate + the honest label + deployment-side
+    sandboxing (an ADR-0020 Assumption, not something PipeGuard builds); an operator's declared
+    output glob is not yet enforced by the emitted command (`path("*")` captures the whole work
+    dir); a custom process is always meta-threaded per-sample, so a non-per-sample (aggregator or
+    no-input source) custom process is an unhandled edge case (ADR-0020 §Revisit when). *Trace:*
+    [design/nextflow-codegen.md §Operator-authored custom-script processes](../design/nextflow-codegen.md#operator-authored-custom-script-processes-adr-0020-compilerpy--apiroutersnextflowpy),
+    [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md),
+    [design/agent-authoring-contract.md](../design/agent-authoring-contract.md),
+    [design/builder-cards/README.md](../design/builder-cards/README.md),
+    [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md).
+40. **REQ-F-099 — Sandboxed server-side file browser (`GET /api/files`, 2026-07-11, branch
+    `feat/custom-script-io`).** The GB-scale genomics inputs (FASTQ folders, reference FASTAs,
+    panel BEDs, VCFs) live on the compute host, not the browser, so the Builder's locator/custom-
+    script "Browse…" picker needs a **server-side** listing. `GET /api/files?root=<key>&path=<rel>`
+    (`api/routers/files.py`, off-gate, any-authenticated-role — `require_role("viewer",
+    "reviewer", "approver")`) lists the directories + files directly under an **allowlisted** root,
+    one level at a time, returning **metadata only** (`name`, `is_dir`, `size` for files, an
+    extension-inferred `kind` or `null` when unrecognized — never file content). `root` is a
+    **key** into a small configured map (`PIPEGUARD_BROWSE_ROOTS`, a `key=abs_path` comma-separated
+    override; default `{"data": <repo>/data}`), never a raw filesystem path, so a caller can only
+    ever browse a root an operator deliberately exposed. Traversal-hardened (REQ-NF-027) exactly
+    like the existing artifact-download idiom. Powers a new `FileBrowser.tsx` component (a
+    breadcrumbed, kind-filterable picker) wired into `CustomScriptInspector`'s locator fields via
+    `frontend/src/api.ts`'s `browseFiles()` — **additive**: the manual type-a-path input stays, so
+    Browse is a convenience, not the only way to set a locator. 10 tests
+    (`tests/test_files_api.py`, `TestClient`-driven, pure-offline). *Trace:*
+    [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the file browser shipped
+    alongside the custom-script card as the same Branch B), REQ-NF-027,
+    [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md).
 
 ## Notes / deferred
 

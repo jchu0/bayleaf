@@ -812,6 +812,43 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    evaluation.md` (EVAL-007, EVAL-060, census refreshed), `tasks.md` (T-125–T-130),
    `TABLE_OF_CONTENTS.md` (registers `audit/` + `agent-authoring-contract.md`). [journal
    2026-07-11](docs/journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
+   **Custom-script processes + generic File-input + sandboxed browse (2026-07-11, T-138, branches
+   `cleanup`→`feat/custom-script-io`, merged to main).** Two related pieces after retiring the
+   unwired downstream placeholders. **(A)** The Builder's Truth VCF + NGSCheckMate palette nodes
+   (unwired, no runnable `ProcessSpec`) are removed for a generic typed **File-input** card that
+   emits any chosen artifact kind (`BuilderShared.tsx` `makeUserNode`); the `truth_vcf`/`ngscheckmate`
+   KINDS stay in the vocabulary (frontend `EXTRA_VOCAB_KINDS`, backend `node_author.models`), and the
+   node-author corpus drops `source_truth_vcf` (now **10 cards**, was 11). **(B)** An operator-authored
+   **custom-script Nextflow process** (ADR-0020): `NfNode` gains optional `script`/`container`/`conda`
+   (`is_custom()` = non-empty script); `compile_graph` renders the operator body **VERBATIM** via
+   `_render_custom` — the catalog is never consulted for it, a blank script is a `CompileError` (never
+   a fabricated command), a novel output kind is wired by name — under a **4-way safety** model
+   (executes only inside a SAVED, APPROVED pipeline via the W1 run gate; honest `operator_authored`
+   label on card + emitted process; agents stay metadata-only, the HUMAN authors the script via this
+   card — the surface `agent-authoring-contract.md` presupposes; core never executes, only the
+   out-of-core driver runs Nextflow — ADR-0001/0003). Wired end-to-end: `POST /api/pipelines/compile`
+   + the W1 run-gate's `_to_graph` thread the three fields; the Builder's amber **Custom script** card
+   + `CustomScriptInspector` author label/typed-ports/script/runtime; `toCompileNode` projects them
+   into the compile/run payload (round-trip-verified — the emitted `modules/custom_script.nf` carries
+   the verbatim body + label + honest comment). A new sandboxed **`GET /api/files`**
+   (`api/routers/files.py`: allowlisted roots via `PIPEGUARD_BROWSE_ROOTS`, default `data/`;
+   `resolve()`+`is_relative_to()` traversal-hardened; `require_role` read-only, metadata-only) + a
+   `FileBrowser.tsx` picker beside the locator field give the Builder a **server-side** "Browse…" for
+   the compute-host data (the client OS picker stays for the small samplesheet upload). New
+   `tests/test_io_path_wiring.py` **proves the run-input wiring is real, not decoration** (a picked
+   `_catalog()` key → a real on-disk file → the exact `nextflow` argv) — with the honest boundary that
+   a run selects from the fixed catalog KEYS, **not** from an arbitrary canvas-card locator path
+   (locators feed dry-run/preview; wiring a browsed path into the actual run needs a backend change,
+   deferred). **Deferred/honest:** no runtime SANDBOX on a custom script yet (approval-gate +
+   honest-label only, ADR-0020's own limit); and the compiler's pre-existing **off-golden-path
+   robustness gaps** — proc-name collision, data-kind-source→placeholder (affects the new File-input
+   card when wired), unescaped name/kind interpolation — are documented from a concurrent grounded
+   review (verdict 3/5: germline chain strong, arbitrary Builder graph under-guarded), a hardening
+   pass pending. Census 585 collected / 44 files (578 pass / 7 skip offline). Docs swept: ADR-0020,
+   `agent-authoring-contract.md`, `nextflow-codegen.md`, `builder-cards/README.md` §7,
+   `architecture.md`, `functional.md` (REQ-F-098/099), `nonfunctional.md` (REQ-NF-027),
+   `evaluation.md` (EVAL-015/016), `tasks.md` (T-138), `TABLE_OF_CONTENTS.md`. [journal
+   2026-07-11](docs/journal/2026-07-11-custom-script-io.md).
 
 ## Git conventions
 

@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006, EVAL-009), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress, per-variant table EVAL-013), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) (EVAL-009, EVAL-013), [journal/2026-07-11-fleet.md](../journal/2026-07-11-fleet.md) (EVAL-008 update, EVAL-014), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (EVAL-014), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
+| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006, EVAL-009), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress, per-variant table EVAL-013), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (custom-script processes, EVAL-015; sandboxed file browser, EVAL-016), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) (EVAL-009, EVAL-013), [journal/2026-07-11-fleet.md](../journal/2026-07-11-fleet.md) (EVAL-008 update, EVAL-014), [journal/2026-07-11-custom-script-io.md](../journal/2026-07-11-custom-script-io.md) (EVAL-015, EVAL-016), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (EVAL-014), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
 
 ## Overview
 
@@ -19,51 +19,59 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **555 tests across 41 files** — collection verified via
-`uv run pytest --collect-only -q` (555 collected) + `git ls-files 'tests/*.py' | wc -l` (41), both
-re-run 2026-07-11 after the "fleet" session (T-135/T-136/T-137: node-author W2 backend + a11y +
-reliability tests; was 517/37 after the W3/W4-deferred-slice continuation, 507/35 after the
-P3-backlog session, 471/33 after the earlier audit/hardening/W1-W4/E2E session, 427/29 before
-that). Pass/skip count depends on whether `nextflow` is on `PATH` (two machine-gated live checks
-join the existing Postgres live-integration pattern: `test_nextflow_compile.py`'s
-`test_generated_germline_stub_runs`, EVAL-006, and
-`test_e2e_pipeline.py::test_approved_germline_pipeline_stub_runs_live`, EVAL-007): **549 pass / 6
+The offline suite is **585 tests across 44 files** — collection verified via
+`uv run pytest --collect-only -q` (585 collected), re-run 2026-07-11 after the custom-script-I/O
+session (branch `feat/custom-script-io`: Branch A retired `source_truth_vcf`'s test surface — no
+test file was ever dedicated to it — and Branch B, uncommitted at review time, added 3 new test
+files + extended a 4th; **file count via a working-tree listing, not `git ls-files`,** since 3 of
+the 4 are not yet committed — `git ls-files 'tests/*.py' | wc -l` still reports 41 until they land;
+was 555/41 after the "fleet" session, 517/37 after the W3/W4-deferred-slice continuation, 507/35
+after the P3-backlog session, 471/33 after the earlier audit/hardening/W1-W4/E2E session, 427/29
+before that). Pass/skip count depends on whether `nextflow` is on `PATH` (**three** machine-gated
+live checks now join the existing Postgres live-integration pattern — the pre-existing two plus a
+new one from this session's `test_io_path_wiring.py`: `test_nextflow_compile.py`'s
+`test_generated_germline_stub_runs`, EVAL-006; `test_e2e_pipeline.py::test_approved_germline_pipeline_stub_runs_live`,
+EVAL-007; and `test_io_path_wiring.py`'s
+`test_driver_argv_shape_is_accepted_by_the_committed_pipeline_stub_run`, EVAL-016): **578 pass / 7
 skip** when `nextflow` is absent (this repo's default sandboxed dev/CI environment — verified here
-via `uv run pytest -q`), a **computed 551 pass / 4 skip** when it is present (arithmetic from the
-two `nextflow`-gated skip reasons — the maintainer's local `hackathon` conda env with Nextflow
-26.04 + a JRE was not re-run live for this specific session; the 38 new tests this session are all
-pure-offline, POSIX-process-group-gated at most, and add only to the pass count). Either way every
-non-live test runs unconditionally. By collected size:
+via `uv run pytest -q`), a **computed 581 pass / 4 skip** when it is present (arithmetic from the
+three `nextflow`-gated skip reasons — the maintainer's local `hackathon` conda env with Nextflow
+26.04 + a JRE was not re-run live for this specific session; the 30 new/changed tests this session
+are otherwise all pure-offline and add only to the pass count). Either way every non-live test runs
+unconditionally; `ruff`/`mypy` (backend) and `tsc`/`oxlint` (frontend) are also clean this session.
+By collected size:
 `test_api` (44), `test_notify` (36), `test_synthetic` (33), `test_fetch_giab` (32),
 `test_gate` (30), `test_review_queue` (19), `test_node_author` (19, the advisory
 node-authoring agent, T-046), `test_persistence` (17), `test_metrics` (17), `test_archivist` (17,
 the advisory archivist/librarian agent), `test_triage` (16), `test_run_giab_preflight` (16, the
 four pre-flight guards in `scripts/run_giab_pipeline.py`, T-131), `test_pipeline_repair` (16, the
-advisory pipeline-repair agent), `test_job_store` (16, NEW this session — was 12, the durable
-jsonl/sqlite job store + the shared process-group-aware driver launch, T-131, +4 reliability tests
-T-137: a LIVE `killpg` process-group reap + negative control, an atomic dup-run-id-submit test,
-the Builder-run `_reconcile → lost` branch, EVAL-008), `test_nextflow_compile` (15),
+advisory pipeline-repair agent), `test_job_store` (16), `test_nextflow_compile` (15),
 `test_card_readout` (14), `test_settings` (13, config-override authoring), `test_node_author_conformance`
-(13, NEW this session — the `check_conformance()` capability-pin harness, T-135, EVAL-014),
-`test_auth` (13), `test_safe_harbor` (12), `test_pipeline_run` (12, the Pipeline-Builder Run
-endpoint), `test_pipeline_lifecycle` (11, submit/approve/dry-run/diff), `test_route_to_human` (10,
-the off-by-default route-to-human gate rule VAR-RTH-001, ADR-0018 D2), `test_e2e_pipeline` (10, the
-offline acceptance test threading sheet→intake→the W1 approval gate→report/provenance, EVAL-007),
-`test_gate_notify` (9), `test_artifacts_s3` (9), `test_node_author_importer` (8, NEW this
-session — the doc-drop `nextflow_schema.json` importer, T-135, EVAL-014), `test_pipelines` (8, the
+(13), `test_auth` (13), `test_safe_harbor` (12), `test_pipeline_run` (12, the Pipeline-Builder Run
+endpoint), `test_pipeline_lifecycle` (11, submit/approve/dry-run/diff), `test_files_api` (10, NEW
+this session — the sandboxed `GET /api/files` browser: allowlist, traversal/absolute/symlink-escape
+rejection, kind inference, nested-parent-link, role gate, ADR-0020, EVAL-016), `test_route_to_human`
+(10, the off-by-default route-to-human gate rule VAR-RTH-001, ADR-0018 D2), `test_e2e_pipeline` (10,
+the offline acceptance test threading sheet→intake→the W1 approval gate→report/provenance,
+EVAL-007), `test_nextflow_custom_process` (9, NEW this session — operator-authored custom-script
+processes: verbatim render + label, catalog-bypass-on-name-collision, blank-script rejection,
+uncatalogued-placeholder unchanged, novel-output-kind wiring, compose≠execute, germline-drift-green,
+ADR-0020, EVAL-015), `test_io_path_wiring` (9, NEW this session — offline proof that the
+PRE-EXISTING `POST /api/pipelines/run` input picker actually wires a chosen key through to the
+real driver/`nextflow run` argv, not a new feature but new coverage), `test_gate_notify` (9),
+`test_artifacts_s3` (9), `test_node_author_importer` (8), `test_pipelines` (8, the
 Pipeline Builder save/version store), `test_execution_trace` (8, the structured execution-trace
 feed → EXEC-001), `test_run_giab_multisample` (7, the W4-continuation multi-sample driver parse:
 N-sample fixture publish dir → N gated run-dir rows, byte-identical fan-out-of-1, fail-loud on
 partial/empty, `S1`/`S10` prefix anchoring, T-134, EVAL-009), `test_artifacts` (7),
-`test_node_author_accept_api` (7, NEW this session — `POST /api/builder/node-proposal/accept` +
-`GET /api/builder/library`, T-135, EVAL-014), `test_library_store` (6, NEW this session — the
-`api/library_store.py` jsonl/sqlite pluggable store, T-135, ADR-0016 item 9, EVAL-014),
+`test_node_author_accept_api` (7), `test_library_store` (6),
 `test_share_store` (6, the pluggable jsonl/sqlite/postgres share-egress-audit sink,
-ADR-0016/ADR-0018 D3), `test_node_author_api` (6, the W2 read-only
+ADR-0016/ADR-0018 D3), `test_nextflow_api` (6, WAS 4 this session — +2: a posted custom-script node
+compiles to real Nextflow over the wire; a blank custom script 422s, ADR-0020, EVAL-015),
+`test_node_author_api` (6, the W2 read-only
 `GET /api/builder/node-proposal` endpoint), `test_share_egress` (5, the de-identified
 share/report egress endpoint, ADR-0018 D3), `test_metrics_mapping` (5),
-`test_persistence_postgres_live` (4), `test_nextflow_api` (4, the `POST /api/pipelines/compile`
-endpoint), `test_run_variants` (3, the W3-continuation per-variant Report endpoint,
+`test_persistence_postgres_live` (4), `test_run_variants` (3, the W3-continuation per-variant Report endpoint,
 `GET /api/runs/{id}/variants`, T-133, EVAL-013), `test_run_giab_driver` (2, the W4 Slurm/local
 executor-profile auto-detection unit) — all
 runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `test_api` and
@@ -71,9 +79,11 @@ runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `
 `test_route_to_human`, `test_safe_harbor`, `test_share_egress`, `test_share_store`,
 `test_job_store`, `test_run_giab_preflight`, `test_run_giab_multisample`, `test_run_variants`,
 `test_nextflow_compile`, `test_e2e_pipeline`, `test_node_author_accept_api`,
-`test_node_author_conformance`, `test_node_author_importer`, `test_library_store`, and the
-agent suites run pure-offline over the core + pydantic, `test_share_egress`/`test_nextflow_api`/
-`test_e2e_pipeline`/`test_run_variants`/`test_node_author_accept_api` via a `TestClient`).
+`test_node_author_conformance`, `test_node_author_importer`, `test_library_store`,
+`test_io_path_wiring`, and the agent suites run pure-offline over the core + pydantic,
+`test_share_egress`/`test_nextflow_api`/`test_e2e_pipeline`/`test_run_variants`/
+`test_node_author_accept_api`/`test_files_api`/`test_io_path_wiring` via a `TestClient`;
+`test_nextflow_custom_process` is pure `pipeguard.nextflow` unit-level, no `TestClient` needed).
 
 ## What "good" means (principles)
 
@@ -440,6 +450,120 @@ is backend-only, see [design/agent-authoring-contract.md](../design/agent-author
 nothing to test); the free-text `--help`/README half of the doc-drop importer (not built); a
 roster-wide, CI-parametrized sweep of `check_conformance()` across all six advisory agents (today
 it is invoked against node-authoring candidates only).
+
+### EVAL-015 — Operator-authored custom-script processes: verbatim rendering, catalog bypass, and never-fabricate (ADR-0020)
+
+| Field | Value |
+| --- | --- |
+| **Target** | `src/pipeguard/nextflow/compiler.py` (`NfNode.script`/`.is_custom()`, `_render_custom`, `_render_module`), `api/routers/nextflow.py` (`CompileNode.script`/`.container`/`.conda`) |
+| **Type** | Deterministic (pure text codegen; no live Claude call; no verdict/gate touched) |
+| **Automated?** | Yes — `test_nextflow_custom_process.py` (9, pure-offline, no `TestClient`) + 2 cases in `test_nextflow_api.py` (over a `TestClient`) |
+
+**Definition of good.** A Builder card MAY carry a human-authored verbatim Nextflow `script:` body
+(plus optional `container`/`conda`) — a THIRD compile path alongside a catalogued tool and an
+uncatalogued placeholder. Five properties make it trustworthy: (1) **The catalog is never
+consulted for a custom node**, even when the card's tool NAME collides with a catalogued one
+(`bcftools norm`) — the operator's body always wins. (2) **The body is emitted byte-for-byte**
+(only re-indented into the `script:` block), never rewritten or fabricated, and wired from the
+node's own typed `ins`/`outs` exactly like a catalogued per-sample process (meta-threaded). (3)
+**An honest label is unconditional** — every custom module carries a header comment stating it is
+operator-authored, not curated, and needs production sandboxing, plus `label 'operator_authored'`
+on the process itself. (4) **Never fabricate**: a blank/whitespace `script` is a `CompileError`
+(surfaced as a 422 at `POST /api/pipelines/compile`) — distinct from an uncatalogued node with NO
+script at all (`script is None`), which keeps its pre-existing labelled placeholder unchanged, never
+an error. (5) **A novel output kind is allowed and wired by its raw name** (`emit: <kind>`) —
+the compiler never crashes just because a custom process emits something outside the built-in
+`ARTIFACT_KINDS` vocabulary.
+
+**Method.** `test_custom_process_renders_verbatim_wired_and_labelled` compiles a two-node graph
+(a catalogued `bcftools call` feeding a custom `bcftools annotate` card) and asserts the operator's
+exact command string appears in the emitted module, the header/label strings are present, the
+operator's `container`/`conda` are threaded through, and `main.nf` wires
+`BCFTOOLS_ANNOTATE(BCFTOOLS_CALL.out.vcf)` from the typed edge.
+`test_custom_node_never_consults_the_catalog_even_on_a_name_collision` reuses the catalogued name
+`bcftools norm` for a custom card and asserts the curated `bcftools norm -f` command does NOT leak
+into the output. `test_empty_custom_script_is_a_compile_error` is parametrized over `""`, `"   "`,
+and a whitespace-only multi-line string, asserting `CompileError` with `"empty script"` every time.
+`test_uncatalogued_no_script_node_keeps_its_placeholder_not_an_error` asserts the pre-existing
+uncatalogued path (`script is None`) is byte-for-byte unaffected — still the `PLACEHOLDER`/`exit 1`
+module, never mislabelled `operator_authored`.
+`test_germline_carries_no_custom_node_and_drift_stays_green` compiles the seeded germline graph and
+asserts (a) no emitted file contains the custom-process header/label anywhere, and (b) the
+compiler's output still matches the committed `pipelines/germline/` reference byte-for-byte (the
+pre-existing drift guard) — pinning that the feature is purely additive.
+`test_compile_returns_text_and_spawns_no_subprocess` monkeypatches `subprocess.run`/`Popen` to raise
+if called, then compiles a custom-node graph and asserts it succeeds untouched — compose ≠ execute
+holds even for operator-authored text.
+`test_custom_process_may_emit_a_kind_outside_the_known_vocabulary` compiles a custom node emitting
+a novel `cnv_segments` kind and asserts it is wired by name (`emit: cnv_segments`), never rejected.
+`tests/test_nextflow_api.py::test_compile_accepts_an_operator_authored_custom_script_node` and
+`::test_compile_rejects_a_blank_custom_script_with_a_422` re-run the wire-level shape of cases 1 and
+4 above through the real FastAPI `TestClient`, confirming the additive `CompileNode` fields
+(`script`/`container`/`conda`) round-trip over HTTP.
+
+**Known failure modes.** A future change that let `_render_module` check the catalog before
+`is_custom()` would be caught by the name-collision test; a regression that rendered a blank script
+as an empty/placeholder command (rather than raising) would fail the parametrized blank-script
+test; a regression that dropped the honest header/label would fail the labelled-render assertion.
+**Not covered by an automated test:** the custom script itself running under any PipeGuard-side
+runtime sandbox (there is none — ADR-0020 states the approval gate + the honest label +
+deployment-side sandboxing are the safety envelope, not a sandbox PipeGuard builds); a LIVE
+`nextflow run` of a custom process against real inputs (only the germline chain's own
+`-stub-run` is live-verified, EVAL-006 — a custom process has never been executed by Nextflow in
+this repo, only compiled); the Builder's `CustomScriptInspector` UI itself (frontend, not unit
+tested here — see [design/builder-cards/README.md §7](../design/builder-cards/README.md#7-retired-placeholders-a-generic-file-input-source-and-the-custom-script-card-2026-07-11-branch-featcustom-script-io)).
+
+### EVAL-016 — Sandboxed server-side file browser: allowlisted, traversal-hardened, metadata-only (ADR-0020)
+
+| Field | Value |
+| --- | --- |
+| **Target** | `api/routers/files.py` (`GET /api/files`) |
+| **Type** | Deterministic (pure filesystem read + boundary checks; no verdict/gate touched) |
+| **Automated?** | Yes — `test_files_api.py` (10, `TestClient`-driven, pure-offline) |
+
+**Definition of good.** Two hard boundaries make it safe to point at a real, GB-scale data host:
+(1) **Allowlist, not free filesystem access** — `root` is a KEY into a small configured map
+(`PIPEGUARD_BROWSE_ROOTS`, default `{"data": <repo>/data}`), never a raw path; an unknown key is a
+404, never a filesystem probe. (2) **Traversal-hardening that PROVABLY cannot leak** — a `..`
+component or a leading `/` (absolute path) is rejected (400) BEFORE the filesystem is touched; the
+resolved `root/path` is then asserted to remain inside the resolved root, catching an escaping
+SYMLINK (a case the pre-checks structurally cannot see, since the path spelling is clean) at the
+`resolve()`-and-assert step (403). Every rejection is checked to never leak the out-of-root content
+even in its error body. The endpoint returns METADATA ONLY (name/is_dir/size/an
+extension-inferred kind) — it never reads or serves file bytes.
+
+**Method.** `_make_sandbox` builds a controlled root under `tmp_path` with a nested layout AND
+plants a sentinel string (`_SECRET`) in a file just OUTSIDE the root, redirecting
+`PIPEGUARD_BROWSE_ROOTS` to it per-test (env read per-request, not cached). Every traversal test
+(`test_dotdot_traversal_is_rejected_and_does_not_escape`,
+`test_absolute_path_is_rejected_and_does_not_escape`,
+`test_symlink_escaping_the_root_is_forbidden`) asserts BOTH the correct status code (400/400/403)
+AND `_SECRET not in resp.text` — a positive check that the response body could never have
+exfiltrated the out-of-root content, not just that the status code "looks right." The symlink case
+specifically creates a symlink INSIDE the sandboxed root pointing to the root's own PARENT
+directory (which holds the secret) and confirms it 403s only once resolved, proving the
+resolve-and-assert step (not just the `..`/absolute pre-checks) is load-bearing.
+`test_list_the_data_root_returns_entries` exercises the REAL default root (the repo's `data/`, no
+env override) and asserts a known committed run dir appears and directories sort before files.
+`test_kind_inference_across_extensions` asserts `.vcf.gz` → `vcf` (a double extension), `.fastq.gz`
+→ `fastq`, `.fasta` → `reference_fasta`, `.bed` → `panel_bed`, and an unrecognized extension → an
+honest `null`, never a guess — and separately asserts the response echoes only the allowlist KEY
+(`"sandbox"`), never the root's real absolute on-disk path.
+`test_nested_subdir_returns_correct_parent` walks two levels deep and asserts the `parent` link is
+correct at each level, that a trailing slash normalizes without changing the listing, and that a
+LEADING slash is rejected (400) rather than silently normalized (an asymmetry the test makes
+explicit). `test_viewer_role_may_browse` asserts the lowest RBAC role is sufficient — allowlisted
+browsing is read-only but not anonymous.
+
+**Known failure modes.** A regression that checked `..`/absolute BEFORE resolving symlinks but
+skipped the post-resolve assert would be caught by the symlink-escape test specifically (the other
+two pre-checks alone cannot catch it). A regression that echoed the resolved absolute path (leaking
+server filesystem layout) would fail the "echoes only the KEY" assertion in the kind-inference test.
+**Not covered by an automated test:** the Builder's `FileBrowser.tsx` picker UI itself (frontend,
+not exercised here); a live `PIPEGUARD_BROWSE_ROOTS` override pointing at a genuinely large
+(GB-scale) production data host (only a `tmp_path`-scoped sandbox and the repo's own small `data/`
+are exercised); concurrent/multi-request race conditions on a mutating filesystem (the endpoint is
+read-only, so this is a low-probability, low-consequence gap, not asserted either way).
 
 ## Failure-mode cases (synthetic)
 

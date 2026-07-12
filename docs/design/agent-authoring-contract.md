@@ -5,7 +5,7 @@
 | **Status** | **Active** (2026-07-11, W2 + W2 backend) — the governing contract for how an *authoring* agent is built and what it may do. Wired end-to-end: a read-only endpoint + the Builder modal render + a platform-version stamp (W2), and — backend-only, T-135 — accept→a draft library entry, the `check_conformance()` harness, and a structured (`nextflow_schema.json`) doc-drop importer. Later slices (the Builder's own accept button, `draft→approved`, the free-text `--help`/README importer half, a roster-wide CI conformance sweep) are labelled deferred below. |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [design/agents.md](agents.md) (the six-agent roster + shared invariants + intake a–g) · [design/node-authoring-agent.md](node-authoring-agent.md) (agent #6, what shipped) · [design/nextflow-codegen.md](nextflow-codegen.md) (the compiler + catalog this contract binds to) · [design/builder-cards/README.md](builder-cards/README.md) (the tool-card corpus + reserved kinds) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises) · [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) (off by default) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) (corpora/retrieval) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) (scoping/tiering) · [ADR-0016](../adr/ADR-0016-postgres-port.md) (item 9, the library store) · [requirements/scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#5/#9/#11) · [planning/tasks.md](../planning/tasks.md) (T-046, T-135) · [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) |
+| **Related** | [design/agents.md](agents.md) (the six-agent roster + shared invariants + intake a–g) · [design/node-authoring-agent.md](node-authoring-agent.md) (agent #6, what shipped) · [design/nextflow-codegen.md](nextflow-codegen.md) (the compiler + catalog this contract binds to) · [design/builder-cards/README.md](builder-cards/README.md) (the tool-card corpus + reserved kinds) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises) · [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) (off by default) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) (corpora/retrieval) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) (scoping/tiering) · [ADR-0016](../adr/ADR-0016-postgres-port.md) (item 9, the library store) · [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the operator custom-script card — the human-authoring surface this contract presupposes) · [requirements/scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#5/#9/#11) · [planning/tasks.md](../planning/tasks.md) (T-046, T-135) · [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) |
 
 ## Overview
 
@@ -26,10 +26,15 @@ a real `file:line`, so the contract cannot drift into aspiration.
 
 **The one load-bearing invariant** (everything else serves it): an authoring agent emits
 **metadata, never a runnable command**. It fills typed shapes (`ToolCardEntry` / `NodeProposal` /
-`PortSpec`); the runnable `script:` / `stub:` body lives *solely* in the human-curated `ProcessSpec`
-catalog. A **human authors the runnable body** before anything compiles. This is the **compose ≠
-execute** trust seam (ADR-0003) — if it ever softened, agent-authored metadata would become a route
-to arbitrary command execution.
+`PortSpec`); the runnable `script:` / `stub:` body is authored **only by a human** — either curated
+into the `ProcessSpec` catalog, or supplied verbatim on an **operator-authored custom-script Builder
+card** ([ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), the human-authoring
+surface this contract presupposes). A **human authors the runnable body** before anything compiles.
+This is the **compose ≠ execute** trust seam (ADR-0003) — if it ever softened, agent-authored
+metadata would become a route to arbitrary command execution. The custom-script card does not soften
+it: an *agent* still cannot emit a command (the shapes it writes have no command field), and an
+operator's custom command reaches a compute host only inside a SAVED, APPROVED pipeline via the W1
+run gate (ADR-0020 safety [i]).
 
 ---
 
@@ -60,9 +65,17 @@ compile_graph → nextflow run`:
 1. **Metadata only.** A `NodeProposal` carries ports/version/locators; it is not runnable. Compiling
    and running is the [`nextflow/`](../../src/pipeguard/nextflow/) codegen path, driven by the
    human-curated catalog — see [nextflow-codegen.md](nextflow-codegen.md).
-2. **A human authors the runnable body.** A tool becomes runnable only when a human adds its
-   `ProcessSpec` (with a real `script:` and a `stub:`) to [`catalog.py`](../../src/pipeguard/nextflow/catalog.py).
-   The agent never does this.
+2. **A human authors the runnable body — two human paths, never an agent one.** A tool becomes
+   runnable when a **human** either (a) adds its `ProcessSpec` (with a real `script:` and a `stub:`)
+   to [`catalog.py`](../../src/pipeguard/nextflow/catalog.py), or (b) authors a verbatim Nextflow
+   process body on an **operator-authored custom-script Builder card**
+   ([ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md); a non-empty `NfNode.script`
+   renders a real process wired from its typed ports, the catalog never consulted for it — a
+   blank body is a `CompileError`, never a fabricated command). The **agent never does either** —
+   the shapes it writes to (`NodeProposal`/`PortSpec`) have no command field. Path (b) is the
+   human-authoring surface this whole contract presupposes; it executes only behind the W1 approval
+   gate ([`api/routers/pipeline_run.py`](../../api/routers/pipeline_run.py)), so an un-reviewed
+   custom command never reaches a compute host.
 3. **Uncatalogued → a loud placeholder, never a fabricated command.** If a tool has no `ProcessSpec`,
    the compiler emits a labelled placeholder process whose `script:` is `exit 1`
    ([`compiler.py:227` `_render_placeholder`](../../src/pipeguard/nextflow/compiler.py), the

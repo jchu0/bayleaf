@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | draft |
-| **Date** | 2026-07-10 (MST) |
+| **Date** | 2026-07-10 (MST) · corrected 2026-07-11 (MST, the `Truth VCF` reference source this doc named is retired, see §4 edge 5) |
 | **Audience** | frontend / bioinformatics |
-| **Related** | [builder-cards/README.md](README.md) · [frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model) · [nf-core-conventions.md](../../data/nf-core-conventions.md) · [BuilderShared.tsx](../../../frontend/src/components/BuilderShared.tsx) (`BTOOLSPEC['bcftools norm']`, `GIAB_LOC`) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) (`step_variants`) |
+| **Related** | [builder-cards/README.md](README.md) (§7) · [frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model) · [nf-core-conventions.md](../../data/nf-core-conventions.md) · [BuilderShared.tsx](../../../frontend/src/components/BuilderShared.tsx) (`BTOOLSPEC['bcftools norm']`, `GIAB_LOC`) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) (`step_variants`) · [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md) (the custom-script benchmarking seam replacing the retired Truth VCF node) |
 
 ## 1. Tool overview
 
@@ -48,7 +48,7 @@ of the tool's real I/O even when a run leaves it unused).
 
 | Kind | File it produces | Downstream consumer card(s) | Card side |
 |---|---|---|---|
-| `filtered_vcf` | `-Oz -o HG002.norm.vcf.gz` (`run_giab_pipeline.py:218`); locator `variants/*.norm.filtered.vcf.gz` (`GIAB_LOC.filtered_vcf`, `parser: vcf`, `required: true`) | **ingest → variant gate** (terminal output; no downstream tool card in the seeded chain). Seam: a benchmarking card comparing against the `Truth VCF` source (`r_truth`) would also consume it. | **right** (primary data out) |
+| `filtered_vcf` | `-Oz -o HG002.norm.vcf.gz` (`run_giab_pipeline.py:218`); locator `variants/*.norm.filtered.vcf.gz` (`GIAB_LOC.filtered_vcf`, `parser: vcf`, `required: true`) | **ingest → variant gate** (terminal output; no downstream tool card in the seeded chain). Seam: a benchmarking step comparing against a GIAB truth VCF would also consume it — see the corrected note below §4 edge 5. | **right** (primary data out) |
 | `vcf_index` (companion `.csi`) | `bcftools index -f HG002.norm.vcf.gz` (`run_giab_pipeline.py:222`) | Sidecar for the `filtered_vcf` (like `.bai` to a `bam`); consumed implicitly by any tool that opens the VCF. **Not yet in the kind vocabulary** (`ARTIFACT_KINDS` / `GIAB_LOC` have no `vcf_index`/`csi`) — reserve as an **optional companion port** or bundle visually with `filtered_vcf`; do not fabricate a locator kind. | **bottom** (companion/sidecar) |
 
 Note: `filtered_vcf` is **not** wired to MultiQC — MultiQC's inputs are `fastp_json`,
@@ -72,8 +72,16 @@ QC aggregation. It exits the graph to the deterministic gate.
    target; terminates the variant branch). The locator `filtered_vcf`
    (`variants/*.norm.filtered.vcf.gz`) is what ingest resolves; `run_gate` computes the
    verdict — never stored on the graph (README §6/§7).
-5. *(seam, no edge today)* `n_norm` OUTPUT `filtered_vcf` → a benchmarking card vs the
-   `Truth VCF` source (`r_truth`), if/when one is added.
+5. *(seam, no edge today)* `n_norm` OUTPUT `filtered_vcf` → a benchmarking card vs a GIAB truth
+   VCF, if/when one is added. **Corrected 2026-07-11 (Branch A of the custom-script-card
+   effort):** the dedicated `Truth VCF` reference source (`r_truth`) this seam used to name is
+   retired — it was an unwired placeholder no tool in the seeded chain consumed
+   (`docs/design/builder-cards/README.md` §7). The seam is still open, just via a different
+   shape: a generic **File input** card (any operator-picked kind, incl. `truth_vcf` — the KIND
+   itself is unchanged/still in `ARTIFACT_KINDS`) feeding an
+   [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md) custom-script
+   benchmarking node (e.g. `bcftools isec`/`hap.py`), rather than a bespoke seeded reference
+   node + a bespoke seeded comparison tool.
 
 ## 5. Card layout notes
 

@@ -5,7 +5,7 @@
 | **Status** | Built (2026-07-11, T-123, commits `10f1816`→`e4ba174`); **extended the same day** (T-129, "W4," commit `5f0d5ec`) with executor profiles, per-sample fan-out, and full QC port wiring; **hardened the same day** (T-131, commit `595815e`) with pre-flight guards + per-run version capture; **the driver's post-run parse extended to genuine multi-sample later the same day** (W4 continuation, T-134, commit `9ab7fca`) — offline-verified against fixture publish dirs; the live multi-sample Nextflow run stays unverified, see §Multi-sample driver parse below |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide, AI advisory — this module sets no verdict), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; this doc REALIZES its "Nextflow carries compute portability" decision), [ADR-0016](../adr/ADR-0016-postgres-port.md) (the durable job store the intake driver's launch now persists into, item 8), [design/architecture.md](architecture.md) (component map), [data/nf-core-conventions.md](../data/nf-core-conventions.md) (the vocabulary this catalog adopts), [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) (the card graph this compiles), [design/builder-cards/](builder-cards/) (the per-tool port specs the catalog mirrors), [planning/tasks.md](../planning/tasks.md) (T-123, T-129, T-131, T-134), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 w-deferrals](../journal/2026-07-11-w-deferrals.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide, AI advisory — this module sets no verdict), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; this doc REALIZES its "Nextflow carries compute portability" decision), [ADR-0016](../adr/ADR-0016-postgres-port.md) (the durable job store the intake driver's launch now persists into, item 8), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (operator-authored custom-script processes — the compile path in §Operator-authored custom-script processes below), [design/agent-authoring-contract.md](agent-authoring-contract.md) (agents author metadata, a human authors the custom script), [design/architecture.md](architecture.md) (component map), [data/nf-core-conventions.md](../data/nf-core-conventions.md) (the vocabulary this catalog adopts), [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) (the card graph this compiles), [design/builder-cards/](builder-cards/) (the per-tool port specs the catalog mirrors), [planning/tasks.md](../planning/tasks.md) (T-123, T-129, T-131, T-134), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 w-deferrals](../journal/2026-07-11-w-deferrals.md) |
 
 ## Overview
 
@@ -131,6 +131,61 @@ command (see [Wiring rules](#wiring-rules) point 5).
 8. **A bad edge is rejected.** An edge naming a missing node or an out-of-range port index raises
    `CompileError` immediately — never silently dropped (a dropped edge would be a *worse* bug than
    a loud failure: a graph that looks valid but wires nothing).
+
+## Operator-authored custom-script processes (ADR-0020, `compiler.py` / `api/routers/nextflow.py`)
+
+The catalog is curated (wiring rule 5): a card the maintainer hasn't written a `ProcessSpec` for
+compiles to a loud placeholder. That leaves no in-product path to run a real step off the germline
+chain — say a `bcftools annotate` over a called VCF. An **operator-authored custom-script process**
+is that path: a Builder card on which a **human** supplies a verbatim Nextflow `script:` body.
+
+**Model.** `NfNode` carries three optional fields — `script: str | None`, `container: str | None`,
+`conda: str | None`. A node with a **non-empty** `script` is a **custom process**
+(`NfNode.is_custom()`). Absent on every ordinary card, so the change is purely additive — the seeded
+germline chain carries none and its compiled output is byte-identical (the drift guard stays green).
+
+**Compile.** `_render_module` checks for a custom node **first**, before the catalog: a custom node's
+verbatim body is rendered by `_render_custom` and **the catalog is never consulted for it** — even if
+the custom tool name collides with a catalogued one, the operator's body wins (pinned by
+`test_custom_node_never_consults_the_catalog_even_on_a_name_collision`). The body is emitted
+byte-for-byte (only re-indented into the `script:` block, exactly as the catalogued path does);
+PipeGuard never rewrites or fabricates it. Ports are meta-threaded and wired from the graph edges
+**exactly like a catalogued per-sample process** (`_custom_input_decl` reuses `_with_meta` +
+`REFERENCE_PARAM`/`INDEXED_REFERENCE_PARAMS`), so a custom card drops into a fan-out graph unchanged —
+`ANNOTATE(BCFTOOLS_CALL.out.vcf)` is wired from the edge with zero custom-path wiring code. Each
+input variable is named after its port **kind** (`path(vcf)`, referenced as `${vcf}`) so an
+operator's script can address its inputs by a predictable name. Outputs declare `path("*")` (the
+typed model can't know the operator's filenames, so the process captures its work dir; the operator's
+script is responsible for producing the declared artifacts) with `emit: <kind>` — an output kind
+**outside the built-in vocabulary is allowed and wired by its raw name**, never a crash
+(`test_custom_process_may_emit_a_kind_outside_the_known_vocabulary`).
+
+**Honesty + safety (the whole point, ADR-0020's four-way safety).** The emitted module carries an
+honest header comment + a `label 'operator_authored'` directive — *"operator-authored custom process
+— runs on the compute host; production needs sandboxing/allowlisting; not a curated/catalogued tool.
+PipeGuard transcribed this operator body verbatim (compose ≠ execute) — it did not author or vet the
+command."* Two hard rules keep it from becoming a fabrication vector:
+
+1. **Never fabricate a command.** A custom card whose `script` is blank/whitespace is a
+   `CompileError` (a **422** at `POST /api/pipelines/compile`), never an invented command; an
+   uncatalogued-*and*-no-script node keeps its existing labelled placeholder (distinct paths).
+2. **Compose ≠ execute is unchanged.** `_render_custom` emits TEXT; `compile_graph` spawns no
+   subprocess (`test_compile_returns_text_and_spawns_no_subprocess`). A custom command reaches a
+   compute host **only** inside a SAVED, APPROVED pipeline via the W1 run gate
+   (`POST /api/pipelines/run`, ADR-0020 safety [i]); the stateless compile path runs nothing. Agents
+   still cannot author a command — this is the *human*-authoring surface the
+   [agent-authoring-contract](agent-authoring-contract.md) presupposes (ADR-0020 safety [iii]).
+
+**Compile API.** `POST /api/pipelines/compile` accepts the three optional fields on a posted node
+(`CompileNode.script/container/conda`), threaded straight into the `NfNode` — additively, so the
+pre-existing wire shape is unchanged. A custom-script card thus compiles to real Nextflow over the
+wire (`test_compile_accepts_an_operator_authored_custom_script_node`).
+
+**Honest scope.** A custom process is meta-threaded per-sample, so it expects a per-sample input
+carrying `meta` (the common "runs on a pipeline output" case, e.g. a VCF). A custom node with only
+reference/no per-sample inputs is an edge case not specially handled (see ADR-0020 §Revisit when).
+The Builder's custom-script card UI is built separately (frontend); this doc is the backend compile
+path.
 
 ## Per-sample fan-out (W4, `catalog.py` / `compiler.py`)
 
@@ -365,8 +420,9 @@ see [functional.md REQ-F-092/REQ-F-093](../requirements/functional.md) and
 | `test_reference_source_node_maps_to_a_params_channel` | A no-input reference card compiles identically to an unwired reference input. |
 | `test_repeated_tool_is_aliased` | Two nodes naming the same tool alias to distinct calls sharing one module. |
 | `test_generated_germline_stub_runs` | **Machine-gated, skip-safe** (mirrors the Postgres-live pattern): if `nextflow` is on `PATH`, the generated pipeline must validate end-to-end via `-stub-run` with placeholder inputs; absent Nextflow → skip, never fail. |
-| `tests/test_nextflow_api.py` (4 tests) | `POST /api/pipelines/compile` — JSON preview, `.zip` download, a 422 on a cycle/empty graph. |
-| `tests/test_run_giab_multisample.py` (7 tests, NEW, W4 continuation) | Offline, fixture-publish-dir proof of the multi-sample parse: N-sample dir → N gated run-dir rows; fan-out-of-1 byte-identical to the pre-fan-out format; partial/empty publish dir fails loud; `S1`/`S10` prefix anchoring; `demux_stats.csv` `% Reads` share. No `nextflow` involved — see [§Multi-sample driver parse](#multi-sample-driver-parse-2026-07-11-w4-continuation). |
+| `tests/test_nextflow_api.py` (6 tests) | `POST /api/pipelines/compile` — JSON preview, `.zip` download, a 422 on a cycle/empty graph, **and (ADR-0020) a posted custom-script node → real Nextflow + a blank custom script → 422**. |
+| `tests/test_nextflow_custom_process.py` (9 items, NEW, ADR-0020) | Operator-authored custom processes: a custom node renders its verbatim body wired from the edge + honestly labelled; the catalog is never consulted (even on a name collision); a blank script is a `CompileError` (never fabricated) while an uncatalogued-no-script node keeps its placeholder; a novel output kind is wired by name; compose ≠ execute (returns text, spawns no subprocess); the germline drift stays green. Pure-offline, no `nextflow` needed. |
+| `tests/test_run_giab_multisample.py` (7 tests, W4 continuation) | Offline, fixture-publish-dir proof of the multi-sample parse: N-sample dir → N gated run-dir rows; fan-out-of-1 byte-identical to the pre-fan-out format; partial/empty publish dir fails loud; `S1`/`S10` prefix anchoring; `demux_stats.csv` `% Reads` share. No `nextflow` involved — see [§Multi-sample driver parse](#multi-sample-driver-parse-2026-07-11-w4-continuation). |
 
 Census (verified `uv run pytest --collect-only -q` + `git ls-files 'tests/*.py' | wc -l`, updated
 2026-07-11 after the W3/W4-continuation session, T-133/T-134, in a sandbox with `nextflow` NOT on
@@ -383,6 +439,14 @@ placeholder tests, and the new multi-sample-parse tests, run unconditionally off
 (unchanged); `tests/test_job_store.py` (12) and `tests/test_run_giab_preflight.py` (16) from the
 prior P3-backlog session cover the durable job store and the four preflight guards above, both
 pure-offline with no `nextflow` on `PATH` needed.
+
+**ADR-0020 delta (this session, operator-authored custom-script processes):** +1 file
+(`tests/test_nextflow_custom_process.py`, 9 pure-offline items) and +2 cases in
+`tests/test_nextflow_api.py` (4→6) — **+11 items / +1 file** over the 517/37 base above (a computed
+528/38). The exact global integer is intentionally NOT re-asserted as "verified" here: this landed
+on the shared `feat/custom-script-io` branch alongside a concurrent file-I/O-wiring session whose own
+untracked test files share the working tree, so a clean `--collect-only` couldn't isolate this
+slice; the authoritative refreshed census is reconciled at integration (`quality/evaluation.md`).
 
 ## Limitations (recorded in the open, not hidden)
 

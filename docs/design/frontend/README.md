@@ -770,14 +770,24 @@ button **copies** that YAML (+ fires the compose-only Emit) instead of the earli
 off to Nextflow" button — no network call, compose ≠ execute unchanged.
 
 **Node-authoring agent** ("Author a tool node"). This section describes the ORIGINAL modal design
-(drop tool docs `--help`/`nextflow_schema.json` → an editable `ToolNode` preview) — **still a
-static preview, unwired to any backend**, exactly as written. What's new (2026-07-10, T-046): the
-agent's Python core is now built (`src/pipeguard/node_author/`), but it is a **different, narrower
-mechanism** than this modal assumes — retrieval over a fixed 11-card curated corpus from a
-natural-language request, not a doc-drop parser — and it is not reachable from this modal (no
-`api/` endpoint calls it yet). This modal's own behavior is unchanged by that build; see
-[design/node-authoring-agent.md](../node-authoring-agent.md) "What actually shipped" for the
-grounded comparison and [tasks T-046](../../planning/tasks.md) for status.
+(drop tool docs `--help`/`nextflow_schema.json` → an editable `ToolNode` preview) — preserved as
+originally written below (`still a static preview, unwired to any backend`, `retrieval over a
+fixed 11-card curated corpus`), but **both of those framings are now stale — read this box first.**
+What's new (2026-07-10, T-046): the agent's Python core is now built
+(`src/pipeguard/node_author/`), and it is a **different, narrower mechanism** than this modal
+originally assumed — retrieval over a curated corpus from a natural-language request, not a
+doc-drop parser. **Superseded 2026-07-11 (W2, T-127):** a read-only `GET /api/builder/node-proposal`
+endpoint now exists and `AuthorToolNodeModal` renders the REAL proposal — it is no longer a static,
+unwired preview (see [design/frontend/README.md §6](#6-pipeline-builder--full-model) node-author
+paragraph elsewhere for the wired behavior, and [design/agent-authoring-contract.md](../agent-authoring-contract.md)
+for the full read/accept API). **Corrected 2026-07-11 (branch `feat/custom-script-io`, Branch A):**
+the corpus is **10 cards**, not 11 — the unwired Truth VCF reference-node card was retired (its
+concept is now a generic "File input" Builder card); see
+[design/node-authoring-agent.md](../node-authoring-agent.md) item 7 and
+[ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md). This modal's own original
+design prose is unchanged below; see [design/node-authoring-agent.md](../node-authoring-agent.md)
+"What actually shipped" for the grounded comparison and [tasks T-046](../../planning/tasks.md) for
+status.
 
 **Advisory agents.** **Pipeline-repair** (proposes fixes for recurring signatures) and
 **Archivist** (proposes cold-storage of released `run/` dirs) — both stub-first, human-approved,

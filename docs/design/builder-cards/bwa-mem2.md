@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | **Status** | draft |
-| **Date** | 2026-07-10 (MST) |
-| **Related** | [builder-cards README](../builder-cards/README.md) · [frontend README §6](../frontend/README.md) · [nf-core conventions](../../data/nf-core-conventions.md) · [BuilderShared.tsx](../../../frontend/src/components/BuilderShared.tsx) · [run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) |
+| **Date** | 2026-07-10 (MST) · corrected 2026-07-11 (MST, NGSCheckMate is no longer a seeded palette node) |
+| **Related** | [builder-cards README](../builder-cards/README.md) (§7) · [frontend README §6](../frontend/README.md) · [nf-core conventions](../../data/nf-core-conventions.md) · [BuilderShared.tsx](../../../frontend/src/components/BuilderShared.tsx) · [run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) · [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md) |
 
 Card-design spec for the **bwa-mem2** node in the Pipeline Builder (README §6). Grounds the card's
 half-circle connection ports in the tool's real CLI I/O and the exact command the germline chain
@@ -65,9 +65,14 @@ Notes:
    card has **no bottom metrics port**. Alignment-derived QC (mapping rate, insert size) comes from
    `samtools flagstat`/Picard downstream, not from the aligner. Keep the bottom edge clean.
 3. The `.bai` index is **not** a bwa-mem2 output — it is produced downstream by `samtools index`
-   after markdup (`n_markdup` outputs `bam`·`bai`·`markdup_metrics`). NGSCheckMate reads that
-   **deduped, indexed** BAM, so it is a consumer of markdup's output, **not** a direct consumer of
-   this card's `bam` port.
+   after markdup (`n_markdup` outputs `bam`·`bai`·`markdup_metrics`). An identity/swap check like
+   NGSCheckMate would read that **deduped, indexed** BAM, so it would be a consumer of markdup's
+   output, **not** a direct consumer of this card's `bam` port. **Corrected 2026-07-11 (Branch A of
+   the custom-script-card effort):** there is no longer a seeded `NGSCheckMate` palette node at all
+   (`docs/design/builder-cards/README.md` §7) — the point above is preserved as a wiring-topology
+   note (where such a card WOULD attach, if authored), not a claim that one exists on the canvas
+   today; a real NGSCheckMate command is now authored as an
+   [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md) custom-script card.
 
 ## 4. EDGES
 

@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | draft (§§1–3 now mostly REALIZED — see §5) |
-| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST, card geometry) · updated 2026-07-11 (MST, edge clarity + off-canvas boundary) · updated 2026-07-11 (MST, W4 full QC port wiring) |
+| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST, card geometry) · updated 2026-07-11 (MST, edge clarity + off-canvas boundary) · updated 2026-07-11 (MST, W4 full QC port wiring) · updated 2026-07-11 (MST, custom-script + File-input cards, §7) |
 | **Audience** | frontend / design / bioinformatics |
-| **Related** | [frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model) (Pipeline Builder — full node model) · [design/ui-conventions.md UIC-16](../ui-conventions.md) · [data/nf-core-conventions.md](../../data/nf-core-conventions.md) (tool I/O → `ArtifactRef` / `MetricValue`) · [data/qc_metrics-sources.md](../../data/qc_metrics-sources.md) (metric provenance) · [frontend `BuilderShared.tsx`](../../../frontend/src/components/BuilderShared.tsx) (`BTOOLSPEC` · `TOOLS` · `GIAB_LOC` · `germlineTemplate()` · `portSide()` · `layoutPorts()` · `cardHeight()`) · [frontend `BuilderCanvas.tsx`](../../../frontend/src/components/BuilderCanvas.tsx) (current render + wiring) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) (the real germline commands the cards abstract) |
+| **Related** | [frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model) (Pipeline Builder — full node model) · [design/ui-conventions.md UIC-16](../ui-conventions.md) · [data/nf-core-conventions.md](../../data/nf-core-conventions.md) (tool I/O → `ArtifactRef` / `MetricValue`) · [data/qc_metrics-sources.md](../../data/qc_metrics-sources.md) (metric provenance) · [frontend `BuilderShared.tsx`](../../../frontend/src/components/BuilderShared.tsx) (`BTOOLSPEC` · `TOOLS` · `GIAB_LOC` · `germlineTemplate()` · `portSide()` · `layoutPorts()` · `cardHeight()`) · [frontend `BuilderCanvas.tsx`](../../../frontend/src/components/BuilderCanvas.tsx) (current render + wiring) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) (the real germline commands the cards abstract) · [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md) (the operator-authored custom-script card, §7) · [design/nextflow-codegen.md](../nextflow-codegen.md) (the compile path a custom-script card feeds) |
 
 This is the **general** card-design convention for the Pipeline Builder, plus the index of the
 per-tool card specs. Each per-tool doc grounds one node's ports in that tool's **real** CLI I/O and
@@ -153,3 +153,53 @@ Full detail: [journal 2026-07-11](../../journal/2026-07-11-builder-boundary-and-
    `DecisionBoundaryModal.tsx`, reachable from the toolbar's "⋯ More" menu. If a future card design
    pass revisits how to represent the boundary, it should start from that modal, not the removed
    `IngestBand`/`GateCard` components.
+
+## 7. Retired placeholders, a generic File-input source, and the custom-script card (2026-07-11, branch `feat/custom-script-io`)
+
+Two independent pieces, together closing the "these two named nodes were unwired placeholders"
+gap this doc's §4 index never actually listed them under (`Truth VCF` / `NGSCheckMate` were
+**References**/**Contamination** palette tiles, not per-tool cards with their own spec doc — this
+section is the closest thing to their retirement record).
+
+1. **Branch A — retire `Truth VCF` + `NGSCheckMate`, add a generic `File input` card.** Both were
+   dangling, unwired palette nodes: `Truth VCF` (`r_truth`, a reference source with an `optional`
+   locator no tool in the seeded chain consumed) and `NGSCheckMate` (a palette-composable identity
+   card with no seeded edge into the germline chain). Both are removed from `BuilderShared.tsx`'s
+   `REFS`/`BTOOLSPEC`/`CARD_PORTS`/`GIAB_LOC` and `PipelineBuilder.tsx`'s palette (the "Contamination"
+   section is gone with it). In their place, a generic typed **`File input`** card
+   (`BTOOLSPEC['File input']`, `makeUserNode` honors the operator-picked output kind) can emit ANY
+   single artifact kind the operator selects via the inspector's port-kind picker — a re-analysis
+   VCF, a truth VCF to benchmark against, or any other one-shot typed source. **The `truth_vcf` and
+   `ngscheckmate` KINDS are NOT retired** — both remain in `ARTIFACT_KINDS` via a new
+   `EXTRA_VOCAB_KINDS` constant (mirrored on the backend, `node_author.models.ARTIFACT_KINDS`), so a
+   File-input card (or a custom-script card, item 2 below) can still emit/consume either kind; only
+   the two bespoke, unwired palette nodes are gone. `catalog.py`'s `REFERENCE_PARAM` drops
+   `truth_vcf` (the germline chain never consumed it as a compiler-level reference param — it was
+   never wired to the real pipeline in the first place). The node-author corpus
+   (`knowledge/tool_cards.jsonl`) drops the `source_truth_vcf` card — **the corpus is 10 cards now
+   (was 11)**; `tool_ngscheckmate`'s citation is corrected to point at the vocabulary membership
+   rather than the removed `BTOOLSPEC['NGSCheckMate']`. Per-tool docs that referenced either removed
+   node as a wiring target ([samtools-markdup.md](samtools-markdup.md),
+   [bcftools-norm.md](bcftools-norm.md), [multiqc.md](multiqc.md), [bwa-mem2.md](bwa-mem2.md)) are
+   corrected in the same sweep — they now describe NGSCheckMate as a real bioinformatics concept a
+   File-input/custom-script card COULD stand in for, not a still-composable palette node.
+2. **Branch B — the operator-authored custom-script card** ([ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md),
+   [design/nextflow-codegen.md §Operator-authored custom-script processes](../nextflow-codegen.md#operator-authored-custom-script-processes-adr-0020-compilerpy--apiroutersnextflowpy)).
+   A new **"Custom script"** palette card (amber/`warn`-toned — a deliberately distinct visual
+   register from a catalogued tool or a source, since it runs an OPERATOR's command on the compute
+   host) opens its own dedicated inspector (`CustomScriptInspector`, replacing the generic
+   `BuilderInspector` when selected) instead of following this doc's §§1-3 catalogued-tool card
+   convention: a label, typed input/output ports (add/remove from the same closed `ARTIFACT_KINDS`
+   vocabulary every other card uses — never free-invented), a `script:` textarea (the verbatim
+   Nextflow body), a runtime toggle (container OR conda — only the active one is sent to the
+   compiler), and locator authoring for its output kinds with a new server-side **Browse** picker
+   (`FileBrowser.tsx` → `GET /api/files`, allowlisted + traversal-hardened, metadata only — see
+   [nonfunctional.md REQ-NF-027](../../requirements/nonfunctional.md)). It is honestly NOT a
+   curated tool card: the compiler renders the operator's body verbatim and never consults the
+   catalog for it, even if the card's name collides with a catalogued tool. `NextflowExportModal`
+   gains a per-file bundle picker (`main.nf`/`modules/*.nf`/config) so an operator can verify their
+   script round-tripped. This card is orthogonal to the retired `Truth VCF`/`NGSCheckMate` nodes
+   above but was designed as their natural successor: a lab that wants "the NGSCheckMate identity
+   check back" now authors it as a custom-script card (a real `ngscheckmate` command, wired from a
+   `bam` input to an `ngscheckmate`-kind output) rather than PipeGuard shipping a second bespoke,
+   possibly-unwired palette tile for it.
