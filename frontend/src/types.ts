@@ -821,14 +821,29 @@ export type RunLayoutConfig = {
 }
 export type ProposedFlag = { flag: string; value: string; enabled: boolean; help: string }
 
+// The processing gate a submit requests (ADR-0021). `immediate` fires the driver now; `hold`
+// registers the run without firing (an operator releases it later via POST /api/runs/:id/release);
+// `schedule` parks it against a `scheduled_at` timestamp (released manually — a time-based
+// auto-release is a deferred backend seam).
+export type ProcessingMode = 'immediate' | 'hold' | 'schedule'
+
 // Submit → run execution (POST /api/runs). The endpoint TRIGGERS the pipeline driver (the core
 // still never runs a tool). Only samples with reads on disk are processed; the rest are skipped.
+// The backend model is `extra="forbid"` — only the fields below are accepted; send nothing else.
 export type SubmitRunIn = {
   run_name: string
   study?: string
   assay?: string
   platform?: string
   samples: { sample: string; type?: string; i7?: string; i5?: string; study?: string }[]
+  // Optional authored-pipeline name to run this run's samples through (resolved + compiled from its
+  // APPROVED baseline via the same approval gate as POST /api/pipelines/run). Absent → the committed
+  // germline-panel reference default. `pipeline_version` optionally pins an approved revision.
+  pipeline?: string | null
+  pipeline_version?: number | null
+  // Processing gate. `scheduled_at` is an ISO-8601 timestamp, required when mode === 'schedule'.
+  mode?: ProcessingMode
+  scheduled_at?: string | null
 }
 export type SubmitRunAck = {
   run_id: string
@@ -836,13 +851,22 @@ export type SubmitRunAck = {
   processed_samples: string[]
   skipped_samples: string[]
 }
-// `lost` is the restart-recovery terminal state: a job whose launching process died with no run
-// dir on disk (api/job_store.TERMINAL_STATUSES = complete|failed|lost). The pydantic field is an
-// open `str`; this mirrors the actual values the intake router emits.
+// Per-sample job state for a (potentially multi-sample) submit — a processed sample tracks the
+// run's lifecycle; a skipped sample (no reads on disk) is frozen at `skipped`.
+export type SampleStatus = { sample: string; status: string }
+// `held`/`scheduled` are the ADR-0021 parked states (registered but the driver hasn't fired — an
+// operator releases them). `lost` is the restart-recovery terminal state: a job whose launching
+// process died with no run dir on disk (api/job_store.TERMINAL_STATUSES = complete|failed|lost).
+// The pydantic field is an open `str`; this mirrors the actual values the intake router emits.
 export type IntakeStatus = {
   run_id: string
-  status: 'queued' | 'running' | 'complete' | 'failed' | 'lost'
+  status: 'queued' | 'held' | 'scheduled' | 'running' | 'complete' | 'failed' | 'lost'
   error?: string | null
   processed_samples: string[]
   skipped_samples: string[]
+  samples?: SampleStatus[]
+  // ADR-0021 processing-gate context (additive; an older persisted job yields the defaults).
+  mode?: ProcessingMode | string
+  scheduled_at?: string | null
+  pipeline?: string | null
 }

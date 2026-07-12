@@ -231,6 +231,9 @@ export const api = {
   // ── intake: submit a run for processing (the execution boundary) ──
   submitRun: (body: SubmitRunIn) => write<SubmitRunAck>('/api/runs', 'POST', body),
   intakeStatus: (runId: string) => get<IntakeStatus>(`/api/runs/${enc(runId)}/intake-status`),
+  // Release a HELD or SCHEDULED run → fire the driver now (ADR-0021; reviewer/approver-gated).
+  // The manual counterpart to a time-based scheduler; 409 if the run is not held/scheduled.
+  releaseRun: (runId: string) => write<IntakeStatus>(`/api/runs/${enc(runId)}/release`, 'POST', {}),
 
   // ── runs + cards (reads) ──
   runs: (opts?: RunsQuery) => get<RunSummary[]>(`/api/runs${runsQs(opts)}`),

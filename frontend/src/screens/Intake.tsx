@@ -6,9 +6,10 @@ import { MeterBar } from '../components/Bar'
 import { CollapsibleRow } from '../components/CollapsibleRow'
 import { Pager, type PerPage } from '../components/Pager'
 import { PageHeader } from '../components/PageHeader'
+import { ReleaseControl } from '../components/ReleaseControl'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { useRefresh } from '../hooks/useRefresh'
-import type { CardHeader, DecisionCard, RunDetail, Runbook } from '../types'
+import type { CardHeader, DecisionCard, IntakeStatus, RunDetail, Runbook } from '../types'
 import { VERDICT_LABEL } from '../verdict'
 
 // Runbook gates are stored canonically (fraction for %-metrics, x for coverage); `unit`
@@ -64,13 +65,42 @@ export function Intake() {
   const [error, setError] = useState<string | null>(null)
   const [overrides, setOverrides] = useState<Record<string, boolean>>({})
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({})
+  // Intake job status runs alongside the RunDetail: a HELD/SCHEDULED run has no data dir yet (so
+  // api.run 404s) — we surface the Release control from this status instead of a hard error.
+  const [intake, setIntake] = useState<IntakeStatus | null>(null)
 
   useEffect(() => {
     if (!runId) return
     setRun(null)
+    setError(null)
+    setIntake(null)
     api.run(runId).then(setRun).catch((e) => setError(String(e)))
     api.config().then(setRunbook).catch(() => setRunbook(null))
+    api.intakeStatus(runId).then(setIntake).catch(() => setIntake(null))
   }, [runId])
+
+  // Poll intake-status after a release until the run finishes, then load its RunDetail (the data
+  // dir only exists once processing completes). Terminal on complete/failed/lost, like the poller
+  // in Submit — no spinning forever on a lost job.
+  const pollIntake = useCallback((rid: string) => {
+    const tick = async (): Promise<void> => {
+      try {
+        const st = await api.intakeStatus(rid)
+        setIntake(st)
+        if (st.status === 'complete') {
+          const r = await api.run(rid).catch(() => null)
+          if (r) setRun(r)
+        } else if (st.status === 'failed' || st.status === 'lost') {
+          setError(st.error ?? `intake ${st.status}`)
+        } else {
+          setTimeout(() => void tick(), 2500)
+        }
+      } catch {
+        /* a 404 / blip is terminal — stop polling rather than spin forever */
+      }
+    }
+    void tick()
+  }, [])
 
   // Refresh re-pulls the run + runbook and stamps "Updated {time}"; the button spins while
   // in flight. No verdict is recomputed here — it's an operator refetch, nothing more.
@@ -107,8 +137,21 @@ export function Intake() {
     return { gate, unit, display: displayThreshold(gate, unit) }
   }, [runbook])
 
-  if (error) return <ErrorBox message={error} />
   if (!runId) return <Empty message="Pick a run from the switcher to see its intake gate." />
+  // A parked (held/scheduled) run has no RunDetail yet — surface the Release control instead of a
+  // 404. On release we poll intake-status, then load the run once processing completes.
+  if (!run && intake && (intake.status === 'held' || intake.status === 'scheduled')) {
+    return (
+      <ParkedIntakeView
+        intake={intake}
+        onReleased={(next) => {
+          setIntake(next)
+          pollIntake(next.run_id)
+        }}
+      />
+    )
+  }
+  if (error) return <ErrorBox message={error} />
   if (!run) return <Loading label="Loading intake…" />
 
   // A run "sequenced" if the flow-cell-health signals (Q30 + Cluster PF) cleared — the
@@ -232,6 +275,57 @@ function MetaField({ label, value, pending }: { label: string; value?: string | 
           {value || 'not captured'}
         </div>
       )}
+    </div>
+  )
+}
+
+// A held/scheduled run parked at the execution boundary (ADR-0021): no RunDetail exists yet, so we
+// render the Release control + an honest sample summary instead of the QC gate. Releasing starts
+// real compute; once it completes the parent swaps in the full intake gate.
+function ParkedIntakeView({
+  intake,
+  onReleased,
+}: {
+  intake: IntakeStatus
+  onReleased: (next: IntakeStatus) => void
+}) {
+  const processed = intake.processed_samples ?? []
+  const skipped = intake.skipped_samples ?? []
+  return (
+    <div className="pg-fade mx-auto max-w-[1080px]">
+      <PageHeader title="Intake gate" />
+      <div className="mt-[18px] overflow-hidden rounded-[14px] border border-line bg-card shadow-card">
+        <div className="border-b border-line px-[18px] py-[14px]">
+          <div className="text-[14.5px] font-semibold text-text">
+            Run <span className="font-mono">{intake.run_id}</span> · not yet processing
+          </div>
+          <div className="mt-0.5 text-[12px] text-text-2">
+            Registered at the execution boundary but the pipeline driver has not fired. Release it to
+            run the QC gate.
+          </div>
+        </div>
+        <div className="px-[18px] py-4">
+          <ReleaseControl status={intake} onReleased={onReleased} />
+          <div className="mt-3 text-[12px] text-text-2">
+            {processed.length > 0 ? (
+              <>
+                <strong className="text-text">{processed.length}</strong> sample
+                {processed.length === 1 ? '' : 's'} will process
+                {skipped.length > 0 ? (
+                  <>
+                    {' '}
+                    · <strong className="text-text">{skipped.length}</strong> skipped (no reads on
+                    disk for this demo)
+                  </>
+                ) : null}
+                .
+              </>
+            ) : (
+              'No samples with reads on disk to process for this demo run.'
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

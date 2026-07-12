@@ -5,9 +5,11 @@ import {
   ArrowRight,
   CircleCheck,
   ClipboardList,
+  Clock,
   FileCheck,
   History,
   Info,
+  PauseCircle,
   Paperclip,
   Plus,
   RefreshCw,
@@ -15,12 +17,15 @@ import {
   ShieldCheck,
   Trash2,
   Upload,
+  Workflow,
   X,
+  Zap,
 } from 'lucide-react'
 import { api } from '../api'
 import { useConfirm } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
 import { Pager, type PerPage } from '../components/Pager'
+import { ReleaseControl } from '../components/ReleaseControl'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { useToast } from '../components/Toast'
 import { useRole } from '../context/RoleContext'
@@ -36,7 +41,7 @@ import {
   readSubmitAudit,
 } from '../lib/accession'
 import { colIndex, splitCsv } from '../lib/csv'
-import type { SampleRow, SubmitRunIn } from '../types'
+import type { IntakeStatus, ProcessingMode, SampleRow, SubmitRunIn } from '../types'
 
 // Submit samplesheet (§5.1) — the pipeline's front door: registers a run + its samples BEFORE
 // processing. Compose ≠ execute: this screen only records run/sample metadata and hands off to
@@ -215,6 +220,43 @@ export function Submit() {
   const sheetInput = useRef<HTMLInputElement>(null)
   const metaInput = useRef<HTMLInputElement>(null)
 
+  // ── Processing gate (ADR-0021) ──
+  // Pipeline picker: APPROVED stored pipelines (reuses the Builder Run-picker idiom). '' = the
+  // committed germline-panel reference default (send no `pipeline` field). Non-empty → run that
+  // approved authored pipeline by name, resolved + compiled server-side (the approval gate).
+  const [pipes, setPipes] = useState<{ name: string; version: number }[]>([])
+  const [pipeline, setPipeline] = useState('') // '' → default reference
+  // Processing mode: immediate fires now; hold parks it for a manual release; schedule parks it
+  // against scheduled_at (released manually — auto-release is a deferred backend seam).
+  const [mode, setMode] = useState<ProcessingMode>('immediate')
+  const [scheduledAt, setScheduledAt] = useState('') // datetime-local value (local wall-clock)
+  // After a hold/schedule submit the run is PARKED — we hold its IntakeStatus here and render the
+  // Release control instead of navigating away (the run has no data dir until it's released).
+  const [parked, setParked] = useState<IntakeStatus | null>(null)
+
+  // Load APPROVED pipelines for the picker (latest approved version per name), defaulting the
+  // selection to the seeded germline-panel baseline if it's approved. Non-fatal on failure — the
+  // picker just offers the default reference (send no pipeline field, which the backend accepts).
+  useEffect(() => {
+    api
+      .listPipelines()
+      .then((list) => {
+        const latest = new Map<string, number>()
+        for (const p of list) {
+          if (p.status !== 'approved') continue
+          const cur = latest.get(p.name)
+          if (cur == null || p.version > cur) latest.set(p.name, p.version)
+        }
+        const approved = [...latest.entries()].map(([n, v]) => ({ name: n, version: v }))
+        approved.sort((a, b) =>
+          a.name === 'germline-panel' ? -1 : b.name === 'germline-panel' ? 1 : a.name.localeCompare(b.name),
+        )
+        setPipes(approved)
+        if (approved.some((p) => p.name === 'germline-panel')) setPipeline('germline-panel')
+      })
+      .catch(() => setPipes([]))
+  }, [])
+
   // BaseSpace connect flow. `imported` gates whether run details + samples are populated in
   // BaseSpace mode — blank until Import, per the design. Upload mode is always populated.
   const [baseConnected, setBaseConnected] = useState(false)
@@ -273,14 +315,17 @@ export function Submit() {
   const joinCurPage = Math.min(joinPage, joinPages)
   const joinPageRows = joinRows.slice((joinCurPage - 1) * joinPerN, (joinCurPage - 1) * joinPerN + joinPerN)
 
-  const canSubmit = count > 0 && join.metadataPresent && joinApproved
+  const scheduleReady = mode !== 'schedule' || scheduledAt.trim() !== ''
+  const canSubmit = count > 0 && join.metadataPresent && joinApproved && scheduleReady
   const submitBlockedReason = !join.metadataPresent
     ? 'Attach sample metadata first'
     : join.blocking > 0
       ? `Resolve ${join.blocking} identity issue${join.blocking === 1 ? '' : 's'}`
       : !joinApproved
         ? 'Approve the identity join'
-        : ''
+        : !scheduleReady
+          ? 'Pick a schedule time'
+          : ''
 
   // Accession → Submit handoff: if the Sample accessioning screen sent subject/tissue metadata,
   // pre-attach it here (the same client-side merge an uploaded sample_metadata.csv gets) and clear
@@ -419,22 +464,92 @@ export function Submit() {
     sel.clear()
   }
 
+  // Poll intake-status until the run finishes, then navigate to its decision cards. Shared by an
+  // immediate submit and by a manual release of a parked run (ADR-0021) — same terminal handling.
+  const pollToComplete = useCallback(
+    (runId: string) => {
+      const tick = async (): Promise<void> => {
+        try {
+          const st = await api.intakeStatus(runId)
+          if (st.status === 'complete') {
+            toast(`Run ${runId} processed — opening decision cards.`, 'success')
+            navigate(`/runs/${runId}`)
+          } else if (st.status === 'failed' || st.status === 'lost') {
+            toast(`Pipeline ${st.status} — ${st.error ?? 'unknown error'}`, 'error')
+            setSubmitting(false)
+          } else {
+            setTimeout(() => void tick(), 2500)
+          }
+        } catch (e) {
+          // A 404 (the job registry lost the run — e.g. an API restart) or a network blip is terminal
+          // for this poller: without this catch the recursion rejects silently and the button spins
+          // "Processing…" forever. Stop, clear the state, and surface it honestly.
+          toast(
+            `Lost track of run ${runId} — ${e instanceof Error ? e.message : String(e)}. Check the Runs list.`,
+            'error',
+          )
+          setSubmitting(false)
+        }
+      }
+      void tick()
+    },
+    [navigate, toast],
+  )
+
   // Submit registers the run, then hands off to the execution boundary (POST /api/runs) — the
   // API triggers the pipeline driver (the core still never runs a tool). Gated on an approved
-  // identity join. We poll intake-status and navigate to the run once processing completes.
+  // identity join. `mode` decides whether processing fires now (immediate → poll to completion),
+  // is parked for a manual release (hold), or is scheduled (schedule + scheduled_at); a parked run
+  // renders the Release control below instead of navigating away.
   async function submit() {
     if (!canSubmit) return
     setSubmitting(true)
+    setParked(null)
+    // datetime-local has no timezone; toISOString stamps it as UTC ISO-8601 (backend tolerant).
+    const scheduledIso = mode === 'schedule' && scheduledAt ? new Date(scheduledAt).toISOString() : null
     const body: SubmitRunIn = {
       run_name: meta.runName,
       study: meta.study,
       assay: meta.assay,
       platform: meta.platform,
       samples: samples.map((s) => ({ sample: s.sample, type: s.type, i7: s.i7, i5: s.i5, study: s.study })),
+      mode,
+      // Only send fields the backend accepts (SubmitRunIn is extra="forbid"): the authored pipeline
+      // name is sent only when one is picked (else the germline-panel reference default); the
+      // schedule timestamp only in schedule mode.
+      ...(pipeline ? { pipeline } : {}),
+      ...(scheduledIso ? { scheduled_at: scheduledIso } : {}),
     }
     try {
       const ack = await api.submitRun(body)
-      logAudit('submit', `Submitted run ${ack.run_id} · ${body.samples.length} samples (identity join approved)`)
+      const modeNote = mode === 'hold' ? ' (held)' : mode === 'schedule' ? ' (scheduled)' : ''
+      logAudit(
+        'submit',
+        `Submitted run ${ack.run_id} · ${body.samples.length} samples${modeNote}${pipeline ? ` · pipeline ${pipeline}` : ''} (identity join approved)`,
+      )
+      // A parked (held/scheduled) run does NOT run yet — surface the Release control, don't navigate.
+      if (ack.status === 'held' || ack.status === 'scheduled') {
+        const st = await api.intakeStatus(ack.run_id).catch(() => null)
+        setParked(
+          st ?? {
+            run_id: ack.run_id,
+            status: ack.status,
+            processed_samples: ack.processed_samples,
+            skipped_samples: ack.skipped_samples,
+            mode,
+            scheduled_at: scheduledIso,
+            pipeline: pipeline || null,
+          },
+        )
+        toast(
+          ack.status === 'held'
+            ? `Run ${ack.run_id} registered and held — release it to start processing.`
+            : `Run ${ack.run_id} scheduled — release it (or wait for the operator) to start processing.`,
+          'info',
+        )
+        setSubmitting(false)
+        return
+      }
       // Scale-aware summary: a 100-sample flowcell can't dump every name into a toast — list up to 5.
       const summarize = (arr: string[]) => (arr.length <= 5 ? arr.join(', ') : `${arr.length} samples`)
       const procMsg = ack.processed_samples.length
@@ -442,30 +557,7 @@ export function Submit() {
         : 'No samples with reads on disk to process'
       const skip = ack.skipped_samples.length ? ` · skipped ${summarize(ack.skipped_samples)} (no reads on disk for this demo)` : ''
       toast(`${procMsg} through the pipeline…${skip}`, 'info')
-      const poll = async (): Promise<void> => {
-        try {
-          const st = await api.intakeStatus(ack.run_id)
-          if (st.status === 'complete') {
-            toast(`Run ${ack.run_id} processed — opening decision cards.`, 'success')
-            navigate(`/runs/${ack.run_id}`)
-          } else if (st.status === 'failed') {
-            toast(`Pipeline failed — ${st.error ?? 'unknown error'}`, 'error')
-            setSubmitting(false)
-          } else {
-            setTimeout(() => void poll(), 2500)
-          }
-        } catch (e) {
-          // A 404 (the in-memory job registry lost the run — e.g. an API restart) or a network
-          // blip is terminal for this poller: without this catch the recursion rejects silently and
-          // the button spins "Processing…" forever. Stop, clear the state, and surface it honestly.
-          toast(
-            `Lost track of run ${ack.run_id} — ${e instanceof Error ? e.message : String(e)}. Check the Runs list.`,
-            'error',
-          )
-          setSubmitting(false)
-        }
-      }
-      void poll()
+      pollToComplete(ack.run_id)
     } catch (e) {
       toast(`Couldn't submit run — ${e instanceof Error ? e.message : String(e)}`, 'error')
       setSubmitting(false)
@@ -1235,6 +1327,132 @@ export function Submit() {
         </div>
       )}
 
+      {/* PROCESSING — the authored-pipeline picker + the processing gate (ADR-0021). Immediate fires
+          the driver on submit; Hold parks the run for a manual release; Schedule parks it against a
+          timestamp. Compose ≠ execute: the core never runs a tool — the API triggers the driver. */}
+      {count > 0 && (
+        <div className="mt-[14px] overflow-hidden rounded-[14px] border border-line bg-card shadow-card">
+          <div className="flex items-center gap-[10px] border-b border-line px-[18px] py-[14px]">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-weak">
+              <Workflow size={17} strokeWidth={1.8} className="text-accent-strong" />
+            </div>
+            <div className="flex-1">
+              <div className="text-[14.5px] font-semibold text-text">Processing</div>
+              <div className="mt-0.5 text-[12px] text-text-2">
+                Choose the approved pipeline and when this run processes. bayleaf composes;{' '}
+                <strong className="text-text">Nextflow executes</strong> — no verdict is set here.
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-[14px] px-[18px] py-4 md:grid-cols-2">
+            {/* Pipeline picker — APPROVED stored pipelines (scale-aware dropdown), default reference. */}
+            <div>
+              <label htmlFor="pipeline-picker" className="mb-[5px] block text-[11px] font-semibold text-text-2">
+                Pipeline
+              </label>
+              <select
+                id="pipeline-picker"
+                value={pipeline}
+                onChange={(e) => setPipeline(e.target.value)}
+                className="w-full cursor-pointer rounded-lg border border-line-strong bg-card px-[11px] py-2 text-[12.5px] text-text outline-none focus:border-accent"
+              >
+                <option value="">Default · germline reference</option>
+                {pipes.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name} · v{p.version}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-[5px] text-[10.5px] text-text-3">
+                {pipeline
+                  ? 'Runs this approved pipeline (its blessed baseline is resolved server-side).'
+                  : pipes.length === 0
+                    ? 'No approved pipelines found — running the committed germline-panel reference. Approve one in the Builder to pick it here.'
+                    : 'Runs the committed germline-panel reference. Pick an approved pipeline to override.'}
+              </div>
+            </div>
+
+            {/* Processing mode — Immediate | Hold | Schedule (compact toggle setting). */}
+            <div>
+              <span className="mb-[5px] block text-[11px] font-semibold text-text-2">When to process</span>
+              <SegmentedControl<ProcessingMode>
+                value={mode}
+                onChange={setMode}
+                label="Processing mode"
+                options={[
+                  {
+                    value: 'immediate',
+                    label: (
+                      <span className="inline-flex items-center gap-[6px]">
+                        <Zap size={14} strokeWidth={1.9} />
+                        Immediate
+                      </span>
+                    ),
+                  },
+                  {
+                    value: 'hold',
+                    label: (
+                      <span className="inline-flex items-center gap-[6px]">
+                        <PauseCircle size={14} strokeWidth={1.9} />
+                        Hold
+                      </span>
+                    ),
+                  },
+                  {
+                    value: 'schedule',
+                    label: (
+                      <span className="inline-flex items-center gap-[6px]">
+                        <Clock size={14} strokeWidth={1.9} />
+                        Schedule
+                      </span>
+                    ),
+                  },
+                ]}
+              />
+              {mode === 'schedule' ? (
+                <div className="mt-2">
+                  <label htmlFor="scheduled-at" className="mb-[5px] block text-[10.5px] font-semibold text-text-3">
+                    Scheduled time
+                  </label>
+                  <input
+                    id="scheduled-at"
+                    type="datetime-local"
+                    value={scheduledAt}
+                    onChange={(e) => setScheduledAt(e.target.value)}
+                    className="w-full rounded-lg border border-line-strong bg-card px-[11px] py-2 font-mono text-[12px] text-text outline-none focus:border-accent"
+                  />
+                  <div className="mt-[5px] text-[10.5px] text-text-3">
+                    Parked until an operator releases it — a time-based auto-release is a deferred seam.
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-[7px] text-[10.5px] text-text-3">
+                  {mode === 'immediate'
+                    ? 'Fires the pipeline driver as soon as you submit.'
+                    : 'Registers the run without processing — release it later to start compute.'}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PARKED — a held/scheduled run after submit: the Release control (reviewer/approver-gated,
+          confirm-gated) starts real compute; on release we poll to completion and open the run. */}
+      {parked && (
+        <div className="mt-[14px]">
+          <ReleaseControl
+            status={parked}
+            onReleased={(next) => {
+              setParked(null)
+              setSubmitting(true)
+              pollToComplete(next.run_id)
+            }}
+          />
+        </div>
+      )}
+
       {/* FOOTER — guardrail note + inert Save draft + Submit (gated on the approved identity join) */}
       <div className="mt-4 flex flex-wrap items-center gap-[14px]">
         <div className="flex items-center gap-2 text-[12px] text-text-2">
@@ -1260,7 +1478,13 @@ export function Submit() {
           className="inline-flex items-center gap-2 rounded-[9px] bg-accent px-[18px] py-2.5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-60"
         >
           <ArrowRight size={15} strokeWidth={2} />
-          {submitting ? 'Processing…' : 'Submit to pipeline'}
+          {submitting
+            ? 'Processing…'
+            : mode === 'hold'
+              ? 'Submit & hold'
+              : mode === 'schedule'
+                ? 'Submit & schedule'
+                : 'Submit to pipeline'}
         </button>
       </div>
     </div>
