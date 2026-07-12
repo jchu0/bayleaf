@@ -30,6 +30,7 @@ reference indexed under ``data/real-giab/ref/chr20.fa``; the raw panel fastqs un
 from __future__ import annotations
 
 import argparse
+import glob
 import gzip
 import json
 import os
@@ -78,6 +79,25 @@ class RunConfig:
     reference: Path = _REF
     panel_bed: Path = _PANEL_BED
     origin: str = "real-giab"  # provenance tag for the run dir; operator inputs may set another
+
+
+@dataclass(frozen=True)
+class SampleMetrics:
+    """One sample's parsed QC — the unit of the W4 multi-sample fan-out. The published pipeline
+    names every per-sample output ``${meta.id}.*`` (nf-core ``[meta, files]``), so an N-sample run
+    yields N of these, one per discovered sample. A fan-out of 1 (the live HG002 driver) yields
+    exactly one, which the run-dir writer emits BYTE-IDENTICALLY to the pre-fan-out driver.
+    ``n_variants`` is carried for the run log only — it is not a frozen-five column."""
+
+    sample: str
+    q30: float
+    reads_pf: float
+    coverage: float
+    dup: float
+    total_reads: int
+    b20: float
+    b30: float
+    n_variants: int = 0
 
 
 _LOG: list[str] = []
@@ -368,9 +388,12 @@ def run_nextflow(cfg: RunConfig) -> Path:
     if java_home:
         env.setdefault("JAVA_HOME", java_home)  # the launcher needs a JVM the env may not export
     # Per-sample fan-out (W4): hand the pipeline a samplesheet (sample,fastq_1,fastq_2), not
-    # --read1/--read2. This single-sample run is a degenerate fan-out of 1 — the emitted outputs
-    # are named ${meta.id}.* = HG002.*, byte-identical to the pre-fan-out driver, so the frozen-five
-    # parse below is unchanged (a multi-sample sheet + N-run-dir parse is the deferred slice).
+    # --read1/--read2. This live driver still writes a SINGLE-row sheet (only HG002 has panel reads
+    # on disk), so the actual Nextflow run is a fan-out of 1 — the emitted outputs are named
+    # ${meta.id}.* = HG002.*. The POST-run parse (parse_publish_dir) is now genuinely N-sample
+    # capable: it discovers every ${id}.fastp.json in the publish dir and writes one run-dir row per
+    # sample, so the moment a multi-sample sheet (multiple read pairs on disk) is handed in, an
+    # N-sample run yields N gated cards. That multi-read-pair live input is the env-gated piece.
     samplesheet = scratch / "samplesheet.csv"
     samplesheet.write_text(
         f"sample,fastq_1,fastq_2\n{cfg.sample},{cfg.read1},{cfg.read2}\n",
@@ -398,12 +421,58 @@ def run_nextflow(cfg: RunConfig) -> Path:
     return results
 
 
-def _one(results: Path, pattern: str) -> Path:
-    """The single published output matching ``pattern`` (an absent output is a hard error)."""
-    hits = sorted(results.glob(pattern))
+def _one_for(results: Path, sample: str, pattern: str) -> Path:
+    """The single published output for ``sample`` matching ``{sample}.{pattern}``.
+
+    The sample-id **dot prefix** anchors the match so a shared-prefix pair like ``S1``/``S10`` never
+    cross-captures (``S1.*`` cannot match ``S10.…`` — the char after ``S1`` is ``0``, not ``.``);
+    ``glob.escape`` neutralizes any metachar in a sample id. An ABSENT output is a hard error: a
+    partial publish dir (a sample missing one of its per-sample files) FAILS LOUD here rather than
+    silently dropping the sample or fabricating a metric.
+    """
+    hits = sorted(results.glob(f"{glob.escape(sample)}.{pattern}"))
     if not hits:
-        sys.exit(f"expected a pipeline output matching {pattern} under {results}")
+        sys.exit(
+            f"expected a published output for sample {sample!r} matching "
+            f"'{sample}.{pattern}' under {results} — the publish dir is partial for this sample"
+        )
     return hits[0]
+
+
+def discover_samples(results: Path) -> list[str]:
+    """Every sample id published under ``results``, discovered from the per-sample
+    ``${id}.fastp.json`` (the fan-out's canonical first-stage per-sample artifact). Sorted so the
+    run-dir row order is stable. An EMPTY publish dir (no fastp output at all) fails loud."""
+    ids = sorted(p.name[: -len(".fastp.json")] for p in results.glob("*.fastp.json"))
+    if not ids:
+        sys.exit(
+            f"no per-sample outputs found under {results} (expected at least one *.fastp.json)"
+        )
+    return ids
+
+
+def parse_sample(results: Path, sample: str) -> SampleMetrics:
+    """Parse ONE sample's published frozen-five inputs into a :class:`SampleMetrics`. Reuses the
+    per-file parsers; every per-sample output is required (``_one_for`` fails loud on a missing
+    one), so a partial publish dir never yields a fabricated or half-populated sample."""
+    q30, reads_pf, dup, total_reads = parse_fastp(_one_for(results, sample, "fastp.json"))
+    coverage, b20, b30 = parse_mosdepth(
+        _one_for(results, sample, "*mosdepth.summary.txt"),
+        _one_for(results, sample, "*thresholds.bed.gz"),
+    )
+    n_variants = count_variants(_one_for(results, sample, "norm.vcf.gz"))
+    return SampleMetrics(sample, q30, reads_pf, coverage, dup, total_reads, b20, b30, n_variants)
+
+
+def parse_publish_dir(results: Path) -> list[SampleMetrics]:
+    """Discover ALL samples in the published output and parse each into a :class:`SampleMetrics`.
+
+    An N-sample fan-out yields N records (→ N gated cards from one run dir); a fan-out of 1 yields
+    exactly one, so the HG002 path is unchanged. Loud on an empty publish dir (``discover_samples``)
+    or a sample with a missing per-sample output (``_one_for``) — the honest failure the guardrail
+    requires, never a silent drop.
+    """
+    return [parse_sample(results, s) for s in discover_samples(results)]
 
 
 def parse_mosdepth(summary: Path, thresholds: Path) -> tuple[float, float, float]:
@@ -446,23 +515,24 @@ def parse_fastp(fastp_json: Path) -> tuple[float, float, float, int]:
     return q30, reads_pf, dup, before
 
 
-def write_run_dir(
-    cfg: RunConfig,
-    q30: float,
-    reads_pf: float,
-    coverage: float,
-    dup: float,
-    total_reads: int,
-    b20: float,
-    b30: float,
-) -> None:
-    """Write the run dir the read-API discovers + gates (data/<run_id>/).
+def write_run_dir_multi(cfg: RunConfig, samples: list[SampleMetrics]) -> None:
+    """Write the ONE run dir the read-API discovers + gates (data/<run_id>/), holding one row per
+    sample across every frozen-five file.
 
-    Beyond the frozen five, the QC report also carries the REAL breadth-of-coverage metrics mosdepth
-    computed (breadth_20x/30x) — honest extra QC from this run's own data (not contrived), so the
-    real card's QC group is richer than five rows. cluster_pf stays blank (a run-level SAV metric
-    not derivable from reads).
+    This is the flowcell model: one sequencing run → one run dir → N samples (exactly what a demux
+    produces, and what ``data/mock_run_01`` already is — S1..S5 in one dir). The gate reads
+    ``qc_metrics.csv`` row-by-row and emits one card per sample, so an N-sample run yields N gated
+    results without any read-API or gate change. A **fan-out of 1** emits BYTE-IDENTICAL output to
+    the pre-fan-out single-sample driver (the ``write_run_dir`` wrapper below preserves that path).
+
+    Beyond the frozen five, ``qc_metrics.csv`` also carries the REAL breadth-of-coverage metrics
+    mosdepth computed per sample (breadth_20x/30x) — honest extra QC from each sample's own data
+    (not contrived). ``cluster_pf`` stays blank (a run-level SAV metric not derivable from reads).
+    ``demux_stats.csv``'s ``% Reads`` is each sample's share of the run's total reads (100% for a
+    lone sample); ``sample_metadata.csv`` stays fixture-authored per the honesty note below.
     """
+    if not samples:  # a defensive guard — parse_publish_dir already fails loud on an empty dir
+        sys.exit("write_run_dir_multi: no samples to write (empty publish dir)")
     cfg.run_dir.mkdir(parents=True, exist_ok=True)
 
     def w(name: str, text: str) -> None:
@@ -474,7 +544,7 @@ def write_run_dir(
         f"InstrumentPlatform,{cfg.platform}\nDate,{cfg.run_date}\n\n"
         "[Reads]\nRead1Cycles,250\nRead2Cycles,250\n\n"
         "[BCLConvert_Data]\nSample_ID,index,index2\n"
-        f"{cfg.sample},NA,NA\n",
+        + "".join(f"{s.sample},NA,NA\n" for s in samples),
     )
     # P3-9 HONESTY NOTE: this sample_metadata.csv is FIXTURE-AUTHORED, not real subject metadata.
     # The live driver has no LIMS/subject feed, so subject_id and tissue are PLACEHOLDERS: subj_id
@@ -488,20 +558,55 @@ def write_run_dir(
     w(
         "sample_metadata.csv",
         "sample_id,subject_id,tissue,library_prep,submitted_by,metadata_origin\n"
-        f"{cfg.sample},{cfg.sample},blood,PCR-free,{cfg.submitted_by},"
-        "fixture-authored-placeholder\n",
+        + "".join(
+            f"{s.sample},{s.sample},blood,PCR-free,{cfg.submitted_by},"
+            "fixture-authored-placeholder\n"
+            for s in samples
+        ),
     )
-    # Real read count from fastp; single sample so 100% of reads are this sample.
-    w("demux_stats.csv", f"SampleID,Index,# Reads,% Reads\n{cfg.sample},NA,{total_reads},100.0\n")
+    # Real read counts from fastp; % Reads is each sample's share of the run total (100% for one).
+    total_all = sum(s.total_reads for s in samples)
+
+    def pct(reads: int) -> float:
+        return (reads / total_all * 100.0) if total_all else 100.0
+
+    w(
+        "demux_stats.csv",
+        "SampleID,Index,# Reads,% Reads\n"
+        + "".join(f"{s.sample},NA,{s.total_reads},{pct(s.total_reads):.1f}\n" for s in samples),
+    )
     # cluster_pf is a run-level SAV/InterOp metric not derivable from reads → left blank (honest).
     w(
         "qc_metrics.csv",
         "sample_id,q30,pct_reads_identified,mean_coverage,dup_rate,cluster_pf,"
         "breadth_20x,breadth_30x\n"
-        f"{cfg.sample},{q30:.2f},{reads_pf:.2f},{coverage:.1f},{dup:.4f},,{b20:.4f},{b30:.4f}\n",
+        + "".join(
+            f"{s.sample},{s.q30:.2f},{s.reads_pf:.2f},{s.coverage:.1f},{s.dup:.4f},,"
+            f"{s.b20:.4f},{s.b30:.4f}\n"
+            for s in samples
+        ),
     )
     w("pipeline.log", "\n".join(_LOG) + "\n")
     w("origin", f"{cfg.origin}\n")
+
+
+def write_run_dir(
+    cfg: RunConfig,
+    q30: float,
+    reads_pf: float,
+    coverage: float,
+    dup: float,
+    total_reads: int,
+    b20: float,
+    b30: float,
+) -> None:
+    """Single-sample convenience wrapper over :func:`write_run_dir_multi`, kept as the stable
+    scalar entrypoint (the offline preflight test calls it positionally). Packs the scalars into a
+    one-sample list; for a fan-out of 1 the run dir is BYTE-IDENTICAL to the pre-fan-out driver."""
+    write_run_dir_multi(
+        cfg,
+        [SampleMetrics(cfg.sample, q30, reads_pf, coverage, dup, total_reads, b20, b30)],
+    )
 
 
 def main() -> int:
@@ -548,34 +653,38 @@ def main() -> int:
     _preflight_contigs(cfg.reference, cfg.panel_bed)
     _preflight_fastqs(cfg.read1, cfg.read2)
     results = run_nextflow(cfg)
-    q30, reads_pf, dup, total_reads = parse_fastp(_one(results, "*.fastp.json"))
-    coverage, b20, b30 = parse_mosdepth(
-        _one(results, "*.mosdepth.summary.txt"), _one(results, "*.thresholds.bed.gz")
-    )
-    n_variants = count_variants(_one(results, "*.norm.vcf.gz"))
-    _log(
-        "gate",
-        f"handing the run/ outputs to run_gate (Q30 {q30:.1f}%, reads-PF {reads_pf:.1f}%, "
-        f"cov {coverage:.1f}x, dup {dup:.3f}%, {n_variants} variants)",
-    )
-    write_run_dir(cfg, q30, reads_pf, coverage, dup, total_reads, b20, b30)
+    # W4: discover + parse EVERY sample the pipeline published (one ${id}.fastp.json per sample).
+    # A fan-out of 1 (this live HG002 driver) parses one; a multi-sample sheet would parse N. A
+    # partial publish dir fails loud inside parse_publish_dir — never a fabricated metric.
+    samples = parse_publish_dir(results)
+    for s in samples:
+        _log(
+            "gate",
+            f"handing {s.sample} to run_gate (Q30 {s.q30:.1f}%, reads-PF {s.reads_pf:.1f}%, "
+            f"cov {s.coverage:.1f}x, dup {s.dup:.3f}%, {s.n_variants} variants)",
+        )
+    write_run_dir_multi(cfg, samples)  # ONE run dir, one row per sample (byte-identical for N=1)
     capture_versions(cfg)  # P3-6: snapshot the resolved tool/Nextflow versions that ran this run
 
     _, cards = run_gate_from_dir(cfg.run_dir)  # default runbook — the read-API's recompute
-    card = cards[0]
 
-    print("\n=== REAL GIAB HG002 panel fastqs → Nextflow germline pipeline → gate ===")
-    print(f"  reads (fastp in)    : {total_reads:,}")
-    print(f"  Q30                 : {q30:.1f}%   (fastp)")
-    print(f"  reads passing filter: {reads_pf:.1f}%   (fastp)")
-    print(f"  mean coverage       : {coverage:.1f}x   (mosdepth --by panel, bwa-mem2 dedup BAM)")
-    print(f"  duplication         : {dup:.3f}%  (fastp)")
-    print(f"  breadth             : {b20 * 100:.1f}% >=20x, {b30 * 100:.1f}% >=30x")
-    print(f"  variants (norm)     : {n_variants}   (bcftools call | norm)")
+    n = len(samples)
+    label = "HG002 panel fastqs" if n == 1 else f"{n} samples"
+    print(f"\n=== REAL GIAB {label} → Nextflow germline pipeline → gate ===")
+    for s in samples:
+        print(f"\n  sample {s.sample}:")
+        print(f"    reads (fastp in)    : {s.total_reads:,}")
+        print(f"    Q30                 : {s.q30:.1f}%   (fastp)")
+        print(f"    reads passing filter: {s.reads_pf:.1f}%   (fastp)")
+        print(f"    mean coverage       : {s.coverage:.1f}x   (mosdepth --by panel, dedup BAM)")
+        print(f"    duplication         : {s.dup:.3f}%  (fastp)")
+        print(f"    breadth             : {s.b20 * 100:.1f}% >=20x, {s.b30 * 100:.1f}% >=30x")
+        print(f"    variants (norm)     : {s.n_variants}   (bcftools call | norm)")
     print(f"\n  run dir: {cfg.run_dir.relative_to(_REPO)}  (discoverable by the read-API)")
-    print(f"  sample {card.sample_id}: {card.verdict.value.upper()} — {card.headline}")
-    for f in card.findings:
-        print(f"    - [{f.severity.value}] {f.rule_id}: {f.title}")
+    for card in cards:
+        print(f"  sample {card.sample_id}: {card.verdict.value.upper()} — {card.headline}")
+        for f in card.findings:
+            print(f"    - [{f.severity.value}] {f.rule_id}: {f.title}")
     return 0
 
 

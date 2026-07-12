@@ -89,12 +89,24 @@ class SubmitRunAck(BaseModel):
     skipped_samples: list[str]
 
 
+class SampleStatus(BaseModel):
+    """Per-sample job state for a (potentially multi-sample) submit. A ``processed`` sample tracks
+    the run's lifecycle (queued → running → complete/failed/lost); a ``skipped`` sample never runs
+    (no panel reads on disk), so its status is frozen at ``skipped``."""
+
+    sample: str
+    status: str
+
+
 class IntakeStatus(BaseModel):
     run_id: str
     status: str
     error: str | None = None
     processed_samples: list[str] = []
     skipped_samples: list[str] = []
+    # Per-sample progress for a multi-sample run (W4). Additive: an older persisted job with no
+    # ``samples`` key simply yields an empty list. The run-level ``status`` above stays the summary.
+    samples: list[SampleStatus] = []
 
 
 def _bioconda_env() -> dict[str, str]:
@@ -104,6 +116,19 @@ def _bioconda_env() -> dict[str, str]:
     if bin_dir:
         env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
     return env
+
+
+def _mirror_samples(rec: dict[str, Any], status: str) -> None:
+    """Reflect a run-level transition onto each PROCESSED sample in the record's per-sample list.
+
+    The driver runs the whole processed set in ONE Nextflow invocation, so per-sample state is
+    coarse — every processed sample mirrors the run's status (queued → running → complete/failed).
+    A ``skipped`` sample never ran, so its status is left frozen at ``skipped``. A record with no
+    ``samples`` key (older jobs) is a no-op.
+    """
+    for s in rec.get("samples", []):
+        if s.get("status") != "skipped":
+            s["status"] = status
 
 
 def _mark(run_id: str, status: str, *, error: str | None = None) -> None:
@@ -117,6 +142,7 @@ def _mark(run_id: str, status: str, *, error: str | None = None) -> None:
     rec["updated_at"] = now_iso()
     if error is not None:
         rec["error"] = error
+    _mirror_samples(rec, status)
     store.upsert(rec)
 
 
@@ -140,6 +166,7 @@ def _reconcile(run_id: str, job: dict[str, Any]) -> dict[str, Any]:
         job["status"] = "lost"
         job["error"] = job.get("error") or "job owner process is gone (backend restarted mid-run)"
     job["updated_at"] = now_iso()
+    _mirror_samples(job, job["status"])  # keep per-sample state consistent with the reconciliation
     get_job_store().upsert(job)
     return job
 
@@ -192,6 +219,12 @@ def submit_run(
     # and the in-flight reservation set together, so two concurrent submits of the same id can't
     # both proceed (only the winner registers + launches a thread; the loser gets a 409).
     now = now_iso()
+    # Per-sample job state (W4): a processed sample starts ``queued`` (it will track the run's
+    # lifecycle); a skipped sample is ``skipped`` up front (no reads on disk, it never runs). Order
+    # follows the submitted samplesheet so the UI can render them in the operator's order.
+    sample_states = [
+        {"sample": s, "status": "queued" if s in _FIXTURE_SAMPLES else "skipped"} for s in submitted
+    ]
     conflict = False
     with _lock:
         if (_DATA / run_id).exists() or run_id in _active:
@@ -208,6 +241,7 @@ def submit_run(
                     "updated_at": now,
                     "processed": processed,
                     "skipped": skipped,
+                    "samples": sample_states,
                 }
             )
     if conflict:
@@ -238,4 +272,5 @@ def intake_status(run_id: str) -> IntakeStatus:
         error=job.get("error"),
         processed_samples=job.get("processed", []),
         skipped_samples=job.get("skipped", []),
+        samples=[SampleStatus(**s) for s in job.get("samples", [])],
     )
