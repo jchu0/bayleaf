@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-11 (MST) |
+| **Last updated** | 2026-07-12 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [HISTORY.md](../HISTORY.md) (archived wave/batch narrative), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
 
 ## Overview
 
@@ -14,6 +14,12 @@ traces to an ADR, the architecture, or a grounded data doc. Quality attributes
 (determinism, security, performance) live in [nonfunctional.md](nonfunctional.md);
 boundaries in [scope-and-wishlist.md](scope-and-wishlist.md). Requirements describe
 in-scope MVP behavior; deferred items are marked *(wishlist)*.
+
+> **Naming (Fact).** The product surface was renamed **PipeGuard → bayleaf** (2026-07-11,
+> commit `41330fe`) — README, frontend, FastAPI title, and UI copy. The importable Python
+> package (`src/pipeguard/`), the `PIPEGUARD_*` env vars, and these engineering docs deliberately
+> keep the `pipeguard` name; "PipeGuard" throughout this doc refers to the same system now
+> presented as bayleaf.
 
 ## Decision gate
 
@@ -188,11 +194,14 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    (`PIPEGUARD_NODE_AUTHOR_MODEL`, default mid/Sonnet), stub-default, degrade-to-stub on any error
    (incl. a safety refusal). **Narrower than the roster's original design** (see
    [node-authoring-agent.md](../design/node-authoring-agent.md) "What actually shipped"): the
-   corpus is a fixed **10 curated cards** (this pipeline's own 7 tools + 2 reference nodes — was 11
-   cards / 3 reference nodes until Branch A of the custom-script-card effort, 2026-07-11, retired
-   the unwired Truth VCF reference-node card; see REQ-F-098 below and
-   [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md)),
-   `src/pipeguard/node_author/knowledge/tool_cards.jsonl`, not a parser over a dropped
+   corpus is a fixed **9 curated cards** (this pipeline's own 7 tools + 2 reference nodes —
+   verified via `load_tool_card_corpus()`, 2026-07-12). Two cards were retired *after* the original
+   11: Branch A of the custom-script-card effort (2026-07-11) dropped the unwired **Truth VCF**
+   reference node (→ 10; see REQ-F-098 and [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md)),
+   then commit `dff2cef` retired **NGSCheckMate** from the *proposable* set (→ 9) — retired-but-pinned:
+   the JSON line stays commented in `tool_cards.jsonl` (and the `ngscheckmate` kind stays in
+   `ARTIFACT_KINDS`), so it can be un-commented without loss but is not currently proposed.
+   Corpus file: `src/pipeguard/node_author/knowledge/tool_cards.jsonl`, not a parser over a dropped
    `nextflow_schema.json`/`--help`/README, so the agent can only propose a tool already known to
    the corpus via `propose_node()` — it does not yet onboard a genuinely new/arbitrary tool through
    its main retrieval path. `GET /api/builder/node-proposal` + Pipeline-Builder wiring now exist
@@ -1309,7 +1318,7 @@ had reserved or listed as *not-yet-built*.
     lists accepted entries (optional `tool`/`status` filters). A companion
     `src/pipeguard/node_author/importer.py` (`import_from_nextflow_schema`) deterministically parses
     an nf-core `nextflow_schema.json` into a `NodeProposal` for a tool **NOT** already in the
-    curated 10-card corpus (was 11, see REQ-F-025 / REQ-F-098) — the structured, lowest-injection-risk half of the doc-drop importer
+    curated 9-card corpus (was 11; see REQ-F-025 for the two post-11 retirements) — the structured, lowest-injection-risk half of the doc-drop importer
     REQ-F-025 notes is unbuilt; a `format: file-path` param maps to a real `ARTIFACT_KINDS` kind
     only on a confident, conservative name/pattern match, else a `reserved` slot (never invented).
     +34 tests (`test_library_store.py`, `test_node_author_accept_api.py`,
@@ -1403,6 +1412,29 @@ had reserved or listed as *not-yet-built*.
     [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the file browser shipped
     alongside the custom-script card as the same Branch B), REQ-NF-027,
     [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md).
+41. **REQ-F-100 — Operator-gated, scheduled sample processing on authored pipelines ([ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md),
+    2026-07-12).** Closes two gaps in the intake execution path (`POST /api/runs`). **(1) Intake can
+    run an authored pipeline.** `SubmitRunIn` gains an optional `pipeline` name (+ optional
+    `pipeline_version`); when present, intake resolves + compiles that saved pipeline's
+    approver-blessed (`emitted`) snapshot through the **same approval gate** the Builder-Run path
+    (`POST /api/pipelines/run`, REQ-F-054/ADR-0014) uses — both routers now share ONE gate + ONE
+    compile path via `api/authored_pipeline.py` (`resolve_approved`/`compile_record`/`materialize_bundle`),
+    so neither ever runs a raw client-posted graph. A name with no approved version is a **409**;
+    absent → the committed `germline-panel` reference as before (byte-preserved, drift-proven). Running
+    a non-default authored pipeline needs reviewer/approver (`require_role`). **(2) A processing gate.**
+    `SubmitRunIn` gains `mode`: `immediate` (default — fire the driver now, unchanged), `hold` (register
+    in a new **`held`** state, do not fire), or `schedule` (store a required `scheduled_at` ISO-8601 +
+    register **`scheduled`**, do not fire). `POST /api/runs/{id}/release` (reviewer/approver)
+    transitions a `held`/`scheduled` run → `running` and fires the driver from the persisted job
+    record (409 if not parked, 404 if unknown). The Submit screen gains a pipeline picker + a
+    processing-mode control + a Release action. **Honest deferral:** a **time-based auto-release
+    scheduler is deliberately not built** — `scheduled` is `hold` plus a stored timestamp + an honest
+    note; no cron/timer/thread wakes it, the operator releases it manually (called out in
+    `api/job_store.py`'s `HELD_STATUSES` + the `release_run` docstring). Compose ≠ execute holds — the
+    core still never runs a tool; only the out-of-core driver shells out. 15 tests
+    (`tests/test_intake_scheduling.py`, offline — the background driver is monkeypatched, so no thread
+    runs `nextflow`). *Trace:* [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md),
+    `api/routers/intake.py`, `api/authored_pipeline.py`, `api/job_store.py`, REQ-F-054, REQ-F-057.
 
 ## Notes / deferred
 

@@ -20,7 +20,7 @@ infrastructure into a hackathon demo that must stay offline and single-process.
 ## Decision
 
 1. **A minimal identity primitive** (`api/auth.py`). `Role = viewer | reviewer | approver`;
-   a frozen `Actor{id, role}`; `current_actor()` reads `X-PipeGuard-Actor` / `X-PipeGuard-Role`
+   a frozen `Actor{id, role}`; `current_actor()` reads `X-bayleaf-Actor` / `X-bayleaf-Role`
    headers with a **permissive dev-default** (`id=dev, role=approver`) so the offline demo and
    the existing test suite need no auth wiring; `require_role(*allowed)` is a dependency that
    **403s** on an insufficient role and otherwise yields the `Actor`. `current_actor` is the
@@ -75,7 +75,7 @@ infrastructure into a hackathon demo that must stay offline and single-process.
 
 The frontend gained a client-side login screen (`frontend/src/auth.ts` + `screens/Login.tsx`,
 T-081, commit `0f7e85f`) that fronts every route and chooses which `Actor{id, role}` the app
-sends as `X-PipeGuard-Actor`/`-Role`. This is **additive framing, not a new decision**: it does
+sends as `X-bayleaf-Actor`/`-Role`. This is **additive framing, not a new decision**: it does
 not change `api/auth.py`, `current_actor()`, `require_role`, or any backend authorization
 boundary described above — it only decides which of the already-permitted `Actor`s the UI acts
 as, and it is itself an equally-explicit **dev-only** layer (four hardcoded demo accounts, one

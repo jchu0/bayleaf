@@ -2,17 +2,17 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted (maintainer sign-off 2026-07-10 MST; three open questions decided — see [Maintainer decisions](#maintainer-decisions-2026-07-10-sign-off)); D2 + D3 built end-to-end against a committed run, plus a narrower `RunReport` view (W3) and its per-variant evidence table (W3 continuation) — see [Realized](#realized-2026-07-11) |
+| **Status** | Accepted (maintainer sign-off 2026-07-10 MST; three open questions decided — see [Maintainer decisions](#maintainer-decisions-2026-07-10-sign-off)); D2 + D3 built end-to-end against a committed run, plus a narrower `RunReport` view and its per-variant evidence table — see [Realized (current status)](#realized-current-status) |
 | **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST) |
 | **Deciders** | maintainer (signed off 2026-07-10), design pass (4 parallel memos, 2026-07-10) |
-| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md) (three-gate model), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md) (GIAB benchmark / no invented pathogenicity), [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) (advisory agent scoping), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md) (self-contained records), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported` event), [ADR-0016](ADR-0016-postgres-port.md) (pluggable-store family the share sink now matches), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [data/provenance.md](../data/provenance.md), [design/variant-interpretation.md](../design/variant-interpretation.md), [journal 2026-07-11 d2-d3](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 share-store persistence](../journal/2026-07-11-share-store-persistence.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 w-deferrals](../journal/2026-07-11-w-deferrals.md) |
+| **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md) (three-gate model), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md) (GIAB benchmark / no invented pathogenicity), [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) (advisory agent scoping), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md) (self-contained records), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported` event), [ADR-0016](ADR-0016-postgres-port.md) (pluggable-store family the share sink now matches), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [data/provenance.md](../data/provenance.md), [design/variant-interpretation.md](../design/variant-interpretation.md), [HISTORY.md § ADR-0018](../HISTORY.md#adr-0018--variant-interpretation-what-landed-against-a-committed-run) (dated build chronology), [journal 2026-07-11 d2-d3](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 share-store persistence](../journal/2026-07-11-share-store-persistence.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 w-deferrals](../journal/2026-07-11-w-deferrals.md) |
 
 ## Context
 
-The maintainer asked to extend PipeGuard past variant **calling** into the rare-disease downstream chain —
+The maintainer asked to extend bayleaf past variant **calling** into the rare-disease downstream chain —
 **variant filtering/prioritization → annotation → interpretation → reporting** — and chose the fullest option
 ("full interpretation + report"). That ambition collides head-on with the repo's **life-science guardrails**
-(CLAUDE.md): PipeGuard is a *research/demo QC decision gate with production intent* and must make **no diagnostic,
+(CLAUDE.md): bayleaf is a *research/demo QC decision gate with production intent* and must make **no diagnostic,
 therapeutic, or safety claims**; confidence is a heuristic, never calibrated; clinical variant claims stay grounded
 in ClinVar/GIAB truth and **never invent pathogenicity** (ADR-0004). A naive "interpretation engine" that emits a
 Pathogenic/Likely-Pathogenic call would cross directly into being a clinical decision system.
@@ -22,7 +22,7 @@ converged on a way to deliver real rare-disease value **without** crossing that 
 and the phased approach so implementation can proceed safely; the architecture detail lives in
 [design/variant-interpretation.md](../design/variant-interpretation.md).
 
-The load-bearing insight: PipeGuard's three gates (ADR-0013) answer *"can we trust this run / this call?"* — the
+The load-bearing insight: bayleaf's three gates (ADR-0013) answer *"can we trust this run / this call?"* — the
 variant gate is a **call-quality** gate (DP/GQ/AB/caller-filters). Interpretation answers a **different** question:
 *"what does the world already say about a trustworthy call, and in what order should a human review it?"* Those two
 questions must stay separate.
@@ -42,8 +42,8 @@ questions must stay separate.
    INSUFFICIENT_EVIDENCE`) that always carries its contributing evidence — a *triage ordering*, **not** a
    pathogenicity call and **not** a probability.
 
-3. **PipeGuard authors no pathogenicity.** Every clinical-significance statement is a **quotation** of ClinVar (with
-   accession + review status), never PipeGuard's own determination. No ACMG-classification engine, no calibrated
+3. **bayleaf authors no pathogenicity.** Every clinical-significance statement is a **quotation** of ClinVar (with
+   accession + review status), never bayleaf's own determination. No ACMG-classification engine, no calibrated
    probability, no diagnosis, no therapeutic/actionability claim. ACMG evidence codes may be *surfaced as cited
    inputs* but never *emitted* as a final classification — and for the MVP that emission is **deferred entirely**.
 
@@ -58,7 +58,7 @@ questions must stay separate.
    findings-with-evidence (verbatim), the QC readout, an honest "variant gate — not run in this build" empty state
    until variant rules exist, and generated narration in a **visually separated** block (ADR-0001). It is **DRAFT
    until an approver signs off**, reusing the shipped draft→submit→approve lifecycle + `*_by` capture (ADR-0017).
-   PipeGuard can never mark a report "final" on its own.
+   bayleaf can never mark a report "final" on its own.
 
 6. **Data sharing is an explicit, review-gated, audited egress action — never automatic.** A Share surface composes
    one egress with a selectable **scope** (report / tabular export / artifacts), **location** (local staged dir by
@@ -68,7 +68,7 @@ questions must stay separate.
    reuses `api/deid.py` (drop operator PII; gate cohort keys by origin) and documents `DateShift` + free-text
    18-identifier redaction as **labelled seams** — it is a demo seam, explicitly **NOT** HIPAA de-identification.
 
-7. **Compose ≠ execute (ADR-0003).** PipeGuard **reads** an externally-produced annotated VCF; it never runs
+7. **Compose ≠ execute (ADR-0003).** bayleaf **reads** an externally-produced annotated VCF; it never runs
    VEP/annotators. Reference data (ClinVar, gnomAD, a GIAB truth set) is fetched via accessions + a fetch script,
    never committed raw, origin-tagged (new git-ignored `real-clinvar`/`real-gnomad` origins).
 
@@ -92,7 +92,7 @@ single highest clinical-sensitivity call, so its scope is drawn tightly to stay 
 Decision 1 (the variant gate stays QC, never a clinical-significance gate):
 
 - **A rule decides to ROUTE; a human decides the outcome.** The gate action is *"human review
-  required"* — the most conservative direction (never auto-proceed, never auto-classify). PipeGuard
+  required"* — the most conservative direction (never auto-proceed, never auto-classify). bayleaf
   still authors **no pathogenicity**: the routing rule reads a variant's *already-present, verbatim-
   cited* significance field (e.g. an annotated VCF's `CLNSIG` with its ClinVar review status) as
   **evidence**, and emits an ESCALATE-gated `Finding` that says *"a ClinVar P/LP-flagged candidate is
@@ -141,7 +141,7 @@ before any external share.
 |---|---|
 | A full ACMG-classification / pathogenicity-calling engine | Crosses directly into a clinical decision system; forbidden by the biomedical guardrails; would "invent pathogenicity" (ADR-0004). |
 | Make clinical significance a 4th **gate** that moves the verdict | Collapses interpretation into the QC gate and lets an annotation drive a decision — violates ADR-0001/0013; keeps the variant gate strictly QC instead. |
-| Run the annotator (VEP) inside PipeGuard | Violates compose ≠ execute (ADR-0003); PipeGuard reads an annotated VCF a driver produced. |
+| Run the annotator (VEP) inside bayleaf | Violates compose ≠ execute (ADR-0003); bayleaf reads an annotated VCF a driver produced. |
 | A calibrated pathogenicity probability | Confidence is a heuristic here (guardrail 2); a probability would misrepresent certainty — omitted, like `DecisionCard.confidence`. |
 | Auto-release / auto-share reports | Removes the human sign-off + explicit-egress guarantees; every report is DRAFT-until-signed and every share is confirm-gated + audited. |
 
@@ -153,109 +153,47 @@ before any external share.
 | **Costs** | Real reference data (ClinVar/gnomAD) + fetch scripts + a new core module + models + report/share endpoints + frontend — a multi-part build. PHI-scrub is only partial (labelled seams); external egress carries real privacy risk mitigated by role-gate + confirm + audit, not by compliance controls. |
 | **Follow-ups** | Docs owed on build (qc_metrics.md Gate 3, metric_registry.md `variant.gnomad_af` + annotation-source registry, a new data/variant_annotation.md, schemas.md, a license table, data/README origins, ToC). The interpretation **agent**, trio/inheritance context, more annotation sources, `DateShift`/free-text redaction, real S3/Box egress, PDF, and a persisted ledger-anchored report are all **deferred seams**. |
 
-## Realized (2026-07-11)
+## Realized (current status)
 
-Two further build increments landed against a **committed run**, closing two gaps the 2026-07-10
-sweep had explicitly left open (see [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md#open-questions--todo): "the rule has never fired end-to-end against a
-committed run" / "not yet wired to any egress endpoint"). Verified by reading `api/main.py`,
-`api/share_store.py`, `tests/test_route_to_human.py`, and `tests/test_share_egress.py` directly.
+> Dated, commit-by-commit build chronology (D2 route-to-human, D3 share egress + persistence
+> parity, the `RunReport` view, the per-variant table) lives in
+> [HISTORY.md § ADR-0018](../HISTORY.md#adr-0018--variant-interpretation-what-landed-against-a-committed-run).
+> This section is the current state + the honest limits. Verified against `api/main.py`,
+> `api/share_store.py`, `tests/test_route_to_human.py`, `tests/test_share_egress.py`,
+> `tests/test_run_variants.py`.
 
-1. **D2 fires end-to-end against a committed run (commit `8ecc2a1`).** `api/main._active_runbook
-   (run_id)` is the deployment-config seam that arms route-to-human **per run**: it reads an
-   optional `route_to_human` marker file (comma-separated ClinVar significances) from the run
-   directory and, if present, arms a copy of `DEFAULT_RUNBOOK`'s `RouteToHumanPolicy` for that run
-   only; absent/empty stays the stock disarmed default. `_evaluate(run_id)` now gates through it.
-   A new fixture, `data/RUN-2026-07-11-CLINVAR-RTH/` (`origin=contrived`), demonstrates it: clean
-   QC, a single verbatim-cited ClinVar **Pathogenic** BRCA1 spike (`VCV000017661`) GIAB HG002 does
-   **not** actually carry, and the arming marker — HG002 now **ESCALATE**s via `VAR-RTH-001` on the
-   variant gate when this run is evaluated through the API. Every other/unmarked run stays disarmed
-   (the core default, and the pinned demo scenario, are untouched — asserted by
-   `test_clinvar_rth_fixture_escalates_via_per_run_arming`). The fixture's `NOTE.md` restates the
-   honesty caveat inline: no real individual (HG002 is a consented benchmark), no PipeGuard-authored
-   pathogenicity (ADR-0004) — the rule quotes ClinVar and routes to a human, it renders no clinical
-   determination.
-2. **D3's Safe-Harbor-style scrub is now wired to a real egress (commits `076ecd4`, `263390a`) —
-   narrower than the full Share window this ADR's Decision 6 and
-   [design/variant-interpretation.md §4](../design/variant-interpretation.md#4-reporting--sharing-p2)
-   describe.** `POST /api/runs/{run_id}/share` (`require_role("approver")`) runs every decision row
-   (`sample_id`/`verdict`/`headline`/`rationale`/`n_findings` joined with intake identity) through
-   `api.safe_harbor.redact_record`, returns a `ShareBundle` (the scrubbed rows + a `ShareManifest`:
-   `policy_id="safe-harbor-style-v1"`, `n_rows`, `origin`, a sha256 `content_hash` of the exact
-   emitted bytes, the `event_id`, the 18 §164.514(b)(2) classes, and the disclaimer), and records a
-   `DATA_EXPORTED` `ProvenanceEvent` to a new, separate, pluggable sink
-   (`api/share_store.py`, kept apart from the gate's own cacheable `EventLedger` — see
-   [data/provenance.md](../data/provenance.md#a-second-separate-sink-for-share-events-apishare_storepy);
-   shipped JSONL-only at first, brought to the pluggable jsonl/sqlite/postgres shape the same
-   day — see item 4 below).
-   The Provenance screen (`frontend/src/screens/Provenance.tsx`) surfaces it as an approver-ONLY,
-   confirm-gated "Share (de-identified)" header action; on success it toasts the manifest and
-   refetches the run so the `DATA_EXPORTED` row appears in the Event trail immediately.
-   **What this narrows, honestly:** this is **not** yet the full Share window Decision 6 describes —
-   there is no scope selector (report / tabular export / artifacts; today it is always the
-   `grain="decision"` rows above), no location choice (local staged dir / S3 / Box / signed link;
-   today the bundle is returned directly to the caller, nothing is staged or pushed anywhere), and
-   no security-level tier (L0/L1/L2; today the Safe-Harbor-style scrub is the *only* policy — there
-   is no less-strict opt-down). It also does **not** yet write to the Admin Activity feed the way
-   pipeline/settings/ticket writes do (`frontend/src/screens/Admin.tsx`'s `FeedKind` has no `share`
-   case) — the audit trail for a share lives only in the run's own Provenance › Event trail today.
-   5 new tests (`tests/test_share_egress.py`): approver-gated (viewer/reviewer 403), unknown-run
-   404, direct identifiers (`submitted_by`/`subject_id`) dropped from every row, the recorded event
-   pinned to the manifest's content hash, and a share leaves the gate's cards byte-identical
-   (egress transform only, ADR-0001).
-3. **D3's share sink brought to persistence parity (2026-07-11, commit `9a4ef5f`), closing the
-   "JSONL-only" gap.** When it first shipped (item 2 above), the share-egress sink was the one
-   off-gate sink without a DB adapter — feedback/pipeline/review/settings already had the
-   pluggable jsonl/sqlite/postgres shape ([ADR-0016](ADR-0016-postgres-port.md)). `api/share_ledger.py`
-   was renamed and rebuilt as `api/share_store.py`: a `ShareStore` Protocol +
-   `JsonlShareStore`/`SqliteShareStore`/`PostgresShareStore`, `get_share_store()` env-selected via
-   `PIPEGUARD_SHARE_STORE` (default `jsonl`; `PIPEGUARD_SHARE_PATH`/`PIPEGUARD_SHARE_DB`/the shared
-   `DATABASE_URL`). The DB adapters **degrade to JSONL** on any construction failure (missing
-   extra/DSN, unreachable server), logged by exception type only — never the DSN, matching every
-   other guarded seam in the repo. `api/main.py`'s `get_run`/`share_run` now call
-   `get_share_store().for_run(...)`/`.append(...)`. 6 new tests (`tests/test_share_store.py`:
-   jsonl default, sqlite round-trip, sqlite==jsonl parity, degrade-to-jsonl without a DSN,
-   idempotent re-append, tolerant corrupt-line read) plus a live-Postgres round-trip appended to
-   `tests/test_persistence_postgres_live.py` — **verified green against a real `postgres:16`**
-   (all 4 live-Postgres tests pass); 409 offline passed / 4 skipped, ruff+mypy clean. This is
-   parity of the *storage backend* only — the endpoint's behavior (approver-gated, one fixed
-   policy, no scope/location/security-level selection) is unchanged from item 2. **Still an
-   honest, documented seam, not built:** a file lock / connection pool for multi-worker
-   concurrency (the same limit `api/feedback_store.py` already carries).
-4. **A `RunReport` view (W3, commit `3d5a73d`, same day) — a narrower "option A" over already-wired
-   data, not the full report projection §1 item 3 of the design describes.** `RunDetail` gains a
-   `?view=report` **Report** tab (`RunReport.tsx`): verdict mix, a route-to-human hero panel
-   quoting ClinVar significance VERBATIM, per-sample gate outcomes + cited evidence, a sign-off
-   footer stating human sign-off is a labelled seam, not a button. Built entirely over `detail`
-   (cards + events) already on the wire — no `api/report.py` projection, no `ReportStore`, no
-   draft→approve/sign-off write path, no persisted report artifact. The same commit fixed an
-   honesty bug in the Lineage DAG: a fired route-to-human ESCALATE used to render the review node
-   "skipped" (no VCF artifact) despite the rules having already escalated the sample — a fired
-   gate now wins over the no-artifact default. See
-   [design/variant-interpretation.md §0 item 3](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off).
-5. **The per-variant evidence table (W3 continuation, commit `fec0f83`, later the same day) —
-   closes item 4's "still no per-variant evidence table" gap.** A new read-only
-   `GET /api/runs/{run_id}/variants` (`api/main.py`) serves every `VariantCall` a run's
-   `variants.csv` carries, parsed via the SAME `pipeguard.parsers.parse_variant_calls` the
-   route-to-human rule already uses (404 unknown run; `[]` when no `variants.csv` — an honest
-   empty state, never a fabricated row; the same ClinVar value already served through `card`
-   findings for a fired route-to-human hit, so this is no new field exposure). `RunReport.tsx`
-   renders it as a paginated table (Sample · Gene · HGVS · ClinVar significance quoted VERBATIM ·
-   review status · accession) beneath the route-to-human hero, with its own disclaimer that
-   PipeGuard authors no pathogenicity and sets no verdict here (ADR-0001/G3/G4 held — a read
-   surface only). **Narrower than the full `AnnotatedVariant` model (Decision 2 / §1 item 1):**
-   only the `VariantCall`/D2 fields ship — ClinVar classification, review status, accession,
-   version — with no gnomAD population-frequency column, no inheritance-fit, and no call-quality
-   join; the table is unconditional on the route-to-human rule firing (any row in `variants.csv`
-   shows, whether or not it is armed), unlike the hero panel above. +3 tests
-   (`tests/test_run_variants.py`); live-verified against `RUN-2026-07-11-CLINVAR-RTH` (BRCA1
-   `c.68_69del` "Pathogenic" renders verbatim) and `mock_run_01` (no `variants.csv` → honest empty
-   state). See
-   [design/variant-interpretation.md §0 item 4](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off),
-   [functional.md REQ-F-094](../requirements/functional.md), [tasks T-133](../planning/tasks.md).
-6. **What is genuinely still unbuilt**, per [design/variant-interpretation.md §0](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off):
-   the interpretation agent, the `api/report.py`/`ReportStore`/sign-off lifecycle, the full Share
-   window (scope/location/security-level), gnomAD AF / inheritance-fit evidence, the
-   review-ordering tier, and the ClinVar/gnomAD fetch scripts.
+**Built end-to-end against a committed run** (2026-07-11):
+
+1. **D2 route-to-human fires (`VAR-RTH-001`).** `api/main._active_runbook(run_id)` arms
+   route-to-human **per run** from an optional `route_to_human` marker file in the run dir
+   (comma-separated ClinVar significances); absent/empty stays the stock disarmed `DEFAULT_RUNBOOK`.
+   The fixture `data/RUN-2026-07-11-CLINVAR-RTH/` (`origin=contrived`: clean QC + a single
+   verbatim-cited ClinVar **Pathogenic** BRCA1 spike HG002 does not carry + the arming marker) makes
+   HG002 **ESCALATE** through the API. The core default and pinned demo stay disarmed/untouched.
+   bayleaf authors **no** pathogenicity — the rule quotes ClinVar and routes to a human (ADR-0001/0004).
+2. **D3 Safe-Harbor-style share egress, narrower than the full Share window.**
+   `POST /api/runs/{run_id}/share` (`require_role("approver")`) scrubs a run's decision rows via
+   `api.safe_harbor.redact_record` → a `ShareBundle` + `ShareManifest` (`policy_id`, `n_rows`,
+   `origin`, a sha256 `content_hash` of the exact emitted bytes, the 18 §164.514(b)(2) classes, the
+   non-compliance disclaimer), and records a `DATA_EXPORTED` event to the separate, pluggable
+   `api/share_store.py` sink (jsonl/sqlite/postgres, degrade-to-JSONL, ADR-0016;
+   [provenance.md](../data/provenance.md#a-second-separate-sink-for-share-events-apishare_storepy)).
+   Surfaced in Provenance as an approver-only, confirm-gated action. **Narrower than Decision 6:** no
+   scope selector, no location choice, no security-level tier (the scrub is the only policy); the
+   share audit lands in the run's own Event trail, not (yet) the Admin Activity feed. **Multi-worker
+   store locking is a documented seam, not built.**
+3. **A `RunReport` view** (`?view=report`, `RunReport.tsx`): verdict mix, a route-to-human hero
+   quoting ClinVar VERBATIM, per-sample gate outcomes + cited evidence, a sign-off footer stating
+   human sign-off is a labelled seam — built over already-wired `detail`, **not** the full
+   `api/report.py`/`ReportStore`/sign-off lifecycle. A `GET /api/runs/{run_id}/variants` read-only
+   endpoint (parsed via `pipeguard.parsers.parse_variant_calls`) powers a per-variant table (Sample ·
+   Gene · HGVS · ClinVar significance VERBATIM · review status · accession) — only the `VariantCall`/D2
+   fields, **no** gnomAD AF / inheritance-fit / call-quality join.
+
+**Genuinely still unbuilt** (per [design/variant-interpretation.md §0](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off)):
+the interpretation **agent**, the `api/report.py`/`ReportStore`/sign-off lifecycle, the full Share
+window (scope/location/security-level), gnomAD AF / inheritance-fit evidence, the review-ordering
+tier, and the ClinVar/gnomAD fetch scripts.
 
 ## Open questions
 

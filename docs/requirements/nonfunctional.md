@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-11 (MST) |
+| **Last updated** | 2026-07-12 (MST) |
 | **Audience** | software / all |
-| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
+| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [HISTORY.md](../HISTORY.md) (archived wave/batch narrative), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
 
 ## Overview
 
@@ -239,6 +239,21 @@ links to [evaluation.md](../quality/evaluation.md).
    parse](../design/nextflow-codegen.md#multi-sample-driver-parse-2026-07-11-w4-continuation),
    REQ-NF-041, [tasks T-134](../planning/tasks.md),
    [journal 2026-07-11](../journal/2026-07-11-w-deferrals.md).
+7. **REQ-NF-046 — The Nextflow compiler is hostile-input-robust: compile correctly or fail loud,
+   never silently wrong (2026-07-12, T-140, commit `37e54a8`).** Six verified robustness fixes turn
+   off-golden-path/hostile graphs that used to emit a silently-wrong or unparseable bundle into ones
+   that either compile correctly or raise a `CompileError`: (a) two distinct tools sharing a process
+   name are rejected, not merged; (b) a `File input` source of a data kind wires to the right
+   channel and a novel-kind source becomes a params channel (was a zero-input dangling process);
+   (c) fan-in / duplicate-emit / port-drift guards catch a graph whose edges no longer match a
+   node's declared ports; (d) operator-supplied strings (labels, `script:` bodies, ADR-0020) are
+   injection-escaped so a quote/`$`/backtick cannot break out of the generated Groovy. The germline
+   byte-for-byte drift guard + the custom-script tests stay green — these fixes touch only hostile
+   inputs. Pure text codegen (compose ≠ execute — no tool runs). 17 cases
+   (`tests/test_nextflow_robustness.py`, one per fix). *Trace:*
+   [design/nextflow-codegen.md](../design/nextflow-codegen.md),
+   [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md),
+   [quality/evaluation.md EVAL-017](../quality/evaluation.md), [tasks T-140](../planning/tasks.md).
 
 ## Maintainability, type-safety & testing
 

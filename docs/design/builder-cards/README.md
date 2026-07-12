@@ -176,9 +176,10 @@ section is the closest thing to their retirement record).
    the two bespoke, unwired palette nodes are gone. `catalog.py`'s `REFERENCE_PARAM` drops
    `truth_vcf` (the germline chain never consumed it as a compiler-level reference param — it was
    never wired to the real pipeline in the first place). The node-author corpus
-   (`knowledge/tool_cards.jsonl`) drops the `source_truth_vcf` card — **the corpus is 10 cards now
-   (was 11)**; `tool_ngscheckmate`'s citation is corrected to point at the vocabulary membership
-   rather than the removed `BTOOLSPEC['NGSCheckMate']`. Per-tool docs that referenced either removed
+   (`knowledge/tool_cards.jsonl`) drops the `source_truth_vcf` card (11→10); NGSCheckMate was then
+   **retired-but-pinned** from the proposable corpus (10→**9**, its JSON line commented out so
+   `load_tool_card_corpus()` skips it while the `ngscheckmate` KIND stays in the vocabulary) —
+   **the corpus is 9 cards now** (7 germline tools + Reference FASTA + Panel BED). Per-tool docs that referenced either removed
    node as a wiring target ([samtools-markdup.md](samtools-markdup.md),
    [bcftools-norm.md](bcftools-norm.md), [multiqc.md](multiqc.md), [bwa-mem2.md](bwa-mem2.md)) are
    corrected in the same sweep — they now describe NGSCheckMate as a real bioinformatics concept a

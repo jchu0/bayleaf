@@ -102,7 +102,7 @@ Two preflight-gate rules realize the operational-failure branch of the verdict p
    + the exit code, and maps to **RERUN** under the same operational-failure policy (verdict
    policy 3) as PIPE-001 — the verdict rationale is unchanged, only the evidence source is.
 
-Both rules **read** an artifact the pipeline dropped; PipeGuard composes, it does not
+Both rules **read** an artifact the pipeline dropped; bayleaf composes, it does not
 execute — the gate never runs a process ([ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)).
 `trace.txt` is an **optional** input: present only for runs that had a process failure
 (see [`data/README.md`](../../data/README.md)).
@@ -136,7 +136,7 @@ D2) — the highest clinical-sensitivity call in the system, so its scope is dra
    **QC** gate (DP/GQ/AB, Gate 3 table above) is untouched — this is a distinct, additive
    review-routing rule on the same gate.
 4. **Reads, never runs.** The rule reads `RunArtifacts.variant_calls` (`VariantCall`, parsed from
-   an externally-produced `variants.csv` by `parsers.parse_variant_calls`) — PipeGuard never runs
+   an externally-produced `variants.csv` by `parsers.parse_variant_calls`) — bayleaf never runs
    an annotator (compose ≠ execute, ADR-0003). Empty for every run today, so a run without
    `variants.csv` is unaffected (belt-and-suspenders: `evaluate_sample` on a run with variant calls
    but a disarmed policy yields the exact finding set it would without any variant data).

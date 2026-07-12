@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Built (2026-07-11, T-123, commits `10f1816`→`e4ba174`); **extended the same day** (T-129, "W4," commit `5f0d5ec`) with executor profiles, per-sample fan-out, and full QC port wiring; **hardened the same day** (T-131, commit `595815e`) with pre-flight guards + per-run version capture; **the driver's post-run parse extended to genuine multi-sample later the same day** (W4 continuation, T-134, commit `9ab7fca`) — offline-verified against fixture publish dirs; the live multi-sample Nextflow run stays unverified, see §Multi-sample driver parse below |
-| **Last updated** | 2026-07-11 (MST) |
+| **Status** | Built (T-123) and extended: executor profiles + per-sample fan-out + full QC port wiring (W4), pre-flight guards + per-run version capture (T-131), N-sample driver parse (W4 continuation — offline-verified vs fixture publish dirs; the live multi-sample run stays unverified, §Multi-sample driver parse), operator-authored custom-script processes (ADR-0020), robustness hardening (injection escaping + collision/fan-in/dup-emit/port-drift guards, §Robustness hardening), and operator-gated/authored-pipeline intake (ADR-0021, §Nextflow-first intake). Build chronology in [HISTORY.md](../HISTORY.md). |
+| **Last updated** | 2026-07-12 (MST) |
 | **Audience** | software / bioinformatics |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide, AI advisory — this module sets no verdict), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; this doc REALIZES its "Nextflow carries compute portability" decision), [ADR-0016](../adr/ADR-0016-postgres-port.md) (the durable job store the intake driver's launch now persists into, item 8), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (operator-authored custom-script processes — the compile path in §Operator-authored custom-script processes below), [design/agent-authoring-contract.md](agent-authoring-contract.md) (agents author metadata, a human authors the custom script), [design/architecture.md](architecture.md) (component map), [data/nf-core-conventions.md](../data/nf-core-conventions.md) (the vocabulary this catalog adopts), [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) (the card graph this compiles), [design/builder-cards/](builder-cards/) (the per-tool port specs the catalog mirrors), [planning/tasks.md](../planning/tasks.md) (T-123, T-129, T-131, T-134), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 w-deferrals](../journal/2026-07-11-w-deferrals.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide, AI advisory — this module sets no verdict), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; this doc REALIZES its "Nextflow carries compute portability" decision), [ADR-0016](../adr/ADR-0016-postgres-port.md) (the durable job store the intake driver's launch now persists into, item 8), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (operator-authored custom-script processes — the compile path in §Operator-authored custom-script processes below), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (operator-gated/scheduled intake processing of approved authored pipelines — §Nextflow-first intake below), [design/agent-authoring-contract.md](agent-authoring-contract.md) (agents author metadata, a human authors the custom script), [design/architecture.md](architecture.md) (component map), [data/nf-core-conventions.md](../data/nf-core-conventions.md) (the vocabulary this catalog adopts), [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) (the card graph this compiles), [design/builder-cards/](builder-cards/) (the per-tool port specs the catalog mirrors), [planning/tasks.md](../planning/tasks.md) (T-123, T-129, T-131, T-134), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 w-deferrals](../journal/2026-07-11-w-deferrals.md) |
 
 ## Overview
 
@@ -131,6 +131,30 @@ command (see [Wiring rules](#wiring-rules) point 5).
 8. **A bad edge is rejected.** An edge naming a missing node or an out-of-range port index raises
    `CompileError` immediately — never silently dropped (a dropped edge would be a *worse* bug than
    a loud failure: a graph that looks valid but wires nothing).
+
+### Robustness hardening (`tests/test_nextflow_robustness.py`, 17 cases)
+
+A kind/tool/id/pipeline-name is interpolated raw into generated Groovy + bash, and a graph can now
+carry operator-supplied text (custom scripts, packaging strings) — so the compiler validates and
+escapes rather than trusting input:
+
+1. **Injection defense.** `_groovy_escape()` escapes backslash + single-quote and turns a raw
+   newline/CR into `\n`/`\r` before any value enters a single-quoted Groovy string (the pipeline
+   name, and operator-supplied `conda`/`container`); a hostile port `kind`, tool name, or node id
+   that fails the identifier pattern is rejected with a `CompileError`, never emitted.
+2. **File-input source wires to reads, not a placeholder.** A generic `File input` source emitting
+   `fastq` wires to the `ch_reads` value channel exactly like an unwired `fastq` input; a novel-kind
+   source becomes its own params channel — neither becomes a labelled placeholder.
+3. **Proc-name-collision guard.** `_proc_name` is many-to-one (punctuation/case collapse), so two
+   *distinct* tools mapping to the same process name are rejected — a custom node reusing a
+   catalogued name is NOT a collision (`is_custom` wins in `_render_module`).
+4. **Fan-in guard.** Two edges into one input port are rejected — a real fan-in must be merged by an
+   explicit upstream node, not a clobbered channel map.
+5. **Duplicate-emit dedup.** Duplicate output kinds on a placeholder/custom node are deduped, so the
+   `emit:` block stays valid.
+6. **Catalog port-drift guard.** A catalogued (non-custom) node whose declared ports diverge from
+   its `ProcessSpec` (drifted inputs, or an uncatalogued output kind) is rejected — a reordered
+   output *subset* still compiles.
 
 ## Operator-authored custom-script processes (ADR-0020, `compiler.py` / `api/routers/nextflow.py`)
 
@@ -323,9 +347,9 @@ Download `.zip` — labelled honestly as "composes, never runs a tool or sets a 
 capability addition on top of the Builder's pre-existing `run_layout.yaml` emission
 (wishlist #11, [scope-and-wishlist.md](../requirements/scope-and-wishlist.md)): where `Emit`
 produces a locator-config YAML naming which files feed which stage, "Export to Nextflow" produces
-an actually-executable pipeline for the same graph. The two are separate, independent actions —
-this batch did not touch `RunHandoffModal` (still the `run_layout.yaml` view) or
-`AuthorToolNodeModal` (still a static preview, [node-authoring-agent.md](node-authoring-agent.md)).
+an actually-executable pipeline for the same graph. (The old `RunHandoffModal` `run_layout.yaml`
+preview was later deleted as orphaned once `RunPipelineModal` superseded it; `AuthorToolNodeModal`
+is now wired to a real node proposal, [node-authoring-agent.md](node-authoring-agent.md).)
 
 ## Nextflow-first intake
 
@@ -340,6 +364,18 @@ pipeline's **published** QC outputs (`*.fastp.json`, `*.mosdepth.summary.txt`/
 consumes (unchanged — `run_gate` was not touched). Needs `nextflow` + a JRE + the bioconda tools
 on `PATH` (e.g. the `hackathon` conda env used to verify this locally — not a repo dependency);
 `api/routers/intake.py` injects an env override via `PIPEGUARD_BIOCONDA_BIN`.
+
+**Operator-gated + authored-pipeline processing (ADR-0021).** `POST /api/runs`'s `SubmitRunIn` now
+optionally names a `pipeline` (+`pipeline_version`): when present, intake resolves + compiles that
+operator-**authored**, approver-blessed pipeline through the *same* approval gate the Builder-Run
+path uses (`api/authored_pipeline.py` — a name with no approved version → 409); absent, it runs the
+committed `germline-panel` reference as before (byte-preserved, since for that pipeline the compiled
+bundle *is* the committed reference). A processing `mode` gates *when* the driver fires — `immediate`
+(now), `hold` (register without firing; release later via `POST /api/runs/{id}/release`), or
+`schedule` (park with `scheduled_at`; a time-based auto-release is a DEFERRED seam — release is
+manual today). Both are execution-boundary concerns, off the deterministic gate; compose ≠ execute
+holds (the core still never runs a tool). See
+[ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md).
 
 **The `compose ≠ execute` boundary, stated precisely:**
 
@@ -423,30 +459,15 @@ see [functional.md REQ-F-092/REQ-F-093](../requirements/functional.md) and
 | `tests/test_nextflow_api.py` (6 tests) | `POST /api/pipelines/compile` — JSON preview, `.zip` download, a 422 on a cycle/empty graph, **and (ADR-0020) a posted custom-script node → real Nextflow + a blank custom script → 422**. |
 | `tests/test_nextflow_custom_process.py` (9 items, NEW, ADR-0020) | Operator-authored custom processes: a custom node renders its verbatim body wired from the edge + honestly labelled; the catalog is never consulted (even on a name collision); a blank script is a `CompileError` (never fabricated) while an uncatalogued-no-script node keeps its placeholder; a novel output kind is wired by name; compose ≠ execute (returns text, spawns no subprocess); the germline drift stays green. Pure-offline, no `nextflow` needed. |
 | `tests/test_run_giab_multisample.py` (7 tests, W4 continuation) | Offline, fixture-publish-dir proof of the multi-sample parse: N-sample dir → N gated run-dir rows; fan-out-of-1 byte-identical to the pre-fan-out format; partial/empty publish dir fails loud; `S1`/`S10` prefix anchoring; `demux_stats.csv` `% Reads` share. No `nextflow` involved — see [§Multi-sample driver parse](#multi-sample-driver-parse-2026-07-11-w4-continuation). |
+| `tests/test_nextflow_robustness.py` (17 tests) | The §Robustness hardening guards: Groovy/identifier injection escaping (hostile kind/tool/pipeline-name), the File-input-source-wires-to-reads fix, proc-name-collision / fan-in / duplicate-emit / catalog-port-drift rejection, zero-input meta omission — plus the germline drift + a custom-script node still compiling. Pure-offline. |
 
-Census (verified `uv run pytest --collect-only -q` + `git ls-files 'tests/*.py' | wc -l`, updated
-2026-07-11 after the W3/W4-continuation session, T-133/T-134, in a sandbox with `nextflow` NOT on
-`PATH`): **517 tests collected across 37 files** (was 507/35 after the P3-backlog session,
-471/33 after W4/E2E, 427/29 before that) — **511 passed / 6 skipped** here (the
-`test_nextflow_compile.py` live `-stub-run` skip above plus `test_e2e_pipeline.py`'s env-gated
-live-stub check, both absent `nextflow`; the two new files this session — `test_run_variants.py`
-(3) and `test_run_giab_multisample.py` (7) — are both pure-offline, no `nextflow` needed, so they
-add to the pass count, not the skip count); on a machine with `nextflow` on `PATH` both env-gated
-checks run instead, giving a computed **513 passed / 4 skipped** (arithmetic from the two skip
-reasons — not independently re-run in this sandbox). Either way the compiler/wiring/drift/
-placeholder tests, and the new multi-sample-parse tests, run unconditionally offline, with no
-`nextflow` binary required. `test_nextflow_compile.py` itself stayed at 15 cases this session
-(unchanged); `tests/test_job_store.py` (12) and `tests/test_run_giab_preflight.py` (16) from the
-prior P3-backlog session cover the durable job store and the four preflight guards above, both
-pure-offline with no `nextflow` on `PATH` needed.
-
-**ADR-0020 delta (this session, operator-authored custom-script processes):** +1 file
-(`tests/test_nextflow_custom_process.py`, 9 pure-offline items) and +2 cases in
-`tests/test_nextflow_api.py` (4→6) — **+11 items / +1 file** over the 517/37 base above (a computed
-528/38). The exact global integer is intentionally NOT re-asserted as "verified" here: this landed
-on the shared `feat/custom-script-io` branch alongside a concurrent file-I/O-wiring session whose own
-untracked test files share the working tree, so a clean `--collect-only` couldn't isolate this
-slice; the authoritative refreshed census is reconciled at integration (`quality/evaluation.md`).
+Census (verified `uv run pytest --collect-only -q` + `ls tests/test_*.py | wc -l`, updated
+2026-07-12): **620 tests collected across 46 test files**. The compiler/wiring/drift/placeholder/
+robustness/custom-process/multi-sample-parse tests all run **unconditionally offline** — no
+`nextflow` binary required. Two machine-gated live checks (`test_nextflow_compile.py`'s `-stub-run`
+and `test_e2e_pipeline.py`'s env-gated live-stub) skip when `nextflow` is absent (this sandbox's
+default) and run when it is present; that is the only source of the pass-vs-skip variance. The
+authoritative pass/skip census is reconciled in [quality/evaluation.md](../quality/evaluation.md).
 
 ## Limitations (recorded in the open, not hidden)
 

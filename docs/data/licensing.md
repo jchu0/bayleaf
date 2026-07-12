@@ -9,11 +9,11 @@
 
 ## Overview
 
-Per-component licensing for the genomics tools and reference data PipeGuard sits on top
-of, and why the design keeps **PipeGuard's own code MIT-licensable**. The load-bearing
-decision is **external-process invocation**: PipeGuard reads tool *outputs* and, when it
+Per-component licensing for the genomics tools and reference data bayleaf sits on top
+of, and why the design keeps **bayleaf's own code MIT-licensable**. The load-bearing
+decision is **external-process invocation**: bayleaf reads tool *outputs* and, when it
 runs a tool, does so as an arm's-length subprocess — it does not link or vendor tool
-code, so a tool's copyleft does not reach PipeGuard's source
+code, so a tool's copyleft does not reach bayleaf's source
 ([constraints.md](../requirements/constraints.md) REQ-C-020/021).
 
 > **Verification status matters.** Only the four tools in
@@ -24,7 +24,7 @@ code, so a tool's copyleft does not reach PipeGuard's source
 
 ## The licensing model
 
-1. **PipeGuard's own code → MIT** (intended). It orchestrates and reads outputs.
+1. **bayleaf's own code → MIT** (intended). It orchestrates and reads outputs.
 2. **CLI / subprocess use of a tool = mere aggregation** — even a GPLv3 tool (e.g.
    PLINK) is fine invoked over the shell (FSF
    [MereAggregation](https://www.gnu.org/licenses/gpl-faq.html#MereAggregation)).
@@ -73,7 +73,7 @@ result here (move the row up to "verified" when done).
 
 | Tool | License | Implication |
 |---|---|---|
-| **BCL Convert / bcl2fastq** (Illumina) | **Proprietary (Illumina EULA)** | Demux software is vendor-licensed; **not redistributable**. PipeGuard only reads its *outputs* (demux stats / FASTQ), never ships it. |
+| **BCL Convert / bcl2fastq** (Illumina) | **Proprietary (Illumina EULA)** | Demux software is vendor-licensed; **not redistributable**. bayleaf only reads its *outputs* (demux stats / FASTQ), never ships it. |
 
 ## Reference data sources
 

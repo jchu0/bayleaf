@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Accepted |
 | **Date** | 2026-07-12 (MST) |
-| **Deciders** | PipeGuard maintainers |
+| **Deciders** | bayleaf maintainers |
 | **Related** | ADR-0003 (deployment-agnostic ports / Nextflow), ADR-0014 (approval gate), ADR-0019 (pipeline versioning + run pinning), ADR-0020 (operator-authored custom processes); `api/routers/intake.py`, `api/routers/pipeline_run.py`, `api/authored_pipeline.py`, `api/job_store.py` |
 
 ## Context

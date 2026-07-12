@@ -9,7 +9,7 @@
 
 ## Overview
 
-How PipeGuard sources, labels, and stores its data. The through-line: **every
+How bayleaf sources, labels, and stores its data. The through-line: **every
 artifact is labeled by origin**, so real reference data, programmatically
 perturbed data, and hand-authored demo data are never confused — a hard
 requirement for a provenance tool.

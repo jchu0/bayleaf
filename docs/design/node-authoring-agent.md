@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Built, narrower than proposed (2026-07-10, T-046, commit `71d4ff9`)** — roster agent #5. The core Python agent (`src/pipeguard/node_author/`) is built and tested; the flow this doc originally proposed (drop a tool's docs → parse → propose) was **not** what shipped — see "What actually shipped" below. **Updated 2026-07-11 (W2, T-127): a read-only `api/` endpoint + Pipeline-Builder wiring now exist** — the builder's "Author a tool node" modal renders the real proposal instead of a static `phase-2` preview. **Updated again 2026-07-11 (W2 backend, T-135): accept→library, a conformance harness, and a structured doc-drop importer are now built (backend-only)** — `POST /api/builder/node-proposal/accept` + `api/library_store.py` + `src/pipeguard/node_author/conformance.py` + `src/pipeguard/node_author/importer.py`. **Still deferred:** the Builder's own "Accept to library" button (no frontend caller yet), the `draft→approved` transition, and the free-text `--help`/README half of the importer — see item 5 below + [agent-authoring-contract.md](agent-authoring-contract.md). **Corrected 2026-07-11 (branch `feat/custom-script-io`, Branch A, commit `6f1c758`): the corpus is 10 cards, not 11** — the unwired Truth VCF reference-node card was retired; see item 7 below. |
+| **Status** | **Built, narrower than proposed (2026-07-10, T-046, commit `71d4ff9`)** — roster agent #5. The core Python agent (`src/pipeguard/node_author/`) is built and tested; the flow this doc originally proposed (drop a tool's docs → parse → propose) was **not** what shipped — see "What actually shipped" below. **Updated 2026-07-11 (W2, T-127): a read-only `api/` endpoint + Pipeline-Builder wiring now exist** — the builder's "Author a tool node" modal renders the real proposal instead of a static `phase-2` preview. **Updated again 2026-07-11 (W2 backend, T-135): accept→library, a conformance harness, and a structured doc-drop importer are now built (backend-only)** — `POST /api/builder/node-proposal/accept` + `api/library_store.py` + `src/pipeguard/node_author/conformance.py` + `src/pipeguard/node_author/importer.py`. **Still deferred:** the Builder's own "Accept to library" button (no frontend caller yet), the `draft→approved` transition, and the free-text `--help`/README half of the importer — see item 5 below + [agent-authoring-contract.md](agent-authoring-contract.md). **Corrected: the corpus is 9 cards** — the unwired Truth VCF reference-node card was retired (Branch A, `feat/custom-script-io`, 11→10), then NGSCheckMate was retired-but-pinned from the *proposable* corpus (10→9): its card is commented out in `tool_cards.jsonl` so `load_tool_card_corpus()` skips it, while the `ngscheckmate` KIND stays in the vocabulary. See item 7 below. |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | all (contributors and Claude Code) |
 | **Related** | [design/agents.md](agents.md) (roster #5) · [design/agent-authoring-contract.md](agent-authoring-contract.md) (the boundaries MD this agent's endpoint + UI must satisfy) · [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) · [design/frontend/README.md](frontend/README.md) (§4 node model) · [design/frontend/handoffs/2026-07-09-review-to-design.md](frontend/handoffs/2026-07-09-review-to-design.md) (§4h, §6) · [design/builder-cards/](builder-cards/) (the tool-card corpus this agent retrieves over) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) (item 9, the library store) · [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the operator custom-script card — the human-authoring surface this agent's contract presupposes, and Branch A's corpus-count correction) · [scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#9, #11) · [planning/tasks.md](../planning/tasks.md) (T-044, T-046, T-127, T-135) · [functional.md](../requirements/functional.md) (REQ-F-025, REQ-F-089, REQ-F-096, REQ-F-098) · [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) · [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md) |
@@ -23,10 +23,12 @@ doc-drop pipeline this note originally proposed:
 1. **Input is a natural-language request** ("add a tool that trims adapters", or a bare tool name)
    — not a dropped `nextflow_schema.json` / `--help` dump / module / README. No document parser of
    any kind exists in the shipped code.
-2. **The corpus is fixed and small: 10 curated cards** (was 11 — see "Corrected 2026-07-11" below)
+2. **The corpus is fixed and small: 9 curated cards** (was 11, then 10 — see item 7 below)
    (`knowledge/tool_cards.jsonl`) — the pipeline's own 7 germline tools (fastp, bwa-mem2, samtools
-   markdup, mosdepth, bcftools call/norm, MultiQC) plus NGSCheckMate and 2 reference-node cards
-   (FASTA/BED), hand-authored from `docs/design/builder-cards/` + the frontend `BTOOLSPEC`. It can
+   markdup, mosdepth, bcftools call/norm, MultiQC) plus 2 reference-node cards (Reference FASTA /
+   Panel BED), hand-authored from `docs/design/builder-cards/` + the frontend `BTOOLSPEC`.
+   NGSCheckMate is retired-but-pinned: its card is commented out (the loader skips `#` lines) so it
+   is no longer proposable, but the `ngscheckmate` KIND remains in the vocabulary. It can
    only propose a tool **already known to the corpus** — it does not onboard a genuinely new/
    arbitrary tool. This is the opposite of "bring your own tools" (#11's original unlock); it is
    closer to "help an operator rediscover or re-propose one of this pipeline's own tools."
@@ -66,13 +68,16 @@ doc-drop pipeline this note originally proposed:
    spike, per the module docstring). +34 tests (`test_library_store.py`,
    `test_node_author_accept_api.py`, `test_node_author_conformance.py`,
    `test_node_author_importer.py`).
-7. **Corrected 2026-07-11 (branch `feat/custom-script-io`, Branch A of the custom-script-card
-   effort, commit `6f1c758`): the corpus is 10 cards, not 11.** The unwired `Truth VCF` reference
-   source (`source_truth_vcf` in `tool_cards.jsonl`) is retired — its concept is now a generic typed
-   **File input** Builder card (any single artifact kind the operator picks, `BuilderShared.tsx`
-   `makeUserNode`), not a bespoke reference-node card. `truth_vcf` and `ngscheckmate` REMAIN in the
-   `ARTIFACT_KINDS` vocabulary on both sides (frontend `EXTRA_VOCAB_KINDS`, backend
-   `node_author.models.ARTIFACT_KINDS`) — only the two named palette nodes were removed, not the
+7. **Corrected: the corpus is 9 cards, not 11.** Two retirements, both leaving their KIND in the
+   vocabulary: (a) the unwired `Truth VCF` reference source (`source_truth_vcf` in
+   `tool_cards.jsonl`) was retired (`feat/custom-script-io` Branch A, commit `6f1c758`, 11→10) — its
+   concept is now a generic typed **File input** Builder card (any single artifact kind the operator
+   picks, `BuilderShared.tsx` `makeUserNode`), not a bespoke reference-node card; (b) NGSCheckMate
+   was then **retired-but-pinned** from the *proposable* corpus (10→9) — its JSON line is commented
+   out in `tool_cards.jsonl` (`load_tool_card_corpus()` skips `#` lines) so the agent can no longer
+   propose it, but re-introducing it is a one-line un-comment. `truth_vcf` and `ngscheckmate` REMAIN
+   in the `ARTIFACT_KINDS` vocabulary on both sides (frontend `EXTRA_VOCAB_KINDS`, backend
+   `node_author.models.ARTIFACT_KINDS`) — only the palette/corpus entries were removed, not the
    kinds. This is orthogonal to the operator-authored custom-script process
    ([ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), the same branch's Branch B):
    a custom-script card is how an operator would now wrap something like NGSCheckMate as a runnable

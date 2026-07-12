@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-11 (MST) |
+| **Last updated** | 2026-07-12 (MST) — job-store `held`/`scheduled` parked states (ADR-0021) |
 | **Audience** | bioinformatics / software |
-| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family, incl. the job + library stores), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / route-to-human / `data.exported` share egress), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (`LibraryEntry`'s conformance gate), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) |
+| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family, incl. the job + library stores), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / route-to-human / `data.exported` share egress), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (job-store `held`/`scheduled`), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (`LibraryEntry`'s conformance gate), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) |
 
 ## Overview
 
@@ -69,14 +69,14 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > a missing on-disk artifact yields no rows, not a crash (tolerant boundary, CLAUDE.md
 > data-handling 2).
 >
-> **`VariantCall` (ADR-0018 D2, 2026-07-10).** One annotated candidate variant PipeGuard **READS**
-> from an externally-produced annotated VCF/table — a driver ran VEP/bcftools, PipeGuard never does
+> **`VariantCall` (ADR-0018 D2, 2026-07-10).** One annotated candidate variant bayleaf **READS**
+> from an externally-produced annotated VCF/table — a driver ran VEP/bcftools, bayleaf never does
 > (composes ≠ executes, ADR-0001/0003) — parsed by `parsers.parse_variant_calls` from the on-disk
 > artifact **`variants.csv`** (tolerant of alt column spellings `clnsig`/`clnrevstat`/`clnacc`; an
 > absent file yields `[]`). Fields — `sample_id` (required) plus **all-optional** `gene` · `hgvs` ·
 > `clinvar_significance` (raw `CLNSIG`) · `clinvar_review_status` (raw `CLNREVSTAT`) ·
 > `clinvar_accession` · `clinvar_version`. **Clinical significance is stored VERBATIM** — the
-> parser and the rule that reads it never normalize or reclassify the string; PipeGuard authors no
+> parser and the rule that reads it never normalize or reclassify the string; bayleaf authors no
 > pathogenicity of its own (ADR-0004). `variant_calls` is folded into `RunArtifacts.sample_ids()`
 > (a sample present only via an annotated variant still gets evaluated). Empty for every
 > committed fixture except `data/RUN-2026-07-11-CLINVAR-RTH/` (a contrived, verbatim-cited
@@ -275,11 +275,17 @@ gitignored `share.events.jsonl` rather than the gate's own `EventLedger`)*.
    are **derived index records**, never stored on the canonical record.
 6. **Execution-job bookkeeping (`api/job_store.py`, 2026-07-11) is API-layer, not a core record.**
    Unlike items 1–5 above (which mirror `src/pipeguard/models.py`), a job (`kind`, `run_id`,
-   `status: queued|running|complete|failed|lost`, `error`) tracks a background driver launch that
-   `api/routers/intake.py`/`pipeline_run.py` triggers — it never enters `RunArtifacts`,
-   `MetricValue`, or the JSONL ledger, and it is mutable (not content-hashed / immutable like the
-   records above). `lost` is a restart-recovery terminal status: a job whose owning process died
-   with no result dir on disk. Persisted via the SAME jsonl/sqlite pluggable-store shape as the
+   `status: queued|running|held|scheduled|complete|failed|lost`, `error`) tracks a background
+   driver launch that `api/routers/intake.py`/`pipeline_run.py` triggers — it never enters
+   `RunArtifacts`, `MetricValue`, or the JSONL ledger, and it is mutable (not content-hashed /
+   immutable like the records above). `lost` is a restart-recovery terminal status: a job whose
+   owning process died with no result dir on disk. **`held` and `scheduled` are operator-parked
+   states (ADR-0021, `HELD_STATUSES`):** a `mode=hold`/`mode=schedule` submit registers the job
+   without launching a driver, and `POST /api/runs/{id}/release` transitions it → `running`. A
+   parked job has no thread and no data dir, so restart-reconcile treats it as parked and **never**
+   mis-reconciles it to `lost` the way a genuinely died-mid-run `queued`/`running` job is.
+   `scheduled` stores a `scheduled_at` but is **honest-but-inert** — no timer/cron auto-fires it; an
+   operator releases it manually (the time-based auto-release scheduler is a deferred seam, ADR-0021). Persisted via the SAME jsonl/sqlite pluggable-store shape as the
    product stores above, but deliberately with **no Postgres backend** (node-local scratch, not
    shared product state) — see [ADR-0016 item 8](../adr/ADR-0016-postgres-port.md). **Additive,
    2026-07-11 (W4 continuation):** `IntakeStatus` (`api/routers/intake.py`) gains

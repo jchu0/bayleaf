@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Accepted |
 | **Date** | 2026-07-11 (MST) |
-| **Deciders** | PipeGuard maintainers |
+| **Deciders** | bayleaf maintainers |
 | **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises — a custom script sets no verdict) · [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; compose ≠ execute) · [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve lifecycle — the approval gate a custom process runs behind) · [ADR-0019](ADR-0019-pipeline-versioning-run-pinning-edit-lock.md) (pipeline versioning + run pinning) · [design/nextflow-codegen.md](../design/nextflow-codegen.md) (the compile path) · [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (agents author metadata, a human authors the script) · [requirements/scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#11 the Pipeline Builder) |
 
 ## Context
@@ -19,7 +19,7 @@ That is deliberately safe, but it is also a wall: to run *anything not in the se
 catalog* — a `bcftools annotate` step to overlay ClinVar on a called VCF, a lab's in-house
 filtering one-liner, a tool no `ProcessSpec` exists for yet — an operator has no in-product path.
 Their only options were "wait for a maintainer to add a `ProcessSpec`" or "hand-edit the exported
-`main.nf` outside PipeGuard." Both defeat the Builder's purpose (compose a runnable pipeline in
+`main.nf` outside bayleaf." Both defeat the Builder's purpose (compose a runnable pipeline in
 the product).
 
 The node-authoring agent ([design/node-authoring-agent.md](../design/node-authoring-agent.md),
@@ -48,7 +48,7 @@ verbatim Nextflow `script:` body (plus optional `container`/`conda` packaging). 
    a catalogued tool* (the same meta-threaded per-sample wiring). **The catalog is never consulted
    for a custom node** — even if its tool name collides with a catalogued one, the operator's body
    wins. The body is emitted byte-for-byte (only re-indented into the `script:` block, as the
-   catalogued path already does) — PipeGuard never rewrites or fabricates it.
+   catalogued path already does) — bayleaf never rewrites or fabricates it.
 3. **Compile API.** `POST /api/pipelines/compile` (`api/routers/nextflow.py`) accepts the three
    optional fields on a posted node (additively; the existing shape is unchanged), so the Builder
    can post a custom-script card and get real Nextflow back.
@@ -75,10 +75,10 @@ command on a compute host is only acceptable because **four independent guardrai
 2. **[ii] Honest label — on the card and in the emitted process.** The compiler emits an honest
    header comment + a `label 'operator_authored'` process directive on every custom process:
    *"operator-authored custom process — runs on the compute host; production needs
-   sandboxing/allowlisting; not a curated/catalogued tool. PipeGuard transcribed this operator body
+   sandboxing/allowlisting; not a curated/catalogued tool. bayleaf transcribed this operator body
    verbatim (compose ≠ execute) — it did not author or vet the command."* The Builder card carries
    the matching honesty (a custom card is visibly not a curated tool). No reader — human or
-   downstream tool — can mistake an operator body for a PipeGuard-vetted one.
+   downstream tool — can mistake an operator body for a bayleaf-vetted one.
 3. **[iii] Agents stay metadata-only; the human authors the script.** This card is the
    **human-authoring surface** the [agent-authoring-contract](../design/agent-authoring-contract.md)
    already assumes. An authoring agent proposes ports/version/locators/prose and **never** a
@@ -95,7 +95,7 @@ command on a compute host is only acceptable because **four independent guardrai
 
 A fifth, narrower guard supports these: **never fabricate a command.** A custom card whose body is
 blank/whitespace is a `CompileError` (a 422 at the API), never an invented command; an
-uncatalogued-*and*-no-script node keeps its existing labelled placeholder. PipeGuard emits an
+uncatalogued-*and*-no-script node keeps its existing labelled placeholder. bayleaf emits an
 operator's real body or a loud gap — never a guess.
 
 ## Assumptions
@@ -108,7 +108,7 @@ operator's real body or a loud gap — never a guess.
    not an anonymous one. This is a research/biotech operations tool, not a public code-execution
    service.
 3. Production deployments will sandbox/allowlist the compute host (containers, restricted images,
-   no ambient credentials). PipeGuard emits the honest warning; it does not itself sandbox.
+   no ambient credentials). bayleaf emits the honest warning; it does not itself sandbox.
 
 ## Alternatives considered
 
@@ -116,7 +116,7 @@ operator's real body or a loud gap — never a guess.
 |---|---|
 | **Catalog-only forever** (a maintainer must add every `ProcessSpec`) | The safe status quo, but a hard wall: no in-product path to run anything off the curated chain; every new step is a code change + release. Defeats the Builder. |
 | **Let the node-authoring agent emit the `script:`** | Directly violates the agent-authoring contract's one load-bearing invariant (agents author metadata, never commands) — it would turn agent-proposed metadata into a route to arbitrary command execution. Rejected outright. |
-| **Free-form command box that PipeGuard "wraps"/rewrites into a process** | Any rewriting risks silently changing the operator's intent (a fabricated or mangled command). We emit the body **verbatim** instead, so what runs is exactly what a human wrote and an approver reviewed. |
+| **Free-form command box that bayleaf "wraps"/rewrites into a process** | Any rewriting risks silently changing the operator's intent (a fabricated or mangled command). We emit the body **verbatim** instead, so what runs is exactly what a human wrote and an approver reviewed. |
 | **Run custom scripts straight from the stateless `/compile` or a draft graph** | Would let an un-reviewed command reach a compute host. Rejected — execution stays behind the W1 approval gate (safety [i]); compile stays text-only. |
 
 ## Consequences
@@ -124,7 +124,7 @@ operator's real body or a loud gap — never a guess.
 | | |
 |---|---|
 | **Gains** | An operator can run a real step off the curated catalog (e.g. `bcftools annotate` over a VCF) entirely in-product; the node-author contract's presupposed human-authoring surface now exists; the Builder → runnable-Nextflow story is complete for human-authored steps, not just the seven catalogued tools. |
-| **Costs** | The compiler can now emit an arbitrary operator command — so the honest label, the blank-script rejection, and (above all) the W1 approval gate before any run are load-bearing, not optional. Output filenames aren't known from the typed model, so a custom process declares `path("*")` (captures the work dir); the operator's script is responsible for producing its declared artifacts. A custom process is meta-threaded per-sample, so it expects a per-sample input carrying `meta` (the common "runs on a pipeline output" case); a custom node with only reference/no per-sample inputs is an edge case not specially handled. |
+| **Costs** | The compiler can now emit an arbitrary operator command — so the honest label, the blank-script rejection, and (above all) the W1 approval gate before any run are load-bearing, not optional. (The compiler was robustness-hardened alongside this: `_groovy_escape` on interpolated values incl. operator `conda`/`container` strings, kind/tool/id identifier validation, a File-input source fix, and duplicate-node / fan-in-clobber / proc-name-collision / port-drift guards — `src/pipeguard/nextflow/compiler.py` — so a graph can't smuggle Groovy or silently mis-wire; these harden every process, not just custom ones.) Output filenames aren't known from the typed model, so a custom process declares `path("*")` (captures the work dir); the operator's script is responsible for producing its declared artifacts. A custom process is meta-threaded per-sample, so it expects a per-sample input carrying `meta` (the common "runs on a pipeline output" case); a custom node with only reference/no per-sample inputs is an edge case not specially handled. |
 | **Follow-ups** | The Builder's custom-script card UI (authoring surface, the honest label, review affordances) — frontend, built separately. The backend compile + compile-API + run-gate threading are done; the store already round-trips the `script` field, so no persistence change was needed. Optional: let the operator declare output globs (tighter than `path("*")`); a per-deployment allowlist/sandbox profile for the emitted process. |
 
 ## Revisit when

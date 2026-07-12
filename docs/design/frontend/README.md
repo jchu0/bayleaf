@@ -780,9 +780,10 @@ doc-drop parser. **Superseded 2026-07-11 (W2, T-127):** a read-only `GET /api/bu
 endpoint now exists and `AuthorToolNodeModal` renders the REAL proposal — it is no longer a static,
 unwired preview (see [design/frontend/README.md §6](#6-pipeline-builder--full-model) node-author
 paragraph elsewhere for the wired behavior, and [design/agent-authoring-contract.md](../agent-authoring-contract.md)
-for the full read/accept API). **Corrected 2026-07-11 (branch `feat/custom-script-io`, Branch A):**
-the corpus is **10 cards**, not 11 — the unwired Truth VCF reference-node card was retired (its
-concept is now a generic "File input" Builder card); see
+for the full read/accept API). **Corrected: the corpus is 9 cards**, not 11 — the unwired Truth VCF
+reference-node card was retired (11→10; its concept is now a generic "File input" Builder card),
+then NGSCheckMate was retired-but-pinned from the proposable corpus (10→9, its card commented out so
+the loader skips it while the `ngscheckmate` KIND stays in the vocabulary); see
 [design/node-authoring-agent.md](../node-authoring-agent.md) item 7 and
 [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md). This modal's own original
 design prose is unchanged below; see [design/node-authoring-agent.md](../node-authoring-agent.md)

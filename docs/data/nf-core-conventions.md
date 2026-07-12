@@ -1,4 +1,4 @@
-# nf-core / Nextflow Conventions → PipeGuard Schema
+# nf-core / Nextflow Conventions → bayleaf Schema
 
 | Field | Value |
 |---|---|
@@ -131,7 +131,7 @@ Naming grammar: `<sample>.<caller>[.<stage>].<ext>`.
 
 ## Mapping summary
 
-| PipeGuard record | nf-core source of truth | Key fields |
+| bayleaf record | nf-core source of truth | Key fields |
 |---|---|---|
 | `Sample` | samplesheet cols + meta | `patient`(=subject_key), `sample`, `sex`, `status`, `lane`, `num_lanes` |
 | `ArtifactRef` | `csv/*.csv` recaps + `reports/` grammar | `path`, `kind`, `sample_id`, `patient_id`, `caller`, `stage`, `checksum` |
