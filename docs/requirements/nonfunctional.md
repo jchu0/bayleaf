@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
+| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
 
 ## Overview
 
@@ -273,6 +273,24 @@ links to [evaluation.md](../quality/evaluation.md).
    does not claim AA/AAA conformance anywhere else in the UI. *Trace:*
    [design/ui-conventions.md](../design/ui-conventions.md) UIC-19,
    [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
+2. **Update (2026-07-11, T-136, REQ-F-097, commit `4427ec2`) — the baseline extends to the shared
+   view-selector/pagination/toggle primitives + form labels.** `components/Tabs.tsx` gains
+   roving-tabindex + Arrow/Home/End keyboard nav (tab roles already existed); `components/
+   Pager.tsx`'s page-button row is now a `nav aria-label="Pagination"` landmark with
+   `aria-current="page"` + a per-page `aria-label`; `components/SegmentedControl.tsx` gains
+   `role="radiogroup"`/`role="radio"` + `aria-checked` + an optional accessible group `label`;
+   `components/RunSelector.tsx` gains the ARIA combobox/listbox pattern (`role="combobox"`,
+   `aria-expanded`/`aria-controls`/`aria-activedescendant`, ArrowUp/ArrowDown to move the
+   highlighted option, Enter to pick it). `screens/Submit.tsx`/`Accession.tsx`/`Settings.tsx` form
+   inputs gain `htmlFor`/`id` label↔input association, `aria-label` on grid-row inputs whose column
+   headers are visual-only, and `aria-describedby` on hint text. **Verdict-token contrast was
+   verified, not assumed**, to pass WCAG AA: all 8 fg/bg token pairings measure 5.5–9:1 contrast, so
+   `index.css` (the Builder-shared theme) needed no change. This is still not a full WCAG audit —
+   the scope caveat above holds; it narrows which components/screens the baseline covers, it does
+   not newly claim app-wide AA conformance. *Trace:*
+   [design/ui-conventions.md](../design/ui-conventions.md) UIC-19,
+   [functional.md REQ-F-097](functional.md), [tasks T-136](../planning/tasks.md),
+   [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md).
 
 ---
 

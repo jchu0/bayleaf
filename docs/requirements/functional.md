@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
 
 ## Overview
 
@@ -191,12 +191,12 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    corpus is a fixed **11 curated cards** (this pipeline's own 7 tools + 3 reference nodes,
    `src/pipeguard/node_author/knowledge/tool_cards.jsonl`), not a parser over a dropped
    `nextflow_schema.json`/`--help`/README, so the agent can only propose a tool already known to
-   the corpus — it does not yet onboard a genuinely new/arbitrary tool. **No `api/` endpoint and no
-   Pipeline-Builder wiring exist yet** — verified: `grep -rn node_author api/` and
-   `grep -rn propose_node frontend/src` both return nothing; the Builder's "Author a tool node"
-   modal is still a static, pre-existing `phase-2` preview, unconnected to this agent. 19 tests
-   (`tests/test_node_author.py`), all offline/$0. *Trace:*
-   [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+   the corpus via `propose_node()` — it does not yet onboard a genuinely new/arbitrary tool through
+   its main retrieval path. `GET /api/builder/node-proposal` + Pipeline-Builder wiring now exist
+   (REQ-F-089, 2026-07-11); a separate `POST /api/builder/node-proposal/accept` +
+   `nextflow_schema.json` doc-drop importer now exist too, backend-only (REQ-F-096, 2026-07-11) — see
+   that requirement for what those close. 19 tests (`tests/test_node_author.py`), all offline/$0.
+   *Trace:* [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
    [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md),
    [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md),
    [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md),
@@ -1287,6 +1287,56 @@ had reserved or listed as *not-yet-built*.
     parse](../design/nextflow-codegen.md#multi-sample-driver-parse-2026-07-11-w4-continuation),
     REQ-F-090, REQ-F-067, [tasks T-134](../planning/tasks.md),
     [journal 2026-07-11](../journal/2026-07-11-w-deferrals.md).
+37. **REQ-F-096 — Node-author accept → tool-card library, a conformance harness, and a structured
+    doc-drop importer, ALL BACKEND-ONLY (2026-07-11, T-135, "W2 backend").** A new
+    `POST /api/builder/node-proposal/accept` (`reviewer`/`approver`, `api/routers/node_author.py`)
+    RE-DERIVES the proposal server-side from the submitted request (never trusts a client-supplied
+    proposal), guards `matched`, runs it through a new deterministic
+    `src/pipeguard/node_author/conformance.py` `check_conformance()` — mechanically asserting
+    [agent-authoring-contract.md](../design/agent-authoring-contract.md)'s capability pins
+    (`advisory` present and `True`; no `verdict`/`confidence` key anywhere in the candidate; no
+    `script`/`stub` command-body key anywhere; every port kind is a real `ARTIFACT_KINDS` member or
+    an explicitly-declared `reserved` one; `corpus_version`/`schema_version`/`platform_version`
+    pinned, plus the tool `version` when matched) — and stores a `status="draft"` `LibraryEntry`
+    (metadata only: ports, a pinned version, suggested locators, citations — **never** a
+    `script:`/`stub:` command body) in a new pluggable `api/library_store.py`
+    (`LibraryStore` Protocol, `PIPEGUARD_LIBRARY_STORE=jsonl|sqlite`, degrade-to-JSONL,
+    **deliberately no Postgres adapter** — a node-local corpus of accepted drafts, not shared
+    product state, [ADR-0016 item 9](../adr/ADR-0016-postgres-port.md)). `GET /api/builder/library`
+    lists accepted entries (optional `tool`/`status` filters). A companion
+    `src/pipeguard/node_author/importer.py` (`import_from_nextflow_schema`) deterministically parses
+    an nf-core `nextflow_schema.json` into a `NodeProposal` for a tool **NOT** already in the
+    curated 11-card corpus — the structured, lowest-injection-risk half of the doc-drop importer
+    REQ-F-025 notes is unbuilt; a `format: file-path` param maps to a real `ARTIFACT_KINDS` kind
+    only on a confident, conservative name/pattern match, else a `reserved` slot (never invented).
+    +34 tests (`test_library_store.py`, `test_node_author_accept_api.py`,
+    `test_node_author_conformance.py`, `test_node_author_importer.py`). **Honest deferrals, named
+    not dropped:** the Builder's own "Accept to library" button — no frontend caller of either new
+    endpoint exists, verified: `grep -rn "node-proposal/accept\|builder/library" frontend/src`
+    returns nothing, so the modal still never auto-adds a card; the `draft→approved` library-entry
+    transition; the free-text `--help`/README half of the doc-drop importer (its own spike, per the
+    module's own docstring); a roster-wide, CI-enforced conformance sweep (today's
+    `check_conformance()` runs against one node-authoring candidate at accept time, not a
+    parametrized test over the whole six-agent roster). *Trace:*
+    [design/node-authoring-agent.md](../design/node-authoring-agent.md),
+    [design/agent-authoring-contract.md](../design/agent-authoring-contract.md), REQ-F-025,
+    REQ-F-089, [ADR-0016 item 9](../adr/ADR-0016-postgres-port.md),
+    [tasks T-135](../planning/tasks.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md).
+38. **REQ-F-097 — A11y baseline extends to the shared view-selector/pagination/toggle primitives +
+    form labels (2026-07-11, T-136, REQ-NF-070 addendum).** `components/Tabs.tsx` gains
+    roving-tabindex + Arrow/Home/End keyboard navigation; `components/Pager.tsx` gains a `nav`
+    landmark + `aria-current="page"`/`aria-label` per page button; `components/SegmentedControl.tsx`
+    gains `role="radiogroup"` + `role="radio"`/`aria-checked` (+ an optional accessible `label`);
+    `components/RunSelector.tsx` gains the combobox/listbox pattern (`role="combobox"`,
+    `aria-expanded`/`aria-controls`/`aria-activedescendant`, arrow-key + Enter/Escape handling).
+    `screens/Submit.tsx`/`Accession.tsx`/`Settings.tsx` gain `htmlFor`/`id` label↔input
+    association, `aria-label` on grid-row inputs whose column headers are visual-only, and
+    `aria-describedby` on hint text. Verdict-token contrast was **verified** (not assumed) to pass
+    WCAG AA — all 8 fg/bg token pairings measure 5.5–9:1 — so no `index.css` change was needed; this
+    is a verification result, not a new claim of full AA conformance app-wide (REQ-NF-070's scope
+    caveat still holds). *Trace:* [design/ui-conventions.md](../design/ui-conventions.md) UIC-19,
+    [nonfunctional.md REQ-NF-070](nonfunctional.md), [tasks T-136](../planning/tasks.md),
+    [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md).
 
 ## Notes / deferred
 
@@ -1308,15 +1358,19 @@ had reserved or listed as *not-yet-built*.
    server-side authorization boundary; a production build would need to enforce page/read access
    in `api/`, not just hide nav items in `frontend/`.
 7. **Node-authoring agent (REQ-F-025) now has a read-only `api/` endpoint + Builder wiring
-   (REQ-F-089, 2026-07-11) — this item is CLOSED for the read path, narrower for the write
-   path.** `GET /api/builder/node-proposal` makes `propose_node()` reachable and the Builder's
-   "Author a tool node" modal now renders the real proposal — the "static preview, no transport"
-   framing this note used to carry is stale. What is **still** true: **accept→card is not built**
-   (the modal never auto-adds a card; "Copy proposal" is the only action), there is no governed
-   library store, and the agent is still **narrower than the roster's original design**:
-   retrieval over a fixed 11-card curated corpus, not a parser over a dropped tool's own docs, so
-   it cannot onboard a genuinely new/arbitrary tool yet (see
-   [node-authoring-agent.md](../design/node-authoring-agent.md) "What actually shipped").
+   (REQ-F-089, 2026-07-11) — this item is CLOSED for the read path.** `GET /api/builder/node-proposal`
+   makes `propose_node()` reachable and the Builder's "Author a tool node" modal now renders the
+   real proposal — the "static preview, no transport" framing this note used to carry is stale.
+   **Update (2026-07-11, T-135, REQ-F-096): accept→library, a conformance harness, and a structured
+   doc-drop importer are now built too, backend-only.** `POST /api/builder/node-proposal/accept` +
+   a governed `api/library_store.py` exist; `node_author/importer.py` can onboard a tool NOT in the
+   curated corpus **from a `nextflow_schema.json`**. What is **still** true / deferred: the
+   Builder's own "Accept to library" **button** is not built (no frontend caller of the accept/
+   library endpoints exists, so the modal still never auto-adds a card; "Copy proposal" is the only
+   UI action), the `draft→approved` transition is not built, and the free-text `--help`/README half
+   of the doc-drop importer is not built — see
+   [node-authoring-agent.md](../design/node-authoring-agent.md) "What actually shipped" and
+   [agent-authoring-contract.md §Status](../design/agent-authoring-contract.md#status--what-is-wired-vs-deferred-honest).
 8. **UIC-16's larger four-side-typed-port Builder cards remain unbuilt** (REQ-F-083i) — only the
    full-canvas dot grid and the current-tools palette expander shipped; ports stay left/right-only
    on the existing fixed-size cards, tracked in [builder-cards/](../design/builder-cards/) §5.

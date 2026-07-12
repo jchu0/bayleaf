@@ -185,9 +185,16 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    via `PIPEGUARD_ARCHIVIST_AGENT=stub|claude` (released runs → organizational `ArchiveDigest`,
    Haiku default); advisory node-authoring agent (`src/pipeguard/node_author/`, ADR-0009/0012, T-046,
    Wave 10 below) via `PIPEGUARD_NODE_AUTHOR_AGENT=stub|claude` (a natural-language request →
-   cited `NodeProposal` retrieved over an 11-card curated tool corpus, Sonnet default;
-   **core-only** — no `api/` endpoint or frontend wiring exist yet, unlike the other four agents) —
-   all six stub-first ($0), import `anthropic` lazily, and fall back to the stub
+   cited `NodeProposal` retrieved over an 11-card curated tool corpus, Sonnet default; now with a
+   **read + accept API** (W2): `GET /api/builder/node-proposal` (read), `POST .../node-proposal/accept`
+   (reviewer/approver — the server *re-derives* the proposal via `propose_node` so a client can't
+   smuggle metadata, guards `matched` + runs `check_conformance`, then persists a **draft
+   `LibraryEntry`** — metadata only, never a script/stub — into a new pluggable `api/library_store.py`
+   [`PIPEGUARD_LIBRARY_STORE=jsonl|sqlite`, node-local, ADR-0016]) + `GET /api/builder/library`;
+   `src/pipeguard/node_author/conformance.py` (a deterministic boundaries-contract validator) +
+   `importer.py` (a `nextflow_schema.json` doc-drop importer, unknown kinds→reserved-never-invented).
+   The Builder "Accept to library" **button** + the `--help`/README importer half + the draft→approve
+   transition stay deferred) — all six stub-first ($0), import `anthropic` lazily, and fall back to the stub
    on any error (incl. a safety refusal). Models via `PIPEGUARD_*_MODEL`.
 4. **Delivery layers (thin, over the core).** `app/` = Streamlit demo (kept as the
    guaranteed-working fallback); `api/` = FastAPI read-API + **off-gate writes**
@@ -611,10 +618,12 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    default, `PIPEGUARD_NODE_AUTHOR_AGENT=stub|claude` + `_MODEL` (default Sonnet, mid tier). **This
    is narrower than the roster's original design note** ([design/node-authoring-agent.md](docs/design/node-authoring-agent.md)):
    there is no doc-drop parser (`nextflow_schema.json`/`--help`/README), so it can propose only a
-   tool already in its fixed corpus, not onboard a genuinely new one. **Confirmed by grep: no
-   `api/` endpoint and no frontend wiring exist** (`grep -rn node_author api/` and
-   `grep -rn propose_node frontend/src` both empty) — the Pipeline Builder's pre-existing
-   `AuthorToolNodeModal` stays a static `phase-2` mock, unconnected to this agent.
+   tool already in its fixed corpus, not onboard a genuinely new one. At Wave 10 there was no `api/`
+   endpoint or frontend wiring — the `AuthorToolNodeModal` was a static `phase-2` mock.
+   **Superseded 2026-07-11 (W2, see item 3 above):** the modal now renders a real proposal, and a
+   read/**accept** API + `conformance.py` + a `nextflow_schema.json` **importer** now exist; the
+   still-open slices are the `--help`/README importer half, the draft→approve transition, and the
+   Builder "Accept to library" button (held for the concurrent Builder session).
    **(2) UIC-1..16 — a UI convention batch** (33 frontend files, 0 files under `src/`/`api/`/`tests/`;
    built by a structured parallel workflow — 4 shared-primitive agents behind a barrier, then 9
    per-screen agents on disjoint files; tsc + oxlint clean, verified in-browser across every

@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [design/ui-conventions.md](ui-conventions.md), [design/builder-cards/](builder-cards/), [design/node-authoring-agent.md](node-authoring-agent.md), [design/variant-interpretation.md](variant-interpretation.md), [design/nextflow-codegen.md](nextflow-codegen.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [design/ui-conventions.md](ui-conventions.md), [design/builder-cards/](builder-cards/), [design/node-authoring-agent.md](node-authoring-agent.md), [design/agent-authoring-contract.md](agent-authoring-contract.md), [design/variant-interpretation.md](variant-interpretation.md), [design/nextflow-codegen.md](nextflow-codegen.md) |
 
 ## Overview
 
@@ -84,8 +84,19 @@ Every finding and verdict is labelled with the gate it came from:
    palette. All are stub-first ($0), import `anthropic` lazily, and fall back to the stub on any
    error. **Node-authoring gained a read-only `api/` endpoint 2026-07-11** (W2, T-127,
    `GET /api/builder/node-proposal`) — the Builder's "Author a tool node" modal now renders the
-   real proposal instead of a static preview; accept→card stays deferred (see
-   [agent-authoring-contract.md](agent-authoring-contract.md)).
+   real proposal instead of a static preview. **The accept path is now backend-built too
+   (2026-07-11, T-135, "W2 backend")**: `POST /api/builder/node-proposal/accept`
+   (`reviewer`/`approver`) re-derives the proposal server-side, runs it through a new
+   `pipeguard.node_author.conformance.check_conformance()` (mechanically enforcing
+   `agent-authoring-contract.md`'s capability pins), and stores a `draft` `LibraryEntry` — metadata
+   only, never a runnable command — in the new `api/library_store.py`
+   (`PIPEGUARD_LIBRARY_STORE=jsonl|sqlite`, ADR-0016 item 9). A companion
+   `src/pipeguard/node_author/importer.py` deterministically parses an nf-core
+   `nextflow_schema.json` into a `NodeProposal` for a tool **not** in the curated corpus (the
+   structured half of the originally-proposed doc-drop importer); free-text `--help`/README
+   parsing stays deferred. **Still deferred: the Builder's own "Accept to library" button** — the
+   two new endpoints have no frontend caller yet, so accept is reachable only over the wire
+   (`curl`/tests), not from the UI. See [agent-authoring-contract.md](agent-authoring-contract.md).
 4. **Delivery layers (thin, over the core).** `app/` Streamlit (offline demo / fallback);
    `api/` FastAPI — the production read-API seam (ADR-0010/0014/0016); `frontend/` React —
    **rebuilt to the refreshed design prototype** (`docs/design/frontend/`, 2026-07-09, Waves 1–3),
@@ -830,6 +841,38 @@ Every finding and verdict is labelled with the gate it came from:
      [functional.md REQ-F-094/REQ-F-095](../requirements/functional.md). Verified: 517 tests
      collected / 37 files (was 507/35), 511 passed / 6 skipped in this sandbox (no `nextflow` on
      `PATH`), ruff+mypy clean.
+   - **Fleet: node-author W2 backend + a11y sweep + reliability tests (2026-07-11, commits
+     `5a3dd6a`/`4427ec2`/`63b87ce`, T-135/T-136/T-137,
+     [journal](../journal/2026-07-11-fleet.md)) — three independent pieces, no verdict/gate/
+     ADR-0001 boundary changed.** **(1) Node-author accept→library (T-135)** — see the Advisory
+     agents bullet above and [ADR-0016 item 9](../adr/ADR-0016-postgres-port.md); +34 tests
+     (`test_library_store.py`, `test_node_author_accept_api.py`, `test_node_author_conformance.py`,
+     `test_node_author_importer.py`). **(2) A11y baseline extends past `Toast`/`ConfirmDialog`
+     (T-136, REQ-NF-070 addendum)** — `Tabs` gains roving-tabindex + Arrow/Home/End keyboard nav;
+     `Pager` gets a `nav` landmark + `aria-current`/`aria-label` per page; `SegmentedControl` gets
+     `role="radiogroup"`/`role="radio"` + `aria-checked`; `RunSelector` gets the combobox/listbox
+     pattern (`aria-activedescendant` + arrow nav); Submit/Accession/Settings form inputs gain
+     `htmlFor`/`id` label association, `aria-label` on grid-row inputs with visual-only headers, and
+     `aria-describedby` on hints. Verdict-token contrast was **verified** to pass WCAG AA (all 8
+     fg/bg pairings, 5.5–9:1) — no `index.css` change was needed. Frontend-only
+     (`git diff --stat` scoped to `components/{Tabs,Pager,SegmentedControl,RunSelector}.tsx` +
+     `screens/{Submit,Accession,Settings}.tsx`). **(3) Reliability test gaps closed (T-137,
+     closes the EVAL-008 "not covered by an automated test" note)** — `test_job_store.py` (12→16)
+     gains a LIVE `killpg` process-group reap test (a driver whose grandchild outlives the direct
+     child is fully reaped on timeout) plus a negative control that stubs the group-kill down to a
+     direct-child-only `proc.kill()` and proves the grandchild then survives — so the reap
+     assertion is shown to actually detect an orphan, not pass vacuously; plus an atomic
+     concurrent-same-run-id-submit test and the Builder-run `_reconcile → lost` branch test.
+     Test-only, skip-gated to POSIX process groups + `/bin/sh`. Census: **555 tests collected / 41
+     files** (was 517/37), **549 passed / 6 skipped** (verified via `uv run pytest`), ruff+mypy
+     clean. **Deferred, named, not silently dropped:** the Builder's own "Accept to library"
+     button (no frontend caller of the accept/library endpoints yet); the free-text `--help`/README
+     half of the doc-drop importer (only the structured `nextflow_schema.json` path is built); the
+     `draft→approved` library-entry transition; a roster-wide, CI-enforced
+     `test_agent_conformance.py` (today's `check_conformance()` is invoked at accept time only, not
+     as a parametrized sweep over every advisory agent); the Slurm executor profile stays
+     CONFIG-verified, not CLUSTER-verified (REQ-F-090); a live multi-sample Nextflow run stays
+     unverified (REQ-F-095, item above).
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
@@ -895,7 +938,8 @@ config override, notably, records intent without mutating the live runbook.
 | Feedback-triage agent (off-gate) | `PIPEGUARD_FEEDBACK_AGENT=stub\|claude` (`PIPEGUARD_FEEDBACK_MODEL`); advisory categorization of the in-app feedback corpus (`api/feedback_agent.py`) | stub ($0) |
 | Pipeline-repair agent (advisory) | `PIPEGUARD_PIPELINE_REPAIR_AGENT=stub\|claude` (`PIPEGUARD_PIPELINE_REPAIR_MODEL`, default Opus-high); cross-run remediation proposals over a recurring signature (`src/pipeguard/pipeline_repair/`) | stub ($0) |
 | Archivist agent (off-gate) | `PIPEGUARD_ARCHIVIST_AGENT=stub\|claude` (`PIPEGUARD_ARCHIVIST_MODEL`, default Haiku); organizational digest/index over released runs (`api/archivist.py`) | stub ($0) |
-| Node-authoring agent (advisory) | `PIPEGUARD_NODE_AUTHOR_AGENT=stub\|claude` (`PIPEGUARD_NODE_AUTHOR_MODEL`, default Sonnet); retrieves a `NodeProposal` over a curated 11-card tool corpus (`src/pipeguard/node_author/`, T-046). **A read-only `GET /api/builder/node-proposal` endpoint + Builder-modal wiring shipped 2026-07-11 (W2, T-127)** — closes the earlier "core-only, reachable only by direct Python import" gap; accept→card stays deferred, see [agent-authoring-contract.md](agent-authoring-contract.md) | stub ($0) |
+| Node-authoring agent (advisory) | `PIPEGUARD_NODE_AUTHOR_AGENT=stub\|claude` (`PIPEGUARD_NODE_AUTHOR_MODEL`, default Sonnet); retrieves a `NodeProposal` over a curated 11-card tool corpus (`src/pipeguard/node_author/`, T-046). **A read-only `GET /api/builder/node-proposal` endpoint + Builder-modal wiring shipped 2026-07-11 (W2, T-127)** — closes the earlier "core-only, reachable only by direct Python import" gap. **`POST /api/builder/node-proposal/accept` → the library store shipped the same day (T-135)** — backend-only; the Builder's own "Accept to library" button stays deferred, see [agent-authoring-contract.md](agent-authoring-contract.md) | stub ($0) |
+| Tool-card library store (off-gate product) | `PIPEGUARD_LIBRARY_STORE=jsonl\|sqlite` (`api/library_store.py`, 2026-07-11, T-135); holds accepted `NodeProposal`s as versioned `draft` `LibraryEntry` records, gated through `check_conformance()` at accept time — degrade-to-JSONL. **No Postgres adapter, by design**: node-local corpus of accepted drafts, not shared product state (ADR-0016 item 9), same shape as the job store | JSONL |
 | Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack\|teams\|discord`; each adapter armed by its OWN `PIPEGUARD_{SLACK,TEAMS,DISCORD}_LIVE=1` (Teams/Discord also need `PIPEGUARD_{TEAMS,DISCORD}_WEBHOOK_URL`) | stub ($0, no network) |
 | Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — add/remap a source metric without touching rules | canonical decimals; ON the critical path |
 | Repository (persistence) | `Repository` port; SqliteRepository **and** guarded PostgresRepository built (ADR-0016), `get_repository()` selects | SQLite + JSONL (Postgres off by default) |

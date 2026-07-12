@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family, incl. the job store), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / route-to-human / `data.exported` share egress), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md) |
+| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family, incl. the job + library stores), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / route-to-human / `data.exported` share egress), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (`LibraryEntry`'s conformance gate), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) |
 
 ## Overview
 
@@ -290,6 +290,25 @@ gitignored `share.events.jsonl` rather than the gate's own `EventLedger`)*.
    read the pre-existing `processed_samples`/`skipped_samples` string lists breaks. This is
    per-sample UI progress, not a new ledger/DB record; see
    [functional.md REQ-F-095](../requirements/functional.md).
+7. **`LibraryEntry` (`api/library_store.py`, 2026-07-11, T-135) is API-layer product state, not a
+   core record — the accept-time counterpart to item 6's job bookkeeping.** A `LibraryEntry` wraps
+   a node-authoring `NodeProposal`
+   ([functional.md REQ-F-096](../requirements/functional.md)) a human has **accepted**:
+   `{id, tool, version, status: "draft"|"approved", submitted_by, created_at, updated_at, proposal}`.
+   `proposal` is the embedded `NodeProposal` as-is (ports/locators/citations/version stamps —
+   **metadata only**, never a `script:`/`stub:` command body); `status` starts and today stays
+   `"draft"` (no code path yet sets `"approved"`). Each accept **appends** a fresh, immutable entry
+   (`add`/`get`/`list`, no in-place update) — mint-per-accept, not upsert-per-tool. Persisted via
+   the same pluggable-store shape as items above (`LibraryStore` Protocol,
+   `JsonlLibraryStore`/`SqliteLibraryStore`, `PIPEGUARD_LIBRARY_STORE=jsonl|sqlite`,
+   degrade-to-JSONL), but — like the job store — **deliberately with no Postgres backend**: a small,
+   node-local corpus of accepted drafts, not shared product state
+   ([ADR-0016 item 9](../adr/ADR-0016-postgres-port.md)). Never enters `RunArtifacts`,
+   `MetricValue`, or the JSONL provenance ledger, and never re-enters the gate (ADR-0001) — a
+   library entry cannot set or move a verdict/finding/confidence by construction (the embedded
+   `NodeProposal` has no such field, and `check_conformance()` — see
+   [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) — asserts this at
+   accept time before an entry is ever stored).
 
 > **`frontend/src/types.ts` is a hand-maintained TypeScript mirror of this contract, not generated.**
 > It can drift behind the pydantic source of truth above — a 2026-07-11 sweep (T-132) found and

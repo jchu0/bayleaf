@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043) + pluggable **pipeline-graph store BUILT (T-049)** + pluggable **share-egress-audit store BUILT (2026-07-11, ADR-0018 D3)** + a **durable job store BUILT (2026-07-11, T-131, jsonl\|sqlite only — no Postgres adapter, by design)**, all OFF by default; **live-Postgres integration test BUILT + verified green** (`tests/test_persistence_postgres_live.py`, compose-gated + skip-safe); connection pooling + read-from-projection deferred |
+| **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043) + pluggable **pipeline-graph store BUILT (T-049)** + pluggable **share-egress-audit store BUILT (2026-07-11, ADR-0018 D3)** + a **durable job store BUILT (2026-07-11, T-131, jsonl\|sqlite only — no Postgres adapter, by design)** + a **library store BUILT (2026-07-11, T-135, jsonl\|sqlite only, same no-Postgres-by-design shape as the job store)**, all OFF by default; **live-Postgres integration test BUILT + verified green** (`tests/test_persistence_postgres_live.py`, compose-gated + skip-safe); connection pooling + read-from-projection deferred |
 | **Date** | 2026-07-09 (MST) · updated 2026-07-11 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](ADR-0018-variant-interpretation-advisory-evidence.md) (share-egress sink, Realized item 3 — corrected from a stale "item 6" cross-reference, 2026-07-11), [tasks.md](../planning/tasks.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md) |
+| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](ADR-0018-variant-interpretation-advisory-evidence.md) (share-egress sink, Realized item 3 — corrected from a stale "item 6" cross-reference, 2026-07-11), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (the library entry's contract, item 9), [tasks.md](../planning/tasks.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) |
 
 ## Context
 
@@ -98,6 +98,32 @@ So the port must be **real but guarded** — present as a production seam, invis
    instead of racing the winner. See
    [data/schemas.md §Persistence](../data/schemas.md#persistence-databases) and
    [architecture.md §Swappable seams](../design/architecture.md#swappable-seams-the-flex-points).
+9. **A sixth instance, and the second that deliberately stays TWO-backend: the tool-card library
+   store (2026-07-11, T-135, "W2 backend").** `api/library_store.py` (`LibraryStore` Protocol +
+   `JsonlLibraryStore`/`SqliteLibraryStore`, `PIPEGUARD_LIBRARY_STORE=jsonl|sqlite`, default
+   `jsonl`, degrade-to-JSONL on any construction failure — the same discipline as every store
+   above) holds `LibraryEntry` records: a node-authoring `NodeProposal`
+   ([agent-authoring-contract.md](../design/agent-authoring-contract.md)) a human has **accepted**
+   into the tool-card library, via the new `POST /api/builder/node-proposal/accept`
+   (`reviewer`/`approver`, `api/routers/node_author.py`). Like the job store (item 8), **no
+   Postgres adapter exists, by design**: a library entry is a small, node-local corpus of accepted
+   drafts (metadata — ports, a pinned version, suggested locators, citations; never a
+   `script:`/`stub:` command body), not high-volume shared product state, so the two local backends
+   suffice. The accept endpoint **re-derives** the proposal server-side from the request (never
+   trusts a client-supplied proposal) and runs it through a new deterministic
+   [`src/pipeguard/node_author/conformance.py`](../../src/pipeguard/node_author/conformance.py)
+   `check_conformance()` — the mechanical enforcement of
+   `agent-authoring-contract.md`'s capability pins (advisory-True, no verdict/confidence anywhere,
+   no `script`/`stub` command-body key, closed port vocabulary with unknown→reserved, versioned four
+   ways) — before an entry can be stored, so a smuggled gate value or command body 422s rather than
+   landing in the library. Each accept mints a fresh, immutable `draft` entry (`add`/`get`/`list`
+   only, no in-place update); the `draft`→`approved` transition riding the `pipelines_lifecycle` RBAC
+   pattern is a labelled deferred slice. `.env.example` also gained the previously-undocumented
+   `PIPEGUARD_JOB_STORE`/`_PATH`/`_DB` vars in the same commit (a hygiene fix — those vars were
+   already read by `api/job_store.py` since T-131, item 8, just never listed). See
+   [data/schemas.md §Persistence](../data/schemas.md#persistence-databases),
+   [design/agent-authoring-contract.md](../design/agent-authoring-contract.md), and
+   [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md).
 
 ## Assumptions
 
@@ -120,8 +146,8 @@ So the port must be **real but guarded** — present as a production seam, invis
 | | |
 |---|---|
 | **Gains** | The anticipated production DB seam is real + guarded; feedback lands in a queryable DB; a backend swap is one env var; the offline demo/tests are untouched (no new dep, no socket). |
-| **Costs** | A second SQL dialect to keep in parity with `SqliteRepository`; `psycopg` connect logic now exists in **six** off-gate places (repo + feedback + pipeline + settings + review + share stores, confirmed via `grep -rln "class Postgres" api/ src/` — was "three" when this row was first written, before the settings/review/share stores existed). **A seventh pluggable store, the job store (item 8), deliberately does NOT add an eighth Postgres dialect** — `grep -rln "class Postgres" api/ src/` still returns six, `api/job_store.py` has no `class Postgres*` — so the dialect-parity cost above is unchanged by it. The Postgres SQL is not in the default-green CI path (it needs docker + the extra) — covered by the compose-gated live test + offline dialect review + parity tests. |
-| **Follow-ups** | ~~A live-Postgres integration test~~ **DONE** (`tests/test_persistence_postgres_live.py` — compose-gated, skip-safe; verified green against real Postgres 16: projection byte-parity vs SQLite, idempotent replay, feedback JSONB round-trip, and — added 2026-07-11 — share-store round-trip; the review's UTC + `seq` fixes hold). Still open: connection pooling; Alembic-style migrations if the layout ever needs a non-disposable change; wiring the read-API to read the projection (today it recomputes); **multi-worker safety for every pluggable store, incl. the new job store** (a file lock / DB transaction) — the same honest, unchanged limit item 8 above notes for `api/job_store.py`'s `_WRITE_LOCK` (a single-process lock, not a cross-process one). |
+| **Costs** | A second SQL dialect to keep in parity with `SqliteRepository`; `psycopg` connect logic now exists in **six** off-gate places (repo + feedback + pipeline + settings + review + share stores, confirmed via `grep -rln "class Postgres" api/ src/` — was "three" when this row was first written, before the settings/review/share stores existed). **A seventh AND an eighth pluggable store — the job store (item 8) and the library store (item 9) — deliberately do NOT add a seventh/eighth Postgres dialect**: `grep -rln "class Postgres" api/ src/` still returns exactly the same six files (verified 2026-07-11), and neither `api/job_store.py` nor `api/library_store.py` defines a `class Postgres*` — so the dialect-parity cost above is unchanged by either. The Postgres SQL is not in the default-green CI path (it needs docker + the extra) — covered by the compose-gated live test + offline dialect review + parity tests. |
+| **Follow-ups** | ~~A live-Postgres integration test~~ **DONE** (`tests/test_persistence_postgres_live.py` — compose-gated, skip-safe; verified green against real Postgres 16: projection byte-parity vs SQLite, idempotent replay, feedback JSONB round-trip, and — added 2026-07-11 — share-store round-trip; the review's UTC + `seq` fixes hold). Still open: connection pooling; Alembic-style migrations if the layout ever needs a non-disposable change; wiring the read-API to read the projection (today it recomputes); **multi-worker safety for every pluggable store, incl. the job and library stores** (a file lock / DB transaction) — the same honest, unchanged limit item 8 above notes for `api/job_store.py`'s `_WRITE_LOCK` (a single-process lock, not a cross-process one; `api/library_store.py`'s `_WRITE_LOCK` carries the identical limit). |
 
 ## Revisit when
 

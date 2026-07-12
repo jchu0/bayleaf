@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006, EVAL-009), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress, per-variant table EVAL-013), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) (EVAL-009, EVAL-013), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
+| **Related** | [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006, EVAL-009), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress, per-variant table EVAL-013), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) (EVAL-009, EVAL-013), [journal/2026-07-11-fleet.md](../journal/2026-07-11-fleet.md) (EVAL-008 update, EVAL-014), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (EVAL-014), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
 
 ## Overview
 
@@ -19,54 +19,61 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The offline suite is **517 tests across 37 files** — collection verified via
-`uv run pytest --collect-only -q` (517 collected) + `git ls-files 'tests/*.py' | wc -l` (37), both
-re-run 2026-07-11 after the W3/W4-deferred-slice continuation session (T-133/T-134; was 507/35
-after the P3-backlog session, 471/33 after the earlier audit/hardening/W1-W4/E2E session, 427/29
-before that). Pass/skip count depends on whether `nextflow` is on `PATH` (two machine-gated live
-checks join the existing Postgres live-integration pattern: `test_nextflow_compile.py`'s
+The offline suite is **555 tests across 41 files** — collection verified via
+`uv run pytest --collect-only -q` (555 collected) + `git ls-files 'tests/*.py' | wc -l` (41), both
+re-run 2026-07-11 after the "fleet" session (T-135/T-136/T-137: node-author W2 backend + a11y +
+reliability tests; was 517/37 after the W3/W4-deferred-slice continuation, 507/35 after the
+P3-backlog session, 471/33 after the earlier audit/hardening/W1-W4/E2E session, 427/29 before
+that). Pass/skip count depends on whether `nextflow` is on `PATH` (two machine-gated live checks
+join the existing Postgres live-integration pattern: `test_nextflow_compile.py`'s
 `test_generated_germline_stub_runs`, EVAL-006, and
-`test_e2e_pipeline.py::test_approved_germline_pipeline_stub_runs_live`, EVAL-007): **511 pass / 6
+`test_e2e_pipeline.py::test_approved_germline_pipeline_stub_runs_live`, EVAL-007): **549 pass / 6
 skip** when `nextflow` is absent (this repo's default sandboxed dev/CI environment — verified here
-via `uv run pytest -q`), a **computed 513 pass / 4 skip** when it is present (arithmetic from the
+via `uv run pytest -q`), a **computed 551 pass / 4 skip** when it is present (arithmetic from the
 two `nextflow`-gated skip reasons — the maintainer's local `hackathon` conda env with Nextflow
-26.04 + a JRE was not re-run live for this specific session; the two new files this session are
-both pure-offline and add only to the pass count). Either way every non-live test runs
-unconditionally. By collected size:
+26.04 + a JRE was not re-run live for this specific session; the 38 new tests this session are all
+pure-offline, POSIX-process-group-gated at most, and add only to the pass count). Either way every
+non-live test runs unconditionally. By collected size:
 `test_api` (44), `test_notify` (36), `test_synthetic` (33), `test_fetch_giab` (32),
 `test_gate` (30), `test_review_queue` (19), `test_node_author` (19, the advisory
 node-authoring agent, T-046), `test_persistence` (17), `test_metrics` (17), `test_archivist` (17,
 the advisory archivist/librarian agent), `test_triage` (16), `test_run_giab_preflight` (16, the
 four pre-flight guards in `scripts/run_giab_pipeline.py`, T-131), `test_pipeline_repair` (16, the
-advisory pipeline-repair agent), `test_nextflow_compile` (15), `test_card_readout` (14),
-`test_settings` (13, config-override authoring), `test_auth` (13), `test_safe_harbor` (12),
-`test_pipeline_run` (12, the Pipeline-Builder Run endpoint), `test_job_store` (12, the durable
-jsonl/sqlite job store + the shared process-group-aware driver launch, T-131),
-`test_pipeline_lifecycle` (11, submit/approve/dry-run/diff), `test_route_to_human` (10, the
-off-by-default route-to-human gate rule VAR-RTH-001, ADR-0018 D2), `test_e2e_pipeline` (10, the
+advisory pipeline-repair agent), `test_job_store` (16, NEW this session — was 12, the durable
+jsonl/sqlite job store + the shared process-group-aware driver launch, T-131, +4 reliability tests
+T-137: a LIVE `killpg` process-group reap + negative control, an atomic dup-run-id-submit test,
+the Builder-run `_reconcile → lost` branch, EVAL-008), `test_nextflow_compile` (15),
+`test_card_readout` (14), `test_settings` (13, config-override authoring), `test_node_author_conformance`
+(13, NEW this session — the `check_conformance()` capability-pin harness, T-135, EVAL-014),
+`test_auth` (13), `test_safe_harbor` (12), `test_pipeline_run` (12, the Pipeline-Builder Run
+endpoint), `test_pipeline_lifecycle` (11, submit/approve/dry-run/diff), `test_route_to_human` (10,
+the off-by-default route-to-human gate rule VAR-RTH-001, ADR-0018 D2), `test_e2e_pipeline` (10, the
 offline acceptance test threading sheet→intake→the W1 approval gate→report/provenance, EVAL-007),
-`test_gate_notify` (9), `test_artifacts_s3` (9),
-`test_run_giab_multisample` (7, NEW this session — the W4-continuation multi-sample driver
-parse: N-sample fixture publish dir → N gated run-dir rows, byte-identical fan-out-of-1, fail-loud
-on partial/empty, `S1`/`S10` prefix anchoring, T-134, EVAL-009), `test_pipelines` (8, the Pipeline
-Builder save/version store), `test_execution_trace` (8, the structured execution-trace feed →
-EXEC-001), `test_artifacts` (7), `test_share_store` (6, the pluggable jsonl/sqlite/postgres
-share-egress-audit sink, ADR-0016/ADR-0018 D3), `test_node_author_api` (6, the W2 read-only
-`GET /api/builder/node-proposal` endpoint),
-`test_run_variants` (3, NEW this session — the W3-continuation per-variant Report endpoint,
-`GET /api/runs/{id}/variants`, T-133, EVAL-013),
-`test_share_egress` (5, the de-identified share/report egress endpoint, ADR-0018 D3),
-`test_metrics_mapping` (5),
+`test_gate_notify` (9), `test_artifacts_s3` (9), `test_node_author_importer` (8, NEW this
+session — the doc-drop `nextflow_schema.json` importer, T-135, EVAL-014), `test_pipelines` (8, the
+Pipeline Builder save/version store), `test_execution_trace` (8, the structured execution-trace
+feed → EXEC-001), `test_run_giab_multisample` (7, the W4-continuation multi-sample driver parse:
+N-sample fixture publish dir → N gated run-dir rows, byte-identical fan-out-of-1, fail-loud on
+partial/empty, `S1`/`S10` prefix anchoring, T-134, EVAL-009), `test_artifacts` (7),
+`test_node_author_accept_api` (7, NEW this session — `POST /api/builder/node-proposal/accept` +
+`GET /api/builder/library`, T-135, EVAL-014), `test_library_store` (6, NEW this session — the
+`api/library_store.py` jsonl/sqlite pluggable store, T-135, ADR-0016 item 9, EVAL-014),
+`test_share_store` (6, the pluggable jsonl/sqlite/postgres share-egress-audit sink,
+ADR-0016/ADR-0018 D3), `test_node_author_api` (6, the W2 read-only
+`GET /api/builder/node-proposal` endpoint), `test_share_egress` (5, the de-identified
+share/report egress endpoint, ADR-0018 D3), `test_metrics_mapping` (5),
 `test_persistence_postgres_live` (4), `test_nextflow_api` (4, the `POST /api/pipelines/compile`
-endpoint), `test_run_giab_driver` (2, the W4 Slurm/local executor-profile
-auto-detection unit) — all
+endpoint), `test_run_variants` (3, the W3-continuation per-variant Report endpoint,
+`GET /api/runs/{id}/variants`, T-133, EVAL-013), `test_run_giab_driver` (2, the W4 Slurm/local
+executor-profile auto-detection unit) — all
 runnable offline with no API key (`uv sync --all-extras && uv run pytest`; the `test_api` and
 `test_triage` suites need the api/claude extras to import FastAPI, while `test_execution_trace`,
 `test_route_to_human`, `test_safe_harbor`, `test_share_egress`, `test_share_store`,
 `test_job_store`, `test_run_giab_preflight`, `test_run_giab_multisample`, `test_run_variants`,
-`test_nextflow_compile`, `test_e2e_pipeline`, and the
+`test_nextflow_compile`, `test_e2e_pipeline`, `test_node_author_accept_api`,
+`test_node_author_conformance`, `test_node_author_importer`, `test_library_store`, and the
 agent suites run pure-offline over the core + pydantic, `test_share_egress`/`test_nextflow_api`/
-`test_e2e_pipeline`/`test_run_variants` via a `TestClient`).
+`test_e2e_pipeline`/`test_run_variants`/`test_node_author_accept_api` via a `TestClient`).
 
 ## What "good" means (principles)
 
@@ -276,8 +283,8 @@ caught here.
 | Field | Value |
 |---|---|
 | **Target** | `api/job_store.py` (durable job store + shared driver launch) + `scripts/run_giab_pipeline.py`'s pre-flight guards |
-| **Type** | Deterministic / Failure-mode (no live Nextflow or subprocess involved) |
-| **Automated?** | Yes — `test_job_store.py` (12) and `test_run_giab_preflight.py` (16), both pure-offline |
+| **Type** | Deterministic / Failure-mode; the `killpg` reap sub-case (below) IS a live subprocess test |
+| **Automated?** | Yes — `test_job_store.py` (16, was 12) and `test_run_giab_preflight.py` (16), both pure-offline (the `killpg` cases spawn a real local child process, no network) |
 
 **Definition of good.** Two independent reliability properties, both landed 2026-07-11 (T-131)
 from the release-hardening audit's P3 findings: (1) **A job survives a backend restart.** A
@@ -299,22 +306,38 @@ replace round-trips, `(kind, run_id)` key namespacing, JSONL's tolerant-corrupt-
 router's `_active`/`_DATA` module state (not a live subprocess) — the `_reconcile` restart-recovery
 paths directly against `intake.intake_status`/`pipeline_run.run_status` (a `running` job with a
 finished result dir → `complete`; with no result → `lost`; still in this process's `_active` set →
-left alone). **The process-group `killpg` timeout-reap itself is asserted only at the
-constant/identity level** — `test_one_shared_driver_timeout_across_both_routers` confirms both
-routers call the SAME `run_driver` function object and that `DRIVER_TIMEOUT_S == 1800` — no test
-actually spawns a hung child process and asserts the group is killed; that behavior is
-code-reviewed, not test-exercised. `test_run_giab_preflight.py` unit-tests each guard as a pure
-function of small on-disk fixtures it builds per test (swapped-mate FASTQs, a
-contig-mismatched BED, a reference missing one index suffix, a version-probe against a
+left alone; **the Builder-run `_reconcile → lost` branch — the mirror of the intake one — was
+previously uncovered and is now tested too**, 2026-07-11 T-137). **Update (2026-07-11, T-137,
+closes the gap this case used to name): the process-group `killpg` timeout-reap is now LIVE-tested,
+not just asserted at the constant/identity level.** A driver command forks a real grandchild
+(`sleep`) that outlives its direct child (`sh`); `test_run_driver_timeout_reaps_the_whole_process_group`
+runs it through `run_driver` with a 1s timeout and asserts the grandchild is dead afterward —
+proving the whole process group, not just the direct child, is reaped. A companion negative
+control, `test_reap_assertion_detects_an_orphan_when_killpg_is_stubbed`, stubs the group-kill down
+to a direct-child-only `proc.kill()` (the pre-fix behavior) and asserts the SAME grandchild then
+**survives** — proving the positive test's liveness assertion actually detects an orphaned subtree
+rather than passing vacuously. Both are skip-gated to POSIX process groups + `/bin/sh`
+(`sys.platform != 'win32'`), so they run on this repo's macOS/Linux dev environment but skip
+cleanly on Windows. A separate atomic-reservation test
+(`test_concurrent_same_run_id_submits_reserve_atomically`) fires two real threads at the same run
+id through a `threading.Barrier` and asserts exactly one wins (`queued`) and the other gets a 409 —
+the concurrency claim is now genuinely exercised under contention, not just reasoned about.
+`test_one_shared_driver_timeout_across_both_routers` still separately confirms both routers call
+the SAME `run_driver` function object and that `DRIVER_TIMEOUT_S == 1800`. `test_run_giab_preflight.py`
+unit-tests each guard as a pure function of small on-disk fixtures it builds per test (swapped-mate
+FASTQs, a contig-mismatched BED, a reference missing one index suffix, a version-probe against a
 deliberately-missing tool) — no Nextflow, no real GIAB data, no network.
 
 **Known failure modes.** A store backend that silently dropped a write (rather than raising or
 degrading) would be caught by the round-trip assertions; a preflight guard that returned instead
 of `sys.exit`-ing on a bad input would let a corrupt run proceed to Nextflow — every guard's
-negative case is asserted to raise `SystemExit`, not just to log. **Not covered by an automated
-test:** the actual `os.killpg` timeout-reap behavior (only the shared-constant/shared-function
-guarantee is), and the FASTQ-pairing guard's O(reads) cost has not been benchmarked at real
-panel/WGS scale.
+negative case is asserted to raise `SystemExit`, not just to log. A `killpg` reap that only killed
+the direct child (the pre-fix behavior) would leave the grandchild alive past the timeout — the
+negative control above proves the test suite would catch a regression back to that behavior, not
+just pass regardless. **Not covered by an automated test:** the FASTQ-pairing guard's O(reads)
+cost has not been benchmarked at real panel/WGS scale, and the `killpg` live test exercises a
+local `sh`/`sleep` process tree, not a real multi-process Nextflow/JVM/tool subtree (the shape it
+protects in production, per the shared-function-identity check above).
 
 ### EVAL-009 — Multi-sample driver parse: N-sample publish dir → N gated run-dir rows (W4 continuation)
 
@@ -356,6 +379,67 @@ panel reads exist on disk in this sandbox — the live driver (`run_nextflow()`)
 single-row (HG002-only) samplesheet. See [design/nextflow-codegen.md §Multi-sample driver
 parse](../design/nextflow-codegen.md#multi-sample-driver-parse-2026-07-11-w4-continuation) and
 the "What we do not yet verify" item below.
+
+### EVAL-014 — Node-author accept→library: server re-derives, conformance-gates, and stores; the doc-drop importer never invents a live port (W2 backend)
+
+| Field | Value |
+| --- | --- |
+| **Target** | `api/library_store.py`, `api/routers/node_author.py` (`accept_node_proposal`/`list_library_entries`), `src/pipeguard/node_author/conformance.py`, `src/pipeguard/node_author/importer.py` |
+| **Type** | Deterministic (no live Claude call in any of these tests; no verdict/gate involved) |
+| **Automated?** | Yes — `test_library_store.py` (6), `test_node_author_accept_api.py` (7), `test_node_author_conformance.py` (13), `test_node_author_importer.py` (8), all pure-offline |
+
+**Definition of good.** Four properties, all landed 2026-07-11 (T-135, "W2 backend"): (1) **A
+library entry can never carry a client-authored proposal.** `POST /api/builder/node-proposal/accept`
+takes only a `request` string (`extra="forbid"`) and RE-DERIVES the `NodeProposal` server-side via
+`propose_node()` — a caller cannot smuggle a fabricated tool/ports/version through the accept body.
+(2) **`check_conformance()` mechanically enforces the agent-authoring-contract pins** — advisory
+present and `True`; no `verdict`/`confidence` key anywhere in the candidate (scanned recursively,
+by key not value, so a legitimate `generated_by: "stub"` value is never a false positive); no
+`script`/`stub` command-body key anywhere; every port kind is a real `ARTIFACT_KINDS` member or an
+explicitly-declared `reserved` one (and a `reserved_kinds` entry that is secretly a real kind is
+itself flagged, `reserved_kind_actually_known`); `corpus_version`/`schema_version`/
+`platform_version` pinned, plus the tool `version` when `matched`. It accepts either a validated
+`NodeProposal` or a raw untrusted `Mapping` (the load-bearing path for an importer/agent that
+hasn't been hardened yet). (3) **The store round-trips a `LibraryEntry` exactly** and is
+degrade-to-JSONL like every other pluggable store — `PIPEGUARD_LIBRARY_STORE=sqlite` failing to
+construct falls back to JSONL, never raises. (4) **The doc-drop importer never fabricates a live
+port.** `import_from_nextflow_schema()` maps a schema's `format: file-path` params to a real
+`ARTIFACT_KINDS` kind only on a confident name/pattern match; every other param becomes a
+`reserved` slot whose slug is guaranteed outside the vocabulary (a fallback slug that would
+collide with a real kind is prefixed `reserved_` first) — so its output is conformant by
+construction, never requiring a human to catch an invented wire after the fact.
+
+**Method.** `test_node_author_conformance.py` asserts each of the five pins independently (one
+test forces a `verdict` key into a nested port/locator/citation and asserts it's caught at depth,
+not just top-level; one asserts a `known=True` port outside `ARTIFACT_KINDS` is flagged
+`port_known_mismatch`; one asserts a real `ARTIFACT_KINDS` member wrongly listed in
+`reserved_kinds` is flagged) plus a conformant-proposal control asserting zero violations, both on
+the raw-dict path and the validated-`NodeProposal` path. `test_node_author_accept_api.py` uses a
+`TestClient`: an unmatched request 422s with no entry stored; a conformant request 201s and the
+returned `LibraryEntry.submitted_by` matches the RBAC actor from the `X-PipeGuard-Actor` header;
+a `viewer`-role request 403s (accept is `reviewer`/`approver`-gated); the list endpoint's `tool`/
+`status` filters are asserted against a multi-entry fixture. `test_library_store.py` round-trips
+both the JSONL and SQLite adapters with the same fixture record and asserts they agree
+byte-for-byte on `list()` ordering (`created_at` then `id`). `test_node_author_importer.py` feeds
+a small hand-built nf-core-shaped schema (`definitions`/`$defs` groups, a `title`, a mix of
+`file-path` and non-file-path params) and asserts: only `file-path` params become ports; a
+recognized name (`input_fastq`, `reference_fasta`, …) maps to a live kind; an unrecognized name
+maps to a `reserved` slug; the resulting `NodeProposal` passes `check_conformance()` with zero
+violations (closing the loop back to item 2 above) — no network, no live Claude call anywhere in
+this file.
+
+**Known failure modes.** A future code path that let the accept endpoint trust a client-supplied
+proposal field would be caught by the `extra="forbid"` schema rejection (asserted directly); a
+conformance-check regression that stopped scanning nested structures for a forbidden key would be
+caught by the depth-specific test named above; an importer regression that let an unrecognized
+param name silently map to a real `ARTIFACT_KINDS` kind (rather than falling through to
+`reserved`) would fail the conformance-closes-the-loop assertion. **Not covered by an automated
+test:** the Builder's own "Accept to library" UI action (no frontend caller exists yet — this case
+is backend-only, see [design/agent-authoring-contract.md](../design/agent-authoring-contract.md)
+§Status); the `draft→approved` transition (no code path sets `status="approved"` yet, so there is
+nothing to test); the free-text `--help`/README half of the doc-drop importer (not built); a
+roster-wide, CI-parametrized sweep of `check_conformance()` across all six advisory agents (today
+it is invoked against node-authoring candidates only).
 
 ## Failure-mode cases (synthetic)
 

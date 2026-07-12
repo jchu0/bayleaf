@@ -5,7 +5,7 @@
 | **Status** | Active — the durable convention registry (so a rule is stated once, not per session) |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / design / reviewers |
-| **Related** | [design/frontend/README.md](frontend/README.md) (tokens + per-screen spec), [design/builder-cards/README.md](builder-cards/README.md) (pipeline-card design), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [functional.md](../requirements/functional.md), [nonfunctional.md](../requirements/nonfunctional.md) (REQ-NF-070, a11y), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [scale-aware memory], [explicit-edit+audit memory] |
+| **Related** | [design/frontend/README.md](frontend/README.md) (tokens + per-screen spec), [design/builder-cards/README.md](builder-cards/README.md) (pipeline-card design), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [functional.md](../requirements/functional.md) (REQ-F-097), [nonfunctional.md](../requirements/nonfunctional.md) (REQ-NF-070, a11y), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [scale-aware memory], [explicit-edit+audit memory] |
 
 ## Why this doc exists
 
@@ -46,6 +46,11 @@ lesson as much as a code one (a component's own "adopted here" list must be re-v
 not trusted from memory). The same commit adds two new durable conventions this session's fixes
 made worth recording once: **UIC-18** (a run-lifecycle status dot must never reuse a verdict hue)
 and **UIC-19** (a11y baseline for the shared `Toast`/`ConfirmDialog` primitives).
+
+**UIC-19 extended (2026-07-11, T-136, commit `4427ec2`).** The a11y baseline widens from
+`Toast`/`ConfirmDialog` to four more shared primitives (`Tabs`/`Pager`/`SegmentedControl`/
+`RunSelector`) plus form-label association on Submit/Accession/Settings; verdict-token contrast is
+now a verified (not assumed) WCAG AA pass. See the updated UIC-19 entry below.
 
 ---
 
@@ -302,19 +307,36 @@ all four verdict hues — `needs_review` → `bg-accent` (needs a human), `runni
 Runs list, the top-bar run switcher, `RunSelector`) — one source of truth, so a future consumer
 inherits the separation automatically.
 
-### UIC-19 — A11y baseline: `Toast` + `ConfirmDialog` · ✅
-The two shared primitives nearly every screen composes through (a write's outcome, and a
-consequential-action confirmation) must carry baseline screen-reader + keyboard support — this is
-NOT a claim of a full WCAG audit, only a floor on these two components. **Shipped (2026-07-11,
-T-132, commit `deee99f`, UIUX-05/UIUX-08):** `components/Toast.tsx`'s container is
-`role="status" aria-live="polite"`; an individual error toast additionally carries `role="alert"`
-(assertive), so a failed write interrupts a screen reader instead of waiting for a pause — matching
-the toast system's own purpose (surfacing every off-gate write's real backend outcome).
-`components/ConfirmDialog.tsx`'s panel gains `role="dialog" aria-modal="true"` +
-`aria-labelledby`/`aria-describedby`, auto-focuses its confirm button on open, and traps Tab within
-the panel (wraps first↔last focusable) so a keyboard/AT user cannot tab out to the page behind the
-overlay — Escape still cancels (a deliberate dismissal). See
+### UIC-19 — A11y baseline: `Toast`/`ConfirmDialog`/shared view primitives/forms · ✅
+The shared primitives nearly every screen composes through (a write's outcome, a consequential-
+action confirmation, view-selector/pagination/toggle controls) plus three forms must carry baseline
+screen-reader + keyboard support — this is NOT a claim of a full WCAG audit, only a floor on these
+named components. **Shipped (2026-07-11, T-132, commit `deee99f`, UIUX-05/UIUX-08):**
+`components/Toast.tsx`'s container is `role="status" aria-live="polite"`; an individual error toast
+additionally carries `role="alert"` (assertive), so a failed write interrupts a screen reader
+instead of waiting for a pause — matching the toast system's own purpose (surfacing every off-gate
+write's real backend outcome). `components/ConfirmDialog.tsx`'s panel gains
+`role="dialog" aria-modal="true"` + `aria-labelledby`/`aria-describedby`, auto-focuses its confirm
+button on open, and traps Tab within the panel (wraps first↔last focusable) so a keyboard/AT user
+cannot tab out to the page behind the overlay — Escape still cancels (a deliberate dismissal). See
 [nonfunctional.md REQ-NF-070](../requirements/nonfunctional.md) for the requirement framing.
+
+**Extended (2026-07-11, T-136, commit `4427ec2`, REQ-F-097/REQ-NF-070):** the baseline now also
+covers the shared view-selector/pagination/toggle primitives + three screens' form inputs.
+`Tabs.tsx` gains roving-tabindex + Arrow/Home/End keyboard nav (tab roles already existed);
+`Pager.tsx`'s page-button row is now a `nav aria-label="Pagination"` landmark with
+`aria-current="page"` + a per-page `aria-label`; `SegmentedControl.tsx` gains
+`role="radiogroup"`/`role="radio"` + `aria-checked` + an optional accessible group `label`;
+`RunSelector.tsx` gains the ARIA combobox/listbox pattern (`role="combobox"`,
+`aria-expanded`/`aria-controls`/`aria-activedescendant`, arrow-key navigation, Enter to pick the
+highlighted option). `Submit.tsx`/`Accession.tsx`/`Settings.tsx` form inputs gain `htmlFor`/`id`
+label↔input association, `aria-label` on grid-row inputs whose column headers are visual-only, and
+`aria-describedby` on hint text. **Verdict-token contrast was VERIFIED, not assumed:** all 8 fg/bg
+token pairings measure 5.5–9:1, passing WCAG AA — `index.css` (the Builder-shared theme) needed no
+change. This is still not a full WCAG audit — the "floor on named components, not a full audit"
+scope caveat above holds; it widens which components/screens sit on that floor, it does not newly
+claim app-wide AA conformance. Still open: Builder-canvas elements, other screens' form controls,
+and any automated a11y CI gate.
 
 ---
 
