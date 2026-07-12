@@ -157,6 +157,21 @@ export type RunDetail = {
   events: ProvenanceEvent[]
 }
 
+// One annotated candidate variant (GET /api/runs/:id/variants), READ from an externally-produced
+// annotated VCF/table (ADR-0018) — a driver ran the annotator; PipeGuard never does (composes ≠
+// executes). `clinvar_significance` is a VERBATIM ClinVar quotation, never PipeGuard's own call
+// (ADR-0004). Every field but `sample_id` is nullable: a partial annotation is a signal, not a
+// crash. Backs the RunReport's full per-variant table (W3), beneath the route-to-human hero.
+export type VariantCall = {
+  sample_id: string
+  gene: string | null
+  hgvs: string | null
+  clinvar_significance: string | null
+  clinvar_review_status: string | null
+  clinvar_accession: string | null
+  clinvar_version: string | null
+}
+
 // A de-identified share/report egress (ADR-0018 D3): the scrubbed rows + an honesty/provenance
 // manifest. `policy_id` is a scrub VERSION, never a compliance attestation (see `disclaimer`).
 export type ShareManifest = {

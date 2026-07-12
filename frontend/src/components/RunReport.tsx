@@ -1,7 +1,8 @@
-import { type ReactNode, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, GitBranch, Info, ShieldAlert, Stethoscope } from 'lucide-react'
-import type { DecisionCard, Evidence, Finding, RunDetail, Verdict } from '../types'
+import { AlertTriangle, CheckCircle2, Dna, GitBranch, Info, ShieldAlert, Stethoscope } from 'lucide-react'
+import type { DecisionCard, Evidence, Finding, RunDetail, VariantCall, Verdict } from '../types'
+import { api } from '../api'
 import { CitedEvidence } from './EvidenceTable'
 import { GateResultStrip } from './GateResultStrip'
 import { VerdictBadge } from './VerdictBadge'
@@ -16,8 +17,10 @@ import { fmtTime, readGateProvenance, readNum, readStr } from '../provenance'
 // from the rule engine's cards (ADR-0001, G1), and every ClinVar significance is quoted VERBATIM
 // from the finding's cited evidence (G3/G4) — PipeGuard authors no pathogenicity. The report has
 // no write path; human sign-off is a labelled seam, not a button (ADR-0018 L61: PipeGuard can
-// never mark a report final on its own). Built entirely over `detail` (cards + events) already on
-// the wire — no new endpoint, no VariantCall transport, no interpretation agent for v1.
+// never mark a report final on its own). The route-to-human hero + per-sample blocks render over
+// `detail` (cards + events) already on the wire; the full per-variant table (W3) additionally
+// reads GET /api/runs/{id}/variants — every ClinVar significance quoted VERBATIM, no interpretation
+// agent, no verdict authored here.
 
 const ORDER: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
 
@@ -34,6 +37,32 @@ type RthHit = { sampleId: string; verdict: Verdict; finding: Finding; clnsig: Ev
 export function RunReport({ detail }: { detail: RunDetail }) {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState<PerPage>('25')
+
+  // Full per-variant table (W3): the run's annotated variants, fetched from the read-only
+  // GET /api/runs/{id}/variants. `null` = still loading; `[]` = no variants.csv (honest empty
+  // state, never an error). Paginated independently of the per-sample decisions table below.
+  const [variants, setVariants] = useState<VariantCall[] | null>(null)
+  const [variantsError, setVariantsError] = useState<string | null>(null)
+  const [vPage, setVPage] = useState(1)
+  const [vPerPage, setVPerPage] = useState<PerPage>('25')
+
+  useEffect(() => {
+    let alive = true
+    setVariants(null)
+    setVariantsError(null)
+    setVPage(1)
+    api
+      .variants(detail.run_id)
+      .then((rows) => {
+        if (alive) setVariants(rows)
+      })
+      .catch((e: unknown) => {
+        if (alive) setVariantsError(e instanceof Error ? e.message : 'Failed to load variants')
+      })
+    return () => {
+      alive = false
+    }
+  }, [detail.run_id])
 
   const cards = useMemo(
     () => [...detail.cards].sort((a, b) => ORDER[a.verdict] - ORDER[b.verdict] || a.sample_id.localeCompare(b.sample_id)),
@@ -68,6 +97,12 @@ export function RunReport({ detail }: { detail: RunDetail }) {
   const pageCount = Math.max(1, Math.ceil(cards.length / per))
   const curPage = Math.min(page, pageCount)
   const pageCards = cards.slice((curPage - 1) * per, curPage * per)
+
+  const vRows = variants ?? []
+  const vPer = Number(vPerPage)
+  const vPageCount = Math.max(1, Math.ceil(vRows.length / vPer))
+  const vCurPage = Math.min(vPage, vPageCount)
+  const vPageRows = vRows.slice((vCurPage - 1) * vPer, vCurPage * vPer)
 
   return (
     <div className="flex flex-col gap-4">
@@ -137,6 +172,77 @@ export function RunReport({ detail }: { detail: RunDetail }) {
               <RouteToHumanCard key={`${h.sampleId}:${h.finding.id}`} hit={h} />
             ))}
           </div>
+        )}
+      </section>
+
+      {/* Full per-variant table (W3) — every annotated candidate variant the run carried, read from
+          variants.csv via the read-only endpoint. This is the fuller table beneath the route-to-
+          human hero above; ClinVar significance is quoted VERBATIM, PipeGuard authors no
+          pathogenicity and sets no verdict here (ADR-0004 / ADR-0001). */}
+      <section>
+        <SectionTitle icon={<Dna size={14} strokeWidth={2} className="text-accent" />}>
+          Annotated variants{variants ? ` (${vRows.length})` : ''}
+        </SectionTitle>
+        {variantsError ? (
+          <div className="mt-2.5 flex items-center gap-2.5 rounded-[12px] border border-line bg-card px-4 py-3.5 text-[12.5px] text-text-2">
+            <Info size={16} strokeWidth={2} className="shrink-0 text-text-3" />
+            Couldn’t load variants — {variantsError}
+          </div>
+        ) : variants === null ? (
+          <div className="mt-2.5 rounded-[12px] border border-line bg-card px-4 py-3.5 text-[12.5px] text-text-3">
+            Loading annotated variants…
+          </div>
+        ) : vRows.length === 0 ? (
+          <div className="mt-2.5 flex items-center gap-2.5 rounded-[12px] border border-line bg-card px-4 py-3.5 text-[12.5px] text-text-2">
+            <CheckCircle2 size={16} strokeWidth={2} className="shrink-0 text-text-3" />
+            <span>
+              No annotated variants in this build — this run published no{' '}
+              <span className="font-mono text-[12px]">variants.csv</span>. Variant annotation is an
+              externally-produced input PipeGuard READS (ADR-0018), never runs.
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className="mt-2.5 overflow-hidden rounded-[12px] border border-line bg-card">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[680px] border-collapse text-left">
+                  <thead>
+                    <tr className="border-b border-line bg-card-2 text-[10px] font-semibold uppercase tracking-[0.5px] text-text-3">
+                      <th className="px-3.5 py-2.5 font-semibold">Sample</th>
+                      <th className="px-3.5 py-2.5 font-semibold">Gene</th>
+                      <th className="px-3.5 py-2.5 font-semibold">HGVS</th>
+                      <th className="px-3.5 py-2.5 font-semibold">ClinVar significance</th>
+                      <th className="px-3.5 py-2.5 font-semibold">Review status</th>
+                      <th className="px-3.5 py-2.5 font-semibold">Accession</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vPageRows.map((v, i) => (
+                      <VariantRow key={`${v.sample_id}:${v.gene ?? ''}:${v.hgvs ?? ''}:${i}`} v={v} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-3.5">
+                <Pager
+                  total={vRows.length}
+                  page={vCurPage}
+                  perPage={vPerPage}
+                  onPage={setVPage}
+                  onPerPage={(p) => {
+                    setVPerPage(p)
+                    setVPage(1)
+                  }}
+                  noun="variants"
+                />
+              </div>
+            </div>
+            <p className="mt-1.5 text-[11px] leading-[1.5] text-text-3">
+              ClinVar significance is quoted <b>verbatim</b> from the annotated source — PipeGuard
+              authors no pathogenicity of its own and sets no verdict here (ADR-0004 / ADR-0001). A
+              qualified human adjudicates any clinically significant call.
+            </p>
+          </>
         )}
       </section>
 
@@ -246,6 +352,36 @@ function RouteToHumanCard({ hit }: { hit: RthHit }) {
         ClinVar and a qualified human adjudicates (ADR-0004).
       </div>
     </div>
+  )
+}
+
+// One annotated-variant row. Every ClinVar field is rendered exactly as the parser returned it —
+// the significance quoted VERBATIM (G3/G4), never normalized or reclassified; a missing field is a
+// plain em-dash, never a fabricated value.
+function VariantRow({ v }: { v: VariantCall }) {
+  return (
+    <tr className="border-b border-line last:border-b-0">
+      <td className="px-3.5 py-2.5 font-mono text-[12px] text-text">{v.sample_id}</td>
+      <td className="px-3.5 py-2.5 font-mono text-[12px] font-semibold text-text">{v.gene ?? '—'}</td>
+      <td className="px-3.5 py-2.5 font-mono text-[11.5px] text-text-2">{v.hgvs ?? '—'}</td>
+      <td className="px-3.5 py-2.5">
+        {v.clinvar_significance ? (
+          // VERBATIM — the cited source's value, rendered unmodified (G3/G4).
+          <span className="font-mono text-[12px] font-medium text-text">
+            “{v.clinvar_significance}”
+          </span>
+        ) : (
+          <span className="text-[12.5px] text-text-3">—</span>
+        )}
+      </td>
+      <td className="px-3.5 py-2.5 font-mono text-[11.5px] text-text-2">
+        {v.clinvar_review_status ?? '—'}
+      </td>
+      <td className="px-3.5 py-2.5 font-mono text-[11.5px] text-text-2">
+        {v.clinvar_accession ?? '—'}
+        {v.clinvar_version ? <span className="text-text-3"> · {v.clinvar_version}</span> : null}
+      </td>
+    </tr>
   )
 }
 

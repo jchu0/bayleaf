@@ -36,7 +36,8 @@ from pydantic import BaseModel, Field
 
 from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
 from pipeguard.metrics import default_registry
-from pipeguard.models import DecisionCard, Gate, Sample, Verdict
+from pipeguard.models import DecisionCard, Gate, Sample, VariantCall, Verdict
+from pipeguard.parsers import parse_variant_calls
 from pipeguard.pipeline_repair import RepairProposal, propose_repair, recurring_signature
 from pipeguard.provenance import EntityRef, EventType, ProvenanceEvent
 from pipeguard.runbook import RouteToHumanPolicy, Runbook
@@ -540,6 +541,23 @@ def get_card_triage(run_id: str, sample_id: str) -> TriageNote:
             status_code=404, detail=f"Sample '{sample_id}' is clean; no triage note"
         )
     return note
+
+
+@app.get("/api/runs/{run_id}/variants")
+def get_run_variants(run_id: str) -> list[VariantCall]:
+    """Every annotated candidate variant for a run, parsed from its `variants.csv` (W3).
+
+    A read-only projection of an externally-produced annotated VCF/table (ADR-0018): PipeGuard
+    READS these rows via the SAME `pipeguard.parsers.parse_variant_calls` the gate uses — it never
+    runs an annotator (composes ≠ executes, ADR-0003) and never authors pathogenicity. Every
+    ClinVar significance is preserved VERBATIM from the source (ADR-0004); no verdict or confidence
+    is set here (ADR-0001) — this feeds the RunReport's full per-variant table beneath the
+    route-to-human hero. A run with no `variants.csv` returns an empty list (a missing annotation is
+    a signal, not an error); an unknown run is a 404, mirroring the other run-detail reads.
+    """
+    run_dir = _run_dir(run_id)  # 404 if the run id is unknown (no SampleSheet.csv)
+    # parse_variant_calls tolerates an absent file → [], so a run without variants.csv is fine.
+    return parse_variant_calls(run_dir / "variants.csv")
 
 
 # --- Provenance data-I/O (the §5 canvas drill-in) --------------------------------------------

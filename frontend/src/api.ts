@@ -46,6 +46,7 @@ import type {
   TicketStatus,
   TransitionResult,
   TriageNote,
+  VariantCall,
   Verdict,
 } from './types'
 
@@ -239,6 +240,10 @@ export const api = {
   qcReadout: (runId: string, sampleId: string) =>
     get<CardReadout>(`/api/runs/${enc(runId)}/cards/${enc(sampleId)}/qc-readout`),
   artifacts: (runId: string) => get<RunArtifact[]>(`/api/runs/${enc(runId)}/artifacts`),
+  // Every annotated candidate variant for a run (W3) — READ-only, ClinVar significance verbatim
+  // (ADR-0004); backs the RunReport's full per-variant table. Empty array for a run with no
+  // variants.csv (a missing annotation is a signal, not an error).
+  variants: (runId: string) => get<VariantCall[]>(`/api/runs/${enc(runId)}/variants`),
   triage: (runId: string, sampleId: string) =>
     get<TriageNote>(`/api/runs/${enc(runId)}/cards/${enc(sampleId)}/triage`),
 
