@@ -18,6 +18,12 @@ from .agent import (
     get_node_author_agent,
     propose_node,
 )
+from .conformance import (
+    ConformanceViolation,
+    check_conformance,
+    is_conformant,
+)
+from .importer import import_from_nextflow_schema
 from .models import (
     ARTIFACT_KINDS,
     NODE_AUTHOR_CORPUS_VERSION,
@@ -41,6 +47,7 @@ __all__ = [
     "NODE_AUTHOR_CORPUS_VERSION",
     "PIPELINE_STAGES",
     "ClaudeNodeAuthor",
+    "ConformanceViolation",
     "LocatorSuggestion",
     "NodeAuthorAgent",
     "NodeCitation",
@@ -51,7 +58,10 @@ __all__ = [
     "StubNodeAuthor",
     "ToolCardEntry",
     "ToolCardRetriever",
+    "check_conformance",
     "get_node_author_agent",
+    "import_from_nextflow_schema",
+    "is_conformant",
     "load_tool_card_corpus",
     "propose_node",
 ]
