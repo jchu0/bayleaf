@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useLocation, useNavigate, Navigate } from 'react-router-dom'
-import { CheckCircle2, Eye, EyeOff, Info, Lock, Mail, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, Eye, EyeOff, Info, Lock, Mail } from 'lucide-react'
 import { useRole } from '../context/RoleContext'
 import { useToast } from '../components/Toast'
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, type DemoAccount } from '../auth'
+import { Logo } from '../components/Logo'
 
 // The demo login gate (screen for the whole app's front door). It authenticates against the
 // client-side demo roster (auth.ts) and, on success, sets the RBAC actor the API already consumes.
@@ -61,11 +62,11 @@ export function Login() {
       <div className="w-full max-w-[400px]">
         {/* Brand */}
         <div className="mb-6 flex items-center justify-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-white shadow-card">
-            <ShieldCheck size={22} strokeWidth={2} />
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[linear-gradient(150deg,#5aae77,#2f7a52)] shadow-card">
+            <Logo size={24} />
           </span>
           <span className="leading-tight">
-            <span className="block font-serif text-[20px] font-medium text-text">PipeGuard</span>
+            <span className="block font-serif text-[20px] font-medium text-text">bayleaf</span>
             <span className="block text-[10.5px] font-semibold uppercase tracking-[1.2px] text-text-3">
               Decision Gate
             </span>

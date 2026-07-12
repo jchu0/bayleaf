@@ -544,7 +544,7 @@ export function ArchivistModal({ onClose }: { onClose: () => void }) {
         )}
       </div>
       <div className="flex items-center gap-2.5 border-t border-line px-4 py-3">
-        <span className="flex-1 text-[10.5px] leading-snug text-text-3">Advisory — this previews the archival manifest; PipeGuard has no archive-write endpoint, so nothing is queued or moved.</span>
+        <span className="flex-1 text-[10.5px] leading-snug text-text-3">Advisory — this previews the archival manifest; bayleaf has no archive-write endpoint, so nothing is queued or moved.</span>
         <button onClick={onClose} className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong">
           Dismiss
         </button>
@@ -722,7 +722,7 @@ export function NextflowExportModal({ graph, onClose }: { graph: NextflowGraphBo
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-semibold text-text">Export to Nextflow</div>
           <div className="mt-0.5 text-[12px] leading-relaxed text-text-2">
-            PipeGuard compiles these cards into a runnable nf-core-style DSL2 pipeline. Download it to
+            bayleaf compiles these cards into a runnable nf-core-style DSL2 pipeline. Download it to
             run anywhere, or use <strong>Run</strong> to execute it here (only AI agents stay off the
             tools — operators run pipelines). Validate with{' '}
             <code className="rounded bg-card-2 px-1 py-px font-mono">nextflow run main.nf -stub-run</code>.
@@ -980,7 +980,7 @@ export function RunPipelineModal({
           <div className="text-[15px] font-semibold text-text">Run pipeline</div>
           <div className="mt-0.5 text-[12px] leading-relaxed text-text-2">
             Runs the <strong>approved version</strong> of the selected pipeline against your chosen
-            inputs → a gate-able run. PipeGuard composes;{' '}
+            inputs → a gate-able run. bayleaf composes;{' '}
             <strong>Nextflow executes</strong> (only AI agents stay off the tools — operators run
             pipelines).
           </div>

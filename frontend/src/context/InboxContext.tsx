@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { DEMO_ACCOUNTS } from '../auth'
+import type { Ticket } from '../types'
 import { useRole } from './RoleContext'
 
 // GA3 — the intentional notification workspace. This is a PERSONAL organization layer that sits
@@ -142,7 +143,10 @@ const InboxContext = createContext<InboxState | null>(null)
 export function InboxProvider({ children }: { children: ReactNode }) {
   const { actor } = useRole()
   const actorId = actor.id
-  const [tickets, setTickets] = useState<{ id: string; title: string; run_id: string; sample_id: string; gate: string; verdict: string; created_at: string; priority: string }[]>([])
+  // Typed as the canonical Ticket[] — these are fed straight from api.listTickets (which returns
+  // Ticket[]). The prior hand-written inline shape had drifted from Ticket and omitted `assignee`,
+  // which broke t.assignee below (the effective-owner read); using the real type keeps them in sync.
+  const [tickets, setTickets] = useState<Ticket[]>([])
   const [selfItems, setSelfItems] = useState<SelfRaw[]>(() => loadJson(selfKey(actorId), []))
   const [overlay, setOverlay] = useState<Record<string, ItemMeta>>(() => loadJson(overlayKey(actorId), {}))
   const [folders, setFolders] = useState<string[]>(() => loadJson(folderKey(actorId), []))
@@ -198,18 +202,9 @@ export function InboxProvider({ children }: { children: ReactNode }) {
         api.listTickets({ status: 'open' }),
         api.listTickets({ status: 'in_review' }),
       ])
-      setTickets(
-        [...open, ...inReview].map((t) => ({
-          id: t.id,
-          title: t.title,
-          run_id: t.run_id,
-          sample_id: t.sample_id,
-          gate: t.gate,
-          verdict: t.verdict,
-          created_at: t.created_at,
-          priority: t.priority,
-        })),
-      )
+      // Store the full Ticket objects (not a narrowed projection) so downstream reads like
+      // t.assignee (the effective-owner logic below) keep every field the Ticket carries.
+      setTickets([...open, ...inReview])
     } catch (e) {
       setError(String(e))
       setTickets([])

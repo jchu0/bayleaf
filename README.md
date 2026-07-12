@@ -1,15 +1,20 @@
-# PipeGuard 🧬
+# bayleaf 🌿
 
-**An AI-assisted provenance & QC decision gate for genomics runs.**
+**Add subtle flavor to your NGS project** — an AI-assisted provenance & QC decision gate for genomics runs.
 
-Built with Claude · Life Sciences hackathon.
+Built with Claude · Life Sciences hackathon. *(Formerly “PipeGuard”.)*
+
+> **Name vs. package.** The product is **bayleaf**; the importable Python package is still
+> `pipeguard` (`from pipeguard import …`, the `PIPEGUARD_*` env vars, `src/pipeguard/`). The
+> module rename is a deliberate, separate change — this pass rebrands the product *surface*
+> (UI, docs, icons), not the code identifiers, so every command below still works verbatim.
 
 Bioinformatics pipelines are good at *executing* workflow steps, but *operating* them
 is still manual: intake, provenance review, QC interpretation, and failure triage
 happen across scattered tools, dashboards, logs, and human memory. When something
 looks off, teams reconstruct by hand what happened, why it matters, and what to do next.
 
-PipeGuard is a vertical slice of that operations layer: **the decision gate for a
+bayleaf is a vertical slice of that operations layer: **the decision gate for a
 sequencing run.** It ingests the run's artifacts, checks them for provenance risks,
 missing metadata, and borderline QC, and produces a **decision card per sample**
 answering the only question the operator cares about:
@@ -18,7 +23,7 @@ answering the only question the operator cares about:
 
 The human still makes the call. They just no longer reconstruct the context by hand.
 
-> **Not a clinical decision system.** PipeGuard is a research/demo tool with production
+> **Not a clinical decision system.** bayleaf is a research/demo tool with production
 > intent. It makes **no diagnostic, therapeutic, or pathogenicity claims**. Runbook
 > thresholds are illustrative and configurable, not clinical thresholds; any confidence
 > value is a heuristic, not a calibrated probability, and is omitted until grounded. See
@@ -29,7 +34,7 @@ The human still makes the call. They just no longer reconstruct the context by h
 ## The core idea: rules decide, AI narrates & advises
 
 The credibility of a decision gate depends on its recommendations being **grounded**, so
-PipeGuard splits the work along one load-bearing invariant — **rules decide; AI narrates
+bayleaf splits the work along one load-bearing invariant — **rules decide; AI narrates
 and advises, and never sets or overrides a verdict** ([ADR-0001](docs/adr/ADR-0001-deterministic-gate-advisory-ai.md)):
 
 1. **Rule engine** (`pipeguard.rules`) owns the *facts*: barcode/index-swap and

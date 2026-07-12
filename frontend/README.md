@@ -1,4 +1,13 @@
-# React + TypeScript + Vite
+# bayleaf — frontend
+
+The React + Vite + Tailwind UI for **bayleaf** (an AI-assisted provenance & QC decision gate
+for genomics runs). It consumes the FastAPI read-API in [`../api`](../api); the Streamlit app in
+[`../app`](../app) is the offline fallback. See the [top-level README](../README.md) for the
+product overview.
+
+---
+
+## Toolchain (React + TypeScript + Vite)
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 

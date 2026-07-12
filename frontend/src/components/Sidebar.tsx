@@ -29,6 +29,7 @@ import { usePrefs } from '../context/PrefsContext'
 import { useRole } from '../context/RoleContext'
 import type { RunSummary } from '../types'
 import { UserSettingsDialog } from './UserSettingsDialog'
+import { Logo } from './Logo'
 
 // `page` tags an item with its PageId so the page-access view-gate can filter it (canSee). Admin
 // items carry no page — they're gated by isAdmin, not by the access profile.
@@ -248,18 +249,15 @@ export function Sidebar({
       >
         <Link
           to="/"
-          title="PipeGuard — Runs"
+          title="bayleaf — Runs"
           className={`flex min-w-0 items-center gap-2.5 ${collapsed ? '' : 'flex-1'}`}
         >
-          <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-lg bg-[linear-gradient(155deg,#2f6bd6,#1a4fac)]">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={1.9} strokeLinecap="round">
-              <path d="M5 3c0 6 14 6 14 12M19 3c0 6-14 6-14 12M5 21c0-2 14-2 14 0M5 3c0 2 14 2 14 0" />
-              <path d="M7 6h10M8 9.5h8M8 14.5h8M7 18h10" strokeWidth={1.3} />
-            </svg>
+          <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-lg bg-[linear-gradient(155deg,#5aae77,#2f7a52)]">
+            <Logo size={19} />
           </span>
           {!collapsed && (
             <span className="min-w-0 leading-[1.1]">
-              <span className="block truncate text-[15px] font-bold tracking-[-0.2px] text-nav-text">PipeGuard</span>
+              <span className="block truncate text-[15px] font-bold tracking-[-0.2px] text-nav-text">bayleaf</span>
               <span className="block text-[10.5px] font-medium uppercase tracking-[0.3px] text-nav-label">
                 Decision gate
               </span>

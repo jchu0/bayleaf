@@ -130,7 +130,7 @@ export function RunReport({ detail }: { detail: RunDetail }) {
           <span>
             Research/demo QC decision gate — <strong>not a clinical decision system</strong> and not a diagnostic report.
             The rules decide every verdict; any ClinVar classification below is <strong>quoted verbatim</strong> from the
-            cited source — PipeGuard authors no pathogenicity of its own. This report is <strong>not final</strong> until a
+            cited source — bayleaf authors no pathogenicity of its own. This report is <strong>not final</strong> until a
             qualified human signs off (ADR-0018).
           </span>
         </div>
@@ -198,7 +198,7 @@ export function RunReport({ detail }: { detail: RunDetail }) {
             <span>
               No annotated variants in this build — this run published no{' '}
               <span className="font-mono text-[12px]">variants.csv</span>. Variant annotation is an
-              externally-produced input PipeGuard READS (ADR-0018), never runs.
+              externally-produced input bayleaf READS (ADR-0018), never runs.
             </span>
           </div>
         ) : (
@@ -238,7 +238,7 @@ export function RunReport({ detail }: { detail: RunDetail }) {
               </div>
             </div>
             <p className="mt-1.5 text-[11px] leading-[1.5] text-text-3">
-              ClinVar significance is quoted <b>verbatim</b> from the annotated source — PipeGuard
+              ClinVar significance is quoted <b>verbatim</b> from the annotated source — bayleaf
               authors no pathogenicity of its own and sets no verdict here (ADR-0004 / ADR-0001). A
               qualified human adjudicates any clinically significant call.
             </p>
@@ -288,7 +288,7 @@ export function RunReport({ detail }: { detail: RunDetail }) {
           <div className="flex items-start gap-2.5 text-[12.5px] leading-[1.5] text-text-2">
             <Stethoscope size={15} strokeWidth={2} className="mt-px shrink-0 text-text-3" />
             <span>
-              <b className="text-text">Human sign-off required.</b> PipeGuard can never mark a report final on its own
+              <b className="text-text">Human sign-off required.</b> bayleaf can never mark a report final on its own
               (ADR-0018) — a qualified reviewer adjudicates via the review queue. Sign-off is not wired in this build.
             </span>
           </div>
@@ -348,7 +348,7 @@ function RouteToHumanCard({ hit }: { hit: RthHit }) {
         </div>
       </div>
       <div className="border-t border-escalate-bd bg-card px-4 py-2.5 text-[11.5px] leading-[1.5] text-text-3">
-        PipeGuard makes no pathogenicity determination of its own — the classification above is quoted verbatim from
+        bayleaf makes no pathogenicity determination of its own — the classification above is quoted verbatim from
         ClinVar and a qualified human adjudicates (ADR-0004).
       </div>
     </div>
