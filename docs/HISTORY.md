@@ -260,6 +260,46 @@ across many maintainer UI-feedback passes:
    (`NfNode.script/container/conda`); sandboxed `GET /api/files` (`api/routers/files.py`); dropped
    `source_truth_vcf` from the node-author corpus (11 → 10).
 
+### Builder agent hardening (2026-07-12, T-142/T-143)
+
+Canonical current-state: [requirements/functional.md](requirements/functional.md) REQ-F-101/102/103,
+[requirements/nonfunctional.md](requirements/nonfunctional.md) REQ-NF-028/054,
+[quality/evaluation.md](quality/evaluation.md) EVAL-019/EVAL-052. Detail:
+[journal 2026-07-12](journal/2026-07-12-builder-agent-hardening.md). Arc base `14307f7`, 5 commits
+`e40784c`→`7c5c073`.
+
+1. **Agent-observation binding model** (`69a2dab`, frontend + `types.ts` only). The ephemeral
+   `advisoryAttach: Set` became a typed, persisted `AgentBinding {agent, node, grants:('outputs'|
+   'logs')[]}` in a `graph.agent_bindings` envelope key **the compiler never dereferences** — proven
+   byte-identical compile with/without bindings by construction (compile payload is `{nodes, edges}`
+   only; `CompileRequest` is pydantic `extra="ignore"`). Taxonomy: Pipeline-repair + Archivist moved
+   out of the Builder palette to Agent-triage launchers; the Builder keeps QC-triage (node-attachable)
+   + Node-authoring.
+2. **Phase 4 — the scoped, de-identified agent-read** (`4582c7d`, backend + 8 tests).
+   `GET /api/runs/{id}/nodes/{node}/observations?grants=outputs[,logs]` returns a bound node's
+   published outputs (scoped by the tool's catalogued output-port globs) and an opt-in
+   **de-identified** log tail (`api/deid.py` `scrub_text()` — subject ids pseudonymized, email/6+-digit
+   PII redacted; a test plants subject-id/email/MRN and proves all three scrubbed). Read-only,
+   traversal-hardened, honest-empty. `gather_node_observations()` is the triage-consumption seam;
+   agent consumption + a UI display + the authored-node→graph linkage stay deferred.
+3. **Reserved-port honesty** (`1621e3f`, +5 tests). Every shown Builder port now maps to a real
+   emitted Nextflow channel or was removed (promoted fastp `unpaired_fastq`/`failed_fastq`,
+   bcftools-norm `vcf_index`, MultiQC `multiqc_html`; removed `read_group`/`per_base`/`panel_bed`/
+   `fastqc_zip`/`bcftools_stats`/`picard_hsmetrics`/`ngscheckmate`; fastp `adapter_fasta` left
+   honestly-reserved).
+4. **mosdepth Export-to-Nextflow 422 fix + Builder UX + `tsc -b` pre-push gate** (`e40784c`,
+   `7c5c073`). The mosdepth card advertised 5 outputs vs a 2-output catalog → the arity gap tripped
+   the output-drift guard and 422'd Export-to-Nextflow of the default view; the 3 real byproducts are
+   now catalogued (germline drift green). Builder UX polish (phantom port removed, honestly
+   non-armable reserved ports, legend + Provenance scroll indicator); inspector `Save card`→`Save`
+   grouped with Delete in one footer row. A `frontend-tsc` pre-push hook now runs `tsc -b` (the
+   references-only root tsconfig had made `tsc --noEmit` a no-op, letting a type error reach `main`).
+
+**Not part of this arc (grounding correction):** the Nextflow compiler's Groovy/identifier injection
+escaping and the File-input `_source_channel` routing the arc brief mentioned landed earlier in
+`37e54a8` (T-140, an ancestor of the arc base `14307f7`), already documented as REQ-NF-046 /
+EVAL-017 — no new NF REQ was written for them.
+
 ### Corrections folded into current docs (2026-07-12)
 
 1. **Node-author corpus 11 → 10 → 9.** Truth VCF retired (`feat/custom-script-io` Branch A, 11→10);
@@ -281,16 +321,19 @@ The census in [quality/evaluation.md](quality/evaluation.md) now states only the
 (re-derived each sweep via `uv run pytest --collect-only -q` + `git ls-files 'tests/*.py' | wc -l`).
 The prior collected/file milestones, kept here for reconstructing *when* coverage grew:
 
-1. **620 / 46** — 2026-07-12 (bayleaf rebrand + NGSCheckMate retire + compiler robustness T-140 +
+1. **634 / 48** — 2026-07-12 (Builder agent hardening, T-142/T-143; `test_node_observations` 8 +
+   `test_nextflow_promoted_ports` 5 + a mosdepth-5-output regression in `test_nextflow_compile`
+   15→16 added). Offline (no `nextflow`, no live Postgres): **627 pass / 7 skip**.
+2. **620 / 46** — 2026-07-12 (bayleaf rebrand + NGSCheckMate retire + compiler robustness T-140 +
    ADR-0021 intake scheduling T-141; `test_nextflow_robustness` 17 + `test_intake_scheduling` 15
    added). Offline (no `nextflow`, no live Postgres): **613 pass / 7 skip**.
-2. **585 / 44** — 2026-07-11, custom-script-I/O session (`feat/custom-script-io`; 578 pass / 7 skip
+3. **585 / 44** — 2026-07-11, custom-script-I/O session (`feat/custom-script-io`; 578 pass / 7 skip
    offline).
-3. **555 / 41** — after the "fleet" session (T-135–T-137).
-4. **517 / 37** — after the W3/W4-deferred-slice continuation (T-133/T-134).
-5. **507 / 35** — after the P3-backlog session (T-131/T-132).
-6. **471 / 33** — after the audit / hardening / W1–W4 / E2E session (T-125–T-130).
-7. **427 / 29** — before that (Nextflow-codegen-executable session, T-123).
+4. **555 / 41** — after the "fleet" session (T-135–T-137).
+5. **517 / 37** — after the W3/W4-deferred-slice continuation (T-133/T-134).
+6. **507 / 35** — after the P3-backlog session (T-131/T-132).
+7. **471 / 33** — after the audit / hardening / W1–W4 / E2E session (T-125–T-130).
+8. **427 / 29** — before that (Nextflow-codegen-executable session, T-123).
 
 The pass/skip split has always depended on whether `nextflow` is on `PATH` (the machine-gated
 live-integration checks) — see the current doc for the HEAD breakdown of the 7 skips (3

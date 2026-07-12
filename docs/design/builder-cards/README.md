@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | draft (§§1–3 now mostly REALIZED — see §5) |
-| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST, card geometry) · updated 2026-07-11 (MST, edge clarity + off-canvas boundary) · updated 2026-07-11 (MST, W4 full QC port wiring) · updated 2026-07-11 (MST, custom-script + File-input cards, §7) |
+| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST, card geometry) · updated 2026-07-11 (MST, edge clarity + off-canvas boundary) · updated 2026-07-11 (MST, W4 full QC port wiring) · updated 2026-07-11 (MST, custom-script + File-input cards, §7) · updated 2026-07-12 (MST, reserved-port honesty pass — §5.4 essentially closed) |
 | **Audience** | frontend / design / bioinformatics |
 | **Related** | [frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model) (Pipeline Builder — full node model) · [design/ui-conventions.md UIC-16](../ui-conventions.md) · [data/nf-core-conventions.md](../../data/nf-core-conventions.md) (tool I/O → `ArtifactRef` / `MetricValue`) · [data/qc_metrics-sources.md](../../data/qc_metrics-sources.md) (metric provenance) · [frontend `BuilderShared.tsx`](../../../frontend/src/components/BuilderShared.tsx) (`BTOOLSPEC` · `TOOLS` · `GIAB_LOC` · `germlineTemplate()` · `portSide()` · `layoutPorts()` · `cardHeight()`) · [frontend `BuilderCanvas.tsx`](../../../frontend/src/components/BuilderCanvas.tsx) (current render + wiring) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) (the real germline commands the cards abstract) · [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md) (the operator-authored custom-script card, §7) · [design/nextflow-codegen.md](../nextflow-codegen.md) (the compile path a custom-script card feeds) |
 
@@ -11,9 +11,10 @@ This is the **general** card-design convention for the Pipeline Builder, plus th
 per-tool card specs. Each per-tool doc grounds one node's ports in that tool's **real** CLI I/O and
 the exact germline command it wraps; this doc holds the shared rules those specs assume. The
 convention was a **design target** — as of 2026-07-11 (commit `12a9913`) the current
-[`BuilderCanvas`](../../../frontend/src/components/BuilderCanvas.tsx) implements **most** of it
-(larger cards, four-sided typed half-circle ports); one item (§5.4, registering the remaining
-reserved kinds) stays open — see §5.
+[`BuilderCanvas`](../../../frontend/src/components/BuilderCanvas.tsx) implements it (larger cards,
+four-sided typed half-circle ports); the last open item (§5.4, the reserved-port kinds) was
+**essentially closed 2026-07-12** by the reserved-port honesty pass — every shown port is now a real
+channel or removed, with one deliberate `adapter_fasta` deferral left. See §5.
 
 ## 1. Philosophy — Databricks-style process cards
 
@@ -47,18 +48,22 @@ The four edges carry fixed semantics so every card reads the same way:
    the mosdepth `*_dist` family, `multiqc_html`) drop out the **bottom**, off the primary spine,
    toward MultiQC / reports. A card with no QC artifact (bwa-mem2, bcftools-call) keeps its bottom
    edge deliberately **clean** — that asymmetry is meaningful.
-4. **User-defined ports are reserved, not all shown.** A tool's optional / off-in-the-demo I/O
-   (adapter FASTA, CRAM reference, `--ploidy-file`, `samtools_stats`, `per_base`, the MultiQC
-   discovered-log bay) gets **geometric room reserved** on the correct edge but renders only when
-   populated — so enabling one later never reflows the card. Kinds not yet in `ARTIFACT_KINDS` must
-   be registered (with a producer) before their reserved port can carry an edge.
+4. **User-defined ports are reserved, not all shown** — but a reserved port must correspond to a
+   REAL producible artifact or be removed, never left as a superficial slot (the 2026-07-12
+   reserved-port honesty rule, §5.4). A tool's genuinely optional I/O (adapter FASTA, CRAM
+   reference, `--ploidy-file`) gets **geometric room reserved** on the correct edge but renders only
+   when populated — so enabling one later never reflows the card. Kinds not yet in `ARTIFACT_KINDS`
+   must be registered (with a producer) before their reserved port can carry an edge; a kind with no
+   real producer (e.g. `mosdepth` `per_base` under `--no-per-base`, or a computed string like
+   `read_group`) is **removed**, not left reserved. As of 2026-07-12 the only reserved-and-shown
+   port in the germline cards is `fastp` `adapter_fasta`.
 
 ## 3. Card sizing — larger than today, and why
 
 1. **Larger footprint.** The target card is bigger than today's fixed **168 px** node
    (`BuilderShared.NODE_W` / `BuilderCanvas.UW`; the seeded ToolCard is **208 px**, `TW`) — roughly
    **~210–230 px wide** and tall enough to host up to **6 half-circle ports** (e.g. samtools-markdup:
-   2 in + 4 out; mosdepth: 3 in + 6 out) plus the header text.
+   2 in + 4 out; mosdepth: 3 in + 5 out after `per_base`'s 2026-07-12 removal) plus the header text.
 2. **Why larger.** Four-sided typed ports need perimeter real estate the current small card can't
    give: a top reference bay, a left data-in, a right data-out, and a bottom QC exit must each sit
    clear of the header (icon · name · version · stage label · PG badge) and of each other. Cramming
@@ -87,8 +92,10 @@ Germline-chain order (fastp → bwa-mem2 → samtools-markdup → {mosdepth, bcf
 ## 5. Open / TODO — spec-vs-shipped, updated 2026-07-11
 
 Items 1–3 below (ports, card size, half-circle visual) **shipped 2026-07-11** (commit `12a9913`,
-[UIC-16](../ui-conventions.md)); item 4 (registering the remaining reserved kinds) is still open.
-Verified by reading `frontend/src/components/BuilderShared.tsx` / `BuilderCanvas.tsx` directly:
+[UIC-16](../ui-conventions.md)); item 4 (the reserved-port kinds) is **essentially closed
+2026-07-12** — every shown port is now a real channel or removed, with one deliberate
+`adapter_fasta` deferral. Verified by reading `frontend/src/components/BuilderShared.tsx` /
+`BuilderCanvas.tsx` + `src/pipeguard/nextflow/catalog.py` directly:
 
 1. **Ports are four-sided — CLOSED.** `BuilderShared.portSide(kind, dir)` is the single geometry
    source of truth: reference/panel **input** kinds (`reference_fasta`/`panel_bed`/`truth_vcf`/
@@ -105,29 +112,39 @@ Verified by reading `frontend/src/components/BuilderShared.tsx` / `BuilderCanvas
    visible` on each card body render true half-circle nubs poking past the card edge on all four
    sides, becoming full circles in Connect mode (unchanged prior behavior); typing is still enforced
    in wiring (`reconcileEdges`, kind-matched).
-4. **Reserved kinds — NARROWED the same day (W4, commit `5f0d5ec`), still partially open.**
-   `fastp_html` and `samtools_stats` — the two kinds this item originally cited — are **no longer
-   reserved**: `fastp` now publishes its already-written HTML report as `fastp_html`, and
-   `samtools markdup` runs an added `samtools stats` publishing `samtools_stats`; both are real,
-   wireable optional ports in `BTOOLSPEC`'s `ins`/`outs` and in `ARTIFACT_KINDS` (mirrored in the
-   backend `node_author.models.ARTIFACT_KINDS` too, T-130), and MultiQC now ingests both alongside
-   the mosdepth `regions`/`global_dist`/`region_dist` byproducts (also newly wired, was reserved).
-   **Still genuinely reserved** — no producer/kind registered yet, `portSide()`'s placement sets
-   already anticipate the correct *side* for them but no tool's `ins`/`outs` carries them
-   (verified: `grep -n 'per_base\|vcf_index\|multiqc_html\|adapter_fasta\|unpaired_fastq\|
-   failed_fastq\|read_group\|fastqc_zip\|bcftools_stats\|picard_hsmetrics' BuilderShared.tsx`
-   finds each only in the placement sets or the reserved `PORT_STATE` entries, never in a tool's
-   `ins`/`outs`): `per_base` (mosdepth per-base depth, disabled by `--no-per-base` in the real
-   command), `vcf_index` (a `.tbi`/`.csi` sidecar bcftools norm's index step produces but no port
-   models), `multiqc_html` (MultiQC's human-readable report, `multiqc_json` is the only wired
-   output today), `adapter_fasta`/`unpaired_fastq`/`failed_fastq`/`read_group` (fastp/bwa-mem2
-   optional flags never exercised by the driver), `fastqc_zip`/`bcftools_stats`/`picard_hsmetrics`
-   (tools not in the catalog at all) — a card renders only its real, wired ports; these stay
-   reserved, unrendered, never fabricated, until each gets a kind + a producer.
+4. **Reserved kinds — essentially CLOSED (2026-07-12, reserved-port honesty pass, commit
+   `1621e3f` + the mosdepth-byproduct fix `e40784c`).** The rule the pass enforces:
+   **every shown port is a real Nextflow channel, or it is removed — no superficial slots.**
+   Verified by reading `BuilderShared.tsx` (`BTOOLSPEC`/`CARD_PORTS`) + `catalog.py` +
+   `tests/test_nextflow_promoted_ports.py` (5 cases), the ten kinds this item used to list are now:
+   1. **Promoted to real, wireable optional ports** (each a genuine product of the tool's existing
+      command): `fastp_html` + `samtools_stats` (W4); then `fastp` `unpaired_fastq`/`failed_fastq`
+      (fastp writes them with `--unpaired1/2`/`--failed_out`), `bcftools norm` `vcf_index` (the
+      `.csi` its `bcftools index -f` step already writes), `MultiQC` `multiqc_html` (`multiqc .`
+      always writes `multiqc_report.html`), and the mosdepth `regions`/`global_dist`/`region_dist`
+      byproducts (the same `mosdepth --by … --thresholds` command already emits them — the frontend
+      advertised all five while the catalog declared two, and that arity gap 422'd
+      Export-to-Nextflow of the default Builder view until `catalog.py` declared them). Each maps to
+      a real `emit:` channel; the promoted kinds are in `ARTIFACT_KINDS` (and `fastp_html`/
+      `samtools_stats` in the backend `node_author.models.ARTIFACT_KINDS`, T-130).
+   2. **Removed as non-real** (a Builder port wires a file channel, so none could ever carry a real
+      wire — dropped rather than left dangling): `bwa-mem2` `read_group` (a computed `@RG` STRING,
+      not a file), `mosdepth` `per_base` (suppressed by the command's `--no-per-base`),
+      `bcftools norm` `panel_bed` (norm is genome-wide), and `MultiQC`
+      `fastqc_zip`/`bcftools_stats`/`picard_hsmetrics`/`ngscheckmate` (no catalogued germline tool
+      produces them, and MultiQC's inputs are fixed by its `ProcessSpec`).
+   3. **Left honestly reserved — one kind, `fastp` `adapter_fasta`.** A real optional
+      `--adapter_fasta` file input, but the compiler's input-drift guard is exact + positional, so
+      adding it to the catalog would force EVERY fastp node (incl. the seeded golden chain) to wire
+      an adapter source — too invasive for this pass, so it stays a non-armable reserved port with a
+      Connect-mode tooltip. It is the ONLY port that renders reserved anywhere now.
 
-Only item 4 remains a **frontend follow-up** now, and it is narrower than when this section was
-first written. Each per-tool doc stays the authority on *what ports a node should host*; this
-section is the (now much smaller) honest gap between spec and code.
+This section is now the honest record that the spec-vs-shipped gap has effectively closed: apart
+from the single deliberate `adapter_fasta` deferral, every Builder card renders only real, wired
+ports. Each per-tool doc stays the authority on *what ports a node should host*; the compiler catalog
+([nextflow-codegen.md §The catalog](../nextflow-codegen.md#the-catalog-catalogpy)) is the authority
+on *which of those map to a real channel*, and the two are kept from drifting by the
+`test_nextflow_promoted_ports.py` + output-drift guards.
 
 ## 6. Edge clarity + the off-canvas decision boundary (2026-07-11, commits `a03704f`→`3d531de`)
 

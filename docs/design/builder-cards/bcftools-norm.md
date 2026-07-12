@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | draft |
-| **Date** | 2026-07-10 (MST) · corrected 2026-07-11 (MST, the `Truth VCF` reference source this doc named is retired, see §4 edge 5) |
+| **Date** | 2026-07-10 (MST) · corrected 2026-07-11 (MST, the `Truth VCF` reference source this doc named is retired, see §4 edge 5) · corrected 2026-07-12 (MST, reserved-port honesty pass — `vcf_index` promoted to a real optional port; the `panel_bed` regions input removed) |
 | **Audience** | frontend / bioinformatics |
 | **Related** | [builder-cards/README.md](README.md) (§7) · [frontend/README.md §6](../frontend/README.md#6-pipeline-builder--full-model) · [nf-core-conventions.md](../../data/nf-core-conventions.md) · [BuilderShared.tsx](../../../frontend/src/components/BuilderShared.tsx) (`BTOOLSPEC['bcftools norm']`, `GIAB_LOC`) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) (`step_variants`) · [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md) (the custom-script benchmarking seam replacing the retired Truth VCF node) |
 
@@ -36,20 +36,21 @@ gate.
 |---|---|---|---|---|
 | `vcf` | positional input `HG002.calls.vcf.gz` (`run_giab_pipeline.py:218`, `str(calls)`) | **required** | `bcftools call` (`n_call`) `vcf` output | **left** (primary data in) |
 | `reference_fasta` | `-f <REF.fa>` (`run_giab_pipeline.py:218`, `str(_REF)`); locator `reference/GRCh38.fa` (`GIAB_LOC.reference_fasta`, `role: reference`) | **required** — left-alignment/REF-check need it | `Reference FASTA` source (`r_fasta`) `reference_fasta` output | **top** (references enter from top) |
-| `panel_bed` (regions) | `-R <regions.bed>` / `-r <chr:beg-end>` — restrict normalization to regions | **user-defined** (optional) — **not run** in the germline chain (per the code map, "bcftools call gains `panel_bed`, norm loses it"); reserve the port for a regions-scoped norm | `Panel BED` source (`r_bed`) `panel_bed` output | **top** (reserved, collapsed by default) |
-
-Notes: `reference_fasta` and the reserved `panel_bed` are `ref: true` ports (rendered as
-reference-tone half-circles, wired by `REF_WIRES` in `BuilderCanvas`, not by `SEEDED_WIRES`).
-The current `BTOOLSPEC` minimum is `ins: ['vcf', 'reference_fasta']` — this doc adds the
-optional `panel_bed` regions port as reserved space, per the card-design convention (host all
-of the tool's real I/O even when a run leaves it unused).
+Notes (updated 2026-07-12 — reserved-port honesty pass): the current `BTOOLSPEC` is
+`ins: ['vcf', 'reference_fasta']`, and `reference_fasta` is a `ref: true` port (reference-tone
+half-circle, wired by `REF_WIRES` in `BuilderCanvas`, not `SEEDED_WIRES`). **The `panel_bed`
+(regions) input this doc used to reserve was REMOVED** (`BuilderShared.tsx`, commit `1621e3f`): the
+catalog command `bcftools norm -f ${reference}` normalizes genome-wide (left-align + split
+multiallelics), consuming no regions/targets BED — the maintainer's I/O correction explicitly took
+`panel_bed` off norm — so a reserved regions port could never carry a real wire and was dropped
+rather than left superficial (`panel_bed` stays on `bcftools call`, where it is real).
 
 ## 3. Output ports
 
 | Kind | File it produces | Downstream consumer card(s) | Card side |
 |---|---|---|---|
 | `filtered_vcf` | `-Oz -o HG002.norm.vcf.gz` (`run_giab_pipeline.py:218`); locator `variants/*.norm.filtered.vcf.gz` (`GIAB_LOC.filtered_vcf`, `parser: vcf`, `required: true`) | **ingest → variant gate** (terminal output; no downstream tool card in the seeded chain). Seam: a benchmarking step comparing against a GIAB truth VCF would also consume it — see the corrected note below §4 edge 5. | **right** (primary data out) |
-| `vcf_index` (companion `.csi`) | `bcftools index -f HG002.norm.vcf.gz` (`run_giab_pipeline.py:222`) | Sidecar for the `filtered_vcf` (like `.bai` to a `bam`); consumed implicitly by any tool that opens the VCF. **Not yet in the kind vocabulary** (`ARTIFACT_KINDS` / `GIAB_LOC` have no `vcf_index`/`csi`) — reserve as an **optional companion port** or bundle visually with `filtered_vcf`; do not fabricate a locator kind. | **bottom** (companion/sidecar) |
+| `vcf_index` (companion `.csi`) *(optional, real)* | `bcftools index -f HG002.norm.vcf.gz` → `HG002.norm.vcf.gz.csi` (`run_giab_pipeline.py`) | Sidecar for the `filtered_vcf` (like `.bai` to a `bam`). **PROMOTED 2026-07-12 (`1621e3f`) from reserved to a real optional port:** the catalog `script:` already ran `bcftools index -f`, so the `.csi` is a genuine byproduct — the compiler now declares + publishes it as a real `emit: vcf_index` channel, and it is in `ARTIFACT_KINDS`. | **bottom** (companion/sidecar) |
 
 Note: `filtered_vcf` is **not** wired to MultiQC — MultiQC's inputs are `fastp_json`,
 `markdup_metrics`, `mosdepth_summary` only (`n_multiqc`), so the norm output does not flow to
@@ -64,8 +65,8 @@ QC aggregation. It exits the graph to the deterministic gate.
 2. `Reference FASTA` (`r_fasta`) OUTPUT `reference_fasta` → `bcftools norm` (`n_norm`) INPUT
    `reference_fasta` (top). A `REF_WIRE` (reference-tone), computed from card geometry in
    `BuilderCanvas`, not a `SEEDED_WIRE`.
-3. *(reserved, no edge today)* `Panel BED` (`r_bed`) OUTPUT `panel_bed` → `n_norm` INPUT
-   `panel_bed` regions (top) — only when the operator scopes norm to a region set.
+3. *(removed 2026-07-12)* the `Panel BED → n_norm` regions edge this doc used to list is gone —
+   the `panel_bed` input port was removed from `bcftools norm` (norm is genome-wide; see §2).
 
 **Out:**
 4. `bcftools norm` (`n_norm`) OUTPUT `filtered_vcf` → **ingest / variant gate** (no tool-card
@@ -91,17 +92,14 @@ QC aggregation. It exits the graph to the deterministic gate.
   stage strip (*Filter / normalize*), body clear for port labels.
 - **Port placement rationale:**
   - **Left:** `vcf` in — the primary variant stream flows left→right through the chain.
-  - **Top:** `reference_fasta` in (required, reference-tone) and the reserved `panel_bed`
-    regions in (optional) — references/panels descend from the top, matching `bwa-mem2` /
-    `bcftools call` / `mosdepth` cards.
+  - **Top:** `reference_fasta` in (required, reference-tone) — references descend from the top,
+    matching `bwa-mem2` / `bcftools call` / `mosdepth` cards. (The former `panel_bed` regions port
+    was removed — §2.)
   - **Right:** `filtered_vcf` out — continues the left→right primary flow toward the gate.
   - **Bottom:** the `vcf_index` companion (sidecar), kept off the primary flow line.
-- **User-defined / reserved ports:** (a) the `panel_bed` **regions** input — collapsed by
-  default, expandable when a run scopes norm; (b) the `vcf_index` **companion** output —
-  render bundled with `filtered_vcf` until a `vcf_index`/`csi` kind is added to
-  `ARTIFACT_KINDS`. Reserve top-edge and bottom-edge space for both so adding them never
-  reflows the card.
+- **Optional real ports (no reserved-only ports remain on this card, 2026-07-12):** `vcf_index`
+  (bottom) is a real optional companion output — a published `emit: vcf_index` channel, in
+  `ARTIFACT_KINDS`, rendered bundled with `filtered_vcf` and wireable when connected.
 - **Do-not-invent guard:** every port above traces to a real flag/output
-  (`run_giab_pipeline.py:216–222`) or a documented `bcftools norm` option; the `vcf_index`
-  companion is real but has **no kind in the current vocabulary**, so it is marked reserved
-  rather than wired.
+  (`run_giab_pipeline.py`) — `vcf_index` is the `.csi` the existing `bcftools index -f` step writes,
+  now a real published channel, and `panel_bed` was removed because norm consumes no regions BED.

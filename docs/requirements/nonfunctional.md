@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-12 (MST) |
 | **Audience** | software / all |
-| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [HISTORY.md](../HISTORY.md) (archived wave/batch narrative), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
+| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [HISTORY.md](../HISTORY.md) (archived wave/batch narrative), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md), [journal 2026-07-12 builder-agent-hardening](../journal/2026-07-12-builder-agent-hardening.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
 
 ## Overview
 
@@ -181,6 +181,28 @@ links to [evaluation.md](../quality/evaluation.md).
    (`viewer` and above) — allowlisted browsing is read-only, but not anonymous. *Trace:*
    [functional.md REQ-F-099](functional.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md),
    [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md).
+9. **REQ-NF-028 — An agent's node-log observation grant is de-identified before it leaves the
+   machine (2026-07-12, T-142).** The scoped node-observation read (REQ-F-101,
+   `GET /api/runs/{id}/nodes/{node}/observations`) treats a tool's `.command.log`/`.command.err`
+   as free text that can carry PII (a tool can echo a subject id into a path or a log line), so the
+   opt-in `grants=logs` tail is routed through `api/deid.py`'s new `scrub_text()` **before** it is
+   returned — NEVER the raw stream. Two conservative transforms, pinned by
+   `tests/test_node_observations.py::test_logs_opt_in_and_deidentified`: (a) every KNOWN sensitive
+   literal (the run's subject ids read from `sample_metadata.csv`, longest-first so a substring
+   can't pre-empt a longer id) is replaced with a salted, non-reversible pseudonym; (b) generic
+   email and 6+-digit runs (MRN/DOB/accession shape — a 6-digit floor keeps small metric integers
+   readable) are redacted with a fixed marker. The test plants a subject id, an email, and an
+   MRN-shaped number and asserts all three are absent from the returned tail while non-sensitive
+   content survives (targeted, not a blackout). This is the **same honesty posture** as the other
+   two scrubs (REQ-NF-023) — a demo heuristic explicitly labelled **NOT** HIPAA de-identification
+   and **not** a validated NLP PHI scrubber (which stays documented-only). It is an egress text
+   transform only: it never reads, sets, or overrides a verdict/finding/confidence (ADR-0001), and
+   `logs` is off by default (least-privilege, ADR-0012). *Trace:* REQ-NF-023,
+   [functional.md REQ-F-101](functional.md),
+   [ADR-0022](../adr/ADR-0022-agent-observation-binding.md),
+   [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md),
+   [quality/evaluation.md EVAL-052](../quality/evaluation.md),
+   [journal 2026-07-12](../journal/2026-07-12-builder-agent-hardening.md).
 
 ## Performance & cost
 
@@ -269,6 +291,14 @@ links to [evaluation.md](../quality/evaluation.md).
 4. **REQ-NF-053 — Docs move with code.** Behavior changes update the relevant docs in
    the same change (dated ISO-8601 MST); a doc-drift habit, not a gate. *Trace:*
    [DOCUMENTATION_HABITS.md](../DOCUMENTATION_HABITS.md).
+5. **REQ-NF-054 — The frontend type-check actually runs on push (2026-07-12, T-143).** A
+   `frontend-tsc` **pre-push** hook (`.pre-commit-config.yaml`) runs `tsc -b` in `frontend/`, at the
+   same heavy-check-on-push cadence as the pytest hook. This closes a real no-op gap: the root
+   `tsconfig` is references-only, so the earlier `tsc --noEmit` invocation type-checked nothing and
+   a type error reached `main` uncaught; `tsc -b` builds the project references and fails the push
+   on any type error. Mirrors the backend `mypy`/`ruff` gate (REQ-NF-051) for the TypeScript side.
+   *Trace:* REQ-NF-051, [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md),
+   [journal 2026-07-12](../journal/2026-07-12-builder-agent-hardening.md).
 
 ## Portability
 

@@ -19,11 +19,11 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The suite is **620 tests across 46 files** — re-derived 2026-07-12 via
-`uv run pytest --collect-only -q` (620 collected) + `git ls-files 'tests/*.py' | wc -l` (46).
-Pass/skip depends on whether `nextflow` is on `PATH`: **613 pass / 7 skip** when `nextflow` is
+The suite is **634 tests across 48 files** — re-derived 2026-07-12 via
+`uv run pytest --collect-only -q` (634 collected) + `git ls-files 'tests/*.py' | wc -l` (48).
+Pass/skip depends on whether `nextflow` is on `PATH`: **627 pass / 7 skip** when `nextflow` is
 absent (this repo's default sandboxed dev/CI environment — verified here via `uv run pytest -q`),
-**616 pass / 4 skip** with `nextflow` present, **620 / 0** with both `nextflow` and a reachable
+**630 pass / 4 skip** with `nextflow` present, **634 / 0** with both `nextflow` and a reachable
 Postgres. The **7 skips** are the machine-gated live-integration checks: **3 `nextflow`-gated**
 stub-run checks (`test_nextflow_compile.py::test_generated_germline_stub_runs`, EVAL-006;
 `test_e2e_pipeline.py::test_approved_germline_pipeline_stub_runs_live`, EVAL-007;
@@ -41,7 +41,8 @@ proc-name collision, File-input source wiring, novel-kind params channel, fan-in
 port-drift guards, injection-escaped strings), `test_metrics` (17), `test_archivist` (17,
 the advisory archivist/librarian agent), `test_triage` (16), `test_run_giab_preflight` (16, the
 four pre-flight guards in `scripts/run_giab_pipeline.py`, T-131), `test_pipeline_repair` (16, the
-advisory pipeline-repair agent), `test_job_store` (16), `test_nextflow_compile` (15),
+advisory pipeline-repair agent), `test_job_store` (16), `test_nextflow_compile` (16, incl. the mosdepth-5-output
+Export-to-Nextflow regression, EVAL-019),
 `test_intake_scheduling` (15, the ADR-0021 authored-pipeline intake + hold/schedule/release
 processing gate — driver monkeypatched, never runs `nextflow`), `test_card_readout` (14),
 `test_settings` (13, config-override authoring), `test_node_author_conformance` (13), `test_auth`
@@ -58,13 +59,17 @@ key through to the real driver/`nextflow run` argv), `test_gate_notify` (9), `te
 (9), `test_nextflow_api` (8, incl. a posted custom-script node compiling over the wire + a blank
 script 422, ADR-0020), `test_node_author_importer` (8), `test_pipelines` (8, the Pipeline Builder
 save/version store), `test_execution_trace` (8, the structured execution-trace feed → EXEC-001),
+`test_node_observations` (8, the Phase-4 scoped/de-identified node-observation read: node-scoped
+outputs, opt-in de-identified log tail, traversal-hardening, honest-empty, EVAL-019/EVAL-052),
 `test_run_giab_multisample` (7, the multi-sample driver parse: N-sample publish dir → N gated
 run-dir rows, byte-identical fan-out-of-1, fail-loud on partial/empty, `S1`/`S10` anchoring, T-134,
 EVAL-009), `test_node_author_accept_api` (7), `test_artifacts` (7), `test_share_store` (6, the
 pluggable jsonl/sqlite/postgres share-egress-audit sink, ADR-0016/ADR-0018 D3), `test_node_author_api`
 (6, the W2 read-only `GET /api/builder/node-proposal` endpoint), `test_library_store` (6),
 `test_share_egress` (5, the de-identified share/report egress endpoint, ADR-0018 D3),
-`test_metrics_mapping` (5), `test_persistence_postgres_live` (4), `test_run_variants` (3, the
+`test_metrics_mapping` (5), `test_nextflow_promoted_ports` (5, the reserved-port promotion:
+every shown Builder port maps to a real emitted channel or is removed, EVAL-019),
+`test_persistence_postgres_live` (4), `test_run_variants` (3, the
 per-variant Report endpoint `GET /api/runs/{id}/variants`, T-133, EVAL-013), `test_run_giab_driver`
 (2, the Slurm/local executor-profile auto-detection unit) — all runnable offline with no API key
 (`uv sync --all-extras && uv run pytest`; `test_api`/`test_triage` need the api/claude extras to
@@ -605,6 +610,42 @@ deliberate deferred seam (ADR-0021), asserted only insofar as no background time
 fire; a genuinely live multi-sample Nextflow run through an authored pipeline stays unverified in
 this sandbox (EVAL-009).
 
+### EVAL-019 — Builder-graph compile: every shown port is a real channel, and an agent binding is off the compile path
+
+| Field | Value |
+| --- | --- |
+| **Target** | `src/pipeguard/nextflow/catalog.py`, `src/pipeguard/nextflow/compiler.py`, `api/routers/nextflow.py` (`CompileRequest`) |
+| **Type** | Deterministic (pure text codegen; compose ≠ execute — no tool runs) |
+| **Automated?** | Partly. **Port promotion:** Yes — `test_nextflow_promoted_ports.py` (5) + the mosdepth-5-output regression in `test_nextflow_compile.py` + the byte-for-byte germline drift guard (EVAL-006). **Agent-binding compile isolation:** by construction (frontend payload is `{nodes, edges}` only; `CompileRequest` is pydantic `extra="ignore"`), pinned indirectly by the drift guard — no dedicated backend test (`69a2dab` touched no `src/`/`tests/`). |
+
+**Definition of good.** Two properties of "what the compiler emits for a Builder graph." (1)
+**No superficial ports** (REQ-F-102): every port a Builder tool card advertises maps to a REAL
+emitted Nextflow channel or is removed — a promoted port (`unpaired_fastq`, `failed_fastq`,
+`vcf_index`, `multiqc_html`) is a genuine byproduct of the existing `script:`/`stub:` command, and
+a removed one (`read_group`, `per_base`, `panel_bed`, `fastqc_zip`, …) was never a real file. A
+5-output mosdepth node compiles cleanly (closing the Export-to-Nextflow 422 the earlier 2-vs-5
+arity gap caused), while the seeded `germline_graph()` stays a valid summary+thresholds subset.
+(2) **An agent binding is off the deterministic compile path** (REQ-F-101): the Builder persists
+`AgentBinding`s in a `graph.agent_bindings` envelope key, and compiling a graph with vs. without
+bindings yields byte-identical output because the compile payload is only `{nodes, edges}` and
+`CompileRequest` ignores extra keys — a binding structurally cannot touch the emitted Nextflow or a
+verdict (ADR-0001 + compose ≠ execute).
+
+**Method.** For (1), `test_nextflow_promoted_ports.py` asserts each promoted port emits its real
+channel with the matching command flag, and that the removed ports are absent; the
+`test_five_output_mosdepth_node_compiles_and_emits_all_channels` case builds a 5-output mosdepth
+node and asserts it no longer raises `CompileError` and declares every byproduct with its real
+filename. The germline drift guard (EVAL-006) re-asserts the golden chain is byte-unchanged. For
+(2), the isolation rests on the payload shape + `extra="ignore"`; the drift guard pins that the
+compiler output is a pure function of `{nodes, edges}`, so no `agent_bindings` key could alter it.
+
+**Known failure modes.** The agent-binding isolation is **not** asserted by a dedicated test that
+posts an `agent_bindings` key and diffs the bundle — a future change that made `CompileRequest`
+consume extra keys would break the invariant without tripping a red test here (mitigated only
+indirectly by the drift guard). A newly-added port that is shown but not actually emitted would
+regress (1); it is caught only if a promoted-ports test names it. `adapter_fasta` stays honestly
+reserved (a real optional input), so its absence from the emitted channels is expected, not a bug.
+
 ## Failure-mode cases (synthetic)
 
 ### EVAL-010 — Each contrived fault reaches its intended verdict
@@ -917,6 +958,40 @@ note, not a failure mode**: this endpoint is one fixed action (always `grain="de
 the Safe-Harbor-style policy) — it does not yet cover the broader Share window (scope / location /
 security-level selection) [design/variant-interpretation.md §4](../design/variant-interpretation.md#4-reporting--sharing-p2)
 describes.
+
+### EVAL-052 — Scoped, de-identified node-observation read: an agent sees one node's outputs, and a log grant is scrubbed
+
+| Field | Value |
+|---|---|
+| **Target** | `GET /api/runs/{run_id}/nodes/{node_id}/observations` (`api/routers/node_observations.py`) + `api/deid.py` `scrub_text()` — the Phase-4 read of a Wave-2 `AgentBinding`'s grant (REQ-F-101, REQ-NF-028) |
+| **Type** | Faithfulness (egress transform, off the decision gate) |
+| **Automated?** | Yes — `test_node_observations.py` (8): `test_outputs_scoped_to_node_by_germline_id`, `test_outputs_scoped_by_tool_key`, `test_logs_opt_in_and_deidentified`, `test_node_with_no_outputs_is_honest_empty`, `test_unresolved_node_is_honest_empty`, `test_unknown_grant_is_422`, `test_viewer_allowed_invalid_principal_rejected`, `test_traversal_run_id_rejected` |
+
+**Definition of good.** An attached advisory agent reads a **narrowing** of what agents already
+observe, never a widening, and any free text is de-identified before it leaves the machine.
+Concretely: (a) `grants=outputs` returns only the bound node's PUBLISHED files, scoped by the
+tool's catalogued output-port globs — a sibling process's artifact (`HG002.dedup.bam` for a fastp
+node) is NOT in scope. (b) `grants=logs` (opt-in) returns a scrubbed tail: a planted subject id
+(`SUBJ-00042-JohnDoe`), email (`jane.patient@hospital.org`), and MRN-shaped number (`7654321`) are
+all absent from the returned lines, while non-sensitive content (a coverage line) survives — the
+scrub is targeted, not a blackout (REQ-NF-028). (c) Honest-empty: a run/node that produced nothing
+on disk, or a node id that doesn't resolve to the seeded graph, returns an empty view with a
+`note`, never fabricated outputs. (d) Read-only + least-privilege: `viewer`+ is allowed but an
+invalid principal is rejected, an unknown grant is 422, a traversal `run_id` is rejected, and the
+read never touches a verdict/finding/confidence (ADR-0001/0012).
+
+**Method.** Build a per-run scratch tree (a published `results/` dir + a Nextflow `work/` task dir
+with a planted-PII `.command.log`, plus a `sample_metadata.csv` giving the subject id to
+pseudonymize), drive a `TestClient`, and assert node-scoping, the three planted PII literals
+absent from the log tail, honest-empty on a missing/unresolved node, and each auth/validation/
+traversal rejection.
+
+**Known failure modes.** `scrub_text` is a demo heuristic, explicitly NOT HIPAA de-identification
+or a validated NLP PHI scrubber — a novel PII shape it does not model (or a subject id not present
+in `sample_metadata.csv`) could survive; the 6-digit floor is a deliberate readability tradeoff
+that leaves 5-digit sensitive numbers alone. The agent *consuming* this scoped view is a deferred
+seam (`gather_node_observations()`), so the endpoint is exercised, but no test asserts an agent
+actually restricts itself to it in a narration.
 
 ## Real-data evaluation (Phase 2 — planned)
 

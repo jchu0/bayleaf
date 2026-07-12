@@ -264,6 +264,19 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
       (`SubmitRunIn`/`SampleIn` are `extra="forbid"`, no subject field; a labelled data-platform seam).
       Design: [design/frontend/](docs/design/frontend/), [design/ui-conventions.md](docs/design/ui-conventions.md).
 
+      **Builder-agent hardening (2026-07-12, ADR-0022).** Agent attachment is now a persisted,
+      read-only **observation binding** (`AgentBinding {agent,node,grants}` in a `graph.agent_bindings`
+      envelope the compiler NEVER dereferences — byte-identical compile proven) + a scoped,
+      **de-identified** node-read endpoint (`GET /api/runs/{id}/nodes/{node}/observations`, `outputs`
+      default / `logs` opt-in via `api.deid.scrub_text`; agent-consumption + UI display are labelled
+      deferrals). System agents (pipeline-repair, archivist) moved off the Builder palette →
+      Agent-triage; the Builder keeps node-attachable QC-triage + node-authoring. Every Builder port
+      now maps to a **real Nextflow channel or is removed** (reserved-port honesty; `fastp adapter_fasta`
+      the sole left-reserved). Plus compiler hardening (injection escaping + validators, `is_source`
+      data-kind fix, collision/fan-in/dup-emit/port-drift `CompileError`s), the mosdepth Export-422 fix,
+      and **`tsc -b` in pre-push**. Details: [ADR-0022](docs/adr/ADR-0022-agent-observation-binding.md),
+      [design/agents.md](docs/design/agents.md); narrative in [HISTORY.md](docs/HISTORY.md).
+
 ## Git conventions
 
 Incremental, self-contained commits; short title + descriptive body. End commit

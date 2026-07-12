@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-12 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [HISTORY.md](../HISTORY.md) (archived wave/batch narrative), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [HISTORY.md](../HISTORY.md) (archived wave/batch narrative), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [journal 2026-07-12 builder-agent-hardening](../journal/2026-07-12-builder-agent-hardening.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
 
 ## Overview
 
@@ -1435,6 +1435,67 @@ had reserved or listed as *not-yet-built*.
     (`tests/test_intake_scheduling.py`, offline — the background driver is monkeypatched, so no thread
     runs `nextflow`). *Trace:* [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md),
     `api/routers/intake.py`, `api/authored_pipeline.py`, `api/job_store.py`, REQ-F-054, REQ-F-057.
+42. **REQ-F-101 — Agent-observation binding + a scoped, de-identified node-observation read
+    (2026-07-12, T-142).** An advisory agent can be *attached* to one Builder graph node as a typed,
+    persisted **`AgentBinding { agent, node, grants: ('outputs'|'logs')[] }`** (`frontend/src/types.ts`),
+    stored in a `graph.agent_bindings` envelope key **the compiler NEVER dereferences** — the
+    Builder's compile/run payload is only `{nodes, edges}` and `api/routers/nextflow.py`'s
+    `CompileRequest` is pydantic `extra="ignore"`, so a binding structurally cannot touch the emitted
+    Nextflow or a verdict (compile is byte-identical with/without bindings; ADR-0001 + compose ≠
+    execute by construction). Default grant `outputs`; `logs` is opt-in. Phase 4 makes the grant
+    *readable*: a new read-only **`GET /api/runs/{run_id}/nodes/{node_id}/observations?grants=outputs[,logs]`**
+    (`api/routers/node_observations.py`, `require_role` viewer+, off-gate) returns the agent's granted
+    view of that node's results for a run — a **narrowing** of what agents already observe, not a
+    widening. `grants=outputs` (default) lists the node's PUBLISHED artifacts scoped by matching the
+    tool's catalogued output-port globs against the run's Nextflow publish dir (never the whole run);
+    `grants=logs` (off by default) returns a **DE-IDENTIFIED** tail of the node's `.command.log`/
+    `.command.err` via `api.deid.scrub_text` (subject ids from `sample_metadata.csv` pseudonymized +
+    email/6+-digit PII redacted, REQ-NF-028) — NEVER raw stderr. Read-only, post-hoc, traversal-hardened
+    like the artifact download, and **honest-empty**: a fixture-only committed run (no scratch dir) or an
+    uncatalogued/unresolved node returns an empty view with a `note`, never fabricated outputs; an
+    authored-pipeline node absent from the seeded `germline_graph()` degrades to honest-empty (the
+    run→authored-graph linkage is not yet tracked). `gather_node_observations()` is the
+    **triage-consumption seam**; the agent actually *consuming* the scoped view and a UI display are
+    labelled deferred follow-ups (the QC-triage agent stays a pure narrator over rule findings today).
+    Taxonomy change: Pipeline-repair + Archivist move OUT of the Builder palette to Agent-triage
+    launchers; the Builder keeps QC-triage (node-attachable) + Node-authoring. 8 tests
+    (`tests/test_node_observations.py`, offline). *Trace:*
+    [ADR-0022](../adr/ADR-0022-agent-observation-binding.md) (the binding is a persisted, read-only
+    observation off the compiled graph),
+    [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
+    [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) (node-scoped least-privilege),
+    REQ-F-045, REQ-F-085, REQ-NF-028, [quality/evaluation.md EVAL-019/EVAL-052](../quality/evaluation.md),
+    [tasks T-142](../planning/tasks.md), [journal 2026-07-12](../journal/2026-07-12-builder-agent-hardening.md).
+43. **REQ-F-102 — Reserved Builder ports become real Nextflow channels or are removed (no
+    superficial ports) (2026-07-12, T-143).** Every port shown on a Builder tool card now maps to a
+    REAL emitted Nextflow channel or was deleted — a dangling "reserved" slot that never resolved to a
+    published artifact is not shown as if it could be wired. **Promoted** to real published channels
+    (with the matching `script:`/`stub:` edit in `catalog.py`, all genuine byproducts of the existing
+    command): fastp `unpaired_fastq` (`--unpaired1/2`) + `failed_fastq` (`--failed_out`), bcftools norm
+    `vcf_index` (the `.csi` from the existing `bcftools index` step), MultiQC `multiqc_html` (always
+    written unless `--no-report`). **Removed** as non-real: bwa `read_group` (a string, not a file),
+    mosdepth `per_base` (`--no-per-base` suppresses it), bcftools norm `panel_bed` (norm is
+    genome-wide), MultiQC `fastqc_zip`/`bcftools_stats`/`picard_hsmetrics`/`ngscheckmate`. **Left
+    honestly-reserved:** fastp `adapter_fasta` (a real optional INPUT; positional promotion into the
+    script deferred). Separately, the mosdepth card advertised **five** outputs while the catalog
+    declared only two — the arity gap tripped the compiler's output-drift guard and **422'd
+    Export-to-Nextflow of the default Builder view**; the three real byproducts of the same
+    `mosdepth --by … --thresholds` command (`regions`/`global_dist`/`region_dist`) are now catalogued,
+    so a full-5-output node compiles while the seeded `germline_graph()` (trimmed to
+    summary+thresholds) stays a valid subset. Reserved ports are also rendered honestly non-armable in
+    the Builder (a Connect-mode tooltip; edge-less ports sort clear of the wired band). Germline
+    regenerated, byte-for-byte drift guard green; +5 tests (`tests/test_nextflow_promoted_ports.py`) +1
+    (the mosdepth 5-output regression in `test_nextflow_compile.py`). Pure text codegen — compose ≠
+    execute. *Trace:* [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md),
+    [design/nextflow-codegen.md](../design/nextflow-codegen.md), REQ-F-085, REQ-F-090 (the earlier W4
+    port-wiring pass this continues), [quality/evaluation.md EVAL-019](../quality/evaluation.md),
+    [tasks T-143](../planning/tasks.md), [journal 2026-07-12](../journal/2026-07-12-builder-agent-hardening.md).
+44. **REQ-F-103 — Builder inspector Save/Delete footer row (2026-07-12, T-143).** Both the standard
+    and custom-script node inspectors now show `[Delete node] [Save]` in a single footer action row
+    (`Save card` renamed to `Save`), replacing an in-body Delete + a separate-footer Save. Cosmetic/
+    layout only: `onSaveCard`/`onDeleteNode` behavior and the edit-vs-view gating are unchanged (Delete
+    stays `userNode`-only). *Trace:* REQ-F-045,
+    [tasks T-143](../planning/tasks.md), [journal 2026-07-12](../journal/2026-07-12-builder-agent-hardening.md).
 
 ## Notes / deferred
 

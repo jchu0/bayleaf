@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Built (T-123) and extended: executor profiles + per-sample fan-out + full QC port wiring (W4), pre-flight guards + per-run version capture (T-131), N-sample driver parse (W4 continuation — offline-verified vs fixture publish dirs; the live multi-sample run stays unverified, §Multi-sample driver parse), operator-authored custom-script processes (ADR-0020), robustness hardening (injection escaping + collision/fan-in/dup-emit/port-drift guards, §Robustness hardening), and operator-gated/authored-pipeline intake (ADR-0021, §Nextflow-first intake). Build chronology in [HISTORY.md](../HISTORY.md). |
+| **Status** | Built (T-123) and extended: executor profiles + per-sample fan-out + full QC port wiring (W4), pre-flight guards + per-run version capture (T-131), N-sample driver parse (W4 continuation — offline-verified vs fixture publish dirs; the live multi-sample run stays unverified, §Multi-sample driver parse), operator-authored custom-script processes (ADR-0020), robustness hardening (injection escaping + collision/fan-in/dup-emit/port-drift guards, §Robustness hardening), the reserved-port honesty model (2026-07-12: every shown port is a real channel or removed — promoted 6 kinds incl. the mosdepth byproducts that had 422'd Export-to-Nextflow, removed 7 non-real, one `adapter_fasta` left reserved; see §The catalog), and operator-gated/authored-pipeline intake (ADR-0021, §Nextflow-first intake). Build chronology in [HISTORY.md](../HISTORY.md). |
 | **Last updated** | 2026-07-12 (MST) |
 | **Audience** | software / bioinformatics |
 | **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide, AI advisory — this module sets no verdict), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; this doc REALIZES its "Nextflow carries compute portability" decision), [ADR-0016](../adr/ADR-0016-postgres-port.md) (the durable job store the intake driver's launch now persists into, item 8), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (operator-authored custom-script processes — the compile path in §Operator-authored custom-script processes below), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (operator-gated/scheduled intake processing of approved authored pipelines — §Nextflow-first intake below), [design/agent-authoring-contract.md](agent-authoring-contract.md) (agents author metadata, a human authors the custom script), [design/architecture.md](architecture.md) (component map), [data/nf-core-conventions.md](../data/nf-core-conventions.md) (the vocabulary this catalog adopts), [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) (the card graph this compiles), [design/builder-cards/](builder-cards/) (the per-tool port specs the catalog mirrors), [planning/tasks.md](../planning/tasks.md) (T-123, T-129, T-131, T-134), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 w-deferrals](../journal/2026-07-11-w-deferrals.md) |
@@ -68,23 +68,48 @@ The catalog covers the **germline-panel chain this repo actually runs**: `fastp`
 flags that a reference FASTA's sidecar index (`.fai`, `.bwt.2bit.64`, …) must be staged alongside
 it — Nextflow otherwise stages only the single declared file (see below).
 
-**Full QC port wiring (W4).** Every real byproduct each tool already writes is now a real,
-published output — not a dangling reserved port a card renders but never wires. `fastp` publishes
-`fastp_html` (the HTML report it already writes via `-h`) alongside `fastp_json`/`fastq`;
-`samtools markdup` runs an added `samtools stats` on the dedup BAM and publishes
-`samtools_stats`; `mosdepth` was already publishing `mosdepth_summary`/`mosdepth_thresholds`.
-`MultiQC` (the aggregator) now ingests **all 5** available QC streams instead of 3 — `fastp_json`,
-`markdup_metrics`, `samtools_stats`, `mosdepth_summary`, `mosdepth_thresholds` — each
-`.map { it[1] }.collect()`'d across every sample before MultiQC scans them. `fastp_html` and
-`samtools_stats` are mirrored in the frontend's `BuilderShared.tsx` (`BTOOLSPEC`/`ARTIFACT_KINDS`)
-and in `node_author.models.ARTIFACT_KINDS` (T-130), so a card's port for these kinds reads as
-`known`/wireable, not `reserved`, everywhere the vocabulary is checked. The mosdepth
-`regions`/`global_dist`/`region_dist` byproducts were wired the same way. A handful of kinds
-remain genuinely reserved (no producer exists yet): `vcf_index`, `multiqc_html`, `per_base`,
-`adapter_fasta`, `unpaired_fastq`, `failed_fastq`, `read_group`, `fastqc_zip`, `bcftools_stats`,
-`picard_hsmetrics` — see
-[builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
-for the current, up-to-date remainder.
+**Full QC port wiring — every shown port is a real channel or removed (W4 → reserved-port
+promotion, 2026-07-12).** The catalog holds no dangling reserved output: every output a Builder
+card shows maps to a real published Nextflow channel, or the port was removed as non-real. `fastp`
+publishes `fastp_html` (the report it already writes via `-h`) and — after the promotion pass —
+`unpaired_fastq`/`failed_fastq` (the `--unpaired1/2` / `--failed_out` products); `samtools markdup`
+runs an added `samtools stats` on the dedup BAM and publishes `samtools_stats`; `bcftools norm`
+publishes `vcf_index` (the `.csi` its existing `bcftools index -f` step already writes); `MultiQC`
+publishes `multiqc_html` (the report `multiqc .` always writes). `mosdepth` publishes
+`mosdepth_summary`/`mosdepth_thresholds` **and** the three remaining byproducts of the same
+`mosdepth --by … --thresholds` command — `mosdepth_regions`/`mosdepth_global_dist`/
+`mosdepth_region_dist` (added to `catalog.py` 2026-07-12): the frontend Builder card advertised all
+five while the catalog declared only two, and that arity gap tripped the compiler's output-drift
+guard and **422'd Export-to-Nextflow of the default Builder view** — declaring the three real
+byproducts closed it. `MultiQC` (the aggregator) ingests **all 5** available QC streams
+(`fastp_json`, `markdup_metrics`, `samtools_stats`, `mosdepth_summary`, `mosdepth_thresholds`),
+each `.map { it[1] }.collect()`'d across every sample before it scans them.
+
+**Promoted / removed / left-reserved — the reserved-port honesty model (2026-07-12,
+`tests/test_nextflow_promoted_ports.py`, 5 cases).** The rule the pass enforces: **every shown port
+is a real channel or it is removed — no superficial slots.** Each catalog change is mirrored in the
+frontend's `BuilderShared.tsx` (`BTOOLSPEC`/`CARD_PORTS`/`ARTIFACT_KINDS`) in the same landing, and
+`builder-cards/README.md §5` is the frontend-facing authority:
+
+1. **Promoted → real published channels:** `fastp_html`, `samtools_stats`,
+   `mosdepth_regions`/`mosdepth_global_dist`/`mosdepth_region_dist`, `fastp` `unpaired_fastq`/
+   `failed_fastq`, `bcftools norm` `vcf_index`, `MultiQC` `multiqc_html` — each is a genuine product
+   of the tool's existing command (an added flag or an index step it already ran), not a fabricated
+   emit. `fastp_html`/`samtools_stats` are additionally in `node_author.models.ARTIFACT_KINDS`
+   (T-130) so a proposed node's port for those kinds reads `known`, not `reserved`.
+2. **Removed as non-real** (a Builder port wires a file channel, so none of these could ever carry a
+   real wire — dropped rather than left as superficial slots): `bwa-mem2` `read_group` (a computed
+   `@RG` STRING, not a file artifact), `mosdepth` `per_base` (suppressed by the command's
+   `--no-per-base`), `bcftools norm` `panel_bed` (norm is genome-wide — the maintainer's I/O
+   correction took it off norm), and `MultiQC` `fastqc_zip`/`bcftools_stats`/`picard_hsmetrics`/
+   `ngscheckmate` (no tool in the catalogued germline chain produces them, and MultiQC's inputs are
+   fixed by its `ProcessSpec`, so the input-drift guard would reject them anyway).
+3. **Left honestly reserved — one kind, `fastp` `adapter_fasta`:** a real optional `--adapter_fasta`
+   file input, but the compiler's input-drift guard is exact + positional, so adding it to the
+   catalog would force EVERY fastp node (incl. the seeded golden chain) to wire an adapter source —
+   too invasive for this pass, so it stays a non-armable reserved slot with a Connect-mode tooltip.
+   It is the only port that renders reserved anywhere now — see
+   [builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11).
 
 **Honesty framing — the catalog is curated, not universal.** This is deliberate, not a
 shortcut left for later: the module docstring says it plainly — "The catalog is deliberately
@@ -459,10 +484,12 @@ see [functional.md REQ-F-092/REQ-F-093](../requirements/functional.md) and
 | `tests/test_nextflow_api.py` (6 tests) | `POST /api/pipelines/compile` — JSON preview, `.zip` download, a 422 on a cycle/empty graph, **and (ADR-0020) a posted custom-script node → real Nextflow + a blank custom script → 422**. |
 | `tests/test_nextflow_custom_process.py` (9 items, NEW, ADR-0020) | Operator-authored custom processes: a custom node renders its verbatim body wired from the edge + honestly labelled; the catalog is never consulted (even on a name collision); a blank script is a `CompileError` (never fabricated) while an uncatalogued-no-script node keeps its placeholder; a novel output kind is wired by name; compose ≠ execute (returns text, spawns no subprocess); the germline drift stays green. Pure-offline, no `nextflow` needed. |
 | `tests/test_run_giab_multisample.py` (7 tests, W4 continuation) | Offline, fixture-publish-dir proof of the multi-sample parse: N-sample dir → N gated run-dir rows; fan-out-of-1 byte-identical to the pre-fan-out format; partial/empty publish dir fails loud; `S1`/`S10` prefix anchoring; `demux_stats.csv` `% Reads` share. No `nextflow` involved — see [§Multi-sample driver parse](#multi-sample-driver-parse-2026-07-11-w4-continuation). |
+| `tests/test_nextflow_promoted_ports.py` (5 tests, 2026-07-12) | The reserved-port honesty model: the promoted kinds (`fastp` `unpaired_fastq`/`failed_fastq`, `bcftools norm` `vcf_index`, `MultiQC` `multiqc_html`, mosdepth byproducts) each render to a real `emit:` channel + `stub:` touch; the removed kinds no longer appear in any `ProcessSpec`; `adapter_fasta` stays reserved; the germline drift stays green. Pure-offline. |
 | `tests/test_nextflow_robustness.py` (17 tests) | The §Robustness hardening guards: Groovy/identifier injection escaping (hostile kind/tool/pipeline-name), the File-input-source-wires-to-reads fix, proc-name-collision / fan-in / duplicate-emit / catalog-port-drift rejection, zero-input meta omission — plus the germline drift + a custom-script node still compiling. Pure-offline. |
 
 Census (verified `uv run pytest --collect-only -q` + `ls tests/test_*.py | wc -l`, updated
-2026-07-12): **620 tests collected across 46 test files**. The compiler/wiring/drift/placeholder/
+2026-07-12): **634 tests collected across 48 test files** (+`test_nextflow_promoted_ports.py` and
+`test_node_observations.py` since the prior 620/46 count). The compiler/wiring/drift/placeholder/
 robustness/custom-process/multi-sample-parse tests all run **unconditionally offline** — no
 `nextflow` binary required. Two machine-gated live checks (`test_nextflow_compile.py`'s `-stub-run`
 and `test_e2e_pipeline.py`'s env-gated live-stub) skip when `nextflow` is absent (this sandbox's

@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | **Active** (2026-07-11, W2 + W2 backend) — the governing contract for how an *authoring* agent is built and what it may do. Wired end-to-end: a read-only endpoint + the Builder modal render + a platform-version stamp (W2), and — backend-only, T-135 — accept→a draft library entry, the `check_conformance()` harness, and a structured (`nextflow_schema.json`) doc-drop importer. Later slices (the Builder's own accept button, `draft→approved`, the free-text `--help`/README importer half, a roster-wide CI conformance sweep) are labelled deferred below. |
-| **Last updated** | 2026-07-11 (MST) |
+| **Last updated** | 2026-07-12 (MST) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [design/agents.md](agents.md) (the six-agent roster + shared invariants + intake a–g) · [design/node-authoring-agent.md](node-authoring-agent.md) (agent #6, what shipped) · [design/nextflow-codegen.md](nextflow-codegen.md) (the compiler + catalog this contract binds to) · [design/builder-cards/README.md](builder-cards/README.md) (the tool-card corpus + reserved kinds) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises) · [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) (off by default) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) (corpora/retrieval) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) (scoping/tiering) · [ADR-0016](../adr/ADR-0016-postgres-port.md) (item 9, the library store) · [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the operator custom-script card — the human-authoring surface this contract presupposes) · [requirements/scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#5/#9/#11) · [planning/tasks.md](../planning/tasks.md) (T-046, T-135) · [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) |
+| **Related** | [design/agents.md](agents.md) (the six-agent roster + shared invariants + intake a–g + the observation-binding model + taxonomy) · [design/node-authoring-agent.md](node-authoring-agent.md) (agent #6, what shipped) · [design/nextflow-codegen.md](nextflow-codegen.md) (the compiler + catalog this contract binds to) · [design/builder-cards/README.md](builder-cards/README.md) (the tool-card corpus + reserved kinds) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises) · [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) (off by default) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) (corpora/retrieval) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) (scoping/tiering) · [ADR-0016](../adr/ADR-0016-postgres-port.md) (item 9, the library store) · [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the operator custom-script card — the human-authoring surface this contract presupposes) · [ADR-0022](../adr/ADR-0022-agent-observation-binding.md) (attach-as-observation, off the compiled graph) · [requirements/scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#5/#9/#11) · [planning/tasks.md](../planning/tasks.md) (T-046, T-135) · [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) |
 
 ## Overview
 
@@ -93,6 +93,18 @@ compile_graph → nextflow run`:
 6. **Registering a reserved kind is a governed change, never a fabrication.** Adding a new
    `ArtifactKind` widens the closed vocabulary + wires a real port — a human, reviewed change to the
    registry, not something an agent proposal performs.
+7. **An agent ATTACHES to a node as a read-only observation, never as a graph edge**
+   ([ADR-0022](../adr/ADR-0022-agent-observation-binding.md)). Where an *observing* agent (QC-triage
+   today) is bound to a Pipeline-Builder node, the attachment is a persisted
+   `AgentBinding {agent, node, grants:('outputs'|'logs')[]}` (`frontend/src/types.ts`) stored in a
+   **sibling `graph.agent_bindings` save-envelope key the compiler never dereferences** — the
+   compile/run payload stays a pure function of `{nodes, edges}`, so a binding is byte-identical-compile
+   safe (compose ≠ execute by construction). A binding grants a **scoped, node-only read**
+   (`GET /api/runs/{id}/nodes/{node}/observations`; `outputs` default, `logs` opt-in + de-identified),
+   never a data edge, a card, or a verdict. This is the *observing* dual of §A's *authoring* rule: an
+   authoring agent emits metadata never a command; an observing agent reads outputs never the graph.
+   Only node-scoped agents are attachable; run-/org-scoped system agents (pipeline-repair, archivist)
+   launch from Agent-triage, not the Builder palette (the taxonomy in [agents.md](agents.md)).
 
 ---
 

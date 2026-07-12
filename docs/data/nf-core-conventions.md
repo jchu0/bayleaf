@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-11 (MST) |
+| **Last updated** | 2026-07-12 (MST) |
 | **Audience** | bioinformatics / software |
 | **Related** | [schemas.md](schemas.md) (the records we derive), [metric_registry.md](metric_registry.md) (the registry §4 argues for), [qc_metrics.md](qc_metrics.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) (this vocabulary now feeds a real DSL2 generator, not only this doc's mapping notes) |
 
@@ -26,6 +26,27 @@ closes that gap too: every catalogued process now carries `tuple val(meta), …`
 `${meta.id}`, so the generated pipeline genuinely adopts §2, not just the packaging conventions
 above it (MultiQC is the one deliberate exception, per §2's own aggregator framing — it collects
 across samples and so drops `meta`, matching real nf-core aggregator modules).
+
+**Reserved-port honesty + the frontend↔catalog no-drift discipline (2026-07-12).** A tool's
+`emit:` channels and a Builder card's shown output ports are **the same set, kept in lockstep** —
+the frontend `BuilderShared.tsx` (`BTOOLSPEC`/`CARD_PORTS`/`ARTIFACT_KINDS`) and the backend
+`catalog.py` `ProcessSpec` must agree on every port kind. Two guardrails enforce this:
+1. **Every shown port is a real channel or it is removed — no superficial reserved slots.** A port
+   only exists if the tool's actual command produces (output) or consumes (input) that artifact.
+   Kinds with no real producer were removed rather than left dangling: `bwa-mem2` `read_group` (a
+   computed `@RG` string, not a file), `mosdepth` `per_base` (suppressed by `--no-per-base`),
+   `bcftools norm` `panel_bed` (norm is genome-wide), `MultiQC`
+   `fastqc_zip`/`bcftools_stats`/`picard_hsmetrics`/`ngscheckmate`. The one deliberately-retained
+   reserved port is `fastp` `adapter_fasta`.
+2. **An arity mismatch is a compile error, not a silent divergence.** If the frontend advertises
+   more output ports than the catalog `ProcessSpec` declares, the compiler's **output-drift guard**
+   422s `POST /api/pipelines/compile` — which is exactly what happened when the Builder showed all
+   five mosdepth outputs but `catalog.py` declared only two; declaring the three real mosdepth
+   byproducts (`mosdepth_regions`/`mosdepth_global_dist`/`mosdepth_region_dist` — all products of the
+   same `mosdepth --by … --thresholds` command) closed the drift and re-enabled Export-to-Nextflow of
+   the default Builder view. The full promoted/removed/left-reserved model lives in
+   [design/nextflow-codegen.md §The catalog](../design/nextflow-codegen.md#the-catalog-catalogpy) and
+   [design/builder-cards/README.md §5](../design/builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11).
 
 ## 1. Sample sheet → `Sample`
 

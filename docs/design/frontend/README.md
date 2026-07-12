@@ -304,6 +304,15 @@ append-only ledger) already shipped to the client and the pre-rewrite screen sim
    verbatim as the default view. Every artifact is a **link** — open in store, copy digest,
    download. Nodes **color by stage status only** (pass/warn); the origin / sample-type chips and
    the header legend were removed (sample type comes from the sample sheet).
+   - **Wider cards + a scroll-position indicator (Shipped 2026-07-12, commit `e40784c`).** The
+     9-stage lineage chain (the 3 post-variant stages added in W3) overflows the viewport, so the
+     stage cards grew (grid column
+     `minmax(104px→184px,1fr)`, `components/provenance/Lineage.tsx`) to read well instead of
+     crushing, and the old static "Click a stage to inspect its data I/O" hint is replaced by a
+     **real scroll indicator**: a `Stage X–Y of N` (or "All N stages in view") range readout +, only
+     when the chain actually overflows, a scrollbar-style thumb whose position/width mirror the
+     horizontal scroll. Measured from real element geometry (`ResizeObserver` + `onScroll`,
+     `data-stage-n` per card), never a verdict/confidence signal — pure chrome, ADR-0001 untouched.
 2. **Event trail** (new centerpiece, `components/provenance/EventTrail.tsx`) — a filterable
    (type / sample / actor + free-text search + oldest/newest order), paginated timeline of the
    REAL events emitted by `run_gate`. Expanding a row is the trace-back: `finding.emitted` → its
@@ -355,6 +364,14 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
 - **Shipped 2026-07-10 (T-099, commit `3c6dacb`):** the flagged-samples table now caps at 10
   rows/page + a numbered pager ("Showing X–Y of N flagged") — a large mixed flowcell can flag
   dozens of samples; the active-sample selection persists across pages.
+- **System-agent launchers (Shipped 2026-07-12, commit `69a2dab`).** The **Pipeline-repair** and
+  **Archivist** advisory agents now launch from here (`AgentLauncher` tiles opening the same
+  `PipelineRepairModal` / `ArchivistModal`, moved out of `BuilderModals`' Builder consumers). The
+  taxonomy rule: these agents act on **runs / recurring signatures / the whole organization**, not
+  on a single pipeline node, so their home is Agent triage — the Pipeline Builder palette now keeps
+  only the two **node-scoped** authoring/observation agents (QC-triage, node-attachable; and
+  Node-authoring). Each launcher opens a read-only, cited proposal; advisory + off-gate, neither
+  sets a verdict (ADR-0001). See §6 "Advisory agents."
 
 ### 5.8 Monitoring  (`view: 'monitoring'`)
 - **Recurring issue signatures**: **searchable**, **collapsible rows** on a fixed 5-column
@@ -549,11 +566,13 @@ Operate "Steps" order (§4): accession → submit → runs → intake → decide
 
 **Modes.** Defaults to **View** (read-only: palette tiles disabled, add guarded, "Author a
 tool node" replaced by a read-only note). **Edit** enables all authoring. **Exception (Shipped
-2026-07-10, T-099, commit `3c6dacb`):** the three advisory-agent palette tiles
-(QC-triage/Pipeline-repair/Archivist) are `alwaysEnabled` — clickable in **View** too, since
-each only opens a read-only advisory modal/pill and never mutates the graph, letting an operator
-consult an agent without switching the whole canvas into Edit. Node-adding (tool/reference)
-tiles still require Edit.
+2026-07-10, T-099, commit `3c6dacb`):** the advisory-agent palette tiles are `alwaysEnabled` —
+clickable in **View** too, since each only opens a read-only advisory modal/pill and never mutates
+the graph, letting an operator consult an agent without switching the whole canvas into Edit.
+Node-adding (tool/reference) tiles still require Edit. **Taxonomy narrowed 2026-07-12 (commit
+`69a2dab`):** the palette's advisory-agent tiles are now only **QC-triage** (node-attachable) and
+**Node-authoring** — **Pipeline-repair and Archivist moved OUT** to Agent-triage launchers (§5.7),
+because they operate on runs/signatures/the organization, not on a single graph node.
 
 **Toolbar — consolidated into a compose bar + overflow (Shipped 2026-07-11, commits
 `4df8f2e`→`3d531de`, [journal](../../journal/2026-07-11-builder-boundary-and-edges.md)).** The
@@ -584,6 +603,15 @@ move — the Panel BED reference card's x-position, 800→1150 — that cleared 
 behind-a-card occlusions; the residual 4 are inherent long-reach fan-in/fan-out wires
 (fastp→MultiQC, reference_fasta fan-out), left honest rather than force-routed (a real
 constraint router is future work, not attempted here).
+
+**Legend accuracy (Shipped 2026-07-12, commit `e40784c`).** `BuilderLegend.tsx` was corrected on
+two counts: (1) the **reserved** port-state swatch now samples the SAME alignment hue as
+required/optional (only fill/border-style differ — dashed-hollow in its kind colour), matching how
+reserved ports actually render on the cards, instead of drifting to the config hue and reading as a
+separate scale; (2) the **Wires** legend gains a fourth row — **`advisory · off-gate`**, a dotted
+accent line — so the real, distinct advisory agent→tool edge type (dotted accent, never a data
+kind; ADR-0001) the legend had been omitting is now shown alongside the solid data wires, the solid
+QC fan-in, and the dashed reference feed.
 
 **Canvas.** Large, pannable in any direction; loads centered on the pipeline. Dot-grid = 20px
 snap grid — **theme-aware since 2026-07-10 (T-098, commit `5763be1`)** via a new `--canvas-dot`
@@ -685,12 +713,33 @@ content inside the read-only Decision-boundary view).
   QC/metric outputs on **bottom** (matching [builder-cards/README.md §2](../builder-cards/README.md#2-port-placement-convention)),
   while the primary sample-data lane keeps its left-in/right-out flow. Render and wire-endpoint
   math share one `layoutPorts()` call, so a wire can never detach from its port when a card's port
-  count changes. Only real (wired) ports render — a documented-but-unregistered kind (e.g.
-  `fastp_html`, `samtools_stats`, the mosdepth `*_dist` family) stays reserved and invisible until
-  it gets a kind + a producer; see [builder-cards/README.md §5](../builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
-  for the one remaining gap. `PipelineBuilder.tsx`/`BuilderInspector.tsx` and the on-canvas
+  count changes. `PipelineBuilder.tsx`/`BuilderInspector.tsx` and the on-canvas
   editing (align/distribute/undo, §"On-canvas editing" above) are untouched — only card geometry
   and port placement changed, not connection semantics.
+- **Reserved-port render honesty (Shipped 2026-07-12, commit `e40784c`).** A **reserved** port is
+  documented but has no runnable Nextflow channel yet, so it stays **non-connectable by design** (no
+  `data-*`, no handlers — drag-to-connect's `elementFromPoint` and click-arm both ignore it). Rather
+  than render it identically to a wireable port and let it silently fail, it is drawn **dashed /
+  hollow** (`portVisualStyle`, its own kind colour) and, in **Connect mode**, becomes hoverable with
+  a **not-allowed cursor + a "why it won't connect" tooltip** (`{kind} · {dir} — reserved: not
+  wireable (no runnable Nextflow channel yet)`), so a user is never misled that it's armable.
+  Edge-less ports also sort **clear of the wired band** so they don't crowd the active ports. (This
+  replaces the earlier "reserved kinds are invisible" behavior — a reserved affordance is now shown
+  honestly, not hidden.)
+- **Reserved→real port cleanup (Shipped 2026-07-12, commit `1621e3f`).** Every *shown* Builder port
+  now maps to a REAL Nextflow channel or was removed — no superficial slots. **Promoted
+  reserved→optional** (each a real published output now in the compiler catalog): fastp
+  `unpaired_fastq` (`--unpaired1/2`) + `failed_fastq` (`--failed_out`), bcftools-norm `vcf_index`
+  (the `.csi` its index step already writes), MultiQC `multiqc_html` (`multiqc_report.html`).
+  **Removed as non-real** (never a connectable file channel): bwa-mem2 `read_group` (a computed
+  `@RG` *string*, not a file), mosdepth `per_base` (suppressed by `--no-per-base`), bcftools-norm
+  `panel_bed` (norm is genome-wide), and the MultiQC `fastqc_zip`/`bcftools_stats`/`picard_hsmetrics`/
+  `ngscheckmate` inputs (no catalogued tool produces them; MultiQC's inputs are fixed by its
+  `ProcessSpec`). **The one genuinely-reserved port left is fastp `adapter_fasta`** — a real
+  `--adapter_fasta` input held reserved only because the compiler's exact/positional input-drift
+  guard would force every fastp node (incl. the seeded golden chain) to wire an adapter source; too
+  invasive for this pass, kept non-armable with the tooltip above. See
+  [builder-cards/README.md §5](../builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11).
 - **Deterministic ingest + gate moved OFF the canvas (Shipped 2026-07-11, commit `3d531de`,
   [journal](../../journal/2026-07-11-builder-boundary-and-edges.md), [ADR-0001](../../adr/ADR-0001-deterministic-gate-advisory-ai.md)
   Realized §3).** An intermediate pass the same day (`73b2a68`) first made the ingest/gate cards
@@ -718,8 +767,40 @@ content inside the read-only Decision-boundary view).
   becomes a read-only indicator, rendered **only** for already-attached tools (no handler; a
   press falls through to card-select) — so a View operator sees the wiring without an inert
   clickable badge on every card. **Agents are port-less** (off the critical path).
+- **Agent attachment is now a persisted OBSERVATION BINDING with a grant popover (Shipped
+  2026-07-12, commit `69a2dab`).** The earlier ephemeral canvas-local `advisoryAttach: Set<string>`
+  is replaced by a typed, persisted `AgentBinding { agent, node, grants }` (`types.ts`) stored in a
+  **sibling save-envelope key** `graph.agent_bindings` (alongside locators). **The compiler NEVER
+  dereferences it** — the compile/run payload stays `{nodes.map(toCompileNode), edges}` and
+  `CompileRequest` is `extra=ignore`, so the emitted Nextflow is **byte-identical with or without any
+  binding** (compose ≠ execute by construction; ADR-0001 — an attachment structurally cannot touch
+  the pipeline or a verdict). Clicking a node's advisory badge opens a **grant popover** (canvas-plane
+  sibling at the badge, so it pans/zooms with the card): toggles for the two observation **grants**
+  plus **Detach**. Grants: **`outputs`** (default, on) = the node's published output artifacts;
+  **`logs`** (opt-in, **off** by default) = the node's `.command.log`/`.err`, which carry subject-id
+  PII and so are **de-identified + never seeded on by default** (PII guardrail). `defaultBindings()`
+  seeds QC-triage over its default QC nodes granting `outputs` only; `reconcileBindings()` prunes any
+  binding whose node was deleted or whose agent isn't attachable, normalising a foreign/older envelope
+  to the known grant vocabulary (never resurrects a missing node). Only **QC-triage** is
+  node-attachable today (the `ATTACHABLE_AGENT_IDS` set); the system agents (Pipeline-repair,
+  Archivist) act on runs/signatures/orgs and live on Agent triage instead (§5.7). *(The backend
+  agent-READ path that consumes these grants is a separate, later slice — see the other agent's
+  design/API docs; this doc covers the authoring surface only.)*
 
 **Inspector (right panel).** Tabs **Params · Locators · I/O · Agents**:
+- **Header controls: Hide (rail) vs Close (Shipped 2026-07-12, commit `e40784c`).** The panel
+  header now carries **two** distinct affordances (mirroring the left palette's collapse): a
+  **Hide** chevron (points toward the panel's own right edge) that **collapses the inspector to a
+  rail and stays collapsed across card selections** until the user explicitly reopens it — selecting
+  another card while hidden must NOT reopen it — and the existing **Close (×)** that clears the
+  selection. Hide keeps the selection; Close drops it.
+- **Footer action row: `[Delete node] [Save]` (Shipped 2026-07-12, commit `e40784c` → renamed
+  `7c5c073`).** In Edit, an editable subject (user node / tool / reference — never a gate/agent)
+  shows one bottom action row: **Delete node** (user nodes only; tools/references aren't deletable)
+  beside a flex-grow **Save** (renamed from **"Save card"** in `7c5c073`). This card-scoped Save
+  commits THIS card's edits into the draft — distinct from the toolbar Save that persists the whole
+  pipeline as a new version. Behavior (`onSaveCard`/`onDeleteNode`, edit-vs-view gating) is
+  unchanged; only the layout moved Delete out of the node body and into the footer beside Save.
 - **Params** — schema-driven form (from bundled `nextflow_schema.json`).
 - **Locators** — editable per output kind: `path|glob`, `parser`, `on_multiple`
   (first/all/error), `required`; `role`/`origin` read-only (**origin locked `unknown` —
@@ -790,9 +871,13 @@ design prose is unchanged below; see [design/node-authoring-agent.md](../node-au
 "What actually shipped" for the grounded comparison and [tasks T-046](../../planning/tasks.md) for
 status.
 
-**Advisory agents.** **Pipeline-repair** (proposes fixes for recurring signatures) and
-**Archivist** (proposes cold-storage of released `run/` dirs) — both stub-first, human-approved,
-off the critical path; never edit the pipeline or a verdict. **Wired to real data (Shipped
+**Advisory agents (relocated to Agent triage 2026-07-12, commit `69a2dab` — see §5.7).**
+**Pipeline-repair** (proposes fixes for recurring signatures) and **Archivist** (proposes
+cold-storage of released `run/` dirs) — both stub-first, human-approved, off the critical path;
+never edit the pipeline or a verdict. **They no longer launch from the Builder palette** (they act
+on runs/signatures/the organization, not a single graph node); their `PipelineRepairModal` /
+`ArchivistModal` now open from **Agent triage** launcher tiles. The wired-to-real-data behavior
+below is unchanged — only the launch surface moved. **Wired to real data (Shipped
 2026-07-10, T-069, commit `adfd7aa`) — both were static previews before this.**
 `PipelineRepairModal` now loads `GET /api/monitoring` for a recurring-signature picker (default:
 top-ranked) and `GET /api/monitoring/signatures/{sig}/repair` for the REAL `RepairProposal`
@@ -904,6 +989,13 @@ emits them and theming holds in both light and dark.
 
 Suggested repo drop: `docs/design/frontend/handoffs/` — point Claude Code here to implement
 against `frontend/src/`.
+
+**Type-check on push (Shipped 2026-07-12, commit `e40784c`).** The frontend now type-checks on
+`git push` via a `frontend-tsc` **pre-push** hook running `tsc -b` in `frontend/` (same
+heavy-check-on-push cadence as the `pytest` push hook). This closes a real gap: the root
+`tsconfig` is references-only, so the old `tsc --noEmit` was a **no-op** and nothing actually ran
+`tsc -b` — which is how a type error once reached `main` uncaught. The push now fails on any
+frontend type error.
 
 ---
 

@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-11 (MST) |
+| **Last updated** | 2026-07-12 (MST) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) · [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the human-authoring surface roster agent #5's contract presupposes) · [architecture.md](architecture.md) · [agent-authoring-contract.md](agent-authoring-contract.md) (how an authoring agent is built + constrained) · [planning/tasks.md](../planning/tasks.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) · [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the human-authoring surface roster agent #5's contract presupposes) · [ADR-0022](../adr/ADR-0022-agent-observation-binding.md) (the agent-attachment observation-binding model + taxonomy) · [architecture.md](architecture.md) · [agent-authoring-contract.md](agent-authoring-contract.md) (how an authoring agent is built + constrained) · [planning/tasks.md](../planning/tasks.md) |
 
 ## Overview
 
@@ -95,6 +95,62 @@ g. **Build stub-first.** Deterministic stub + lazy SDK import + fallback + env f
    [`notify/`](../../src/pipeguard/notify/) (an outbound port) **out** of the agent
    bucket — they are not agents ([ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)).
 
+## Pipeline-vs-system agents — the attachment taxonomy
+
+**Decision ([ADR-0022](../adr/ADR-0022-agent-observation-binding.md)).** Not every agent attaches to
+the same thing. The roster splits by *what an agent scopes over*:
+
+1. **Node-attachable (pipeline) agents** — reason over a **single Pipeline-Builder node's** results.
+   Today this is **QC-triage** (#1). They can be *attached to a node* (see the binding model below);
+   **Node-authoring** (#6) also lives in the Builder palette, but as a card-*author*, not a
+   node-attachment. These stay in the **Builder palette**.
+2. **System agents** — act on **runs / recurring signatures / the whole organization**, not one
+   node: **Pipeline-repair** (#2) and **Archivist** (#3). As of 2026-07-12 they **moved OUT of the
+   Builder palette to Agent-triage launchers** (`frontend/src/screens/AgentTriage.tsx`) — putting
+   them on the canvas implied a node attachment they never had.
+3. **Off-gate corpus agents** — **Feedback-triage** (#4) is neither; it categorizes the in-app
+   feedback corpus and has no canvas presence.
+
+The attachable set is enforced in code: `ATTACHABLE_AGENT_IDS`
+(`frontend/src/components/BuilderShared.tsx`) is `{QC-triage}` today; `reconcileBindings` drops a
+binding for any non-attachable agent.
+
+## Agent attachment — the observation-binding model
+
+**Decision ([ADR-0022](../adr/ADR-0022-agent-observation-binding.md)).** Attaching an agent to a
+pipeline node is a **persisted, read-only observation grant**, not an ephemeral UI toggle and never a
+data edge. This replaced the old ephemeral `advisoryAttach: Set<nodeId>` (lost on reload, no grants,
+no read path).
+
+1. **The shape.** `AgentBinding = { agent, node, grants: ('outputs'|'logs')[] }`
+   (`frontend/src/types.ts`). It lets the agent **read** that node's results; it never wires a data
+   edge, adds a card, or sets a verdict/confidence.
+2. **Off the compiled graph (the load-bearing invariant).** Bindings persist in a **sibling
+   save-envelope key `graph.agent_bindings`** (a peer of `locator_edits` / `reference_locators` in
+   `BuilderGraphPayload`), which the Nextflow compiler **never dereferences**. The compile/run
+   payload stays a pure function of `{ nodes, edges }` (`CompileRequest` is `extra="ignore"`), so a
+   graph compiles **byte-identical with or without any binding** — an attachment structurally cannot
+   change the emitted pipeline (compose ≠ execute, [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md))
+   or a verdict ([ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md); shared invariants 1–2).
+3. **Least-privilege, default-safe grants.** `outputs` (the node's published artifacts) is the
+   default and the only seeded grant; `logs` (`.command.log`/`.command.err`) is **opt-in, off by
+   default** because a task log can echo subject-id PII. `reconcileBindings` prunes danglers
+   (deleted node / non-attachable agent) and normalizes grants on load of a foreign/older envelope.
+4. **The read path (Phase 4).** `GET /api/runs/{run_id}/nodes/{node_id}/observations?grants=outputs[,logs]`
+   (`api/routers/node_observations.py`, `require_role("viewer", …)`) returns the granted, **node-scoped**
+   view: `outputs` are the node's published files scoped by the tool's catalogued output-port globs
+   against `.nf-runs/<run_id>/nf-out/results/` (never the whole run); `logs` are the **de-identified**
+   tail via `api.deid.scrub_text` (subject ids pseudonymized from `sample_metadata.csv`, email/6+-digit
+   PII redacted — raw stderr is never emitted). The response pins `advisory: Literal[True]`, is
+   traversal-hardened, and is **honest-empty** (a fixture-only run or an uncatalogued/authored-graph
+   node returns an empty view with a `note`, never fabricated outputs). Least-privilege, node-scoped
+   ([ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md)).
+5. **Deferred, labelled (not silently dropped).** `gather_node_observations()` is the reusable
+   **triage-consumption seam**, but QC-triage does **not** yet call it (it stays a narrator over rule
+   findings today); a **UI display** of a bound node's observations is unbuilt; and an
+   **authored-pipeline node → graph linkage** isn't tracked, so an authored-graph node id degrades to
+   honest-empty rather than resolving its files.
+
 ## Relationship to the rest of the system
 
 Agents observe the **analysis-output tree** and the **data platform** — the run
@@ -102,7 +158,10 @@ artifacts, decision cards, and QC records already produced by the gate — and e
 advisory, structured suggestions. They never touch the decision path or the
 authoritative event ledger as a decision-maker. The output-tree convention and the
 archivist's substrate are specified in
-[data-platform-and-archivist.md](data-platform-and-archivist.md).
+[data-platform-and-archivist.md](data-platform-and-archivist.md). A node-scoped
+**observation binding** ([ADR-0022](../adr/ADR-0022-agent-observation-binding.md), above) is a
+*narrowing* of that same observation posture to a single Builder node's results, backed by the
+read-only `.../observations` path — never a widening, and never on the compiled graph.
 
 ---
 

@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | draft |
-| **Date** | 2026-07-10 (MST) · corrected 2026-07-11 (MST, NGSCheckMate is no longer a seeded palette node) |
+| **Date** | 2026-07-10 (MST) · corrected 2026-07-11 (MST, NGSCheckMate is no longer a seeded palette node) · corrected 2026-07-12 (MST, reserved-port honesty pass — the `read_group` port removed [a computed string, not a file channel]) |
 | **Related** | [builder-cards README](../builder-cards/README.md) (§7) · [frontend README §6](../frontend/README.md) · [nf-core conventions](../../data/nf-core-conventions.md) · [BuilderShared.tsx](../../../frontend/src/components/BuilderShared.tsx) · [run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) · [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md) |
 
 Card-design spec for the **bwa-mem2** node in the Pipeline Builder (README §6). Grounds the card's
@@ -34,7 +34,12 @@ the tool's full real I/O and lays out where the ports sit.
 |---|---|---|---|---|
 | `fastq` | trimmed pair `HG002.trim.R{1,2}.fastq.gz` (glob `fastq/*_R{1,2}_001.fastq.gz`; `GIAB_LOC.fastq`, `on_multiple: all`) | **required** | fastp (`n_fastp` → `fastq` out) | **left** |
 | `reference_fasta` | indexed reference bundle: `reference/GRCh38.fa` + `.0123` · `.amb` · `.ann` · `.bwt.2bit.64` · `.pac` (`GIAB_LOC.reference_fasta`, role `reference`) | **required** | Reference FASTA source (`r_fasta` → `reference_fasta` out) | **top** |
-| `read_group` (`-R @RG\t…`) | not an artifact — the `@RG` header string (`run_giab_pipeline.py` L123) | **user-defined** | — (Params tab; reserve an optional config port, not wired today) | left (reserved) |
+
+**`read_group` REMOVED 2026-07-12 (reserved-port honesty pass, `1621e3f`).** The `-R @RG\t…` value is
+a **computed STRING** the command hardcodes (`@RG\tID:${meta.id}\t…`, `run_giab_pipeline.py`), not a
+consumed file artifact — and a Builder port wires a *file* channel, so a `read_group` port could
+never carry a real wire. It was dropped rather than left as a superficial reserved slot. The card now
+hosts only its two real inputs (`fastq` left, `reference_fasta` top).
 
 Notes:
 1. The `fastq` port represents the **R1+R2 pair** as one typed edge (the `*_R{1,2}` glob resolves
@@ -45,9 +50,10 @@ Notes:
    real index inputs but are **keyed off the FASTA prefix**, so they do not get their own port kinds
    (none exist in `GIAB_LOC`). The `samtools faidx` `.fai` is **not** consumed by `bwa-mem2 mem`
    (it's a downstream random-access accessory for mosdepth/bcftools) — do not add a port for it here.
-3. `read_group` is a **param string**, not a wired artifact — it lives in the Params inspector.
-   Reserve space for one optional user-defined config port so a future read-group source could wire
-   in, but leave it unwired by default (compose ≠ execute; today it is authored, not fed).
+3. `read_group` is a **param string**, not a wired artifact — the command hardcodes the `@RG`
+   header. It was removed as a port (above): a file-channel port can't carry a computed string, so
+   leaving it reserved would be a superficial slot. If an operator ever needs a variable read group
+   it belongs in the Params inspector, not a typed data port.
 
 ## 3. OUTPUT PORTS
 
@@ -102,10 +108,9 @@ fastq port.
    - **Right —** `bam` (alignment stream exits right into markdup).
    - **Bottom —** intentionally **empty** (no metrics/QC artifact; documents the asymmetry vs
      fastp/markdup/mosdepth cards that do exit metrics from the bottom).
-3. **Reserved / user-defined ports.** Keep space (top-left) for one **optional** user-defined
-   config port for the `@RG` read-group string, rendered as a half-circle only when the operator
-   opts to wire a read-group source; default state shows it in the **Params** tab, unwired. Threads
-   (`-t`) and other flags stay Params-only, never ports.
-4. **Port count to host:** 2 required data ins + 1 required out + 1 reserved user-defined =
-   **up to 4 half-circles**, comfortably inside a 230 × 130 card with the ports distributed across
+3. **No reserved ports (2026-07-12).** The former `read_group` reserved config port was removed —
+   the `@RG` value is a computed string, not a file channel (§2). Read-group, threads (`-t`), and
+   other flags stay Params-only, never ports.
+4. **Port count to host:** 2 required data ins + 1 required out =
+   **3 half-circles**, comfortably inside a 230 × 130 card with the ports distributed across
    three sides.

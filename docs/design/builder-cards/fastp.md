@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Date** | 2026-07-10 (MST) |
+| **Date** | 2026-07-10 (MST) · corrected 2026-07-12 (MST, reserved-port honesty pass — `fastp_html`/`unpaired_fastq`/`failed_fastq` promoted to real optional ports; only `adapter_fasta` stays reserved) |
 | **Audience** | frontend / bioinformatics / design |
 | **Related** | [builder-cards/README.md](README.md) · [design/frontend/README.md §6](../frontend/README.md) · [data/nf-core-conventions.md](../../data/nf-core-conventions.md) · [data/qc_metrics-sources.md](../../data/qc_metrics-sources.md) · [frontend BuilderShared.tsx](../../../frontend/src/components/BuilderShared.tsx) · [scripts/run_giab_pipeline.py](../../../scripts/run_giab_pipeline.py) |
 
@@ -50,17 +50,19 @@ Notes:
 |---|---|---|---|
 | `fastq` | `-o` / `-O` → `HG002.trim.R{1,2}.fastq.gz` | bwa-mem2 (`fastq` in) | right |
 | `fastp_json` | `-j` → `HG002.fastp.json` | MultiQC (`fastp_json` in); PipeGuard `parse_fastp` | bottom |
-| `fastp_html` *(reserve)* | `-h` → `HG002.fastp.html` | Human report / MultiQC | bottom |
-| `unpaired_fastq` *(reserve)* | `--unpaired1/2` → unpaired reads | (none by default) | right |
-| `failed_fastq` *(reserve)* | `--failed_out` → filtered-out reads | (none by default) | bottom |
+| `fastp_html` *(optional)* | `-h` → `HG002.fastp.html` | Human report / MultiQC | bottom |
+| `unpaired_fastq` *(optional)* | `--unpaired1/2` → `HG002.unpaired.fastq.gz` | (none by default) | right |
+| `failed_fastq` *(optional)* | `--failed_out` → `HG002.failed.fastq.gz` | (none by default) | bottom |
 
-Notes:
-1. `fastq` (out) and `fastp_json` are the two real, wired outputs (see `TOOLS[n_fastp].outputs`).
-2. `fastp_html` is a **real** fastp output (`-h`, `run_giab_pipeline.py:112`) but has **no
-   locator kind** in `GIAB_LOC` today — reserve the port; a `fastp_html` kind would be added
-   only if MultiQC/Provenance start consuming it as a typed edge.
-3. `--unpaired1/2`, `--failed_out`, `-m/--merged_out` are documented fastp outputs but **off** in
-   the germline run (user-defined). Reserve slots; do not wire.
+Notes (updated 2026-07-12 — reserved-port honesty pass, `catalog.py` + `BuilderShared.tsx`):
+1. `fastq` (out) and `fastp_json` are the two **required, wired** outputs (see
+   `TOOLS[n_fastp].outputs`); the demo chain wires both.
+2. `fastp_html`, `unpaired_fastq`, and `failed_fastq` are now **real, published, optional** ports —
+   no longer reserved. The compiler catalog publishes each as a real Nextflow `emit:` channel:
+   `fastp_html` (`-h`, `run_giab_pipeline.py`), and `unpaired_fastq`/`failed_fastq` produced by the
+   promoted `--unpaired1/2` / `--failed_out` flags the catalog `script:` now passes. They render as
+   optional ports (unwired by default in the seeded chain), wireable when an operator connects them.
+3. `-m/--merged_out` remains an undeclared fastp output (not modeled as a port).
 
 ## 4. Edges (concrete wires)
 
@@ -85,10 +87,15 @@ Notes:
    - **Right:** trimmed `fastq` output — the primary flow continues to bwa-mem2.
    - **Bottom:** QC/metrics exits — `fastp_json` (→ MultiQC) and `fastp_html`, so QC artifacts
      drop away from the primary alignment lane.
-3. **Reserved (unshown-by-default) ports:** `adapter_fasta` (top), `fastp_html` (bottom),
-   `unpaired_fastq`/`failed_fastq` (right/bottom). Keep geometric room for them so enabling a
-   user-defined output later doesn't reflow the card; render only when populated.
+3. **Optional (unwired-by-default) real ports:** `fastp_html` (bottom),
+   `unpaired_fastq` (right), `failed_fastq` (bottom) — all in `ARTIFACT_KINDS` and mapped to real
+   emit channels; wireable when an operator connects them. **The one still-reserved port is
+   `adapter_fasta`** (top): a real optional `--adapter_fasta` input left non-armable because the
+   compiler's input-drift guard is exact + positional, so catalog-adding it would force every fastp
+   node (incl. the golden chain) to wire an adapter source (§5.4, README). It renders reserved with
+   a Connect-mode tooltip.
 4. **Typed-wiring guard:** every port carries its `kind`; `fastq`↔`fastq`, `fastp_json`↔
-   `fastp_json` only. The two reserved kinds (`adapter_fasta`, `fastp_html`) must be added to
-   `ARTIFACT_KINDS` before their ports can accept an edge — until then they render as
-   disabled/reserved stubs.
+   `fastp_json` only. `adapter_fasta` is a **reserved-only** kind — deliberately NOT in
+   `ARTIFACT_KINDS` (`BuilderShared.tsx`: "a catalogued RESERVED port renders but is never in
+   ins/outs/BTOOLSPEC/ARTIFACT_KINDS, non-wireable"), so its port renders as a reserved stub until
+   the catalog input positionally admits it.

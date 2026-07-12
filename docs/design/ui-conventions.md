@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active — the durable convention registry (so a rule is stated once, not per session) |
-| **Last updated** | 2026-07-11 (MST) |
+| **Last updated** | 2026-07-12 (MST) |
 | **Audience** | software / design / reviewers |
 | **Related** | [design/frontend/README.md](frontend/README.md) (tokens + per-screen spec), [design/builder-cards/README.md](builder-cards/README.md) (pipeline-card design), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [functional.md](../requirements/functional.md) (REQ-F-097), [nonfunctional.md](../requirements/nonfunctional.md) (REQ-NF-070, a11y), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [scale-aware memory], [explicit-edit+audit memory] |
 
@@ -262,15 +262,29 @@ I/O; Databricks-inspired aesthetic. **Shipped**: the alignment dot grid spans th
 every zoom level; the palette shows the current pipeline's tools with a "≫ ALL" expander; and
 (2026-07-11, commit `12a9913`) cards grew to `NODE_W = 232` with typed half-circle ports on all
 four sides, driven by one geometry source of truth (`BuilderShared.portSide()`/`layoutPorts()`)
-shared by render and wire math. **One item stays open, narrowed the same day (W4, commit
-`5f0d5ec`)**: `fastp_html` and `samtools_stats` (both real commands the driver already ran) and
-the mosdepth `regions`/`global_dist`/`region_dist` byproducts were promoted from reserved to
-real, wireable optional ports (MultiQC now ingests all 5 available QC streams). What remains
-genuinely reserved (no producer/kind registered yet): `per_base`, `vcf_index`, `multiqc_html`,
-`adapter_fasta`, `unpaired_fastq`, `failed_fastq`, `read_group`, `fastqc_zip`, `bcftools_stats`,
-`picard_hsmetrics` —
+shared by render and wire math. **Reserved-port sweep closed (2026-07-12, commit `1621e3f`):**
+every *shown* Builder port now maps to a REAL Nextflow channel or was removed — no superficial
+slots. Promoted reserved→optional (real published outputs, now in the compiler catalog): fastp
+`unpaired_fastq`/`failed_fastq`, bcftools-norm `vcf_index`, MultiQC `multiqc_html` (joining
+`fastp_html`/`samtools_stats` + the mosdepth `regions`/`global_dist`/`region_dist` byproducts
+promoted at W4, commit `5f0d5ec`). Removed as non-real (never a connectable file channel): bwa-mem2
+`read_group` (a computed `@RG` string), mosdepth `per_base` (`--no-per-base` suppresses it),
+bcftools-norm `panel_bed` (norm is genome-wide), and MultiQC `fastqc_zip`/`bcftools_stats`/
+`picard_hsmetrics`/`ngscheckmate` (no catalogued tool produces them). **The one genuinely-reserved
+port left is fastp `adapter_fasta`** — a real `--adapter_fasta` input held reserved only because the
+compiler's exact/positional input-drift guard would force every fastp node to wire an adapter source
+(too invasive for this pass). A reserved port is no longer hidden: per the render-honesty rule below
+it renders dashed/hollow and non-armable with a "why it won't connect" tooltip. See
 [builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
-item 4.
+and [frontend/README.md §6 Ports](frontend/README.md#6-pipeline-builder--full-model).
+
+**Reserved-port render honesty (Shipped 2026-07-12, commit `e40784c`).** A documented-but-non-real
+affordance must be shown **honestly non-armable**, never hidden and never rendered identically to a
+working control. A reserved port (no runnable Nextflow channel yet) renders **dashed/hollow** in its
+kind colour and, in Connect mode, becomes hoverable with a **not-allowed cursor + a "why it won't
+connect" tooltip** (it carries no `data-*`/handlers, so drag-to-connect and click-arm both ignore
+it); edge-less ports sort clear of the wired band. This generalizes the honesty guardrail (UIC-1's
+"label the seam, don't fake it") to interactive affordances, not just prose.
 
 ### UIC-17 — Pipeline Builder: composable-only canvas + an "⋯ More" overflow toolbar · ✅
 Two related, maintainer-directed rules from the same 2026-07-11 session
