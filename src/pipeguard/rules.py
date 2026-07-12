@@ -109,6 +109,35 @@ def _check_presence(
                 suggested_verdict=Verdict.ESCALATE,
             )
         )
+    # Declared on the sample sheet (submitted for sequencing) but NO QC artifact — the symmetric
+    # partner of PROV-002. Missing QC is unverified DATA, not clean data: without a rule here the
+    # sample emits zero findings and `aggregate_verdict([])` PROCEEDs — the exact case a safety gate
+    # must fail CLOSED on. Guarded on `sheet is not None` so a not-yet-sequenced, intake-only sample
+    # (no sheet, no QC) is never false-HOLDed (WS-01 Gap A).
+    if sheet is not None and qc is None:
+        findings.append(
+            Finding(
+                rule_id="QC-MISSING",
+                sample_id=sid,
+                category=Category.QC,
+                severity=Severity.WARN,
+                title="Declared for sequencing but no QC results",
+                detail=(
+                    f"{sid} is declared on the sample sheet but has no QC row, so it was never "
+                    f"examined. Missing QC is treated as unverified (HOLD), never as passing."
+                ),
+                evidence=[
+                    Evidence(
+                        source="qc_metrics.csv",
+                        locator=f"sample_id={sid}",
+                        value="missing",
+                        expected="present",
+                        source_kind=SourceKind.METRIC,
+                    )
+                ],
+                suggested_verdict=Verdict.HOLD,
+            )
+        )
     # Declared and sequenced but no intake metadata -> can't confirm what it is.
     if meta is None and (sheet is not None or qc is not None):
         findings.append(
@@ -277,6 +306,52 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -
         ],
         suggested_verdict=verdict,
     )
+
+
+def _check_expected_metrics(
+    sid: str, by_key: dict[str, MetricValue], runbook: Runbook
+) -> list[Finding]:
+    """Turn a profile's EXPECTED-but-absent metric into a HOLD (WS-01, fail-closed).
+
+    For each registry ``our_key`` the runbook's ``expected_metrics`` names but the sample produced
+    no ``MetricValue`` for, emit ``QC-EXPECTED-<key>`` (WARN → HOLD). This restores signal for a
+    ``required=False`` safety metric *bound to a named profile* — a pipeline that simply omits it
+    can no longer read "all clear" — WITHOUT NA-flagging a genuinely lean run: an empty
+    ``expected_metrics`` (the DEFAULT) makes this a no-op. The verdict still comes only from
+    ``aggregate_verdict`` over these self-authored findings (ADR-0001); this rule decides that
+    absence is *unverified*, never that the metric failed. An unregistered key is never in
+    ``by_key``, so it surfaces as a HOLD too — a misconfigured profile fails loud, not silent.
+    """
+    findings: list[Finding] = []
+    for our_key in runbook.expected_metrics:
+        if our_key in by_key:
+            continue
+        findings.append(
+            Finding(
+                rule_id=f"QC-EXPECTED-{our_key.upper()}",
+                sample_id=sid,
+                category=Category.QC,
+                severity=Severity.WARN,
+                title=f"Expected metric not examined: {our_key}",
+                detail=(
+                    f"The '{runbook.pipeline_profile}' profile expects {our_key} to be examined, "
+                    f"but no value was reported for {sid}. An expected-but-absent metric is "
+                    f"treated as unverified (HOLD), not as passing."
+                ),
+                evidence=[
+                    Evidence(
+                        source="qc_metrics.csv",
+                        locator=f"{sid}.{our_key}",
+                        value="not examined",
+                        expected="present",
+                        source_kind=SourceKind.METRIC,
+                        source_field=our_key,
+                    )
+                ],
+                suggested_verdict=Verdict.HOLD,
+            )
+        )
+    return findings
 
 
 def _check_log(sid: str, log_lines: list[str], runbook: Runbook) -> Finding | None:
@@ -458,6 +533,9 @@ def evaluate_sample(sid: str, artifacts: RunArtifacts, runbook: Runbook) -> list
             metric_finding = _evaluate_metric(sid, threshold, by_key.get(threshold.our_key))
             if metric_finding:
                 findings.append(metric_finding)
+        # Expected-metric set (WS-01): a profile-bound metric that was NOT examined → HOLD. The
+        # `qc is None` is already covered by QC-MISSING above, so this only runs with QC present.
+        findings.extend(_check_expected_metrics(sid, by_key, runbook))
 
     log_finding = _check_log(sid, artifacts.log_lines, runbook)
     if log_finding:

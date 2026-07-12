@@ -7,7 +7,9 @@ because Q30 84.1 < gate 85.0") and lets the UI show *which rule* fired.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from .metrics.mapping import producible_metric_keys
 
 
 class QCThreshold(BaseModel):
@@ -190,6 +192,41 @@ class Runbook(BaseModel):
     # so the stock runbook never routes and the deterministic QC gate is unchanged. An operator
     # arms it to escalate ClinVar-significant candidates to mandatory human review (RBAC-gated).
     route_to_human: RouteToHumanPolicy = Field(default_factory=RouteToHumanPolicy)
+    # WS-01: the named pipeline profile this runbook scores (default = the lean base profile). Used
+    # only for honest narration today; WS-05's `RunbookSet` will key profiles by this.
+    pipeline_profile: str = "default"
+    # WS-01 (fail-closed): registry `our_key`s a profile EXPECTS to have examined. Any expected key
+    # with no observed value → a `QC-EXPECTED-<key>` HOLD (rules._check_expected_metrics), so a
+    # profile-bound safety metric can no longer skip silently when a pipeline simply omits it. EMPTY
+    # by default → DEFAULT_RUNBOOK is byte-for-byte unchanged (a genuinely lean run is never
+    # penalised). MECHANISM ONLY in WS-01·PR1: no deployed code sets this yet (`_active_runbook`
+    # never populates it), so QC-EXPECTED fires only for a runbook that explicitly opts in — the
+    # production consumer (a per-profile expected set) is WS-05's `RunbookSet`, which lifts this
+    # SAME field onto the per-(assay, sample_type, platform) profile (a move, not a rename).
+    expected_metrics: tuple[str, ...] = ()
+
+    @field_validator("expected_metrics")
+    @classmethod
+    def _expected_metrics_are_producible(cls, v: tuple[str, ...]) -> tuple[str, ...]:
+        """Fail LOUD at config-load if a profile expects a metric the parse layer cannot produce.
+
+        Without this, a typo'd or registered-but-unwired key (7 of 20 registered keys have no
+        parser) is *never* in `by_key`, so it would HOLD every sample of every run forever, with a
+        finding that misdirects the operator toward the pipeline instead of the profile config. A
+        profile may only expect a metric the system can actually examine. Also de-dupes (order
+        kept), so a duplicated key can't emit two identical findings.
+        """
+        producible = producible_metric_keys()
+        seen: dict[str, None] = {}
+        for key in v:
+            if key not in producible:
+                raise ValueError(
+                    f"expected_metrics key {key!r} is not producible by the current parse layer; "
+                    f"a profile may only expect a metric the system can examine. Producible keys: "
+                    f"{sorted(producible)}"
+                )
+            seen.setdefault(key, None)  # de-dupe, preserving first-seen order
+        return tuple(seen)
 
     def threshold_for(self, metric: str) -> QCThreshold | None:
         return next((t for t in self.qc_thresholds if t.metric == metric), None)

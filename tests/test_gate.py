@@ -11,19 +11,22 @@ import pytest
 from pydantic import ValidationError
 
 from pipeguard import DEFAULT_RUNBOOK, Verdict, evaluate_run, load_run, run_gate
-from pipeguard.metrics import default_registry
+from pipeguard.metrics import default_registry, metric_values_for
 from pipeguard.models import (
     Category,
     Evidence,
     Finding,
     Gate,
     QCMetrics,
+    RunArtifacts,
+    Sample,
     Severity,
     SourceKind,
 )
 from pipeguard.parsers import parse_sample_sheet, parse_sample_sheet_header
 from pipeguard.provenance import EventLedger, EventType
-from pipeguard.rules import _evaluate_metric
+from pipeguard.rules import _evaluate_metric, evaluate_sample
+from pipeguard.runbook import Runbook
 from pipeguard.synthesis import StubSynthesizer, aggregate_verdict
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
@@ -127,6 +130,122 @@ def test_fraction_metric_display_is_not_100x_too_small():
     assert ev.value == "85%"
     assert ev.expected == "≥ 90%"
     assert ev.threshold == "hard-fail ≥ 80%"
+
+
+# ── WS-01 · PR1: fail-closed on missing / expected-but-absent QC ──────────────────
+
+
+def test_sheet_without_qc_holds():
+    """Gap A: a sheet-declared sample with NO QC row emits QC-MISSING and fails closed — absence of
+    QC is unverified data, never clean data, so a safety gate cannot PROCEED on it. Exercises the
+    real evaluate_sample → _check_presence → aggregate_verdict path."""
+    art = load_run(DATA)
+    # S1 is on the sheet AND has intake metadata; drop only its QC row → declared-but-not-examined
+    # (metadata present so META-002 can't fire — the HOLD is attributable purely to missing QC).
+    assert any(e.sample_id == "S1" for e in art.sample_sheet)
+    assert any(s.sample_id == "S1" for s in art.samples)
+    art.qc = [q for q in art.qc if q.sample_id != "S1"]
+    findings = evaluate_sample("S1", art, DEFAULT_RUNBOOK)
+    missing = [f for f in findings if f.rule_id == "QC-MISSING"]
+    assert len(missing) == 1
+    f = missing[0]
+    assert f.category is Category.QC and f.severity is Severity.WARN
+    assert f.suggested_verdict is Verdict.HOLD
+    ev = f.evidence[0]  # self-authored, cites the real source
+    assert ev.source == "qc_metrics.csv" and ev.value == "missing" and ev.expected == "present"
+    assert ev.source_kind is SourceKind.METRIC
+    # I1 + I2: the verdict is exactly aggregate_verdict(findings) and fails closed (not PROCEED).
+    assert aggregate_verdict(findings) is Verdict.HOLD
+    assert aggregate_verdict(findings) is not Verdict.PROCEED
+
+
+def test_declared_sample_never_proceeds_without_examined_qc():
+    """Gap A guard (freezes the finding): no sheet-declared, QC-less sample maps to PROCEED — and
+    and the boundary holds: an intake-only sample (no sheet, no QC) is NOT false-HOLDed."""
+    art = load_run(DATA)
+    art.qc = []  # strip ALL QC → every sheet-declared sample is now declared-but-unexamined
+    for sid in art.sample_ids():
+        findings = evaluate_sample(sid, art, DEFAULT_RUNBOOK)
+        assert any(f.rule_id == "QC-MISSING" for f in findings), sid
+        assert aggregate_verdict(findings) is not Verdict.PROCEED, sid
+    # Boundary: a sample ONLY in intake metadata (sheet None, qc None) → no false QC-MISSING.
+    intake_only = RunArtifacts(run_id="r", samples=[Sample(sample_id="INTAKE_ONLY")])
+    findings = evaluate_sample("INTAKE_ONLY", intake_only, DEFAULT_RUNBOOK)
+    assert not any(f.rule_id == "QC-MISSING" for f in findings)
+
+
+def test_expected_metric_absent_holds():
+    """Gap C: a profile that EXPECTS a metric the sample didn't produce emits QC-EXPECTED-* → HOLD,
+    restoring the signal a `required=False` threshold would silently drop."""
+    art = load_run(DATA)
+    book = DEFAULT_RUNBOOK.model_copy(
+        update={"expected_metrics": ("qc.breadth_20x",), "pipeline_profile": "germline-panel"}
+    )
+    # Premise: S1's QC omits breadth_20x (a richer-report metric mock_run_01 doesn't carry).
+    s1_qc = next(q for q in art.qc if q.sample_id == "S1")
+    assert "qc.breadth_20x" not in {mv.metric_key for mv in metric_values_for(s1_qc)}
+    findings = evaluate_sample("S1", art, book)
+    exp = [f for f in findings if f.rule_id == "QC-EXPECTED-QC.BREADTH_20X"]
+    assert len(exp) == 1
+    f = exp[0]
+    assert f.severity is Severity.WARN and f.suggested_verdict is Verdict.HOLD
+    ev = f.evidence[0]
+    assert ev.value == "not examined" and ev.expected == "present"
+    assert ev.source_kind is SourceKind.METRIC
+    assert aggregate_verdict(findings) is Verdict.HOLD  # I1 + I2
+
+
+def test_expected_metric_default_runbook_no_finding():
+    """Gap C negative (the lean-run guarantee): the SAME clean sample under DEFAULT_RUNBOOK
+    (expected_metrics == ()) emits no QC-EXPECTED-* and stays byte-for-byte clean."""
+    findings = evaluate_sample("S1", load_run(DATA), DEFAULT_RUNBOOK)
+    assert not any(f.rule_id.startswith("QC-EXPECTED") for f in findings)
+    assert findings == []  # S1 was clean before this change; still clean
+
+
+def test_expected_metric_set_leaves_no_silent_skip():
+    """Gap C guard: every expected-but-absent key produces exactly one QC-EXPECTED finding (none
+    silently vanishes), and DEFAULT_RUNBOOK.expected_metrics is provably empty (default = no-op)."""
+    art = load_run(DATA)
+    expected = ("qc.breadth_20x", "qc.pct_mapped", "qc.on_target")
+    book = DEFAULT_RUNBOOK.model_copy(update={"expected_metrics": expected})
+    s1_qc = next(q for q in art.qc if q.sample_id == "S1")
+    present = {mv.metric_key for mv in metric_values_for(s1_qc)}
+    absent_expected = {k for k in expected if k not in present}
+    findings = evaluate_sample("S1", art, book)
+    flagged = {
+        f.rule_id.removeprefix("QC-EXPECTED-").lower()
+        for f in findings
+        if f.rule_id.startswith("QC-EXPECTED")
+    }
+    assert flagged == absent_expected  # no expected-absent key skipped, none invented
+    assert DEFAULT_RUNBOOK.expected_metrics == ()  # the default path is provably a no-op
+
+
+def test_qc_missing_holds_through_the_decision_card():
+    """Gap A end-to-end (I1 through the card the product actually serves, not just the reducer
+    helper): dropping S1's QC row makes run_gate's DecisionCard for S1 a HOLD, and the card's
+    verdict equals aggregate_verdict over the card's own findings — never synthesizer-authored."""
+    art = load_run(DATA)
+    art.qc = [q for q in art.qc if q.sample_id != "S1"]
+    cards = {c.sample_id: c for c in run_gate(art, synthesizer=StubSynthesizer())}
+    s1 = cards["S1"]
+    assert any(f.rule_id == "QC-MISSING" for f in s1.findings)
+    assert s1.verdict is Verdict.HOLD
+    assert s1.verdict is aggregate_verdict(s1.findings)  # verdict == reducer over card findings
+
+
+def test_expected_metrics_rejects_unproducible_key():
+    """WS-01 hardening (from adversarial review): a profile that expects a metric the parse layer
+    cannot produce fails LOUD at Runbook construction — never a per-sample, unclearable
+    HOLD. Producible keys are accepted and de-duped. (pydantic validates on construction; note
+    `model_copy(update=)` deliberately skips validation, so profile builders must construct.)"""
+    with pytest.raises(ValidationError):
+        Runbook(expected_metrics=("contamination.freemix",))  # registered but no wired parser
+    with pytest.raises(ValidationError):
+        Runbook(expected_metrics=("qc.brdth_20x",))  # a typo can't become a run-wide HOLD
+    book = Runbook(expected_metrics=("qc.breadth_20x", "qc.breadth_20x", "qc.pct_mapped"))
+    assert book.expected_metrics == ("qc.breadth_20x", "qc.pct_mapped")  # producible + de-duped
 
 
 def test_run_gate_orders_urgent_first():

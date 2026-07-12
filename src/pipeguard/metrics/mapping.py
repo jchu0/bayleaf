@@ -40,6 +40,14 @@ _QCMETRICS_MAP: tuple[tuple[str, str, str], ...] = (
 )
 
 
+def producible_metric_keys() -> frozenset[str]:
+    """The registry ``our_key``s the current parse layer can actually produce a value for (the keys
+    in ``_QCMETRICS_MAP``). A runbook may only EXPECT a metric the system can examine, so
+    ``runbook.expected_metrics`` is validated against this set (WS-01) — a typo or a
+    registered-but-unwired key can't silently become a permanent, unclearable, misdiagnosed HOLD."""
+    return frozenset(our_key for _, our_key, _ in _QCMETRICS_MAP)
+
+
 def metric_values_for(
     qc: QCMetrics,
     *,
