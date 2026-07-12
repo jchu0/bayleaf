@@ -13,6 +13,7 @@ process MULTIQC {
 
     output:
     path("multiqc_data/multiqc_data.json"), emit: multiqc_json
+    path("multiqc_report.html"), emit: multiqc_html
 
     script:
     """
@@ -21,6 +22,6 @@ process MULTIQC {
 
     stub:
     """
-    mkdir -p multiqc_data && touch multiqc_data/multiqc_data.json
+    mkdir -p multiqc_data && touch multiqc_data/multiqc_data.json multiqc_report.html
     """
 }

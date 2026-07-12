@@ -232,13 +232,17 @@ export const BTOOLSPEC: Record<string, { version: string; icon: IconKey; ins: st
   // fastp now also emits fastp_html (the report it already writes); markdup emits samtools_stats
   // (a real `samtools stats` stream) — both were dangling reserved ports, now wired in the
   // compiler catalog (W3 full-port-wiring). MultiQC ingests every QC stream (was only 3).
-  'fastp': { version: '0.23.4', icon: 'scissors', ins: ['fastq'], outs: ['fastp_json', 'fastq', 'fastp_html'] },
+  // Reserved-port promotion (maintainer note 6): fastp's unpaired_fastq/failed_fastq (produced with
+  // --unpaired1/2/--failed_out), bcftools norm's vcf_index (the `.csi` its `bcftools index` already
+  // writes), and MultiQC's multiqc_html (multiqc always writes multiqc_report.html) are now REAL
+  // wireable outputs — each maps to a real emitted Nextflow channel in the compiler catalog.
+  'fastp': { version: '0.23.4', icon: 'scissors', ins: ['fastq'], outs: ['fastp_json', 'fastq', 'fastp_html', 'unpaired_fastq', 'failed_fastq'] },
   'bwa-mem2': { version: '2.2.1', icon: 'merge', ins: ['fastq', 'reference_fasta'], outs: ['bam'] },
   'samtools markdup': { version: '1.20', icon: 'copy', ins: ['bam'], outs: ['bam', 'bai', 'markdup_metrics', 'samtools_stats'] },
   'mosdepth': { version: '0.3.8', icon: 'bars', ins: ['bam', 'panel_bed'], outs: ['mosdepth_summary', 'mosdepth_thresholds', 'mosdepth_regions', 'mosdepth_global_dist', 'mosdepth_region_dist'] },
   'bcftools call': { version: '1.20', icon: 'dna', ins: ['bam', 'reference_fasta', 'panel_bed'], outs: ['vcf'] },
-  'bcftools norm': { version: '1.20', icon: 'funnel', ins: ['vcf', 'reference_fasta'], outs: ['filtered_vcf'] },
-  'MultiQC': { version: '1.21', icon: 'layers', ins: ['fastp_json', 'markdup_metrics', 'samtools_stats', 'mosdepth_summary', 'mosdepth_thresholds'], outs: ['multiqc_json'] },
+  'bcftools norm': { version: '1.20', icon: 'funnel', ins: ['vcf', 'reference_fasta'], outs: ['filtered_vcf', 'vcf_index'] },
+  'MultiQC': { version: '1.21', icon: 'layers', ins: ['fastp_json', 'markdup_metrics', 'samtools_stats', 'mosdepth_summary', 'mosdepth_thresholds'], outs: ['multiqc_json', 'multiqc_html'] },
   // Reference SOURCES — no inputs; each emits ONE output port PER consumer (same kind, distinct idx)
   // so every consumer edge is a clean one-to-one wire instead of many edges branching off one port
   // (the "tangled mess"): fasta → bwa/call/norm (3 outs), panel BED → mosdepth/call (2 outs). Typed
@@ -420,7 +424,7 @@ export type PortSide = 'left' | 'right' | 'top' | 'bottom'
 const REF_IN_KINDS = new Set(['reference_fasta', 'panel_bed', 'truth_vcf', 'adapter_fasta'])
 const METRIC_OUT_KINDS = new Set([
   'fastp_json', 'fastp_html', 'markdup_metrics', 'samtools_stats', 'multiqc_html',
-  'mosdepth_regions', 'mosdepth_global_dist', 'mosdepth_region_dist', 'per_base', 'vcf_index',
+  'mosdepth_regions', 'mosdepth_global_dist', 'mosdepth_region_dist', 'vcf_index',
 ])
 export function portSide(kind: string, dir: 'in' | 'out'): PortSide {
   if (dir === 'in') return REF_IN_KINDS.has(kind) ? 'top' : 'left'
@@ -440,11 +444,9 @@ const KIND_VAR: Record<string, string> = {
   vcf: '--k-var', filtered_vcf: '--k-var', vcf_index: '--k-var',
   fastp_json: '--k-qc', fastp_html: '--k-qc', markdup_metrics: '--k-qc', samtools_stats: '--k-qc',
   mosdepth_summary: '--k-qc', mosdepth_thresholds: '--k-qc', mosdepth_regions: '--k-qc',
-  mosdepth_global_dist: '--k-qc', mosdepth_region_dist: '--k-qc', per_base: '--k-qc',
-  multiqc_json: '--k-qc', multiqc_html: '--k-qc', fastqc_zip: '--k-qc', bcftools_stats: '--k-qc',
-  picard_hsmetrics: '--k-qc', ngscheckmate: '--k-qc',
+  mosdepth_global_dist: '--k-qc', mosdepth_region_dist: '--k-qc',
+  multiqc_json: '--k-qc', multiqc_html: '--k-qc', ngscheckmate: '--k-qc',
   reference_fasta: '--k-ref', panel_bed: '--k-ref', truth_vcf: '--k-ref', adapter_fasta: '--k-ref',
-  read_group: '--k-cfg',
 }
 export function kindColor(kind: string): string {
   return `var(${KIND_VAR[kind] ?? '--color-text-3'})`
@@ -468,17 +470,26 @@ export type CardPort = { kind: string; dir: 'in' | 'out'; side: PortSide; state:
 export const CARD_PORTS: Record<string, CardPort[]> = {
   fastp: [
     { kind: 'fastq', dir: 'in', side: 'left', state: 'required' },
+    // adapter_fasta stays RESERVED (the one honestly-left-reserved port): `--adapter_fasta` is a
+    // real fastp file input, but the compiler's input-drift guard is EXACT + positional, so adding
+    // it to the catalog would force EVERY fastp node (incl. the seeded golden chain) to wire an
+    // adapter source. Too invasive for this pass; kept non-armable with a tooltip (Wave 1).
     { kind: 'adapter_fasta', dir: 'in', side: 'top', state: 'reserved' },
     { kind: 'fastq', dir: 'out', side: 'right', state: 'required' },
-    { kind: 'unpaired_fastq', dir: 'out', side: 'right', state: 'reserved' },
+    // unpaired_fastq / failed_fastq PROMOTED reserved→optional: fastp writes them with
+    // --unpaired1/2 / --failed_out (added to the compiler catalog), so both are real emit channels.
+    { kind: 'unpaired_fastq', dir: 'out', side: 'right', state: 'optional' },
     { kind: 'fastp_json', dir: 'out', side: 'bottom', state: 'required' },
     { kind: 'fastp_html', dir: 'out', side: 'bottom', state: 'optional' }, // now a real published output (compiler catalog)
-    { kind: 'failed_fastq', dir: 'out', side: 'bottom', state: 'reserved' },
+    { kind: 'failed_fastq', dir: 'out', side: 'bottom', state: 'optional' },
   ],
   'bwa-mem2': [
+    // read_group REMOVED (was reserved): bwa-mem2's `-R` takes a computed read-group STRING (the
+    // command already hardcodes `@RG\tID:${meta.id}\t…`), not a consumed file artifact. A builder
+    // port wires a file channel, so read_group could never be a real connectable channel — dropped
+    // rather than left as a superficial slot (maintainer note 6).
     { kind: 'fastq', dir: 'in', side: 'left', state: 'required' },
     { kind: 'reference_fasta', dir: 'in', side: 'top', state: 'required' },
-    { kind: 'read_group', dir: 'in', side: 'left', state: 'reserved' },
     { kind: 'bam', dir: 'out', side: 'right', state: 'required' },
   ],
   'samtools markdup': [
@@ -500,7 +511,9 @@ export const CARD_PORTS: Record<string, CardPort[]> = {
     { kind: 'mosdepth_regions', dir: 'out', side: 'bottom', state: 'optional' },
     { kind: 'mosdepth_global_dist', dir: 'out', side: 'bottom', state: 'optional' },
     { kind: 'mosdepth_region_dist', dir: 'out', side: 'bottom', state: 'optional' },
-    { kind: 'per_base', dir: 'out', side: 'bottom', state: 'reserved' },
+    // per_base REMOVED (was reserved): the catalog command runs mosdepth with `--no-per-base`, which
+    // SUPPRESSES the per-base depth track — so per_base is never produced. Showing it would be
+    // superficial; dropped rather than left dangling (maintainer note 6).
   ],
   'bcftools call': [
     { kind: 'bam', dir: 'in', side: 'left', state: 'required' },
@@ -512,9 +525,13 @@ export const CARD_PORTS: Record<string, CardPort[]> = {
   'bcftools norm': [
     { kind: 'vcf', dir: 'in', side: 'left', state: 'required' },
     { kind: 'reference_fasta', dir: 'in', side: 'top', state: 'required' },
-    { kind: 'panel_bed', dir: 'in', side: 'top', state: 'reserved' },
+    // panel_bed REMOVED (was reserved): the catalog `bcftools norm -f ${reference}` normalizes
+    // genome-wide (left-align + split multiallelics); it consumes no panel/targets BED, and the
+    // maintainer's I/O correction explicitly took panel_bed off norm. Dropped, not left dangling.
     { kind: 'filtered_vcf', dir: 'out', side: 'right', state: 'required' },
-    { kind: 'vcf_index', dir: 'out', side: 'bottom', state: 'reserved' },
+    // vcf_index PROMOTED reserved→optional: the script already runs `bcftools index -f` on the
+    // normalized VCF, writing a real `.csi` — now a published emit channel (compiler catalog).
+    { kind: 'vcf_index', dir: 'out', side: 'bottom', state: 'optional' },
   ],
   MultiQC: [
     { kind: 'fastp_json', dir: 'in', side: 'left', state: 'required' },
@@ -522,12 +539,14 @@ export const CARD_PORTS: Record<string, CardPort[]> = {
     { kind: 'samtools_stats', dir: 'in', side: 'left', state: 'optional' }, // now wired from markdup (compiler catalog)
     { kind: 'mosdepth_summary', dir: 'in', side: 'left', state: 'required' },
     { kind: 'mosdepth_thresholds', dir: 'in', side: 'left', state: 'optional' }, // now ingested (was dangling)
-    { kind: 'fastqc_zip', dir: 'in', side: 'top', state: 'reserved' },
-    { kind: 'bcftools_stats', dir: 'in', side: 'top', state: 'reserved' },
-    { kind: 'picard_hsmetrics', dir: 'in', side: 'top', state: 'reserved' },
-    { kind: 'ngscheckmate', dir: 'in', side: 'top', state: 'reserved' },
+    // fastqc_zip / bcftools_stats / picard_hsmetrics / ngscheckmate REMOVED (were reserved): no tool
+    // in the catalogued germline chain produces any of these, and MultiQC's inputs are FIXED by its
+    // ProcessSpec (the compiler's input-drift guard is exact), so none could ever be wired. Dropped
+    // rather than left as superficial slots (maintainer note 6).
     { kind: 'multiqc_json', dir: 'out', side: 'right', state: 'required' },
-    { kind: 'multiqc_html', dir: 'out', side: 'bottom', state: 'reserved' },
+    // multiqc_html PROMOTED reserved→optional: `multiqc .` always writes multiqc_report.html (no
+    // --no-report), so it is a real product of the current command — now a published emit channel.
+    { kind: 'multiqc_html', dir: 'out', side: 'bottom', state: 'optional' },
   ],
   // Reference SOURCES — one output port PER consumer (same kind, distinct idx) so each consumer edge is
   // a 1:1 wire (no branching). Side is 'right' (balanceSides lays ref OUTPUTS on the right, with the

@@ -11,6 +11,7 @@ process BCFTOOLS_NORM {
 
     output:
     tuple val(meta), path("*.norm.vcf.gz"), emit: filtered_vcf
+    tuple val(meta), path("*.norm.vcf.gz.csi"), emit: vcf_index
 
     script:
     """
@@ -20,6 +21,6 @@ process BCFTOOLS_NORM {
 
     stub:
     """
-    touch ${meta.id}.norm.vcf.gz
+    touch ${meta.id}.norm.vcf.gz ${meta.id}.norm.vcf.gz.csi
     """
 }

@@ -90,14 +90,24 @@ _SPECS: tuple[ProcessSpec, ...] = (
             # fastp already writes the HTML report (`-h …fastp.html` below) — capture it as a real
             # published output rather than a dangling reserved port (W3 full-port-wiring).
             Port("fastp_html", 'path("*.fastp.html")', emit="fastp_html"),
+            # PROMOTED reserved ports → real outputs. The `--unpaired1/--unpaired2` flags below make
+            # fastp write the surviving mate of a broken PE pair, and `--failed_out` writes every
+            # read that fails a filter — both are genuine fastp products with these flags on, so the
+            # ports now map to real published channels instead of dangling dashed slots.
+            Port("unpaired_fastq", 'path("*.unpaired.fastq.gz")', emit="unpaired_fastq"),
+            Port("failed_fastq", 'path("*.failed.fastq.gz")', emit="failed_fastq"),
         ),
         script=(
             "fastp -i ${read1} -I ${read2} \\\n"
             "  -o ${meta.id}.trim.R1.fastq.gz -O ${meta.id}.trim.R2.fastq.gz \\\n"
+            "  --unpaired1 ${meta.id}.unpaired.fastq.gz "
+            "--unpaired2 ${meta.id}.unpaired.fastq.gz \\\n"
+            "  --failed_out ${meta.id}.failed.fastq.gz \\\n"
             "  -j ${meta.id}.fastp.json -h ${meta.id}.fastp.html -w ${task.cpus}"
         ),
         stub=(
             "touch ${meta.id}.trim.R1.fastq.gz ${meta.id}.trim.R2.fastq.gz "
+            "${meta.id}.unpaired.fastq.gz ${meta.id}.failed.fastq.gz "
             "${meta.id}.fastp.json ${meta.id}.fastp.html"
         ),
     ),
@@ -225,12 +235,18 @@ _SPECS: tuple[ProcessSpec, ...] = (
             Port("vcf", "path(calls)"),
             Port("reference_fasta", "tuple path(reference), path(reference_idx)"),
         ),
-        outputs=(Port("filtered_vcf", 'path("*.norm.vcf.gz")', emit="filtered_vcf"),),
+        outputs=(
+            Port("filtered_vcf", 'path("*.norm.vcf.gz")', emit="filtered_vcf"),
+            # PROMOTED reserved port → real output. The script ALREADY runs `bcftools index -f` on
+            # the normalized VCF below, which writes a `.csi` index — a genuine byproduct of the
+            # current command, not a fabricated slot; capture + publish it as a channel.
+            Port("vcf_index", 'path("*.norm.vcf.gz.csi")', emit="vcf_index"),
+        ),
         script=(
             "bcftools norm -f ${reference} -Oz -o ${meta.id}.norm.vcf.gz ${calls}\n"
             "bcftools index -f ${meta.id}.norm.vcf.gz"
         ),
-        stub="touch ${meta.id}.norm.vcf.gz",
+        stub="touch ${meta.id}.norm.vcf.gz ${meta.id}.norm.vcf.gz.csi",
     ),
     ProcessSpec(
         tool="MultiQC",
@@ -252,9 +268,13 @@ _SPECS: tuple[ProcessSpec, ...] = (
         ),
         outputs=(
             Port("multiqc_json", 'path("multiqc_data/multiqc_data.json")', emit="multiqc_json"),
+            # PROMOTED reserved port → real output. `multiqc .` ALWAYS writes `multiqc_report.html`
+            # by default (only `--no-report` suppresses it, which this command never passes), so the
+            # HTML report is a genuine product of the current command — capture + publish it.
+            Port("multiqc_html", 'path("multiqc_report.html")', emit="multiqc_html"),
         ),
         script="multiqc . --data-format json",
-        stub="mkdir -p multiqc_data && touch multiqc_data/multiqc_data.json",
+        stub=("mkdir -p multiqc_data && touch multiqc_data/multiqc_data.json multiqc_report.html"),
     ),
 )
 
