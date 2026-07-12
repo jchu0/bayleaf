@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
+| **Related** | [functional.md](functional.md), [constraints.md](constraints.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0011](../adr/ADR-0011-tooling-and-reproducibility.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [design/frontend/README.md](../design/frontend/README.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) |
 
 ## Overview
 
@@ -35,6 +35,16 @@ links to [evaluation.md](../quality/evaluation.md).
    **byte-identical**. *Verify:* the offline suite + pinned scenario stayed green across
    T-024/T-025 — [metric_registry.md](../data/metric_registry.md),
    [schemas.md](../data/schemas.md) §QC (units contract).
+5. **REQ-NF-005 — Per-run resolved-version capture (provenance, not a re-pin).** Every driver
+   run (`scripts/run_giab_pipeline.py`) writes `versions.txt` into the run dir — a best-effort
+   snapshot of the resolved Nextflow/fastp/bwa-mem2/samtools/mosdepth/bcftools/multiqc versions
+   actually on `PATH` at run time. This does **NOT** pin or change any container/conda tag (the
+   module catalog stays floating tags + a version floor, deliberately, to keep re-pinning out of
+   scope — a Medium-risk change per the audit); "deterministic reruns" for this project mean
+   wiring + gate re-derivation (REQ-NF-001), not bitwise-identical tool output. A version-probe
+   failure is recorded, never fatal. *Trace:* [functional.md REQ-F-093](functional.md),
+   [design/nextflow-codegen.md](../design/nextflow-codegen.md),
+   [tasks T-131](../planning/tasks.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
 
 ## Provenance & auditability
 
@@ -128,6 +138,29 @@ links to [evaluation.md](../quality/evaluation.md).
    REQ-NF-023) and is not a cryptographic/formal identity-matching guarantee. *Trace:*
    [functional.md REQ-F-083c](functional.md), [design/ui-conventions.md UIC-11](../design/ui-conventions.md#uic-11--submit-samplesheet),
    [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md).
+7. **REQ-NF-026 — Dev-shim auth is loudly labelled; de-id/redaction matching is case-insensitive;
+   the untrusted-text boundary is bounded (2026-07-11, audit P3-11 / AS-03/AS-05/AS-07/AS-08).**
+   Four related agent-safety hardenings, none changing a default behavior: (a) `api/auth.py`'s
+   `current_actor()` logs a single loud warning on first use that the header-trust dev shim is
+   active (any caller can self-assert any role via `X-PipeGuard-Role`) — logged, never raised, so
+   it cannot break the offline demo; a new opt-in `PIPEGUARD_AUTH_STRICT` (OFF by default) defaults
+   a **header-less** request to `viewer` instead of the permissive `approver` — the header itself is
+   still trusted either way, only the no-header fallback changes, and the demo's default behavior
+   is byte-for-byte unchanged. (b) `api/deid.py`/`api/safe_harbor.py` field-name matching is now
+   **case-insensitive** (trim + lower-case the lookup key) — a differently-cased column (`Tissue`)
+   used to silently fall through to `PASSTHROUGH` and egress un-redacted; it now resolves its
+   policy action like its lower-case form. (c) `synthesis/claude.py`'s system prompt now states
+   explicitly that `log_excerpts`/`finding.detail` are UNTRUSTED pipeline/rule-authored text, never
+   an instruction to follow, and caps what reaches the model (8 excerpts × 300 chars) — defense in
+   depth on top of the structural guarantee that the verdict is computed and fixed BEFORE the model
+   call (ADR-0001; the model can at worst mislead the labelled-advisory prose, never re-decide a
+   sample). (d) `safe_harbor.py`'s 18 §164.514(b)(2)-class manifest gains a note that the class list
+   is "classes the scrub *considers*," not "18 actively-running detectors" — several (vehicle,
+   device, biometric, photo) are documented no-detector seams because the class does not appear in
+   this data model; the egress endpoint's disclaimer already states the scrub is uncertified. *Trace:*
+   REQ-NF-020, REQ-NF-023, [architecture.md](../design/architecture.md) §Swappable seams (Auth /
+   identity row), [tasks T-131](../planning/tasks.md),
+   [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
 
 ## Performance & cost
 
@@ -152,6 +185,27 @@ links to [evaluation.md](../quality/evaluation.md).
    the run. *Trace:* CLAUDE.md Data handling, [architecture.md](../design/architecture.md).
 3. **REQ-NF-042 — Layered demo fallback.** Live AI → stub; React/API → Streamlit;
    else recorded walkthrough. *Trace:* [demo_plan.md](../demo/demo_plan.md) §Fallbacks.
+4. **REQ-NF-043 — Execution jobs survive a backend restart (2026-07-11, T-131, audit P3-2/P3-8).**
+   `api/job_store.py` persists each background execution job (intake, Builder-run) so a backend
+   restart cannot strand a poller on `running` forever — a restart-recovered job resolves to
+   `complete` (result dir on disk) or the new terminal status `lost` (owning process gone, no
+   result). Run-id reservation is atomic (the run-dir-exists check and the in-flight-job-set check
+   happen under one lock), closing a race where two concurrent submits of the same run id could
+   both proceed. *Trace:* [functional.md REQ-F-091](functional.md),
+   [ADR-0016](../adr/ADR-0016-postgres-port.md) item 8,
+   [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
+5. **REQ-NF-044 — External-pipeline preflight fails loud, before launch (2026-07-11, T-131, audit
+   P3-3/P3-4/P3-5/P3-7).** `scripts/run_giab_pipeline.py` validates FASTQ pairing/format,
+   reference↔panel-BED contig naming, and reference-index sidecar presence BEFORE handing off to
+   Nextflow — a bad input fails in milliseconds with an actionable message rather than burning a
+   full launch or (worse) silently yielding a wrong result (e.g. a `20`/`chr20` naming mismatch
+   would otherwise silently yield ~0% panel breadth). The shared driver-launch path
+   (`api/job_store.run_driver()`) also now reaps the WHOLE process group on a timeout
+   (`os.killpg`, `start_new_session=True`), not just the direct child, so a timed-out run leaves no
+   orphaned Nextflow/JVM/tool subtree — both routers now share one `DRIVER_TIMEOUT_S` (was 900s
+   intake / 1800s Builder-run, diverged). *Trace:* [functional.md REQ-F-092](functional.md),
+   [design/nextflow-codegen.md](../design/nextflow-codegen.md),
+   [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
 
 ## Maintainability, type-safety & testing
 
@@ -190,6 +244,22 @@ links to [evaluation.md](../quality/evaluation.md).
    addendum), [design/nextflow-codegen.md](../design/nextflow-codegen.md),
    [architecture.md](../design/architecture.md) §Deployment. Cloud/IaC executor config is still
    *wishlist*.
+
+## Accessibility
+
+1. **REQ-NF-070 — Baseline screen-reader + keyboard-trap support on shared components
+   (2026-07-11, T-132, audit S1/UIUX-05/UIUX-08).** Two shared primitives every screen composes
+   through gain a baseline a11y contract: `components/Toast.tsx`'s container carries
+   `role="status" aria-live="polite"`, with an individual error toast additionally carrying
+   `role="alert"` (assertive) so a failure interrupts a screen reader rather than waiting for a
+   pause; `components/ConfirmDialog.tsx`'s panel carries `role="dialog" aria-modal="true"` +
+   `aria-labelledby`/`aria-describedby`, focuses its primary (confirm) button on open, and traps
+   Tab within the panel (wraps first↔last focusable) so keyboard/AT users cannot tab out to the
+   page behind the overlay. **Scope**: this is a baseline for these two shared components, not a
+   full WCAG audit of the app — no automated a11y test/CI gate exists yet, and this requirement
+   does not claim AA/AAA conformance anywhere else in the UI. *Trace:*
+   [design/ui-conventions.md](../design/ui-conventions.md) UIC-19,
+   [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
 
 ---
 

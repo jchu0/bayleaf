@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043) + pluggable **pipeline-graph store BUILT (T-049)** + pluggable **share-egress-audit store BUILT (2026-07-11, ADR-0018 D3)**, all OFF by default; **live-Postgres integration test BUILT + verified green** (`tests/test_persistence_postgres_live.py`, compose-gated + skip-safe); connection pooling + read-from-projection deferred |
+| **Status** | Accepted · PostgresRepository + pluggable feedback store BUILT (T-043) + pluggable **pipeline-graph store BUILT (T-049)** + pluggable **share-egress-audit store BUILT (2026-07-11, ADR-0018 D3)** + a **durable job store BUILT (2026-07-11, T-131, jsonl\|sqlite only — no Postgres adapter, by design)**, all OFF by default; **live-Postgres integration test BUILT + verified green** (`tests/test_persistence_postgres_live.py`, compose-gated + skip-safe); connection pooling + read-from-projection deferred |
 | **Date** | 2026-07-09 (MST) · updated 2026-07-11 (MST) |
 | **Deciders** | James Hu, Claude Code |
-| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](ADR-0018-variant-interpretation-advisory-evidence.md) (share-egress sink, item 6), [tasks.md](../planning/tasks.md) |
+| **Related** | [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [ADR-0014](ADR-0014-productionization-fastapi-react.md), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](ADR-0018-variant-interpretation-advisory-evidence.md) (share-egress sink, item 6), [tasks.md](../planning/tasks.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md) |
 
 ## Context
 
@@ -72,6 +72,32 @@ So the port must be **real but guarded** — present as a production seam, invis
    3/6 the same day, closing the one remaining off-gate sink without a DB adapter. Verified
    against a live `postgres:16` (`tests/test_persistence_postgres_live.py`). See
    [data/provenance.md](../data/provenance.md#a-second-separate-sink-for-share-events-apishare_storepy).
+8. **A fifth instance, and the first that deliberately stays TWO-backend, not three: the durable
+   job store (2026-07-11, T-131, `595815e`, audit finding P3-2, `audit/SYNTHESIS.md` S5 `F5-R5`/`F5-R2`).**
+   `api/job_store.py` (`JobStore` Protocol + `JsonlJobStore`/`SqliteJobStore`,
+   `PIPEGUARD_JOB_STORE=jsonl|sqlite`, default `jsonl`, degrade-to-JSONL on any construction
+   failure — the same discipline as items 3/6/7) replaces the `intake.py`/`pipeline_run.py`
+   routers' in-memory `_jobs: dict[...]` job registries. Those dicts made a submitted-run job
+   **non-durable**: a backend restart lost every job's status, so a poller kept hitting `running`
+   forever for a job whose owning process was gone — the store makes that state (queued → running →
+   complete/failed) survive a restart. A restart-recovered job that has no result on disk resolves
+   to a new terminal status, **`lost`** (distinct from `failed`), so a poll never hangs. **No
+   `PostgresJobStore` exists, and none is planned** — unlike items 3/6/7, a job record is
+   short-lived, single-node scratch bookkeeping (which process launched which subprocess, on THIS
+   machine) rather than shared product state a second reader needs, so the two local backends
+   (JSONL default, SQLite for a real-DB deployment) suffice; `.nf-runs/jobs.{events.jsonl,sqlite}`
+   are the default sinks, already gitignored (the same scratch home both routers use). The module
+   is also the single home for the shared driver-launch primitive both routers now call
+   (`run_driver()` + one `DRIVER_TIMEOUT_S = 1800`, was 900s intake / 1800s Builder-run,
+   diverged): `subprocess.Popen(..., start_new_session=True)` makes the driver a process-group
+   leader, so a timeout `os.killpg`s the WHOLE Nextflow/JVM/tool subtree instead of
+   `subprocess.run(..., timeout=…)`'s direct-child-only reap, which orphaned the subtree
+   (P3-7). Run-id reservation is now **atomic**: the run-dir-exists check and the in-flight `_active`
+   set membership check happen together under one `threading.Lock`, so two concurrent submits of the
+   same id can no longer both proceed to launch a thread (P3-8) — the loser now gets a clean 409
+   instead of racing the winner. See
+   [data/schemas.md §Persistence](../data/schemas.md#persistence-databases) and
+   [architecture.md §Swappable seams](../design/architecture.md#swappable-seams-the-flex-points).
 
 ## Assumptions
 
@@ -94,8 +120,8 @@ So the port must be **real but guarded** — present as a production seam, invis
 | | |
 |---|---|
 | **Gains** | The anticipated production DB seam is real + guarded; feedback lands in a queryable DB; a backend swap is one env var; the offline demo/tests are untouched (no new dep, no socket). |
-| **Costs** | A second SQL dialect to keep in parity with `SqliteRepository`; `psycopg` connect logic now exists in **six** off-gate places (repo + feedback + pipeline + settings + review + share stores, confirmed via `grep -rln "class Postgres" api/ src/` — was "three" when this row was first written, before the settings/review/share stores existed); the Postgres SQL is not in the default-green CI path (it needs docker + the extra) — covered by the compose-gated live test + offline dialect review + parity tests. |
-| **Follow-ups** | ~~A live-Postgres integration test~~ **DONE** (`tests/test_persistence_postgres_live.py` — compose-gated, skip-safe; verified green against real Postgres 16: projection byte-parity vs SQLite, idempotent replay, feedback JSONB round-trip, and — added 2026-07-11 — share-store round-trip; the review's UTC + `seq` fixes hold). Still open: connection pooling; Alembic-style migrations if the layout ever needs a non-disposable change; wiring the read-API to read the projection (today it recomputes). |
+| **Costs** | A second SQL dialect to keep in parity with `SqliteRepository`; `psycopg` connect logic now exists in **six** off-gate places (repo + feedback + pipeline + settings + review + share stores, confirmed via `grep -rln "class Postgres" api/ src/` — was "three" when this row was first written, before the settings/review/share stores existed). **A seventh pluggable store, the job store (item 8), deliberately does NOT add an eighth Postgres dialect** — `grep -rln "class Postgres" api/ src/` still returns six, `api/job_store.py` has no `class Postgres*` — so the dialect-parity cost above is unchanged by it. The Postgres SQL is not in the default-green CI path (it needs docker + the extra) — covered by the compose-gated live test + offline dialect review + parity tests. |
+| **Follow-ups** | ~~A live-Postgres integration test~~ **DONE** (`tests/test_persistence_postgres_live.py` — compose-gated, skip-safe; verified green against real Postgres 16: projection byte-parity vs SQLite, idempotent replay, feedback JSONB round-trip, and — added 2026-07-11 — share-store round-trip; the review's UTC + `seq` fixes hold). Still open: connection pooling; Alembic-style migrations if the layout ever needs a non-disposable change; wiring the read-API to read the projection (today it recomputes); **multi-worker safety for every pluggable store, incl. the new job store** (a file lock / DB transaction) — the same honest, unchanged limit item 8 above notes for `api/job_store.py`'s `_WRITE_LOCK` (a single-process lock, not a cross-process one). |
 
 ## Revisit when
 

@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [design/ui-conventions.md](ui-conventions.md), [design/builder-cards/](builder-cards/), [design/node-authoring-agent.md](node-authoring-agent.md), [design/variant-interpretation.md](variant-interpretation.md), [design/nextflow-codegen.md](nextflow-codegen.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [design/ui-conventions.md](ui-conventions.md), [design/builder-cards/](builder-cards/), [design/node-authoring-agent.md](node-authoring-agent.md), [design/variant-interpretation.md](variant-interpretation.md), [design/nextflow-codegen.md](nextflow-codegen.md) |
 
 ## Overview
 
@@ -744,6 +744,67 @@ Every finding and verdict is labelled with the gate it came from:
      [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (Realized §3, new) — the
      gate/ingest not wearing tool-card affordances at all is the cleanest expression yet of
      "rules decide; the canvas is what you compose, not where the decision lives."
+   - **P3 backlog, wave 1 — reliability + preflight + registry honesty + agent-safety
+     (2026-07-11, T-131, commit `595815e`, [journal](../journal/2026-07-11-p3-backlog.md)).**
+     Four disjoint-file agents acting on the release-hardening audit's `post-hackathon` P3
+     findings (`audit/SYNTHESIS.md`), each re-verifying currency against the code first. **(1)
+     Durable job store** — see [ADR-0016 item 8](../adr/ADR-0016-postgres-port.md) and the
+     Swappable-seams row above; closes P3-2/P3-7/P3-8. **(2) Intake preflight + reproducibility**
+     — `scripts/run_giab_pipeline.py` gains FASTQ pairing/format validation, a reference↔panel-BED
+     contig-naming assertion, and a reference-index sidecar check, each a loud `sys.exit` BEFORE
+     the Nextflow launch (never a silent bad result), plus a per-run `versions.txt` snapshot of
+     resolved tool versions (provenance capture, not a re-pin) — closes P3-3/P3-4/P3-5/P3-6; full
+     detail in [nextflow-codegen.md](nextflow-codegen.md). A `sample_metadata.csv` this driver
+     writes is now explicitly marked `metadata_origin=fixture-authored-placeholder` in its own
+     output — it was always fixture-authored (HG002, tissue=blood), this closes only the *labeling*
+     gap (P3-9), not a data change. **(3) Registry honesty (labeling only, no threshold/gate
+     change)** — `metric_registry.yaml`/`runbook.py`/`mapping.py` gain inline comments + doc notes
+     (`docs/data/metric_registry.md`/`qc_metrics.md`, both already updated in this commit) stating
+     as-built fact: the variant gate is DP-only (GQ/Ts-Tv ungated, allele-balance not computed),
+     7 of 20 registered metrics have no parser wired ("NOT COMPUTED"), `qc.duplication` is
+     as-built sourced from fastp not Picard, and `cluster_pf`'s `required=True` is a **deliberate,
+     unchanged** honesty choice — it structurally HOLDs every reads-only run (P3-1/P3-10; ADR-0001
+     holds, no verdict/threshold moved). **(4) Agent-safety** — `api/auth.py` gains a loud one-shot
+     log warning that the dev-shim auth is permissive + an opt-in `PIPEGUARD_AUTH_STRICT` (default
+     header-less role stays `approver`, unchanged; only defaults to `viewer` if set); `api/deid.py`/
+     `api/safe_harbor.py` field-name matching is now case-insensitive (a `Tissue` column used to
+     silently pass through ungated); `synthesis/claude.py` gains an explicit prompt-injection
+     boundary statement + excerpt caps (8 lines / 300 chars) on the untrusted `log_excerpts` it
+     ingests — the verdict was already structurally immune (deterministic, set before the LLM call),
+     this bounds the advisory-prose blast radius further; `safe_harbor.py`'s 18-class manifest gains
+     an honest-labeling note that the class list is "considered," not "18 actively-scrubbed
+     detectors." Verified: 500 passed / 6 skipped (+33 tests), ruff+mypy clean, demo verdicts
+     byte-identical.
+   - **P3 backlog, wave 2 — UI a11y/Pager + contract-type drift + monitoring pagination
+     (2026-07-11, T-132, commit `deee99f`, [journal](../journal/2026-07-11-p3-backlog.md)).**
+     Three disjoint-file agents on the remaining P3-12/P3-13 UI/contract findings. **(1) UI
+     polish + dead code:** lifecycle status dots (`verdict.ts` `RUN_STATUS_META`) move OFF the
+     verdict palette (`needs_review`/`running`/`released` were `bg-hold`/`bg-info`/`bg-proceed` —
+     the exact hues a sample verdict uses — now `bg-accent`/`bg-variant`/`bg-text-3`), so a
+     run-lifecycle dot can never be misread as a verdict; the shared `<Pager>` finally reaches its
+     last three named consumers (RunOverview/AgentTriage/ReviewQueue, replacing three copies of
+     hand-rolled ‹/›-button pagination); Inbox's top-level view switcher moves from
+     `SegmentedControl` to the canonical `<Tabs>`; `Toast` gains an `aria-live="polite"` region
+     (error toasts `role="alert"`, assertive); `ConfirmDialog` gains `role="dialog"`/`aria-modal`
+     plus a Tab focus trap; the orphaned `RunHandoffModal` (zero call sites since Batch 7's
+     `RunPipelineModal` superseded it) is deleted. **This corrects, not just extends, the earlier
+     UIC-2/UIC-5 "Shipped ✅" claims** — see [ui-conventions.md](ui-conventions.md) UIC-2/UIC-5/
+     UIC-18/UIC-19 for the honest before/after. **(2) Contract-type drift fixed additively** in
+     `frontend/src/types.ts` — `QCThreshold` gains `our_key`/`required`, `Runbook` gains
+     `trace_failure_statuses`/`route_to_human`, `DecisionCard.metric_values` becomes non-optional
+     (the backend always emits an array via `default_factory=list`, never omits the field),
+     `IntakeStatus.status` widens to include the new `'lost'` restart-recovery state, `TriageNote`
+     gains `addresses_signatures` — every field already existed on the Python side; only the TS
+     mirror had drifted behind it (`git diff` confirms zero `src/`/`api/` change in this half).
+     **(3) `GET /api/monitoring` gains server-side `page`/`limit` on `runs[]`** (mirrors
+     `GET /api/runs` exactly — same param names, same `X-PipeGuard-{Total-Count,Page,Limit}`
+     headers), with the KPI roll-up/per-gate rates/signatures staying whole-window aggregates so a
+     page never distorts them; `Monitoring.tsx` wires a `<Pager>` to it. **This closes
+     [T-072](../planning/tasks.md)'s backend half — the "uncapped `runs[]` payload" gap tracked
+     since Batch 8 is now closed on both sides** (the frontend chart still renders every fetched
+     — now server-paged — run as a scrolling bar; T-100's chart-vs-pager framing is unaffected).
+     Verified: 501 passed / 6 skipped (+1 test), ruff+mypy clean, tsc+oxlint clean (whole project),
+     ADR-0001 held (no verdict/confidence touched by either wave).
 5. **Outbound notify seam (`notify/`, ADR-0010).** An optional `run_gate(notifier=…)` hook
    turns each *actionable* card (HOLD/RERUN/ESCALATE; clean cards are skipped) into a
    notification, tailored per verdict category (identity risk / re-run / borderline-QC) with
@@ -818,9 +879,10 @@ config override, notably, records intent without mutating the live runbook.
 | Pipeline-graph store (off-gate product) | `PIPEGUARD_PIPELINE_STORE=jsonl\|sqlite\|postgres` (`api/pipeline_store.py`); mirrors the feedback sink — degrade-to-JSONL, never logs the DSN (ADR-0016) | JSONL |
 | Settings-override store (off-gate authoring) | `PIPEGUARD_SETTINGS_STORE=jsonl\|sqlite\|postgres` (`api/settings_store.py`); config-threshold override ledger — degrade-to-JSONL, DSN never logged. Records intent; **never mutates the live runbook** (ADR-0001/0016) | JSONL |
 | Review-queue store (off-gate product) | `PIPEGUARD_REVIEW_STORE=jsonl\|sqlite\|postgres` (`api/review_store.py`); ticket lifecycle over already-decided samples — degrade-to-JSONL, DSN never logged (ADR-0010/0016) | JSONL |
+| Durable job store (off-gate execution bookkeeping) | `PIPEGUARD_JOB_STORE=jsonl\|sqlite` (`api/job_store.py`, 2026-07-11, T-131); replaces the intake/Builder-run routers' in-memory `_jobs` dicts so a submitted-run job survives a backend restart (`lost` if no result dir on disk, else `complete`) — degrade-to-JSONL. **No Postgres adapter, by design**: node-local scratch bookkeeping, not shared product state (ADR-0016 item 8). Also hosts the shared, process-group-aware `run_driver()` (one `DRIVER_TIMEOUT_S`, `killpg` reaps the whole Nextflow/JVM subtree on timeout) and the atomic dup-run-id reservation both routers now share | JSONL |
 | Auth / identity (off-gate) | `api/auth.py` `current_actor()` header-shim (`X-PipeGuard-Actor`/`-Role`) → swap for a verified IdP (OIDC / signed JWT) returning the same `Actor`; one chokepoint, downstream `require_role(...)` unchanged (ADR-0010/0017) | permissive dev shim (`id=dev`, `role=approver`) |
 | Pipeline codegen (compose, never execute) | `pipeguard.nextflow.compile_graph()` — a card graph → Nextflow bundle; `POST /api/pipelines/compile` (JSON/`.zip`); curated catalog, uncatalogued tool → a labelled placeholder ([design/nextflow-codegen.md](nextflow-codegen.md), T-123) | pure text codegen, no execution |
-| Intake execution driver | `scripts/run_giab_pipeline.py`, triggered by `POST /api/runs`; **Nextflow-first as of 2026-07-11** — runs `pipelines/germline/main.nf` via `nextflow run` (was: called fastp/bwa-mem2/samtools/… directly) | local `-profile conda`, HG002-fixture-scoped |
+| Intake execution driver | `scripts/run_giab_pipeline.py`, triggered by `POST /api/runs`; **Nextflow-first as of 2026-07-11** — runs `pipelines/germline/main.nf` via `nextflow run` (was: called fastp/bwa-mem2/samtools/… directly). **Pre-flight-guarded + version-captured as of 2026-07-11 (T-131):** FASTQ pairing/format, reference/panel-BED contig naming, and reference-index sidecars are asserted (loud `sys.exit`, never a silent bad result) BEFORE the Nextflow launch; every run now also writes a `versions.txt` snapshot of the resolved tool/Nextflow versions on `PATH` — provenance capture only, not a re-pin ([nextflow-codegen.md §Pre-flight guards](nextflow-codegen.md#pre-flight-guards--version-capture-2026-07-11-t-131)) | local `-profile conda`, HG002-fixture-scoped |
 | Deployment | ports & adapters; Nextflow now **executable** for local compute (codegen + the intake driver, above); Slurm/AWS-Batch/HealthOmics executor config stays wishlist (ADR-0003) | local |
 
 Unlike the AI/notify seams (off by default, adapter-swapped at the edge), the **metric registry

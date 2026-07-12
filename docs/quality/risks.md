@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | all |
-| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-confirm-dialog-audit-gate.md](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal/2026-07-10-frontend-wave9.md](../journal/2026-07-10-frontend-wave9.md) |
+| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-confirm-dialog-audit-gate.md](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal/2026-07-10-frontend-wave9.md](../journal/2026-07-10-frontend-wave9.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) |
 
 ## Overview
 
@@ -273,7 +273,17 @@ silently dropped or fabricated.
 (T-063) mean the demo does **not need** a live Submit to show every other screen — Submit can be
 demoed once, pre-verified, or skipped in favor of the pre-seeded runs if the toolchain isn't
 confirmed on the demo machine. `GET /api/runs/{id}/intake-status` surfaces `failed` + an error
-tail rather than hanging silently.
+tail rather than hanging silently. **Extended 2026-07-11 (T-131):** two related gaps this risk's
+scope always implied are now closed — (1) a backend restart mid-run used to strand
+`intake-status` on `running` forever (the old in-memory `_jobs` dict); the durable
+`api/job_store.py` now recovers a restarted job to `complete` or the new `lost` status instead.
+(2) A mismatched/swapped/malformed FASTQ pair, a reference/panel-BED contig-naming mismatch, or a
+missing reference index used to fail deep inside Nextflow (or, worse for a contig mismatch,
+silently yield ~0% coverage) rather than failing fast at the API boundary; four pre-flight guards
+now `sys.exit` before the Nextflow launch with an actionable message. Neither closes the
+underlying toolchain-on-PATH dependency this risk is about — they harden the failure/recovery
+paths around it. See [ADR-0016](../adr/ADR-0016-postgres-port.md) item 8,
+[nextflow-codegen.md §Pre-flight guards](../design/nextflow-codegen.md#pre-flight-guards--version-capture-2026-07-11-t-131).
 
 **Owner / revisit trigger.** Demo rehearsal on the actual demo machine with a live Submit;
 confirm `PIPEGUARD_BIOCONDA_BIN` is set in the API's launch env before any live Submit demo.

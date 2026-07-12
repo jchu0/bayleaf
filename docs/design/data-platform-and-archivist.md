@@ -5,7 +5,7 @@
 | **Status** | Draft — for maintainer review |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [design/architecture.md](architecture.md) · [design/agents.md](agents.md) · [design/variant-interpretation.md](variant-interpretation.md) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) · [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md) · [ADR-0015](../adr/ADR-0015-layered-data-contract.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) · [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) · [data/provenance.md](../data/provenance.md) · [data/schemas.md](../data/schemas.md) · [data/metric_registry.md](../data/metric_registry.md) · [data/strategy.md](../data/strategy.md) · [planning/tasks.md](../planning/tasks.md) · [journal/2026-07-09-giab-e2e-pipeline.md](../journal/2026-07-09-giab-e2e-pipeline.md) · [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md) · [journal/2026-07-10-admin-settings-builder-wiring.md](../journal/2026-07-10-admin-settings-builder-wiring.md) · [journal/2026-07-10-builder-modals-and-run-selector.md](../journal/2026-07-10-builder-modals-and-run-selector.md) · [journal/2026-07-10-batch8-theme-monitoring-recharts.md](../journal/2026-07-10-batch8-theme-monitoring-recharts.md) · [journal/2026-07-10-settings-agent-table.md](../journal/2026-07-10-settings-agent-table.md) · [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md) · [journal/2026-07-10-frontend-wave9.md](../journal/2026-07-10-frontend-wave9.md) · [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md) · [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md) · [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md) · [design/nextflow-codegen.md](nextflow-codegen.md) |
+| **Related** | [design/architecture.md](architecture.md) · [design/agents.md](agents.md) · [design/variant-interpretation.md](variant-interpretation.md) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) · [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md) · [ADR-0015](../adr/ADR-0015-layered-data-contract.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) · [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) · [data/provenance.md](../data/provenance.md) · [data/schemas.md](../data/schemas.md) · [data/metric_registry.md](../data/metric_registry.md) · [data/strategy.md](../data/strategy.md) · [planning/tasks.md](../planning/tasks.md) · [journal/2026-07-09-giab-e2e-pipeline.md](../journal/2026-07-09-giab-e2e-pipeline.md) · [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md) · [journal/2026-07-10-admin-settings-builder-wiring.md](../journal/2026-07-10-admin-settings-builder-wiring.md) · [journal/2026-07-10-builder-modals-and-run-selector.md](../journal/2026-07-10-builder-modals-and-run-selector.md) · [journal/2026-07-10-batch8-theme-monitoring-recharts.md](../journal/2026-07-10-batch8-theme-monitoring-recharts.md) · [journal/2026-07-10-settings-agent-table.md](../journal/2026-07-10-settings-agent-table.md) · [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md) · [journal/2026-07-10-frontend-wave9.md](../journal/2026-07-10-frontend-wave9.md) · [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md) · [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md) · [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md) · [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) · [design/nextflow-codegen.md](nextflow-codegen.md) |
 
 > **Draft for review.** Produced by a multi-agent design workflow (four design perspectives +
 > three adversarial critiques — scope-realism, guardrails, over-engineering — then synthesized)
@@ -451,6 +451,23 @@ tests/` is empty. A "New agent" button links to the Pipeline Builder (`/builder`
 existing agent-authoring surface — a full agent-designer stays a phase-2 seam. See
 [journal 2026-07-10](../journal/2026-07-10-settings-agent-table.md) and
 [tasks T-103](../planning/tasks.md).
+
+### 4.11 (Shipped 2026-07-11, T-132, commit `deee99f`) — `GET /api/monitoring` gains server-side `page`/`limit` on `runs[]`, closing §4.9's open item
+
+**§4.9's own closing line said the fix "is server-side... no further frontend re-presentation
+closes it" — this is that fix.** `get_monitoring` (`api/main.py`) now accepts `page`/`limit`
+query params that slice `runs[]` **after** every whole-window aggregate (`overall`, `gates`,
+`n_signatures_total`, ranked signatures) is computed, mirroring `GET /api/runs`'s existing
+`page`/`limit`/header contract exactly (`X-PipeGuard-{Total-Count,Page,Limit}`, no params → the
+pre-existing byte-identical body). `Monitoring.tsx`'s `api.monitoringPage()` wires a `<Pager>` to
+it. **This is a real backend payload cap, not another client-side render trick** — verified by
+`tests/test_api.py::test_monitoring_runs_pagination_slices_and_reports_total`, which asserts a
+2-run page's `overall.n_runs` still equals the FULL window total (proving the aggregate is
+computed pre-slice, not re-derived from the sliced page). The Recharts `ComposedChart` from §4.9
+still renders every run **on the current page** as a scrolling bar — the chart-vs-pager UI idiom
+from §4.9 is unchanged, only the payload feeding it is now bounded. [tasks T-072](../planning/tasks.md)
+is `done` as of this section; see also [functional.md REQ-F-047](../requirements/functional.md)
+and [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
 
 ---
 

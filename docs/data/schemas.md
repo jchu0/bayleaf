@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | bioinformatics / software |
-| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / route-to-human / `data.exported` share egress), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md) |
+| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family, incl. the job store), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / route-to-human / `data.exported` share egress), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md) |
 
 ## Overview
 
@@ -193,6 +193,10 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 
 ### Agents / corpora (ADR-0009) — MVP-deferred
 13. **TriageNote** — finding_id/signature · agent (`qc_triage|pipeline_repair`) ·
+    **addresses_rule_ids[]** / **addresses_signatures[]** *(the rule_ids and semantic finding
+    signatures this note addresses — both existed on `triage/models.py` since T-015; this doc
+    entry was missing `addresses_signatures` until a 2026-07-11 sweep caught the frontend
+    `types.ts` mirror had also drifted behind it, T-132)* ·
     likely_cause · suggested_action · citations[] (finding_ids + corpus_ids) · model ·
     **advisory: Literal[True]** *(never sets a verdict)*.
 14. **ExperienceRecord** (`exp_`) — issue_signature · source_finding_id · source_ticket_id ·
@@ -263,6 +267,23 @@ gitignored `share.events.jsonl` rather than the gate's own `EventLedger`)*.
 5. **Corpora/embeddings:** knowledge + experience as JSONL; retrieval via BM25/embedding
    index now; **pgvector** when Postgres lands (also the wishlist vector-QC home). Embeddings
    are **derived index records**, never stored on the canonical record.
+6. **Execution-job bookkeeping (`api/job_store.py`, 2026-07-11) is API-layer, not a core record.**
+   Unlike items 1–5 above (which mirror `src/pipeguard/models.py`), a job (`kind`, `run_id`,
+   `status: queued|running|complete|failed|lost`, `error`) tracks a background driver launch that
+   `api/routers/intake.py`/`pipeline_run.py` triggers — it never enters `RunArtifacts`,
+   `MetricValue`, or the JSONL ledger, and it is mutable (not content-hashed / immutable like the
+   records above). `lost` is a restart-recovery terminal status: a job whose owning process died
+   with no result dir on disk. Persisted via the SAME jsonl/sqlite pluggable-store shape as the
+   product stores above, but deliberately with **no Postgres backend** (node-local scratch, not
+   shared product state) — see [ADR-0016 item 8](../adr/ADR-0016-postgres-port.md).
+
+> **`frontend/src/types.ts` is a hand-maintained TypeScript mirror of this contract, not generated.**
+> It can drift behind the pydantic source of truth above — a 2026-07-11 sweep (T-132) found and
+> fixed five such drifts (`QCThreshold.our_key`/`.required`, `Runbook.trace_failure_statuses`/
+> `.route_to_human`, `DecisionCard.metric_values` wrongly marked optional, `IntakeStatus.status`
+> too narrowly typed, `TriageNote.addresses_signatures` missing) — none required a Python-side
+> change; every field already existed here. Treat a `types.ts` claim as provisional until checked
+> against this doc or the model source.
 
 ## Invariants
 

@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Built (2026-07-11, T-123, commits `10f1816`→`e4ba174`); **extended the same day** (T-129, "W4," commit `5f0d5ec`) with executor profiles, per-sample fan-out, and full QC port wiring |
+| **Status** | Built (2026-07-11, T-123, commits `10f1816`→`e4ba174`); **extended the same day** (T-129, "W4," commit `5f0d5ec`) with executor profiles, per-sample fan-out, and full QC port wiring; **hardened the same day** (T-131, commit `595815e`) with pre-flight guards + per-run version capture |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide, AI advisory — this module sets no verdict), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; this doc REALIZES its "Nextflow carries compute portability" decision), [design/architecture.md](architecture.md) (component map), [data/nf-core-conventions.md](../data/nf-core-conventions.md) (the vocabulary this catalog adopts), [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) (the card graph this compiles), [design/builder-cards/](builder-cards/) (the per-tool port specs the catalog mirrors), [planning/tasks.md](../planning/tasks.md) (T-123, T-129), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide, AI advisory — this module sets no verdict), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (deployment-agnostic ports; this doc REALIZES its "Nextflow carries compute portability" decision), [ADR-0016](../adr/ADR-0016-postgres-port.md) (the durable job store the intake driver's launch now persists into, item 8), [design/architecture.md](architecture.md) (component map), [data/nf-core-conventions.md](../data/nf-core-conventions.md) (the vocabulary this catalog adopts), [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) (the card graph this compiles), [design/builder-cards/](builder-cards/) (the per-tool port specs the catalog mirrors), [planning/tasks.md](../planning/tasks.md) (T-123, T-129, T-131), [journal 2026-07-11](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md) |
 
 ## Overview
 
@@ -259,6 +259,50 @@ run-level SAV/InterOp metric a fastq→BAM path cannot produce — flagged, not 
 the pre-Nextflow expected result. This confirms the Nextflow re-plumbing changed *how* the tools
 run, not *what* they compute.
 
+## Pre-flight guards + version capture (2026-07-11, T-131)
+
+Four audit findings (`audit/SYNTHESIS.md` P3-3/P3-4/P3-5/P3-6) hardened
+`scripts/run_giab_pipeline.py` around the Nextflow launch above, without touching what Nextflow
+itself runs or how the gate scores the result:
+
+1. **FASTQ pairing/format (P3-3).** Before the launch, `_preflight_fastqs()` streams R1/R2 in
+   lockstep: each file must exist, be non-empty, and not be the same file; every 4-line record must
+   look like FASTQ (`@` header, `+` separator line, equal seq/qual length); and each pair of records
+   must share a mate-independent read id (Casava comment + `/1`/`/2` suffix stripped). A pairing
+   failure — a swapped file, a truncated file, or a mismatched sample — raises a loud, specific
+   `sys.exit` naming the read index and the two ids that didn't match, **before** any tool runs.
+2. **Reference↔panel-BED contig naming (P3-4).** `_preflight_contigs()` reads the reference's
+   contig set (from its `.fai` if present, else FASTA headers) and asserts every panel-BED contig is
+   a member. A naming mismatch (`20` vs `chr20`) does not crash downstream — it silently yields
+   ~0% panel breadth (mosdepth finds no overlap) — so this check turns that silent-wrong-result
+   failure mode into a loud one, before Nextflow launches.
+3. **Reference-index sidecar presence (P3-5).** `_preflight_reference_index()` asserts the sidecars
+   the germline chain's reference channel needs (`.fai`, `.0123`, `.amb`, `.ann`, `.bwt.2bit.64`,
+   `.pac`) are on disk before launch — without this check the run would launch, run fastp, and only
+   then die deep inside bwa-mem2, burning a full launch on a problem detectable in milliseconds.
+4. **Per-run resolved-version capture (P3-6).** `capture_versions()` writes `versions.txt` into the
+   run dir: a best-effort snapshot of the resolved `nextflow`/`fastp`/`bwa-mem2`/`samtools`/
+   `mosdepth`/`bcftools`/`multiqc` versions actually on `PATH` at run time (`shutil.which` + a
+   `--version`/`version` probe per tool). **This is provenance capture only — it does NOT pin or
+   change any container/conda tag**; the module catalog stays floating tags + a version floor
+   deliberately (re-pinning containers was assessed Medium risk and left out of scope). A probe
+   failure (tool absent/erroring) is recorded as text (`"<tool>: not found on PATH"`), never fatal —
+   capturing provenance must not break a run. **This does not add a `pipeline_info/` round-trip**
+   (Limitation 5 below is unchanged) — `versions.txt` is a separate, simpler resolved-version
+   snapshot, not Nextflow's own manifest.
+
+A fifth, related finding (P3-9) is a **labeling-only** fix, not a new guard: the driver's
+`sample_metadata.csv` was always fixture-authored (HG002, `tissue=blood`, `subject_id=sample_id` —
+this build has no LIMS/subject feed), and now carries an explicit `metadata_origin=
+fixture-authored-placeholder` column so a downstream reader can never mistake it for accessioned
+subject data (an extra column, not a `#`-comment line — the core parser has no `comment=` set and
+would misread a leading `#` line as the header row).
+
+Each guard is a pure function of its path args (unit-tested without Nextflow on `PATH`,
+`tests/test_run_giab_preflight.py`, 16 cases) and none ever silently proceeds past a bad input —
+see [functional.md REQ-F-092/REQ-F-093](../requirements/functional.md) and
+[nonfunctional.md REQ-NF-005/REQ-NF-044](../requirements/nonfunctional.md).
+
 ## Tests / verification
 
 | Test | What it pins |
@@ -275,15 +319,17 @@ run, not *what* they compute.
 | `tests/test_nextflow_api.py` (4 tests) | `POST /api/pipelines/compile` — JSON preview, `.zip` download, a 422 on a cycle/empty graph. |
 
 Census (verified `uv run pytest --collect-only -q` + `git ls-files 'tests/*.py' | wc -l`, updated
-2026-07-11 after W4 + the E2E acceptance test, in a sandbox with `nextflow` NOT on `PATH`):
-**471 tests collected across 33 files** (was 427/29) — **465 passed / 6 skipped** here (the
-`test_nextflow_compile.py` live `-stub-run` skip above plus the new `test_e2e_pipeline.py`
-env-gated live-stub check, both absent `nextflow`); on a machine with `nextflow` on `PATH` both
-run instead, giving 467 passed / 4 skipped. Either way the compiler/wiring/drift/placeholder
-tests run unconditionally offline, with no `nextflow` binary required. `test_nextflow_compile.py`
-itself grew from 10 to 15 cases covering the W4 per-sample fan-out (meta-threaded ports, the
-samplesheet-driven reads channel, the MultiQC aggregator's `.collect()` wiring) and the executor
-profiles (`standard`/`slurm` render in the generated `nextflow.config`).
+2026-07-11 after the P3-backlog session, T-131/T-132, in a sandbox with `nextflow` NOT on `PATH`):
+**507 tests collected across 35 files** (was 471/33 after W4/E2E, 427/29 before that) — **501
+passed / 6 skipped** here (the `test_nextflow_compile.py` live `-stub-run` skip above plus
+`test_e2e_pipeline.py`'s env-gated live-stub check, both absent `nextflow`); on a machine with
+`nextflow` on `PATH` both run instead, giving a computed **503 passed / 4 skipped** (arithmetic
+from the two skip reasons above — not independently re-run in this sandbox, which has no
+`nextflow`). Either way the compiler/wiring/drift/placeholder tests run unconditionally offline,
+with no `nextflow` binary required. `test_nextflow_compile.py` itself stayed at 15 cases this
+session (unchanged by T-131/T-132); the two new files this session,
+`tests/test_job_store.py` (12) and `tests/test_run_giab_preflight.py` (16), cover the durable job
+store and the four preflight guards above, both pure-offline with no `nextflow` on `PATH` needed.
 
 ## Limitations (recorded in the open, not hidden)
 

@@ -204,8 +204,16 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    honest `RunSummary` status/platform/date (from the SampleSheet `[Header]`) + an **intake
    execution boundary** (`api/routers/intake.py`, T-057): `POST /api/runs` registers a submitted
    samplesheet and triggers `scripts/run_giab_pipeline.py` as a background subprocess
-   (in-process job registry; HG002-fixture-scoped, honest-skips the rest; 409 on a dup run id),
-   `GET /api/runs/{id}/intake-status` polls `queued|running|complete|failed` — `src/pipeguard/`
+   (HG002-fixture-scoped, honest-skips the rest; 409 on a dup run id, now reserved atomically
+   under the lock), `GET /api/runs/{id}/intake-status` polls `queued|running|complete|failed|lost`.
+   The job registry is now a **durable job store** (`api/job_store.py`, T-131: a `JobStore` Protocol
+   + `Jsonl`/`Sqlite` impls, `get_job_store()` env-selected `PIPEGUARD_JOB_STORE=jsonl|sqlite`,
+   degrade-to-jsonl, sinks under the gitignored `.nf-runs/` — the sixth off-gate store, but
+   node-local scratch so no Postgres adapter, ADR-0016) replacing the old in-memory dict: an intake
+   or Builder-run job now survives a restart (a `running` job whose process is gone reconciles to
+   `complete` if its run dir is on disk, else `lost`, never an eternal spinner); the driver is
+   launched in its own process group and reaped with `killpg` on the shared `DRIVER_TIMEOUT_S`.
+   `src/pipeguard/`
    still never runs a tool (compose ≠ execute holds at the core), but the API layer now DOES
    trigger an external driver, closing the old "Submit never runs anything" gap. **The driver is
    now Nextflow-first (2026-07-11, T-123):** it no longer calls fastp/bwa-mem2/samtools/… itself —

@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
+| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
 
 ## Overview
 
@@ -416,10 +416,16 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    it, and **the per-run pager above was removed**, not narrowed — a pager made no sense once
    the chart scrolls instead of paginating (the signatures pager is unaffected). The chart now
    renders every fetched run as a bar with no client-side cap either, so `GET /api/monitoring`'s
-   `runs[]` remains uncapped in **both** directions until the backend gains `page`/`limit`
-   (mirroring `GET /api/runs`); [tasks T-072](../planning/tasks.md) stays `todo` and is the
-   single accurate tracker of this gap — read it, not this now-superseded pagination note, for
-   current status. The same commit adds a **grounded hover tooltip** (real per-run verdict
+   `runs[]` remained uncapped in **both** directions until the backend gained `page`/`limit`.
+   **Closed 2026-07-11 (T-132, commit `deee99f`):** `GET /api/monitoring` now accepts additive
+   `page`/`limit` on `runs[]`, mirroring `GET /api/runs` exactly (same param names, the same
+   `X-PipeGuard-{Total-Count,Page,Limit}` response headers); the KPI roll-up, per-gate pass rates,
+   and ranked signatures are computed BEFORE the slice, so a page can never distort them — only the
+   throughput array itself is sliced. `Monitoring.tsx` wires a `<Pager>` to the new params; the
+   chart still renders every run **on the current page** as a scrolling bar (T-100's chart framing
+   is unaffected — this is the backend cap T-072 tracked, not a return to a client-side row limit).
+   [tasks T-072](../planning/tasks.md) is now `done`. The same T-100 commit adds a **grounded hover
+   tooltip** (real per-run verdict
    counts, no synthesis) and a "Flagged (trend)" line (hold+rerun+escalate), and gives each
    ranked signature a unique, stable, client-rendered display id (`SIG-<first 8 chars of the
    signature hash>`) plus a REVERSIBLE, `localStorage`-persisted clear-from-view/restore — a
@@ -595,7 +601,9 @@ had reserved or listed as *not-yet-built*.
    **triggers** `scripts/run_giab_pipeline.py` as a background subprocess (an in-process job
    registry; `require_role(reviewer|approver)`; 409 on a duplicate run id), turning
    `data/<run_id>/` into a gate-able run; `GET /api/runs/{id}/intake-status` polls
-   `queued|running|complete|failed`. This demo build only has real reads on disk for `HG002` —
+   `queued|running|complete|failed`, **now widened to `|lost`** (2026-07-11, REQ-F-091): a job whose
+   owning process died mid-run (e.g. a backend restart) recovers to `lost`, not an indefinite
+   `running`. This demo build only has real reads on disk for `HG002` —
    other submitted samples are **honestly skipped** (registered, reported, never fabricated a
    run for), and a submission with no processable sample 422s. **Compose ≠ execute still holds
    at the core:** `src/pipeguard/` never runs a tool — only the API layer triggers the external
@@ -1197,6 +1205,44 @@ had reserved or listed as *not-yet-built*.
     [design/nextflow-codegen.md](../design/nextflow-codegen.md),
     [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Realized addendum 2026-07-11),
     REQ-F-085, [tasks T-129](../planning/tasks.md), [journal 2026-07-11](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
+32. **REQ-F-091 — Durable execution-job persistence + restart recovery.** The two execution
+    routers (`api/routers/intake.py`'s `POST /api/runs`, `api/routers/pipeline_run.py`'s
+    `POST /api/pipelines/run`) persist each background job's status via `api/job_store.py`
+    (`JobStore` Protocol, `jsonl` default | `sqlite`, `PIPEGUARD_JOB_STORE`) instead of an
+    in-process dict, so a backend restart no longer loses job state or leaves a poller hung on
+    `running` forever. A restart-recovered job whose result dir is on disk resolves to `complete`;
+    otherwise it resolves to a new terminal status, **`lost`** (distinct from `failed` — its owning
+    process died, the work outcome is unknown), persisted so subsequent polls see a stable answer.
+    Run-id reservation is **atomic**: the run-dir-exists check and the in-flight-job-set check
+    happen together under one lock, so two concurrent submits of the same run id can no longer both
+    proceed (one now gets a clean 409). The driver launch is now shared + process-group-aware
+    (`run_driver()`, one `DRIVER_TIMEOUT_S`): a timeout `os.killpg`s the WHOLE Nextflow/JVM/tool
+    subtree, not just the direct child, so a timed-out run leaves no orphaned subprocess.
+    *Trace:* [ADR-0016](../adr/ADR-0016-postgres-port.md) item 8,
+    [architecture.md](../design/architecture.md) §Swappable seams, REQ-F-067,
+    [tasks T-131](../planning/tasks.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
+33. **REQ-F-092 — Pipeline preflight validation (fail loud, before the Nextflow launch).**
+    `scripts/run_giab_pipeline.py` validates its inputs BEFORE handing them to Nextflow, so a bad
+    input fails in milliseconds with an actionable message instead of burning a full launch (or,
+    worse, silently yielding a wrong result): (a) FASTQ **pairing/format** — R1/R2 exist, are
+    non-empty, look like FASTQ, and pair record-for-record on a mate-independent read id; (b)
+    reference↔panel-BED **contig-naming** — every panel-BED contig must exist in the reference
+    (catches a `20` vs `chr20` build mismatch, which would otherwise silently yield ~0% panel
+    breadth); (c) reference-**index sidecar** presence (`.fai`, `.0123`, `.amb`, `.ann`,
+    `.bwt.2bit.64`, `.pac`) — without these the run would launch, run fastp, and only then die deep
+    inside bwa-mem2. Each guard raises a loud, actionable `sys.exit`; none ever silently proceeds.
+    *Trace:* [design/nextflow-codegen.md §Pre-flight guards](../design/nextflow-codegen.md#pre-flight-guards--version-capture-2026-07-11-t-131),
+    [tasks T-131](../planning/tasks.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
+34. **REQ-F-093 — Per-run resolved-version capture (`versions.txt`).** Every driver run writes
+    `versions.txt` into the run dir: a best-effort snapshot of the resolved Nextflow/fastp/
+    bwa-mem2/samtools/mosdepth/bcftools/multiqc versions actually on `PATH` at run time. This is
+    **provenance capture only — it does NOT pin or change any container/conda tag** (a floating-tag
+    re-pin stays out of scope, Medium risk per the audit); "deterministic reruns" for this project
+    means wiring + gate re-derivation, not bitwise-identical tool output, so a per-run snapshot of
+    what actually resolved is the honest reproducibility artifact available today. A probe failure
+    (tool absent/erroring) is recorded, never fatal — capturing provenance must not break a run.
+    *Trace:* [REQ-NF-005](../requirements/nonfunctional.md), [tasks T-131](../planning/tasks.md),
+    [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
 
 ## Notes / deferred
 

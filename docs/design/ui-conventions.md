@@ -5,7 +5,7 @@
 | **Status** | Active — the durable convention registry (so a rule is stated once, not per session) |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / design / reviewers |
-| **Related** | [design/frontend/README.md](frontend/README.md) (tokens + per-screen spec), [design/builder-cards/README.md](builder-cards/README.md) (pipeline-card design), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [functional.md](../requirements/functional.md), [scale-aware memory], [explicit-edit+audit memory] |
+| **Related** | [design/frontend/README.md](frontend/README.md) (tokens + per-screen spec), [design/builder-cards/README.md](builder-cards/README.md) (pipeline-card design), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [functional.md](../requirements/functional.md), [nonfunctional.md](../requirements/nonfunctional.md) (REQ-NF-070, a11y), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [scale-aware memory], [explicit-edit+audit memory] |
 
 ## Why this doc exists
 
@@ -36,6 +36,17 @@ driver already ran, now published + wired to MultiQC); the mosdepth `regions`/`g
 see the UIC-16 entry below and [builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
 for the current set.
 
+**UIC-2/UIC-5 corrected, and two new conventions added (2026-07-11, T-132, commit `deee99f`, the
+P3-backlog audit).** The release-hardening audit (`audit/SYNTHESIS.md` UIUX-02/03/04/05/08) caught
+that two "Shipped ✅" claims below were premature: UIC-2's Tabs migration had NOT reached Inbox's
+top-level view switcher (still `SegmentedControl`), and UIC-5's Pager migration had NOT reached
+RunOverview/AgentTriage/ReviewQueue (still three copies of hand-rolled ‹/›-button pagination). Both
+are now genuinely closed — see the corrected notes on UIC-2/UIC-5 below; this is a documentation
+lesson as much as a code one (a component's own "adopted here" list must be re-verified by `grep`,
+not trusted from memory). The same commit adds two new durable conventions this session's fixes
+made worth recording once: **UIC-18** (a run-lifecycle status dot must never reuse a verdict hue)
+and **UIC-19** (a11y baseline for the shared `Toast`/`ConfirmDialog` primitives).
+
 ---
 
 ## Cross-cutting UI conventions
@@ -60,7 +71,12 @@ through), so it's unmistakably a view selector, not highlighted text. Still dist
 `SegmentedControl` (compact toggle settings). Update `components/Tabs.tsx` once; every consumer
 (Runs / Review-queue / Admin / RunDetail / Provenance / Inbox) inherits it. **Shipped**: `Tabs.tsx`
 restyled to framed (top-rounded, active tab connected via `-mb-px`/`border-b-card`); every consumer
-inherits it with no per-caller API change.
+inherits it with no per-caller API change. **Correction (2026-07-11, T-132, UIUX-04):** the
+"every consumer inherits it" claim above was premature — Inbox's top-level view switcher
+(inbox/board/calendar/notes) was still `SegmentedControl`, not `Tabs`, confirmed by the audit and
+now fixed (`screens/Inbox.tsx`); `Tabs` now genuinely covers all six named consumers (verified:
+`grep -rl "from '../components/Tabs'" frontend/src/screens` returns Runs, Review-queue, Admin,
+RunDetail, Provenance, Inbox).
 
 ### UIC-3 — Checkbox multi-select convention (app-wide) · ✅
 Every checkbox list uses ONE selection model:
@@ -100,10 +116,20 @@ closed; Admin role edits + threshold overrides already had it (T-092/T-051).
 ### UIC-5 — Pagination is 25 / 50 / 100 everywhere · ✅
 Any list that can grow uses the shared `components/Pager.tsx` with a 25/50/100 per-page control
 (default 25). No infinite/unbounded rows (see scale-aware rule). Applies to: notifications/Inbox,
-Submit sample table, Accession, Review queue, Monitoring, Admin, Provenance event-trail/artifacts.
+Submit sample table, Accession, Review queue, Monitoring, Admin, Provenance event-trail/artifacts,
+Runs overview, Agent triage.
 **Shipped** — Inbox's notification list and Submit's sample table gained the real 25/50/100
 control this batch (the last two named consumers); Accession/Review-queue/Monitoring/Admin/
-Provenance already had it from earlier waves (T-114/T-116/T-117).
+Provenance already had it from earlier waves (T-114/T-116/T-117). **Correction (2026-07-11,
+T-132, UIUX-03):** the "Shipped" claim above was premature — Runs overview, Agent triage, and
+Review queue were still each running their OWN hand-rolled ‹/numbered/›-button pagination (not
+the shared `Pager`), confirmed by the audit and now replaced (`screens/RunOverview.tsx` uses
+`<Pager total={total} page={page} perPage={perPage} onPage={setPage} onPerPage={onPerPage}
+noun="runs" />`; `AgentTriage.tsx` uses a fixed-10/page `<Pager … hidePerPage noun="flagged" />`;
+`ReviewQueue.tsx` uses `<Pager total={view.total} … noun="tickets" />`) — three fewer
+hand-rolled pagers, one canonical component. `GET /api/monitoring`'s `runs[]` throughput array
+also gained a `<Pager>` the same session, closing [T-072](../planning/tasks.md)'s backend cap
+(see the REQ-F-047 addendum in [functional.md](../requirements/functional.md)).
 
 ### UIC-6 — Every page is admin-assignable · ✅
 The page-access catalog ([access.ts](../../frontend/src/access.ts)) must include **every** operator
@@ -260,6 +286,35 @@ Two related, maintainer-directed rules from the same 2026-07-11 session
 `BuilderCanvas.tsx` renders zero verdict palette and zero non-composable cards. Grounded in
 [frontend/README.md §6](frontend/README.md#6-pipeline-builder--full-model),
 [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) Realized §3.
+
+### UIC-18 — A run-lifecycle status dot must never reuse a verdict hue · ✅
+A dot that means "where is this run in its lifecycle" (`RunStatus`: `running`/`needs_review`/
+`released`) is a **different signal** from a dot that means "how did this sample turn out"
+(`Verdict`: proceed/hold/rerun/escalate) — they must never share a color, or an operator scanning a
+list of dots cannot tell which signal they're reading. The original `RUN_STATUS_META` mapping
+violated this: `needs_review` used `bg-hold` (the exact amber a HOLD verdict uses) and `released`
+used `bg-proceed` (the exact green a PROCEED verdict uses), so a Runs-list card could show two
+amber, or two green, dots stacked for unrelated reasons. **Shipped (2026-07-11, T-132, commit
+`deee99f`, UIUX-02):** `verdict.ts`'s `RUN_STATUS_META` is remapped to a palette RESERVED away from
+all four verdict hues — `needs_review` → `bg-accent` (needs a human), `running` → `bg-variant`
+(machine sequencing), `released` → `bg-text-3` (neutral grey, filed) — none of which is
+`bg-proceed`/`bg-hold`/`bg-rerun`/`bg-escalate`. Applies to: every `RUN_STATUS_META` consumer (the
+Runs list, the top-bar run switcher, `RunSelector`) — one source of truth, so a future consumer
+inherits the separation automatically.
+
+### UIC-19 — A11y baseline: `Toast` + `ConfirmDialog` · ✅
+The two shared primitives nearly every screen composes through (a write's outcome, and a
+consequential-action confirmation) must carry baseline screen-reader + keyboard support — this is
+NOT a claim of a full WCAG audit, only a floor on these two components. **Shipped (2026-07-11,
+T-132, commit `deee99f`, UIUX-05/UIUX-08):** `components/Toast.tsx`'s container is
+`role="status" aria-live="polite"`; an individual error toast additionally carries `role="alert"`
+(assertive), so a failed write interrupts a screen reader instead of waiting for a pause — matching
+the toast system's own purpose (surfacing every off-gate write's real backend outcome).
+`components/ConfirmDialog.tsx`'s panel gains `role="dialog" aria-modal="true"` +
+`aria-labelledby`/`aria-describedby`, auto-focuses its confirm button on open, and traps Tab within
+the panel (wraps first↔last focusable) so a keyboard/AT user cannot tab out to the page behind the
+overlay — Escape still cancels (a deliberate dismissal). See
+[nonfunctional.md REQ-NF-070](../requirements/nonfunctional.md) for the requirement framing.
 
 ---
 
