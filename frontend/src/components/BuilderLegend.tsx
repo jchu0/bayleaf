@@ -19,14 +19,20 @@ const KIND_ROWS: { c: string; label: string; eg: string; outline?: boolean }[] =
 const STATE_ROWS: [string, CSSProperties][] = [
   ['required', { background: 'var(--k-align)', border: '1.5px solid var(--k-align)' }],
   ['optional', { background: 'color-mix(in srgb, var(--k-align) 40%, transparent)', border: '1.5px solid var(--k-align)' }],
-  ['reserved', { background: 'transparent', border: '1.5px dashed var(--k-cfg)', opacity: 0.7 }],
+  // Reserved samples the SAME alignment hue as required/optional (only fill/border-style change) so the
+  // four rows read as one STATE scale — matching the cards (a reserved port is dashed-hollow in ITS kind
+  // colour, not a separate config hue). Was drifting to --k-cfg, contradicting this section's premise.
+  ['reserved', { background: 'transparent', border: '1.5px dashed var(--k-align)', opacity: 0.7 }],
   ['reference · outlined', { background: 'var(--color-card)', border: '1.5px solid var(--k-ref)' }],
 ]
 
-const WIRE_ROWS: [string, string, boolean][] = [
-  ['data · kind-coloured', 'var(--k-align)', false],
-  ['QC fan-in', 'var(--k-qc)', false],
-  ['reference', 'var(--k-ref)', true],
+// [label, colour, border-style]. Solid = data wires; dashed = the reference feed; dotted accent = the
+// advisory agent→tool link — a real, distinct edge type (ADR-0001, off-gate) the legend was omitting.
+const WIRE_ROWS: [string, string, string][] = [
+  ['data · kind-coloured', 'var(--k-align)', 'solid'],
+  ['QC fan-in', 'var(--k-qc)', 'solid'],
+  ['reference', 'var(--k-ref)', 'dashed'],
+  ['advisory · off-gate', 'var(--color-accent)', 'dotted'],
 ]
 
 // The category-tag chips stamped on every in-card box row (refine pass) — one consistent set: REQ /
@@ -109,9 +115,9 @@ export function BuilderLegend({ edit }: { edit: boolean }) {
       <div className="mt-1 text-[10px] text-text-3">one per port row · number · kind · dir · tag</div>
 
       <div className="mb-1 mt-2.5 text-[8.5px] font-bold uppercase tracking-[0.4px] text-text-3">Wires</div>
-      {WIRE_ROWS.map(([label, c, dashed]) => (
+      {WIRE_ROWS.map(([label, c, style]) => (
         <div key={label} className="flex items-center gap-2 py-[2px]">
-          <span className="h-0 w-6 shrink-0" style={{ borderTop: `2px ${dashed ? 'dashed' : 'solid'} ${c}` }} />
+          <span className="h-0 w-6 shrink-0" style={{ borderTop: `2px ${style} ${c}` }} />
           <span className="text-[11px] text-text-2">{label}</span>
         </div>
       ))}

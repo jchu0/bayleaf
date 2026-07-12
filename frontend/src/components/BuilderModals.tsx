@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Archive,
   Check,
+  ChevronRight,
   Copy,
   Download,
   FileCode,
@@ -10,6 +11,7 @@ import {
   Loader2,
   Play,
   Plus,
+  Save,
   Terminal,
   Trash2,
   TriangleAlert,
@@ -1144,6 +1146,8 @@ export function CustomScriptInspector({
   onDelete,
   onClose,
   onBrowse,
+  onCollapse,
+  onSaveCard,
 }: {
   node: UserNode
   isView: boolean
@@ -1164,6 +1168,10 @@ export function CustomScriptInspector({
   onDelete: (id: string) => void
   onClose: () => void
   onBrowse: (opts: { title: string; kinds?: FileKind[]; onPick: (path: string) => void }) => void
+  // Hide/collapse the panel (mirrors the left palette collapse; persists across selections) + commit
+  // THIS card's edits (distinct from the toolbar Save that persists the whole pipeline).
+  onCollapse: () => void
+  onSaveCard: () => void
 }) {
   const runtime = node.runtime ?? 'container'
   const globs = alignOutGlobs(node.outGlobs, node.outs)
@@ -1183,7 +1191,12 @@ export function CustomScriptInspector({
           <p className="truncate text-[14px] font-semibold text-text">{node.name}</p>
           <p className="truncate font-mono text-[10.5px] text-text-3">operator-authored · custom process</p>
         </div>
-        <button onClick={onClose} className="grid h-7 w-7 place-items-center rounded-lg border border-line text-text-2 hover:bg-page">
+        {/* Hide/collapse (mirrors the left palette) — distinct from Close (X): Hide keeps the selection
+            and collapses the panel to a rail; it stays collapsed across selections until reopened. */}
+        <button onClick={onCollapse} title="Hide inspector" className="grid h-7 w-7 place-items-center rounded-lg border border-line text-text-2 hover:bg-page">
+          <ChevronRight size={14} />
+        </button>
+        <button onClick={onClose} title="Close (clear selection)" className="grid h-7 w-7 place-items-center rounded-lg border border-line text-text-2 hover:bg-page">
           <X size={14} />
         </button>
       </div>
@@ -1405,6 +1418,21 @@ export function CustomScriptInspector({
           </button>
         )}
       </div>
+
+      {/* Card-edit Save — commits THIS custom card's edits (already live in the draft); distinct from
+          the toolbar Save that persists the whole pipeline as a new version. Edit-only. */}
+      {!isView && (
+        <div className="shrink-0 border-t border-line p-3">
+          <button
+            onClick={onSaveCard}
+            title="Apply this card's edits to the draft (the toolbar Save persists the whole pipeline)"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-white shadow-card transition-opacity hover:opacity-90"
+          >
+            <Save size={13} />
+            Save card
+          </button>
+        </div>
+      )}
     </aside>
   )
 }

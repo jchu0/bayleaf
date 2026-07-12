@@ -165,13 +165,36 @@ _SPECS: tuple[ProcessSpec, ...] = (
         outputs=(
             Port("mosdepth_summary", 'path("*.mosdepth.summary.txt")', emit="mosdepth_summary"),
             Port("mosdepth_thresholds", 'path("*.thresholds.bed.gz")', emit="mosdepth_thresholds"),
+            # The remaining three are REAL byproducts of the SAME `mosdepth --by … --thresholds`
+            # command (no extra flag needed): `--by` writes the per-region depth BED and the
+            # region distribution, and the global distribution is always emitted (`--no-per-base`
+            # suppresses only the per-base track). They were dangling reserved ports on the Builder
+            # card (frontend advertises all 5) while the catalog declared only 2 — that arity gap
+            # tripped the compiler's output-drift guard and 422'd Export-to-Nextflow on the default
+            # view. Declared + published here so a full-5-output node compiles; the seeded
+            # germline_graph() still trims to summary+thresholds and stays a valid subset.
+            Port("mosdepth_regions", 'path("*.regions.bed.gz")', emit="mosdepth_regions"),
+            Port(
+                "mosdepth_global_dist",
+                'path("*.mosdepth.global.dist.txt")',
+                emit="mosdepth_global_dist",
+            ),
+            Port(
+                "mosdepth_region_dist",
+                'path("*.mosdepth.region.dist.txt")',
+                emit="mosdepth_region_dist",
+            ),
         ),
         script=(
             "samtools index ${dedup}\n"
             "mosdepth --by ${panel} --no-per-base --thresholds 1,10,20,30 -t ${task.cpus} \\\n"
             "  ${meta.id}.panel ${dedup}"
         ),
-        stub=("touch ${meta.id}.panel.mosdepth.summary.txt ${meta.id}.panel.thresholds.bed.gz"),
+        stub=(
+            "touch ${meta.id}.panel.mosdepth.summary.txt ${meta.id}.panel.thresholds.bed.gz "
+            "${meta.id}.panel.regions.bed.gz ${meta.id}.panel.mosdepth.global.dist.txt "
+            "${meta.id}.panel.mosdepth.region.dist.txt"
+        ),
     ),
     ProcessSpec(
         tool="bcftools call",

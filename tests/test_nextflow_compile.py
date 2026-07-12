@@ -136,6 +136,42 @@ def test_full_port_graph_wires_the_new_qc_streams() -> None:
     assert "MOSDEPTH.out.mosdepth_thresholds.map { it[1] }.collect()" in main
 
 
+def test_five_output_mosdepth_node_compiles_and_emits_all_channels() -> None:
+    """Regression for the Export-to-Nextflow 422 on the default Builder view: the frontend germline
+    template + BTOOLSPEC advertise all FIVE real mosdepth outputs (summary, thresholds, regions,
+    global_dist, region_dist), but the catalog once declared only two — so the compiler's
+    output-drift guard rejected the 5-output node and the API 422'd. The catalogued spec now carries
+    all five, so a node matching the frontend shape compiles cleanly and every channel is emitted.
+    The seeded germline_graph() (which trims mosdepth to summary+thresholds) still compiles as a
+    valid subset — verified by the drift test below."""
+    five = [
+        "mosdepth_summary",
+        "mosdepth_thresholds",
+        "mosdepth_regions",
+        "mosdepth_global_dist",
+        "mosdepth_region_dist",
+    ]
+    g = NfGraph(
+        name="mosdepth-full",
+        nodes=[
+            NfNode("n_markdup", "samtools markdup", ins=["bam"], outs=["bam"]),
+            NfNode("n_mosdepth", "mosdepth", ins=["bam", "panel_bed"], outs=five),
+        ],
+        edges=[NfEdge("n_markdup", 0, "n_mosdepth", 0)],
+    )
+    # The whole point: a 5-output mosdepth node must NOT raise CompileError anymore.
+    files = compile_graph(g).files
+    mosdepth = files["modules/mosdepth.nf"]
+    for kind in five:
+        assert f"emit: {kind}" in mosdepth
+    # All three new byproducts are declared with their real mosdepth filenames (same command).
+    assert 'path("*.regions.bed.gz"), emit: mosdepth_regions' in mosdepth
+    assert 'path("*.mosdepth.global.dist.txt"), emit: mosdepth_global_dist' in mosdepth
+    assert 'path("*.mosdepth.region.dist.txt"), emit: mosdepth_region_dist' in mosdepth
+    # The stub touches every declared output so -stub-run validates the wiring.
+    assert "${meta.id}.panel.regions.bed.gz" in mosdepth
+
+
 # ── drift guard: the committed reference IS the compiler output ──────────────────
 def test_committed_reference_pipeline_matches_the_compiler() -> None:
     """`pipelines/germline/` must be exactly what the compiler emits for the seeded graph — so the

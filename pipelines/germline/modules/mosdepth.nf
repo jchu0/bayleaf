@@ -12,6 +12,9 @@ process MOSDEPTH {
     output:
     tuple val(meta), path("*.mosdepth.summary.txt"), emit: mosdepth_summary
     tuple val(meta), path("*.thresholds.bed.gz"), emit: mosdepth_thresholds
+    tuple val(meta), path("*.regions.bed.gz"), emit: mosdepth_regions
+    tuple val(meta), path("*.mosdepth.global.dist.txt"), emit: mosdepth_global_dist
+    tuple val(meta), path("*.mosdepth.region.dist.txt"), emit: mosdepth_region_dist
 
     script:
     """
@@ -22,6 +25,6 @@ process MOSDEPTH {
 
     stub:
     """
-    touch ${meta.id}.panel.mosdepth.summary.txt ${meta.id}.panel.thresholds.bed.gz
+    touch ${meta.id}.panel.mosdepth.summary.txt ${meta.id}.panel.thresholds.bed.gz ${meta.id}.panel.regions.bed.gz ${meta.id}.panel.mosdepth.global.dist.txt ${meta.id}.panel.mosdepth.region.dist.txt
     """
 }

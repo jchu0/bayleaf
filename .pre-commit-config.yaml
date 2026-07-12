@@ -54,6 +54,17 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      # Frontend type-check on push (same heavy-check-on-push cadence as pytest).
+      # The root tsconfig is references-only, so a bare `tsc --noEmit` is a no-op;
+      # `tsc -b` in frontend/ builds the referenced projects and is the only way a
+      # type error gets caught before it reaches main. Runs the workspace-local tsc.
+      - id: frontend-tsc
+        name: frontend tsc -b (type-check)
+        entry: bash -c 'cd frontend && npx tsc -b'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
       # Soft, non-blocking doc-discipline nudge: warns once/day if code ships without a
       # journal entry. A tripwire, not a gate (the session-end checklist is the enforcer).
       - id: journal-freshness

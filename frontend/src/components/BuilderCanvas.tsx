@@ -1451,12 +1451,30 @@ function UserCard({
           NON-connectable — no data-* (elementFromPoint ignores them) and no handlers. */}
       {laid.map((p, i) => {
         if (p.state === 'reserved') {
+          // A reserved port is documented but NON-connectable by design (no runnable Nextflow channel
+          // yet): it carries no data-* and no handlers, so drag-to-connect (elementFromPoint) and
+          // click-arm both ignore it. To be HONEST rather than silently inert, it stays dashed/hollow
+          // (portVisualStyle) and — in Connect mode — becomes hoverable with a "why it won't connect"
+          // tooltip + a not-allowed cursor, so a user is never misled that it's wireable.
+          const reservedWhy = connectMode
+            ? `${p.kind} · ${p.dir} — reserved: not wireable (no runnable Nextflow channel yet)`
+            : `#${p.cidx} · ${p.kind} · ${p.dir} · reserved — documented, not yet wireable`
           return (
             <span
               key={i}
-              className="pointer-events-none absolute"
-              title={`#${p.cidx} · ${p.kind} · ${p.dir} · reserved`}
-              style={{ ...portBoxStyle(p), borderWidth: 1.5, borderStyle: 'solid', zIndex: 4, ...portVisualStyle(p) }}
+              className="absolute"
+              title={reservedWhy}
+              style={{
+                ...portBoxStyle(p),
+                borderWidth: 1.5,
+                borderStyle: 'dashed',
+                zIndex: 4,
+                ...portVisualStyle(p),
+                // Hoverable in Connect mode so the tooltip + not-allowed cursor surface WHY it's inert;
+                // otherwise inert (pointer-events off) so it never intercepts a card drag.
+                pointerEvents: connectMode ? 'auto' : 'none',
+                cursor: connectMode ? 'not-allowed' : 'default',
+              }}
             />
           )
         }

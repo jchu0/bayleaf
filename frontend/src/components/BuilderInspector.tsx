@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Activity, BarChart3, Lock, Plus, Trash2, X } from 'lucide-react'
+import { Activity, BarChart3, ChevronRight, Lock, Plus, Save, Trash2, X } from 'lucide-react'
 import {
   ARTIFACT_KINDS,
   GIAB_LOC,
@@ -57,6 +57,11 @@ type InspectorProps = {
   onSetPortKind: (id: string, dir: 'ins' | 'outs', idx: number, kind: string) => void
   onDeleteNode: (id: string) => void
   onClose: () => void
+  // Hide/collapse the whole panel (mirrors the left palette's collapse) — persists until the user
+  // explicitly reopens; selecting another card while hidden must NOT reopen it (see PipelineBuilder).
+  onCollapse: () => void
+  // Commit THIS card's edits (distinct from the toolbar Save, which persists the whole pipeline).
+  onSaveCard: () => void
 }
 
 export function BuilderInspector(props: InspectorProps) {
@@ -85,7 +90,13 @@ export function BuilderInspector(props: InspectorProps) {
           <p className="truncate text-[14px] font-semibold text-text">{header.title}</p>
           <p className="truncate font-mono text-[10.5px] text-text-3">{header.sub}</p>
         </div>
-        <button onClick={props.onClose} className="grid h-7 w-7 place-items-center rounded-lg border border-line text-text-2 hover:bg-page">
+        {/* Hide/collapse — chevron points toward the panel's own (right) edge, mirroring the left
+            palette's collapse. Distinct from Close (X): Close clears the selection; Hide keeps it but
+            collapses the panel to a rail, and stays collapsed across card selections until reopened. */}
+        <button onClick={props.onCollapse} title="Hide inspector" className="grid h-7 w-7 place-items-center rounded-lg border border-line text-text-2 hover:bg-page">
+          <ChevronRight size={14} />
+        </button>
+        <button onClick={props.onClose} title="Close (clear selection)" className="grid h-7 w-7 place-items-center rounded-lg border border-line text-text-2 hover:bg-page">
           <X size={14} />
         </button>
       </div>
@@ -127,6 +138,22 @@ export function BuilderInspector(props: InspectorProps) {
           onCycleOnMultiple={props.onCycleOnMultiple}
         />
       ) : null}
+
+      {/* Card-edit Save — commits THIS selected card's edits (name/ports/locators are already live in
+          the draft; this pins a confirm affordance, distinct from the toolbar Save that persists the
+          whole pipeline as a new version). Edit-only + only for an editable subject (not gate/agent). */}
+      {!props.isView && (userNode || tool || reference) && (
+        <div className="shrink-0 border-t border-line p-3">
+          <button
+            onClick={props.onSaveCard}
+            title="Apply this card's edits to the draft (the toolbar Save persists the whole pipeline)"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-white shadow-card transition-opacity hover:opacity-90"
+          >
+            <Save size={13} />
+            Save card
+          </button>
+        </div>
+      )}
     </aside>
   )
 }

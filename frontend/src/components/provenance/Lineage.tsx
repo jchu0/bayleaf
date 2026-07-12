@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDownToLine, ArrowUpFromLine, ChevronRight, ExternalLink } from 'lucide-react'
 import type { Gate, PipelineStage, RunArtifact, RunDetail, Verdict } from '../../types'
 import { GATE_DOT, VERDICT_LABEL } from '../../verdict'
@@ -87,6 +87,55 @@ const GATE_TAG: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', 
 
 export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; artifacts: RunArtifact[] }) {
   const [selected, setSelected] = useState<PipelineStage | null>(null)
+
+  // Scroll-position readout for the horizontal stage chain. The chain can be wider than the
+  // viewport (9 stages, min card width), so instead of a static "click a stage" hint we surface
+  // how many stages exist and WHERE the scroll view currently sits within them — a genuine
+  // scroll indicator (which stage numbers are in view + a scrollbar-style thumb). Measured from
+  // real element geometry, never a verdict/confidence signal (ADR-0001 untouched — pure chrome).
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const [scan, setScan] = useState<{
+    first: number
+    last: number
+    leftPct: number
+    widthPct: number
+    scrollable: boolean
+  } | null>(null)
+
+  const measure = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const crect = el.getBoundingClientRect()
+    let first: number | null = null
+    let last: number | null = null
+    el.querySelectorAll<HTMLElement>('[data-stage-n]').forEach((b) => {
+      const r = b.getBoundingClientRect()
+      // A stage counts as "in view" once the majority of its card is inside the viewport.
+      const visW = Math.min(r.right, crect.right) - Math.max(r.left, crect.left)
+      if (visW > r.width * 0.5) {
+        const n = Number(b.dataset.stageN)
+        if (first === null) first = n
+        last = n
+      }
+    })
+    const scrollable = el.scrollWidth - el.clientWidth > 1
+    const widthPct = el.scrollWidth > 0 ? Math.min(100, (el.clientWidth / el.scrollWidth) * 100) : 100
+    const leftPct = scrollable ? (el.scrollLeft / el.scrollWidth) * 100 : 0
+    setScan({ first: first ?? 1, last: last ?? STAGES.length, leftPct, widthPct, scrollable })
+  }, [])
+
+  useEffect(() => {
+    measure()
+    const el = scrollRef.current
+    if (!el) return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [measure])
 
   // Worst (most-urgent) verdict each gate produced across the run's samples, and overall —
   // the canvas colors a stage by the gate checkpoint that sits on it. The rules already
@@ -215,16 +264,42 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
   const inputs = stageArts.filter((a) => a.role === 'input')
   const outputs = stageArts.filter((a) => a.role === 'output')
 
+  const total = STAGES.length
+  const rangeLabel = scan
+    ? scan.first === 1 && scan.last === total
+      ? `All ${total} stages in view`
+      : `Stage ${scan.first}–${scan.last} of ${total}`
+    : `${total} stages`
+
   return (
     <div>
-      <p className="mb-[18px] text-[12.5px] text-text-2">Click a stage to inspect its data I/O.</p>
+      {/* Scroll-position indicator (replaces the old static "click a stage" hint): the range of
+          stage numbers currently in view + a scrollbar-style thumb showing where the view sits in
+          the full chain. The thumb only appears when the chain actually overflows. */}
+      <div className="mb-[18px] flex items-center gap-3">
+        <span className="whitespace-nowrap text-[12.5px] font-semibold text-text-2">{rangeLabel}</span>
+        {scan?.scrollable && (
+          <div
+            className="relative h-1.5 w-full max-w-[240px] overflow-hidden rounded-full bg-line"
+            title="Scroll the stage chain sideways to see more"
+          >
+            <div
+              className="absolute top-0 h-full rounded-full bg-accent transition-[left] duration-75"
+              style={{ left: `${scan.leftPct}%`, width: `${scan.widthPct}%` }}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Left→right stage DAG — nodes stretch equally with auto-width chevrons between. Now 9
           stages (the 3 post-variant nodes added in W3), so the column template is derived from
-          STAGES.length and the row scrolls sideways (min node width) instead of crushing every card. */}
+          STAGES.length and the row scrolls sideways (wider min node width so each card reads well)
+          instead of crushing every card. `measure` runs on scroll to keep the indicator above in sync. */}
       <div
+        ref={scrollRef}
+        onScroll={measure}
         className="grid items-stretch gap-1 overflow-x-auto px-0.5 pb-2.5 pt-1.5"
-        style={{ gridTemplateColumns: `repeat(${STAGES.length - 1}, minmax(104px,1fr) auto) minmax(104px,1fr)` }}
+        style={{ gridTemplateColumns: `repeat(${STAGES.length - 1}, minmax(184px,1fr) auto) minmax(184px,1fr)` }}
       >
         {STAGES.flatMap((stage, i) => {
           const status = statusFor(stage)
@@ -233,6 +308,7 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
           const cells: ReactNode[] = [
             <button
               key={stage.key}
+              data-stage-n={stage.n}
               onClick={() => setSelected(stage.key)}
               className={`flex w-full flex-col gap-[7px] overflow-hidden rounded-xl border bg-card p-3 text-left transition-shadow ${
                 isActive ? 'border-accent shadow-card ring-[3px] ring-accent-weak' : 'border-line'

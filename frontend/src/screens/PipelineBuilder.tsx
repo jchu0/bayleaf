@@ -170,6 +170,9 @@ export function PipelineBuilder() {
   const [selected, setSelected] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('locators') // authoring surface is the default tab
   const [paletteOpen, setPaletteOpen] = useState(true)
+  // Right inspector hide/collapse (mirrors the left palette). STICKY: once hidden, selecting another
+  // card must NOT auto-reopen the panel — it stays a rail until the user explicitly expands it.
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [consoleTab, setConsoleTab] = useState<ConsoleTab>('validate')
   const [emitted, setEmitted] = useState(false)
@@ -482,6 +485,16 @@ export function PipelineBuilder() {
       setSaveStatus('pending') // reconcile: approve failed, stays pending
       toast(`Couldn't approve pipeline — ${errMsg(e)}`, 'error')
     }
+  }
+
+  // ── card-edit save (right panel) ── DISTINCT from the toolbar Save. A card's edits (name / typed
+  // ports / locators / custom script) are already live in the local draft, so this commits any focused
+  // field (name commits on blur), marks the graph dirty, and confirms — WITHOUT touching the backend.
+  // The toolbar Save is what persists the whole pipeline as a new version. Compose ≠ execute.
+  const onSaveCard = () => {
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+    dirtyToDraft()
+    toast('Card edits applied to the draft — use Save in the toolbar to persist the pipeline as a new version', 'info')
   }
 
   // ── backend Dry-run / Diff (available once Saved) ──
@@ -1198,11 +1211,11 @@ export function PipelineBuilder() {
           {/* PRIMARY compose flow — Save · Validate · Emit (Emit = accent primary) */}
           <button
             onClick={onSave}
-            title="Save a new version"
+            title="Save the WHOLE pipeline (all cards) as a new version — distinct from a card's own Save in the inspector"
             className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong"
           >
             <Save size={13} />
-            Save
+            Save pipeline
           </button>
           <button
             onClick={onValidate}
@@ -1384,8 +1397,23 @@ export function PipelineBuilder() {
           onDeleteSel={deleteSelection}
         />
 
-        {inspectorOn &&
-          (isCustomSel && selUserNode ? (
+        {/* Right inspector. When HIDDEN it becomes a thin rail (mirrors the palette's collapse rail):
+            the collapse is STICKY, so selecting other cards updates `selected` but never reopens the
+            panel — only the rail's expand button does. */}
+        {inspectorCollapsed ? (
+          <aside className="flex w-11 shrink-0 flex-col items-center gap-3 border-l border-line bg-card py-2.5">
+            <button
+              onClick={() => setInspectorCollapsed(false)}
+              className="grid h-[27px] w-[27px] place-items-center rounded-md border border-line bg-card text-text-3 hover:text-text"
+              title="Expand inspector"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <div className="h-px w-[22px] bg-line" />
+            <Pencil size={16} className="text-text-3" />
+          </aside>
+        ) : inspectorOn ? (
+          isCustomSel && selUserNode ? (
             // A custom-script card authors its OWN inspector (label · typed ports · script · runtime ·
             // locators-with-Browse) — the human-authoring surface ADR-0020 presupposes.
             <CustomScriptInspector
@@ -1408,6 +1436,8 @@ export function PipelineBuilder() {
               onDelete={(id) => void deleteNodes([id])}
               onClose={clearSelection}
               onBrowse={openBrowse}
+              onCollapse={() => setInspectorCollapsed(true)}
+              onSaveCard={onSaveCard}
             />
           ) : (
             <BuilderInspector
@@ -1433,8 +1463,11 @@ export function PipelineBuilder() {
               onSetPortKind={setPortKind}
               onDeleteNode={(id) => void deleteNodes([id])}
               onClose={clearSelection}
+              onCollapse={() => setInspectorCollapsed(true)}
+              onSaveCard={onSaveCard}
             />
-          ))}
+          )
+        ) : null}
       </div>
 
       {/* ── console ── */}

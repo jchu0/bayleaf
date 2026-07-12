@@ -480,8 +480,10 @@ export const CARD_PORTS: Record<string, CardPort[]> = {
     { kind: 'bam', dir: 'out', side: 'right', state: 'required' },
   ],
   'samtools markdup': [
+    // Real `samtools markdup` takes NO reference (compiler catalog inputs = bam only). The former
+    // reference_fasta 'reserved' top port rendered but could never connect (no backing channel) — it
+    // is removed so the shown ports match the compiler-mapped I/O (a phantom-port connect bug).
     { kind: 'bam', dir: 'in', side: 'left', state: 'required' },
-    { kind: 'reference_fasta', dir: 'in', side: 'top', state: 'reserved' },
     { kind: 'bam', dir: 'out', side: 'right', state: 'required' },
     { kind: 'bai', dir: 'out', side: 'right', state: 'required' },
     { kind: 'markdup_metrics', dir: 'out', side: 'bottom', state: 'optional' },
@@ -806,7 +808,17 @@ export function computeGraphPortLayout(nodes: UserNode[], edges: UserEdge[]): Ma
     //    slots occupy the body band (below header, above footer); top/bottom slots span the width, inset.
     const laid: LaidPort[] = []
     for (const side of ['left', 'right', 'top', 'bottom'] as PortSide[]) {
-      const grp = slots.filter((q) => q.side === side).sort((a, b) => a.along - b.along)
+      // Order CONNECTED slots first (by their aim), then push UNCONNECTED (eid < 0) slots to the far
+      // end of the side. A newly-added, not-yet-wired port would otherwise land in the middle of the
+      // side (its catalog fallback aims at the card centre) — right in the wired band, so it LOOKS
+      // auto-connected. Biasing it to the extreme keeps it visibly clear of the real wires.
+      const grp = slots
+        .filter((q) => q.side === side)
+        .sort((a, b) => {
+          const au = a.p.eid < 0 ? 1 : 0
+          const bu = b.p.eid < 0 ? 1 : 0
+          return au !== bu ? au - bu : a.along - b.along
+        })
       const vert = side === 'left' || side === 'right'
       const lo = vert ? CARD_HEADER_H + 4 : PORT_EDGE_MARGIN
       const hi = vert ? h - CARD_FOOTER_H - 4 : NODE_W - PORT_EDGE_MARGIN
