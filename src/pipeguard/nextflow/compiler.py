@@ -26,6 +26,31 @@ class CompileError(ValueError):
     """The graph can't be compiled (a cycle, or an edge referencing a missing node/port)."""
 
 
+# ── injection-defense identifier patterns ───────────────────────────────────────────────────────
+# A kind/tool/id is interpolated raw into generated Groovy + bash, so a value carrying a quote,
+# backtick, `$`, brace, or newline could inject code into the emitted pipeline. These patterns are
+# the safe-token allowlist the compiler enforces (a violation is a clean CompileError, never an
+# unsafe bundle). They are deliberately permissive enough that the whole germline chain satisfies
+# them — enforcement is a NO-OP on the golden path, so the byte-for-byte drift guard is unaffected.
+#   - KINDS become Groovy channel/variable names + bash filenames (`emit: <kind>`, `path("<kind>")`)
+#     → a strict snake token.
+#   - TOOLS become process names AND appear inside emitted bash (`echo '… "<tool>" …'`) → letters,
+#     digits, space, dot, dash, underscore (covers "bwa-mem2", "samtools markdup", "bcftools call").
+#   - IDS key internal maps and never reach a shell, but are validated for defense-in-depth.
+KIND_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
+TOOL_PATTERN = re.compile(r"^[A-Za-z0-9 ._-]+$")
+NODE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+def _groovy_escape(value: str) -> str:
+    """Escape a string for safe interpolation into a Groovy SINGLE-QUOTED literal (the manifest name
+    and any operator-supplied ``conda``/``container`` string). Backslash + single-quote are escaped;
+    a raw newline/CR — illegal inside a single-quoted Groovy string — becomes the ``\\n``/``\\r``
+    escape so the emitted config still parses. A clean token (no quote/backslash/newline) is
+    returned UNCHANGED, so the golden path stays byte-identical."""
+    return value.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+
+
 @dataclass
 class NfNode:
     """One Builder card: a tool + its ordered input/output artifact-kinds.
@@ -57,12 +82,19 @@ class NfNode:
         return bool(self.script and self.script.strip())
 
     def is_source(self) -> bool:
-        """A no-input node emitting only reference kinds — a params-backed source, not a process.
-        A custom process is never a source: it carries a real command and always renders as a
-        process, even if it happens to have no inputs (e.g. an operator-authored fetch step)."""
+        """A no-input node WITH outputs — a params-backed pipeline SOURCE, not a process.
+
+        Widened (robustness fix): ANY no-input card is a source, not only one emitting reference
+        kinds. The shipped generic File-input card emits a DATA kind (fastq/bam/vcf) with no inputs;
+        treating it as a tool produced a broken exit-1 placeholder AND dropped the external input
+        from ``required_inputs``. The compiler now routes a source's emitted kind to the right
+        external channel (fastq → the reads samplesheet channel, a reference kind → its ``params``
+        channel, anything else → a ``params.<kind>`` file channel). A custom process is NEVER a
+        source: it carries a real operator-authored command and always renders as a process, even
+        with no inputs (e.g. an operator-authored fetch step)."""
         if self.is_custom():
             return False
-        return not self.ins and bool(self.outs) and all(o in REFERENCE_PARAM for o in self.outs)
+        return not self.ins and bool(self.outs)
 
 
 @dataclass
@@ -162,6 +194,22 @@ def compile_graph(graph: NfGraph) -> NextflowBundle:
                 "needs an operator-authored body; PipeGuard never fabricates a command"
             )
 
+    # Identifier validation (injection defense): a kind/tool/id is interpolated into generated
+    # Groovy + bash, so reject anything outside the safe-token allowlist rather than emit an unsafe
+    # pipeline. NO-OP for the germline chain (its names/kinds all conform), so drift is unaffected.
+    for n in graph.nodes:
+        if not NODE_ID_PATTERN.match(n.id):
+            raise CompileError(f"node id {n.id!r} has characters outside [A-Za-z0-9_.-]")
+        if not TOOL_PATTERN.match(n.tool):
+            raise CompileError(
+                f"node {n.id!r} tool {n.tool!r} has characters outside [A-Za-z0-9 ._-]"
+            )
+        for kind in (*n.ins, *n.outs):
+            if not KIND_PATTERN.match(kind):
+                raise CompileError(
+                    f"node {n.id!r} port kind {kind!r} has characters outside [A-Za-z0-9_]"
+                )
+
     # Validate every edge references real nodes/ports (a missing endpoint is a bug, not a drop).
     incoming: dict[tuple[str, int], tuple[str, int]] = {}
     for e in graph.edges:
@@ -172,10 +220,59 @@ def compile_graph(graph: NfGraph) -> NextflowBundle:
             raise CompileError(f"edge from {e.from_node} port {e.from_idx} out of range")
         if not (0 <= e.to_idx < len(dst.ins)):
             raise CompileError(f"edge into {e.to_node} port {e.to_idx} out of range")
+        # Fan-in guard: two edges into the SAME input port would silently drop all but the last
+        # (this dict is last-write-wins) → a wrong pipeline the operator never sees. Reject it — a
+        # real fan-in must be merged by an explicit upstream node, not a clobbered channel map.
+        if (e.to_node, e.to_idx) in incoming:
+            raise CompileError(
+                f"input port {e.to_idx} of node {e.to_node!r} has two incoming edges — "
+                "merge the fan-in upstream (one edge per input port)"
+            )
         incoming[(e.to_node, e.to_idx)] = (e.from_node, e.from_idx)
 
     tool_nodes = [n for n in graph.nodes if not n.is_source()]
+    # Cycle detection runs first, so a cyclic graph reports "cycle" even if it also has a name
+    # collision or port drift below.
     order = _topo_order(tool_nodes, incoming, nodes)
+
+    # Proc-name collision guard: `_proc_name` is many-to-one (punctuation/case collapse to the same
+    # UPPER_SNAKE), but modules + includes key on it. Two DISTINCT tool strings sharing a process
+    # name would clobber one module and emit a duplicate include — a silently-wrong bundle. Reject
+    # it. (A custom card REUSING a catalogued tool name is the SAME string, not a distinct-tool
+    # collision — is_custom wins in _render_module — so that case is unaffected.)
+    proc_owner: dict[str, str] = {}
+    for tool in dict.fromkeys(n.tool for n in tool_nodes):
+        proc = _proc_name(tool)
+        if proc in proc_owner and proc_owner[proc] != tool:
+            raise CompileError(
+                f"tools {proc_owner[proc]!r} and {tool!r} both map to the Nextflow process "
+                f"name {proc} — rename one so their modules don't collide"
+            )
+        proc_owner[proc] = tool
+
+    # Catalog port-drift guard: a catalogued (non-custom) node whose declared ports diverge from its
+    # ProcessSpec would emit a call/module ARITY mismatch (the call passes one arg per node input
+    # while the module declares the spec's inputs) or reference a `.out.<kind>` channel the module
+    # never emits. Require the INPUT kinds to match the spec exactly (positional wiring depends on
+    # order) and every OUTPUT kind to be one the spec actually emits. A subset/reordered OUTPUT list
+    # is allowed — an unused catalogued output is harmless and the Builder legitimately trims them.
+    for n in tool_nodes:
+        if n.is_custom():
+            continue
+        spec = catalog_entry(n.tool)
+        if spec is None:
+            continue
+        if n.ins != list(spec.input_kinds()):
+            raise CompileError(
+                f"node {n.id!r} ({n.tool}) input ports {n.ins} diverge from the catalogued "
+                f"process ports {list(spec.input_kinds())}"
+            )
+        unknown = [k for k in n.outs if k not in spec.output_kinds()]
+        if unknown:
+            raise CompileError(
+                f"node {n.id!r} ({n.tool}) emits {unknown} which the catalogued process "
+                f"{spec.process} never produces {list(spec.output_kinds())}"
+            )
 
     # Alias any tool used by >1 node (Nextflow requires a distinct name per invocation).
     counts: dict[str, int] = {}
@@ -191,23 +288,29 @@ def compile_graph(graph: NfGraph) -> NextflowBundle:
             seen[n.tool] = seen.get(n.tool, 0) + 1
             call_name[n.id] = f"{base}_{seen[n.tool]}"
 
-    # Which pipeline-source channels the workflow needs (reads + referenced params).
+    # Which pipeline-source channels the workflow needs (reads + referenced params). An input is an
+    # external source when it is UNWIRED (draws its own declared kind) or fed by a SOURCE node (uses
+    # that source's emitted kind); a non-source upstream edge is an internal channel, skipped. The
+    # source kind is classified the same way in both cases: fastq → the reads channel, a reference
+    # kind → its params channel, anything else → a `params.<kind>` file channel.
     needs_reads = False
     ref_params: set[str] = set()
     extra_params: set[str] = set()
     for n in tool_nodes:
         for i, kind in enumerate(n.ins):
             if (n.id, i) in incoming:
-                src_id = incoming[(n.id, i)][0]
-                if nodes[src_id].is_source():
-                    ref_params.add(REFERENCE_PARAM[nodes[src_id].outs[incoming[(n.id, i)][1]]])
-                continue
-            if kind == "fastq":
-                needs_reads = True
-            elif kind in REFERENCE_PARAM:
-                ref_params.add(REFERENCE_PARAM[kind])
+                src_id, src_idx = incoming[(n.id, i)]
+                if not nodes[src_id].is_source():
+                    continue
+                source_kind = nodes[src_id].outs[src_idx]
             else:
-                extra_params.add(kind)
+                source_kind = kind
+            if source_kind == "fastq":
+                needs_reads = True
+            elif source_kind in REFERENCE_PARAM:
+                ref_params.add(REFERENCE_PARAM[source_kind])
+            else:
+                extra_params.add(source_kind)
 
     files: dict[str, str] = {}
     # One module per DISTINCT tool (aliased calls still share the single process definition).
@@ -218,7 +321,12 @@ def compile_graph(graph: NfGraph) -> NextflowBundle:
     files["main.nf"] = _render_main(
         graph, order, call_name, incoming, nodes, needs_reads, ref_params, extra_params
     )
-    files["nextflow.config"] = _render_config(graph.name, ref_params, needs_reads, extra_params)
+    # The name lands in a Groovy single-quoted manifest string — escape it (a NO-OP for a clean
+    # name, so the germline config stays byte-identical). The zip filename / bundle name keep the
+    # raw value; the API layer sanitizes that separately.
+    files["nextflow.config"] = _render_config(
+        _groovy_escape(graph.name), ref_params, needs_reads, extra_params
+    )
     files["README.md"] = _render_readme(graph.name, order, call_name)
     return NextflowBundle(name=graph.name, files=files)
 
@@ -294,15 +402,33 @@ def _render_custom(node: NfNode) -> str:
     output kind outside the known artifact vocabulary is still allowed and wired by its raw name
     (``emit: <kind>``), matching the edge wiring — the compiler never crashes on a novel kind."""
     proc = _proc_name(node.tool)
-    in_decls = "\n    ".join(_custom_input_decl(k) for k in node.ins) or "val _unused"
+    has_inputs = bool(node.ins)
+    # Dedup outputs: a repeated kind would emit duplicate `emit:`/`touch` lines (a Nextflow parse
+    # error). `dict.fromkeys` preserves first-seen order.
+    out_kinds = list(dict.fromkeys(node.outs))
     # We cannot know the operator's output filenames from the typed model, so each declared output
     # captures the process work dir permissively (`path("*")`); the operator's script is responsible
-    # for producing the artifacts. meta rides so a downstream per-sample process stays wired.
-    out_lines = [_with_meta('path("*")') + f", emit: {kind}" for kind in node.outs]
-    out_decls = "\n    ".join(out_lines) or (_with_meta('path("*")') + ", emit: out")
-    touches = " ".join(f"{kind}.stub" for kind in node.outs) or "out.stub"
-    conda_line = f"    conda '{node.conda}'\n" if node.conda else ""
-    container_line = f"    container '{node.container}'\n" if node.container else ""
+    # for producing the artifacts.
+    if has_inputs:
+        # Per-sample: meta rides on the inputs + outputs so a downstream per-sample process stays
+        # wired, and the process tags by sample.
+        in_decls = "\n    ".join(_custom_input_decl(k) for k in node.ins)
+        out_lines = [_with_meta('path("*")') + f", emit: {kind}" for kind in out_kinds]
+        out_decls = "\n    ".join(out_lines) or (_with_meta('path("*")') + ", emit: out")
+        tag_line = '    tag "${meta.id}"\n'
+        input_block = f"    input:\n    {in_decls}\n\n"
+    else:
+        # Zero-input custom (e.g. an operator-authored fetch step): omit the `input:` block entirely
+        # and DROP meta — there is no upstream sample to carry it, so a `${meta.id}` tag/port would
+        # reference an undefined variable and fail to parse under -stub-run.
+        out_lines = [f'path("*"), emit: {kind}' for kind in out_kinds]
+        out_decls = "\n    ".join(out_lines) or 'path("*"), emit: out'
+        tag_line = ""
+        input_block = ""
+    touches = " ".join(f"{kind}.stub" for kind in out_kinds) or "out.stub"
+    # Escape operator-supplied packaging before it enters a Groovy single-quoted string.
+    conda_line = f"    conda '{_groovy_escape(node.conda)}'\n" if node.conda else ""
+    container_line = f"    container '{_groovy_escape(node.container)}'\n" if node.container else ""
     body = _indent((node.script or "").strip())  # is_custom() guarantees a non-empty body
     return (
         "// operator-authored custom process — runs on the compute host; production needs\n"
@@ -310,12 +436,12 @@ def _render_custom(node: NfNode) -> str:
         "// operator body verbatim (compose ≠ execute) — it did not author or vet the command\n"
         "// (ADR-0020).\n"
         f"process {proc} {{\n"
-        f'    tag "${{meta.id}}"\n'
+        f"{tag_line}"
         f"    label 'operator_authored'\n"
         f"{conda_line}"
         f"{container_line}"
         f"    publishDir \"${{params.outdir}}/custom\", mode: 'copy'\n\n"
-        f"    input:\n    {in_decls}\n\n"
+        f"{input_block}"
         f"    output:\n    {out_decls}\n\n"
         f'    script:\n    """\n    {body}\n    """\n\n'
         f'    stub:\n    """\n    touch {touches}\n    """\n'
@@ -357,25 +483,35 @@ def _render_catalogued(spec: ProcessSpec) -> str:
 
 def _render_placeholder(tool: str, node: NfNode) -> str:
     proc = _proc_name(tool)
-    # Meta-thread inputs/outputs like a catalogued per-sample process, so an uncatalogued card still
-    # wires into a fan-out graph (reference inputs stay meta-free value channels).
-    in_lines = [
-        f"path in{i}" if kind in REFERENCE_PARAM else _with_meta(f"path in{i}")
-        for i, kind in enumerate(node.ins)
-    ]
-    in_decls = "\n    ".join(in_lines) or "val _unused"
-    out_lines, touches = [], []
-    for kind in node.outs:
-        out_lines.append(_with_meta(f'path("{kind}.out")') + f", emit: {kind}")
-        touches.append(f"{kind}.out")
-    outs = "\n    ".join(out_lines) or _with_meta('path("out")') + ", emit: out"
-    touch = "touch " + " ".join(touches or ["out"])
+    has_inputs = bool(node.ins)
+    # Dedup outputs: a repeated kind would emit duplicate `emit:`/`touch` lines (a parse error).
+    out_kinds = list(dict.fromkeys(node.outs))
+    if has_inputs:
+        # Meta-thread inputs/outputs like a catalogued per-sample process, so an uncatalogued card
+        # still wires into a fan-out graph (reference inputs stay meta-free value channels).
+        in_lines = [
+            f"path in{i}" if kind in REFERENCE_PARAM else _with_meta(f"path in{i}")
+            for i, kind in enumerate(node.ins)
+        ]
+        in_decls = "\n    ".join(in_lines)
+        head = f'    tag "${{meta.id}}"\n\n    input:\n    {in_decls}\n\n'
+        out_lines = [_with_meta(f'path("{kind}.out")') + f", emit: {kind}" for kind in out_kinds]
+        if not out_lines:
+            out_lines = [_with_meta('path("out")') + ", emit: out"]
+    else:
+        # Zero-input placeholder: omit the `input:` block and drop meta (no upstream sample carries
+        # it) so the process parses + -stub-runs instead of tagging by an undefined `${meta.id}`.
+        head = "\n"
+        out_lines = [f'path("{kind}.out"), emit: {kind}' for kind in out_kinds]
+        if not out_lines:
+            out_lines = ['path("out"), emit: out']
+    outs = "\n    ".join(out_lines)
+    touch = "touch " + " ".join([f"{kind}.out" for kind in out_kinds] or ["out"])
     return (
         f'// PLACEHOLDER — no catalogued Nextflow command for "{tool}". The wiring is real; the\n'
         f"// command is not. `-stub-run` validates the DAG; a real run fails here until filled.\n"
         f"process {proc} {{\n"
-        f'    tag "${{meta.id}}"\n\n'
-        f"    input:\n    {in_decls}\n\n"
+        f"{head}"
         f"    output:\n    {outs}\n\n"
         f'    script:\n    """\n'
         f"    echo 'PipeGuard: no catalogued Nextflow command for \"{tool}\".' >&2\n"
@@ -446,6 +582,18 @@ def _render_main(
     )
 
 
+def _source_channel(kind: str, aggregator: bool = False) -> str:
+    """The external-input channel expression for a pipeline SOURCE emitting ``kind`` — an unwired
+    input port OR an input fed by a no-input source node. ``fastq`` → the per-sample reads channel;
+    a reference kind → its shared ``params`` value channel; anything else → a ``params.<kind>`` file
+    channel. An aggregator pools the per-sample reads across samples."""
+    if kind == "fastq":
+        return "ch_reads.map { it[1] }.collect()" if aggregator else "ch_reads"
+    if kind in REFERENCE_PARAM:
+        return f"ch_{REFERENCE_PARAM[kind]}"
+    return f"ch_{kind}"
+
+
 def _input_channel(
     node: NfNode,
     idx: int,
@@ -462,15 +610,13 @@ def _input_channel(
         from_node, from_idx = incoming[(node.id, idx)]
         src = nodes[from_node]
         if src.is_source():
-            return f"ch_{REFERENCE_PARAM[src.outs[from_idx]]}"
+            # A source node feeds the external channel for its EMITTED kind — routing a data-kind
+            # source (File-input(fastq)→…) to the reads channel, not a broken FILE_INPUT process.
+            return _source_channel(src.outs[from_idx], aggregator)
         chan = f"{call_name[from_node]}.out.{src.outs[from_idx]}"
         return f"{chan}.map {{ it[1] }}.collect()" if aggregator else chan
-    # Unwired input = a pipeline source.
-    if kind == "fastq":
-        return "ch_reads.map { it[1] }.collect()" if aggregator else "ch_reads"
-    if kind in REFERENCE_PARAM:
-        return f"ch_{REFERENCE_PARAM[kind]}"
-    return f"ch_{kind}"
+    # Unwired input = a pipeline source drawing its own declared kind.
+    return _source_channel(kind, aggregator)
 
 
 def _render_config(

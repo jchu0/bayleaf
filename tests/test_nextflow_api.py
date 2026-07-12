@@ -134,6 +134,30 @@ def test_empty_graph_is_422() -> None:
     assert "no tool nodes" in resp.json()["detail"]
 
 
+def test_hostile_port_kind_is_rejected_at_the_boundary() -> None:
+    """The router mirrors the compiler's identifier allowlist: a POST carrying a port kind with
+    shell/Groovy metacharacters is a 422 (pydantic) BEFORE the compiler runs — the value never
+    reaches generated Groovy/bash."""
+    body = {
+        "name": "inject",
+        "nodes": [{"id": "n", "name": "fastp", "ins": ["fastq"], "outs": ["vcf; rm -rf /"]}],
+        "edges": [],
+    }
+    resp = client.post("/api/pipelines/compile", json=body)
+    assert resp.status_code == 422
+
+
+def test_hostile_node_id_is_rejected_at_the_boundary() -> None:
+    """A node id with characters outside the safe allowlist is a 422 at the wire boundary too."""
+    body = {
+        "name": "inject-id",
+        "nodes": [{"id": "n';drop", "name": "fastp", "ins": ["fastq"], "outs": ["fastq"]}],
+        "edges": [],
+    }
+    resp = client.post("/api/pipelines/compile", json=body)
+    assert resp.status_code == 422
+
+
 def test_cyclic_graph_is_422_with_reason() -> None:
     body = {
         "name": "loop",

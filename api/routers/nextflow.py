@@ -15,9 +15,10 @@ import zipfile
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from pipeguard.nextflow import CompileError, NfEdge, NfGraph, NfNode, compile_graph
+from pipeguard.nextflow.compiler import KIND_PATTERN, NODE_ID_PATTERN, TOOL_PATTERN
 
 router = APIRouter(prefix="/api", tags=["nextflow"])
 
@@ -40,6 +41,32 @@ class CompileNode(BaseModel):
     script: str | None = None
     container: str | None = None
     conda: str | None = None
+
+    # Mirror the compiler's injection-defense identifier allowlist at the wire boundary, so a raw
+    # POST carrying a quote/backtick/`$`/newline in an id, tool name, or port kind is rejected with
+    # a 422 (pydantic) BEFORE it reaches the compiler — the value never reaches generated Groovy or
+    # bash. These are the exact patterns compile_graph enforces (compiler.py), kept in one place.
+    @field_validator("id")
+    @classmethod
+    def _check_id(cls, v: str) -> str:
+        if not NODE_ID_PATTERN.match(v):
+            raise ValueError("node id has characters outside [A-Za-z0-9_.-]")
+        return v
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        if not TOOL_PATTERN.match(v):
+            raise ValueError("tool name has characters outside [A-Za-z0-9 ._-]")
+        return v
+
+    @field_validator("ins", "outs")
+    @classmethod
+    def _check_kinds(cls, v: list[str]) -> list[str]:
+        for kind in v:
+            if not KIND_PATTERN.match(kind):
+                raise ValueError(f"port kind {kind!r} has characters outside [A-Za-z0-9_]")
+        return v
 
 
 class CompilePort(BaseModel):
