@@ -11,10 +11,11 @@ from .agent import (
     ClaudeTriageAgent,
     StubTriageAgent,
     TriageAgent,
+    ask_agent,
     get_triage_agent,
     triage_card,
 )
-from .models import KnowledgeEntry, TriageCitation, TriageNote
+from .models import AgentReply, KnowledgeEntry, TriageCitation, TriageNote
 from .retrieval import (
     KeywordRetriever,
     RetrievalHit,
@@ -24,6 +25,7 @@ from .retrieval import (
 
 __all__ = [
     "QC_TRIAGE_AGENT",
+    "AgentReply",
     "ClaudeTriageAgent",
     "KeywordRetriever",
     "KnowledgeEntry",
@@ -33,6 +35,7 @@ __all__ = [
     "TriageAgent",
     "TriageCitation",
     "TriageNote",
+    "ask_agent",
     "get_triage_agent",
     "load_knowledge_corpus",
     "triage_card",

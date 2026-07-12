@@ -32,7 +32,7 @@ from typing import Any, Literal
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
 from pipeguard.metrics import default_registry
@@ -41,7 +41,7 @@ from pipeguard.parsers import parse_variant_calls
 from pipeguard.pipeline_repair import RepairProposal, propose_repair, recurring_signature
 from pipeguard.provenance import EntityRef, EventType, ProvenanceEvent
 from pipeguard.runbook import RouteToHumanPolicy, Runbook
-from pipeguard.triage import TriageNote
+from pipeguard.triage import AgentReply, TriageNote, ask_agent
 
 from .archivist import ArchiveDigest, ArtifactRef, RunArchiveInput, _classify_kind, archive_digest
 from .auth import Actor, require_role
@@ -545,6 +545,29 @@ def get_card_triage(run_id: str, sample_id: str) -> TriageNote:
             status_code=404, detail=f"Sample '{sample_id}' is clean; no triage note"
         )
     return note
+
+
+class AskRequest(BaseModel):
+    """A free-text question to the advisory agent about a card (server is stateless)."""
+
+    model_config = ConfigDict(extra="forbid")
+    question: str = Field(..., min_length=1, max_length=2000)
+
+
+@app.post("/api/runs/{run_id}/cards/{sample_id}/ask")
+def ask_card_agent(run_id: str, sample_id: str, body: AskRequest) -> AgentReply:
+    """Ask the advisory QC-triage agent a free-text question about a sample's card (ADR-0009).
+
+    The interactive sibling of GET .../triage: advisory only (ADR-0001 — never sets or overrides a
+    verdict), OFF the deterministic path, offline stub by default (PIPEGUARD_TRIAGE_AGENT=claude to
+    go live). Unlike triage, a CLEAN card can also be asked about. 404 for an unknown sample. The
+    live path costs an API call, gated by the same off-by-default env flag as triage; a real
+    deployment can add a role/cost gate here.
+    """
+    card = next((c for c in _evaluate(run_id).cards if c.sample_id == sample_id), None)
+    if card is None:
+        raise HTTPException(status_code=404, detail=f"Unknown sample '{sample_id}'")
+    return ask_agent(card, body.question)
 
 
 @app.get("/api/runs/{run_id}/variants")
