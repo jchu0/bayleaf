@@ -165,10 +165,14 @@ metrics:
     canonical_unit: x
     value_type: float
     direction: higher_is_better
+    # Source honesty (WS-06 §9b): the committed germline pipeline computes mean coverage with
+    # mosdepth (`--by` panel windows over the dedup BAM → the `total_region` mean row of
+    # mosdepth.summary.txt; scripts/run_giab_pipeline.py parse_mosdepth). It never runs Picard
+    # CollectHsMetrics, so the source must name mosdepth, not borrow a Picard metric it doesn't emit.
     source:
-      module: picard_collecthsmetrics
-      source_file: hs_metrics
-      raw_field: MEAN_TARGET_COVERAGE
+      module: mosdepth
+      source_file: mosdepth.summary.txt
+      raw_field: total_region.mean
     raw_units_allowed: [x]
     parser: picard_hsmetrics
     parser_version: null
@@ -181,14 +185,16 @@ metrics:
     canonical_unit: fraction
     value_type: float
     direction: higher_is_better
+    # Source honesty (WS-06 §9b): the driver computes breadth from mosdepth's `--thresholds` output
+    # (parse_mosdepth: bases >=20x / region bases), never Picard PCT_TARGET_BASES_20X.
     source:
-      module: picard_collecthsmetrics
-      source_file: hs_metrics
-      raw_field: PCT_TARGET_BASES_20X
-    # The canonical pct trap: Picard PCT_TARGET_BASES_20X is a fraction, but the same
-    # metric via mosdepth/MultiQC (`20_x_pc`) is a percent — hence both units allowed.
+      module: mosdepth
+      source_file: mosdepth.thresholds.bed.gz
+      raw_field: ge_20x_bases/region_bases
+    # The canonical pct trap: mosdepth's threshold ratio is a fraction, but the same metric via
+    # MultiQC mosdepth (`20_x_pc`) is a percent — hence both units allowed.
     raw_units_allowed: [fraction, percent]
-    parser: picard_hsmetrics
+    parser: mosdepth_thresholds
     parser_version: null
     aliases: [20_x_pc]
 
@@ -199,12 +205,13 @@ metrics:
     canonical_unit: fraction
     value_type: float
     direction: higher_is_better
+    # Source honesty (WS-06 §9b): mosdepth `--thresholds` (bases >=30x / region bases), not Picard.
     source:
-      module: picard_collecthsmetrics
-      source_file: hs_metrics
-      raw_field: PCT_TARGET_BASES_30X
+      module: mosdepth
+      source_file: mosdepth.thresholds.bed.gz
+      raw_field: ge_30x_bases/region_bases
     raw_units_allowed: [fraction, percent]
-    parser: picard_hsmetrics
+    parser: mosdepth_thresholds
     parser_version: null
     aliases: [30_x_pc]
 

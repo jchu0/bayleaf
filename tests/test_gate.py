@@ -248,6 +248,53 @@ def test_expected_metrics_rejects_unproducible_key():
     assert book.expected_metrics == ("qc.breadth_20x", "qc.pct_mapped")  # producible + de-duped
 
 
+# ── WS-06 metric correctness (source/label honesty; Gaps 4 & 5) ────────────────────
+
+
+def test_mean_coverage_source_is_honest():
+    """WS-06 §9b: the mean-coverage metric names the tool the committed germline pipeline actually
+    runs (mosdepth's published summary) — never Picard CollectHsMetrics, which the pipeline never
+    invokes. Borrowing a tool's metric name it doesn't produce is dishonest provenance."""
+    src = default_registry().entry("qc.mean_target_coverage").source
+    assert src.module == "mosdepth" and "picard" not in src.module.lower()
+    assert src.source_file == "mosdepth.summary.txt"
+
+
+def test_driver_computed_metrics_name_their_real_tool():
+    """Guard (WS-06 §9b): every metric the committed germline driver actually WRITES (fastp read QC
+    + mosdepth coverage/breadth) names the tool that computes it, never Picard CollectHsMetrics (the
+    reads-only pipeline never runs Picard). Freezes 'borrowed a metric name from a tool we don't
+    run'. (on_target / fold_* stay Picard-sourced — Picard IS their tool; we just don't run it.)"""
+    reg = default_registry()
+    driver_computed = {
+        "qc.q30": "fastp",
+        "qc.reads_passing_filter": "fastp",
+        "qc.duplication": "fastp",
+        "qc.mean_target_coverage": "mosdepth",
+        "qc.breadth_20x": "mosdepth",
+        "qc.breadth_30x": "mosdepth",
+    }
+    for our_key, tool in driver_computed.items():
+        module = reg.entry(our_key).source.module
+        assert module == tool, f"{our_key} claims {module!r}, driver computes it with {tool}"
+        assert "picard" not in module.lower()
+
+
+def test_reads_passing_filter_label_is_not_a_demux_concept():
+    """WS-06 §9c: the qc.reads_passing_filter threshold renders 'Reads passing filter' (fastp's
+    survival metric, matching the registry display_name), never '% reads identified' (a demux
+    concept it is not). The label flows into finding title/detail/content_hash, so this pins it."""
+    threshold = DEFAULT_RUNBOOK.threshold_for("pct_reads_identified")
+    assert threshold is not None and threshold.label == "Reads passing filter"
+    mv = default_registry().observe(
+        metric_key="qc.reads_passing_filter", raw_value=60.0, raw_unit="percent", sample_id="SX"
+    )
+    finding = _evaluate_metric("SX", threshold, mv)  # 60% < gate 70% -> a WARN finding
+    assert finding is not None and "Reads passing filter" in finding.title
+    blob = (finding.title + finding.detail + " ".join(e.value for e in finding.evidence)).lower()
+    assert "reads identified" not in blob
+
+
 def test_run_gate_orders_urgent_first():
     cards = run_gate(load_run(DATA), synthesizer=StubSynthesizer())
     verdicts = [c.verdict for c in cards]

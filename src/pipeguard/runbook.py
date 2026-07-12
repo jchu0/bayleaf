@@ -85,7 +85,11 @@ class Runbook(BaseModel):
             QCThreshold(
                 metric="pct_reads_identified",
                 our_key="qc.reads_passing_filter",
-                label="% reads identified",
+                # WS-06 §9c: this our_key is fastp's `pct_surviving` (reads passing filter), NOT a
+                # demux "reads identified" share — label it as the registry display_name does. (The
+                # `metric`/CSV field name stays for the parser binding; the operator-facing label is
+                # what was mislabelled.)
+                label="Reads passing filter",
                 gate=0.70,
                 hard_fail=0.50,
                 unit="%",
