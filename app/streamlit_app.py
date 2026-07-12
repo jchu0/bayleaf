@@ -1,4 +1,4 @@
-"""PipeGuard dashboard — the operator's provenance & QC decision gate.
+"""bayleaf dashboard — the operator's provenance & QC decision gate.
 
 Deliberately a THIN view. All logic lives in the `pipeguard` package; this file
 only loads a run, calls `run_gate`, and renders the decision cards. Porting to
@@ -31,7 +31,7 @@ VERDICT_STYLE = {
 }
 SEVERITY_ICON = {"critical": "🔴", "warn": "🟠", "info": "🔵"}
 
-st.set_page_config(page_title="PipeGuard — Decision Gate", page_icon="🧬", layout="wide")
+st.set_page_config(page_title="bayleaf — Decision Gate", page_icon="🌿", layout="wide")
 
 
 @st.cache_data(show_spinner=False)  # type: ignore[untyped-decorator]
@@ -99,7 +99,7 @@ def _render_card(card: DecisionCard) -> None:
 
 
 def main() -> None:
-    st.title("🧬 PipeGuard")
+    st.title("🌿 bayleaf")
     st.caption(
         "AI-assisted provenance & QC decision gate for a genomics run. "
         "Should each sample **proceed, hold, rerun, or escalate** — and why?"

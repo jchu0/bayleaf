@@ -63,7 +63,7 @@ from .share_store import get_share_store
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
-app = FastAPI(title="PipeGuard API", version="0.1.0")
+app = FastAPI(title="bayleaf API", version="0.1.0")
 
 # The React dev server (Vite) runs on 5173; allow it in dev. GET for the read-API + exactly
 # one write verb (POST) for the off-gate feedback telemetry — no PUT/DELETE/PATCH. Origins

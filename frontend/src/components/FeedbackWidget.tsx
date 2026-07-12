@@ -23,7 +23,7 @@ function screenLabel(p: string): string {
   if (p.startsWith('/monitoring')) return 'Monitoring'
   if (p.startsWith('/settings')) return 'Settings'
   if (p.startsWith('/runs/')) return 'Decision cards'
-  return 'PipeGuard'
+  return 'bayleaf'
 }
 
 type Phase = 'idle' | 'submitting' | 'done' | 'error'

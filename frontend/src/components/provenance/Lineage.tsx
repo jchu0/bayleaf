@@ -23,7 +23,7 @@ const STAGES: { key: PipelineStage; n: number; title: string; tool: string; gate
   { key: 'variant', n: 5, title: 'Variant calling', tool: 'not run in this build' },
   { key: 'filter', n: 6, title: 'Filter / normalize', tool: 'not run in this build' },
   { key: 'review', n: 7, title: 'Route to human', tool: 'route-to-human · VAR-RTH-001', gate: 'variant' },
-  { key: 'gate', n: 8, title: 'Decision gate', tool: 'PipeGuard rules' },
+  { key: 'gate', n: 8, title: 'Decision gate', tool: 'bayleaf rules' },
   { key: 'share', n: 9, title: 'De-identified share', tool: 'Safe-Harbor-style scrub' },
 ]
 

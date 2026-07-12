@@ -1033,8 +1033,8 @@ export const BUILTIN_PROFILES = ['default', 'giab_panel', 'sarek']
 
 // ── Run hand-off stepper (composes ≠ executes) ──
 export const RUN_STEPS: { title: string; desc: string }[] = [
-  { title: 'Emit run_layout.yaml', desc: 'PipeGuard writes the artifact-kind → path config.' },
-  { title: 'Nextflow / bioconda executes', desc: 'Your engine runs the tools — outside PipeGuard.' },
+  { title: 'Emit run_layout.yaml', desc: 'bayleaf writes the artifact-kind → path config.' },
+  { title: 'Nextflow / bioconda executes', desc: 'Your engine runs the tools — outside bayleaf.' },
   { title: 'Deterministic ingest', desc: 'write_run_dir freezes run/ (5 CSVs).' },
   { title: 'run_gate gates + records', desc: 'Rules compute the verdict; the ledger is written.' },
   { title: 'Decision cards', desc: 'Per-sample verdicts land for review.' },

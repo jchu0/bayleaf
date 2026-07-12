@@ -700,7 +700,7 @@ function SystemTab() {
   const OBS = [
     { label: 'Prometheus /metrics', href: `${apiBase}/metrics`, icon: Activity, note: 'read-API exporter · runs · samples · cards · gate-flagged' },
     { label: 'Prometheus', href: 'http://localhost:9090', icon: LineChart, note: 'scrapes the /metrics seam · :9090' },
-    { label: 'Grafana', href: 'http://localhost:3000', icon: BarChart3, note: 'PipeGuard — QC decision gate dashboard · :3000' },
+    { label: 'Grafana', href: 'http://localhost:3000', icon: BarChart3, note: 'bayleaf — QC decision gate dashboard · :3000' },
   ]
 
   return (
