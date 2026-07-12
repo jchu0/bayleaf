@@ -248,6 +248,18 @@ def test_expected_metrics_rejects_unproducible_key():
     assert book.expected_metrics == ("qc.breadth_20x", "qc.pct_mapped")  # producible + de-duped
 
 
+def test_hg002_committed_run_has_no_spurious_qc_missing():
+    """WS-01 Gap A real-data leg (offline against the committed HG002 fixture): HG002 carries a real
+    QC row, so QC-MISSING must NOT fire — the new rule neither masks nor duplicates HG002's existing
+    honest cluster_pf HOLD (a reads-only path can't produce the run-level %PF metric)."""
+    run_dir = DATA.parent / "RUN-2026-07-08-GIAB-HG002"
+    findings = evaluate_run(load_run(run_dir), DEFAULT_RUNBOOK)["HG002"]
+    assert not any(f.rule_id == "QC-MISSING" for f in findings)  # QC present → no missing-QC HOLD
+    # …the existing structural cluster_pf NA-HOLD is retained, unchanged by WS-01.
+    assert any(f.rule_id == "QC-CLUSTER_PF-NA" for f in findings)
+    assert aggregate_verdict(findings) is Verdict.HOLD
+
+
 # ── WS-06 metric correctness (source/label honesty; Gaps 4 & 5) ────────────────────
 
 
