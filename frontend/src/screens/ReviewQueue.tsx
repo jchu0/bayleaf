@@ -463,17 +463,11 @@ export function ReviewQueue() {
   // state-changing write). Each stakes-y ticket action confirms first, naming its effect + that it's
   // audited; the actions themselves already persist to the review store, which the Admin Activity
   // log reads. Acknowledge stays a direct one-click (a soft "start reviewing", non-destructive).
-  const ACTION_CONFIRM: Record<'resolve' | 'escalate' | 'reopen', ConfirmOpts> = {
+  const ACTION_CONFIRM: Record<'resolve' | 'reopen', ConfirmOpts> = {
     resolve: {
       title: 'Resolve this ticket?',
       body: 'Marks the hold cleared and moves it out of the open queue. Reversible via Reopen; recorded in the audit log.',
       confirmLabel: 'Resolve',
-    },
-    escalate: {
-      // Names where the escalation routes (UIC-10): an Approver who also holds review-queue access.
-      title: 'Escalate to an approver?',
-      body: 'Requests sign-off from an Approver with review-queue access and moves the ticket into review. Recorded in the audit log.',
-      confirmLabel: 'Escalate',
     },
     reopen: {
       title: 'Reopen this ticket?',
@@ -481,9 +475,31 @@ export function ReviewQueue() {
       confirmLabel: 'Reopen',
     },
   }
-  const confirmAct = async (t: QueueTicket, action: 'resolve' | 'escalate' | 'reopen') => {
+  const confirmAct = async (t: QueueTicket, action: 'resolve' | 'reopen') => {
     if (!(await confirm(ACTION_CONFIRM[action]))) return
     act(t, action)
+  }
+  // Acknowledge = start reviewing AND take ownership: picking up an UNOWNED ticket self-assigns it to
+  // the acting user, so nothing sits in review without an accountable owner (the orphan-escalation
+  // fix starts here). An already-owned ticket keeps its owner.
+  const acknowledge = (t: QueueTicket) => {
+    const key = keyOf(t)
+    if (!uiRef.current[key]?.assignee) assign(t, actor.id)
+    act(t, 'acknowledge')
+  }
+  // Escalate ROUTES the ticket to a specific approver (not a shared pool): assign to the chosen
+  // approver, then transition. The UI enables this only once the ticket has an owner; the backend
+  // also rejects an unassigned escalate (review_queue.act_on_ticket), so it isn't a UI-only guardrail.
+  const confirmEscalate = async (t: QueueTicket, approverId: string) => {
+    const target = DEMO_ACCOUNTS.find((a) => a.id === approverId)
+    const ok = await confirm({
+      title: 'Escalate to an approver?',
+      body: `Assigns ${t.card.sample_id} to ${target?.name ?? approverId} for sign-off and moves it into review. Recorded in the audit log.`,
+      confirmLabel: 'Escalate',
+    })
+    if (!ok) return
+    assign(t, approverId)
+    act(t, 'escalate')
   }
   // Suppressing hides an issue class going forward (cascading) — confirm it; un-suppressing merely
   // restores visibility (low-stakes), so it toggles straight through.
@@ -799,10 +815,10 @@ export function ReviewQueue() {
                               onToggle={() => setOpen((m) => ({ ...m, [key]: !m[key] }))}
                               canAssign={canSelect}
                               on={{
-                                ack: () => act(t, 'acknowledge'), // soft, non-destructive — no confirm
+                                ack: () => acknowledge(t), // start reviewing + take ownership if unowned
                                 resolve: () => void confirmAct(t, 'resolve'),
                                 reopen: () => void confirmAct(t, 'reopen'),
-                                escalate: () => void confirmAct(t, 'escalate'),
+                                escalate: (approverId) => void confirmEscalate(t, approverId),
                                 suppress: () => void confirmSuppress(t),
                                 assign: (assignee) => assign(t, assignee),
                                 escalateRepair: () => void escalateRepair(t),
@@ -831,17 +847,23 @@ type TicketHandlers = {
   ack: () => void
   resolve: () => void
   reopen: () => void
-  escalate: () => void
+  escalate: (approverId: string) => void
   suppress: () => void
   assign: (assignee: string | null) => void
   escalateRepair: () => void
   approveFix: (scope: 'instance' | 'class') => void
 }
 
-// Assign a ticket's owner (task 3). Reviewers/approvers get a dropdown of the demo roster (the same
-// actor ids the audit trail uses); a viewer sees the read-only owner. An off-roster assignee (set
-// via the API by a user not in the demo roster) is preserved as its own option so a save can't drop
-// it. "" is the unassigned sentinel → onAssign(null).
+// Only reviewers + approvers can OWN a review ticket — a viewer can't act on one, so offering a
+// viewer as an assignee would create a dead-end owner (UX review finding D). Escalation routes to
+// an APPROVER specifically (who signs off).
+const ASSIGNABLE_ACCOUNTS = DEMO_ACCOUNTS.filter((a) => a.role !== 'viewer')
+const APPROVER_ACCOUNTS = DEMO_ACCOUNTS.filter((a) => a.role === 'approver')
+
+// Assign a ticket's owner (task 3). Reviewers/approvers get a dropdown of the assignable roster (the
+// same actor ids the audit trail uses, viewers excluded); a viewer sees the read-only owner. An
+// off-roster assignee (set via the API by a user not in the demo roster) is preserved as its own
+// option so a save can't drop it. "" is the unassigned sentinel → onAssign(null).
 function AssignControl({
   assignee,
   canAssign,
@@ -859,7 +881,7 @@ function AssignControl({
       </span>
     )
   }
-  const rosterIds = DEMO_ACCOUNTS.map((a) => a.id)
+  const rosterIds = ASSIGNABLE_ACCOUNTS.map((a) => a.id)
   const offRoster = assignee && !rosterIds.includes(assignee) ? assignee : null
   return (
     <label className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2 py-1 text-[12px] text-text-2 focus-within:border-accent">
@@ -872,7 +894,7 @@ function AssignControl({
         aria-label="Assign ticket to"
       >
         <option value="">Unassigned</option>
-        {DEMO_ACCOUNTS.map((a) => (
+        {ASSIGNABLE_ACCOUNTS.map((a) => (
           <option key={a.id} value={a.id}>
             {a.name} ({a.id})
           </option>
@@ -910,6 +932,10 @@ function TicketCard({
   const escalated = ui.escalated ?? false
   const suppressed = ui.suppressed ?? false
   const assignee = ui.assignee ?? null
+  // Escalate now ROUTES to a specific approver, so the button opens an inline approver picker
+  // (deliberate two-step = the audited confirm). Only offered once the ticket has an owner.
+  const [escPicking, setEscPicking] = useState(false)
+  const [escTo, setEscTo] = useState('')
   const prio = PRIORITY[verdict]
   // No per-ticket "opened" timestamp on the wire yet — show the run's own date as context
   // rather than fabricate a relative time.
@@ -1104,15 +1130,63 @@ function TicketCard({
               <EyeOff size={13} />
               {suppressed ? 'Suppressed' : 'Suppress issue class'}
             </button>
-            {showEscalate && (
+            {showEscalate && assignee && !escPicking && (
               <button
                 type="button"
-                onClick={on.escalate}
+                onClick={() => {
+                  // Pre-select the current owner if they already hold approver, else force a choice.
+                  setEscTo(APPROVER_ACCOUNTS.some((a) => a.id === assignee) ? assignee : '')
+                  setEscPicking(true)
+                }}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-escalate-bd bg-escalate-bg px-2.5 py-1.5 text-[12px] font-medium text-escalate-fg transition-colors hover:border-escalate-fg"
               >
                 <ChevronUp size={13} />
                 Escalate to approver
               </button>
+            )}
+            {showEscalate && assignee && escPicking && (
+              <span className="inline-flex items-center gap-1 rounded-lg border border-escalate-bd bg-escalate-bg py-0.5 pl-2 pr-0.5">
+                <select
+                  value={escTo}
+                  onChange={(e) => setEscTo(e.target.value)}
+                  aria-label="Escalate to approver"
+                  className="max-w-[130px] cursor-pointer bg-transparent text-[12px] text-escalate-fg focus:outline-none"
+                >
+                  <option value="">Choose approver…</option>
+                  {APPROVER_ACCOUNTS.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!escTo}
+                  onClick={() => {
+                    on.escalate(escTo)
+                    setEscPicking(false)
+                  }}
+                  className="rounded-md bg-escalate-fg px-2 py-1 text-[11.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  Escalate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEscPicking(false)}
+                  className="rounded-md px-1.5 py-1 text-[11.5px] text-text-3 hover:text-text-2"
+                >
+                  Cancel
+                </button>
+              </span>
+            )}
+            {showEscalate && !assignee && (
+              <span
+                className="inline-flex cursor-default items-center gap-1.5 rounded-lg border border-line bg-card-2 px-2.5 py-1.5 text-[12px] text-text-3"
+                title="Assign this ticket to an owner first — an escalation needs an accountable approver."
+              >
+                <Lock size={13} />
+                Assign before escalating
+              </span>
             )}
             {escalateLocked && (
               <span

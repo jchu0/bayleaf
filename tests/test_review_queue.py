@@ -300,6 +300,18 @@ def test_assign_is_not_a_transition_action(client):
     assert _act(client, tid, "assign").status_code == 422
 
 
+def test_escalate_requires_an_assigned_owner(client):
+    # An unassigned escalation is an orphan no approver owns, so the endpoint rejects it (409).
+    # Assigning an owner first unblocks it and moves the ticket into review.
+    tid = _create(client, headers=REVIEWER)["id"]
+    assert _act(client, tid, "escalate", headers=REVIEWER).status_code == 409
+    _assign(client, tid, "m.chen", headers=REVIEWER)
+    res = _act(client, tid, "escalate", headers=REVIEWER)
+    assert res.status_code == 200
+    assert res.json()["status"] == "in_review"
+    assert res.json()["actions"][-1]["action"] == "escalate"
+
+
 # --- recency window (`since`) + total-count header -------------------------------------------
 
 

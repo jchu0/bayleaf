@@ -318,6 +318,15 @@ def act_on_ticket(
             ),
         )
 
+    # An escalation must have an accountable owner — an unassigned escalation is an orphan no
+    # approver owns (UX review finding A). The UI routes escalate to a specific approver; enforce
+    # the precondition here too so it isn't a UI-only guardrail on a permissive dev backend.
+    if body.action == "escalate" and not record.get("assignee"):
+        raise HTTPException(
+            status_code=409,
+            detail="action 'escalate' requires the ticket to be assigned to an owner first",
+        )
+
     action_entry = {
         "action": body.action,
         "actor": actor.id,
