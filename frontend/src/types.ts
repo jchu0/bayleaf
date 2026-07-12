@@ -194,9 +194,13 @@ export type ShareBundle = {
 
 // The Builder-card graph in the shape POST /api/pipelines/compile accepts (name=tool per node;
 // edges by typed-port index) — ADR-0003: the Builder composes this; the compiler emits Nextflow.
+// A node MAY additionally carry an operator-authored custom Nextflow process (ADR-0020): a HUMAN
+// supplies `script` (a verbatim `script:` body) + optional `container`/`conda` packaging. A non-empty
+// `script` makes the backend render THAT body verbatim (never the tool catalog); the three fields are
+// optional + additive, so an ordinary catalogued/source card omits them and the wire shape is unchanged.
 export type NextflowGraphBody = {
   name: string
-  nodes: { id: string; name: string; ins: string[]; outs: string[] }[]
+  nodes: { id: string; name: string; ins: string[]; outs: string[]; script?: string; container?: string; conda?: string }[]
   edges: { from: { node: string; idx: number }; to: { node: string; idx: number } }[]
 }
 // The compiled pipeline: a map of relative path → file content, the main.nf, and the DAG's
@@ -714,6 +718,24 @@ export type NodeProposal = {
   platform_version: string
   created_at: string
   mode: 'stub' | 'claude'
+}
+
+// Sandboxed server-side file browser (GET /api/files?root=&path=). Powers the Builder's "Browse…"
+// data pickers over server-resident inputs (FASTQ folders, reference, panel) — the GB-scale files
+// live on the compute host, so the browse is SERVER-SIDE and returns metadata only, never content.
+// Off-gate, read-only; `kind` is an ext-inferred artifact kind (null when unrecognized).
+export type FileKind = 'fastq' | 'vcf' | 'bam' | 'panel_bed' | 'reference_fasta'
+export type FileEntry = {
+  name: string
+  is_dir: boolean
+  size: number | null // bytes; files only (null for a directory)
+  kind: FileKind | null
+}
+export type FileListing = {
+  root: string
+  path: string // dir path relative to the root ('' = the root itself)
+  parent: string | null // parent dir rel path for an "up" link, or null at the root
+  entries: FileEntry[]
 }
 
 // Advisory archivist digest (GET /api/archive/index cross-run | GET /api/runs/:id/archive-digest

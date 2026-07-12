@@ -6,19 +6,36 @@ import {
   Copy,
   Download,
   FileCode,
+  FolderOpen,
   Loader2,
   Play,
+  Plus,
+  Terminal,
+  Trash2,
   TriangleAlert,
   Wrench,
   X,
 } from 'lucide-react'
 import { api } from '../api'
+import {
+  ARTIFACT_KINDS,
+  CUSTOM_SAFETY_LABEL,
+  GIAB_LOC,
+  ON_CYCLE,
+  alignOutGlobs,
+  fileKindsFor,
+  mergedLoc,
+  type LocEdits,
+  type OnMultiple,
+  type UserNode,
+} from './BuilderShared'
 import { FALLBACK_SUMMARY } from './ReviewRepairCard'
 import { useToast } from './Toast'
 import type {
   AgentProposal,
   ArchiveDigest,
   CompiledNextflow,
+  FileKind,
   MonitoringSignature,
   NextflowGraphBody,
   NodePortSpec,
@@ -636,11 +653,16 @@ export function NextflowExportModal({ graph, onClose }: { graph: NextflowGraphBo
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  // Which bundle file the operator is previewing — main.nf by default. A custom-script card's verbatim
+  // body lands in its `modules/*.nf`, so letting the operator browse every emitted file is how they
+  // VERIFY their script round-tripped into the bundle (ADR-0020) — not just the wiring in main.nf.
+  const [file, setFile] = useState('main.nf')
 
   useEffect(() => {
     let live = true
     setResult(null)
     setError(null)
+    setFile('main.nf')
     api
       .compileNextflow(graph)
       .then((r) => live && setResult(r))
@@ -650,9 +672,21 @@ export function NextflowExportModal({ graph, onClose }: { graph: NextflowGraphBo
     }
   }, [graph])
 
+  // main.nf first, then modules (where a custom process lives), then config/README. `shown` guards a
+  // stale selection after a recompile (falls back to main.nf).
+  const fileKeys = result
+    ? Object.keys(result.files).sort((a, b) => {
+        const rank = (k: string) => (k === 'main.nf' ? 0 : k.startsWith('modules/') ? 1 : 2)
+        return rank(a) - rank(b) || a.localeCompare(b)
+      })
+    : []
+  const shown = result && result.files[file] != null ? file : 'main.nf'
+  // Did the operator's graph carry a custom process? The compiler stamps this honest header on it.
+  const hasCustom = result ? Object.values(result.files).some((c) => c.includes('operator-authored custom process')) : false
+
   const copy = () => {
     if (!result) return
-    navigator.clipboard?.writeText(result.main_nf)
+    navigator.clipboard?.writeText(result.files[shown] ?? result.main_nf)
     setCopied(true)
     setTimeout(() => setCopied(false), 1400)
   }
@@ -722,9 +756,33 @@ export function NextflowExportModal({ graph, onClose }: { graph: NextflowGraphBo
               {Object.keys(result.files).length} files · {moduleCount} process modules + main.nf +
               nextflow.config
             </div>
-            <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-wide text-text-3">main.nf</div>
+            {hasCustom && (
+              <div className="mb-2.5 flex items-start gap-2 rounded-[9px] border border-hold-bd bg-hold-bg px-3 py-2 text-[11px] leading-relaxed text-hold-fg">
+                <Terminal size={13} className="mt-0.5 shrink-0" />
+                <span>
+                  This bundle includes an <strong>operator-authored custom process</strong> — open its{' '}
+                  <span className="font-mono">modules/…</span> file to review the verbatim script. It runs on the compute host;
+                  production needs sandboxing (ADR-0020). PipeGuard transcribed it (compose ≠ execute).
+                </span>
+              </div>
+            )}
+            {/* File picker — the operator's custom script is in its module, not main.nf; let them see it. */}
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="font-mono text-[10.5px] uppercase tracking-wide text-text-3">file</span>
+              <select
+                value={shown}
+                onChange={(e) => setFile(e.target.value)}
+                className="min-w-0 flex-1 rounded-md border border-line bg-card px-2 py-1 font-mono text-[11px] text-text outline-none focus:border-accent"
+              >
+                {fileKeys.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </select>
+            </div>
             <pre className="max-h-[320px] overflow-auto rounded-lg border border-line bg-card-2 p-3 font-mono text-[11px] leading-relaxed text-text-2">
-              {result.main_nf}
+              {result.files[shown]}
             </pre>
           </>
         )}
@@ -1053,5 +1111,386 @@ export function RunPipelineModal({
         </div>
       )}
     </ModalShell>
+  )
+}
+
+// ── Custom-script inspector (operator-authored process card; ADR-0020) ─────────────────────────────
+// The right-pane authoring surface for a custom-script card. It REPLACES the generic BuilderInspector
+// when a custom node is selected (the screen swaps it in), so a human authors — in the inspector — the
+// label, typed input/output ports, the verbatim `script:` body, and a runtime (container OR conda). It
+// reuses the inspector/port-picker idioms; every edit is a local draft mutation the screen records +
+// reconciles (compose ≠ execute). It NEVER shows or sets a verdict/confidence (ADR-0001). The honest
+// label is prominent, not a tooltip: a human must see this runs on the compute host before approving.
+const customInputCls =
+  'w-full rounded-md border border-line-strong bg-card px-2 py-1.5 font-mono text-[11px] text-text outline-none focus:border-accent'
+
+export function CustomScriptInspector({
+  node,
+  isView,
+  locEdits,
+  locEditable,
+  onRename,
+  onAddPort,
+  onRemovePort,
+  onSetPortKind,
+  onSetOutGlob,
+  onSetScript,
+  onSetRuntime,
+  onSetContainer,
+  onSetConda,
+  onSetLoc,
+  onToggleRequired,
+  onCycleOnMultiple,
+  onDelete,
+  onClose,
+  onBrowse,
+}: {
+  node: UserNode
+  isView: boolean
+  locEdits: LocEdits
+  locEditable: boolean
+  onRename: (id: string, name: string) => void
+  onAddPort: (id: string, dir: 'ins' | 'outs', kind: string) => void
+  onRemovePort: (id: string, dir: 'ins' | 'outs', idx: number) => void
+  onSetPortKind: (id: string, dir: 'ins' | 'outs', idx: number, kind: string) => void
+  onSetOutGlob: (id: string, idx: number, glob: string) => void
+  onSetScript: (id: string, value: string) => void
+  onSetRuntime: (id: string, runtime: 'container' | 'conda') => void
+  onSetContainer: (id: string, value: string) => void
+  onSetConda: (id: string, value: string) => void
+  onSetLoc: (kind: string, field: 'loc' | 'parser', value: string) => void
+  onToggleRequired: (kind: string) => void
+  onCycleOnMultiple: (kind: string) => void
+  onDelete: (id: string) => void
+  onClose: () => void
+  onBrowse: (opts: { title: string; kinds?: FileKind[]; onPick: (path: string) => void }) => void
+}) {
+  const runtime = node.runtime ?? 'container'
+  const globs = alignOutGlobs(node.outGlobs, node.outs)
+  const scriptEmpty = !(node.script && node.script.trim())
+  const locators = GIAB_LOC.filter((g) => node.outs.includes(g.k)).map((g) => mergedLoc(g.k, locEdits))
+  const runtimeCls = isView
+    ? 'w-full rounded-md border border-line bg-card-2 px-2 py-1.5 font-mono text-[11px] text-text outline-none'
+    : customInputCls
+
+  return (
+    <aside className="flex w-[360px] shrink-0 flex-col border-l border-line bg-card">
+      <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
+        <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-lg bg-hold-bg text-hold-fg">
+          <Terminal size={16} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[14px] font-semibold text-text">{node.name}</p>
+          <p className="truncate font-mono text-[10.5px] text-text-3">operator-authored · custom process</p>
+        </div>
+        <button onClick={onClose} className="grid h-7 w-7 place-items-center rounded-lg border border-line text-text-2 hover:bg-page">
+          <X size={14} />
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        {/* Honest label — prominent, never a tooltip (ADR-0020 safety [ii]). */}
+        <div className="mb-4 flex items-start gap-2 rounded-[10px] border border-hold-bd bg-hold-bg px-3 py-2.5 text-[11px] leading-relaxed text-hold-fg">
+          <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+          <span>
+            <strong>{CUSTOM_SAFETY_LABEL}.</strong> PipeGuard transcribes your script verbatim into the emitted Nextflow —{' '}
+            it never authors or vets the command (compose ≠ execute). It reaches a compute host <strong>only</strong> once a
+            saved pipeline is approved (the run gate, ADR-0020). This card sets no verdict.
+          </span>
+        </div>
+
+        {/* Identity — rename. Commits on blur / Enter (keyed to the node so it resets on reselect). */}
+        <div className="mb-4 rounded-[10px] border border-line p-3">
+          <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">label</div>
+          <input
+            key={node.id}
+            defaultValue={node.name}
+            readOnly={isView}
+            onBlur={(e) => !isView && onRename(node.id, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            }}
+            className={`w-full rounded-md border px-2 py-1.5 text-[12.5px] font-semibold text-text outline-none ${
+              isView ? 'border-line bg-card-2' : 'border-line-strong bg-card focus:border-accent'
+            }`}
+          />
+          <p className="mt-1.5 text-[10px] leading-snug text-text-3">
+            Becomes the Nextflow process name — it can even reuse a catalogued tool's name; your body always wins over the catalog.
+          </p>
+        </div>
+
+        {/* Typed INPUT ports — kind picker (the same ARTIFACT_KINDS vocab, never free-invented). */}
+        <PortRows
+          node={node}
+          dir="ins"
+          label="Inputs"
+          isView={isView}
+          globs={globs}
+          onAddPort={onAddPort}
+          onRemovePort={onRemovePort}
+          onSetPortKind={onSetPortKind}
+          onSetOutGlob={onSetOutGlob}
+        />
+        {/* Typed OUTPUT ports — kind picker + an emit glob per output. */}
+        <PortRows
+          node={node}
+          dir="outs"
+          label="Outputs"
+          isView={isView}
+          globs={globs}
+          onAddPort={onAddPort}
+          onRemovePort={onRemovePort}
+          onSetPortKind={onSetPortKind}
+          onSetOutGlob={onSetOutGlob}
+        />
+        <p className="mb-4 -mt-1 text-[10px] leading-snug text-text-3">
+          The emitted process captures its whole work dir (<span className="font-mono">path(&quot;*&quot;)</span>); the emit glob documents the file your
+          script should produce (not yet enforced by the command — ADR-0020 follow-up).
+        </p>
+
+        {/* The verbatim script: body. */}
+        <div className="mb-4">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">script:</span>
+            {scriptEmpty && <span className="font-mono text-[9.5px] text-escalate-fg">empty · won’t compile</span>}
+          </div>
+          <textarea
+            value={node.script ?? ''}
+            readOnly={isView}
+            spellCheck={false}
+            rows={9}
+            onChange={(e) => onSetScript(node.id, e.target.value)}
+            placeholder="# operator-authored Nextflow script: body — runs verbatim on the compute host"
+            className={`w-full resize-y whitespace-pre rounded-md border px-2 py-1.5 font-mono text-[11px] leading-relaxed text-text outline-none ${
+              isView ? 'border-line bg-card-2' : 'border-line-strong bg-card focus:border-accent'
+            } ${scriptEmpty ? 'border-escalate-bd' : ''}`}
+          />
+          <p className="mt-1 text-[10px] leading-snug text-text-3">
+            Reference a wired input by its port kind (<span className="font-mono">${'{'}vcf{'}'}</span>) and the sample as{' '}
+            <span className="font-mono">${'{'}meta.id{'}'}</span>. A blank body is rejected — PipeGuard never fabricates a command.
+          </p>
+        </div>
+
+        {/* Runtime — a container image OR a conda spec (the packaging for the body). */}
+        <div className="mb-4">
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">runtime</div>
+          <div className="mb-2 grid grid-cols-2 gap-1.5">
+            {(['container', 'conda'] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => !isView && onSetRuntime(node.id, r)}
+                disabled={isView}
+                className={`rounded-md border px-2 py-1.5 text-[11.5px] font-medium capitalize ${
+                  runtime === r ? 'border-accent bg-accent-weak text-accent-strong' : 'border-line bg-card-2 text-text-2 hover:border-line-strong'
+                } ${isView ? 'cursor-default' : 'cursor-pointer'}`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+          {runtime === 'container' ? (
+            <input
+              value={node.container ?? ''}
+              readOnly={isView}
+              onChange={(e) => onSetContainer(node.id, e.target.value)}
+              placeholder="quay.io/biocontainers/…"
+              className={runtimeCls}
+            />
+          ) : (
+            <input
+              value={node.conda ?? ''}
+              readOnly={isView}
+              onChange={(e) => onSetConda(node.id, e.target.value)}
+              placeholder="bioconda::bcftools=1.20"
+              className={runtimeCls}
+            />
+          )}
+          <p className="mt-1 text-[10px] leading-snug text-text-3">
+            Emitted as the process <span className="font-mono">{runtime}</span> directive. Only the selected one is sent.
+          </p>
+        </div>
+
+        {/* Locators — the run_layout path for this node's output kinds, with a server-side Browse. */}
+        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">Locators</div>
+        {locators.length === 0 ? (
+          <p className="text-[11px] text-text-3">
+            No emitted locator for this node’s output kinds. Give it an output kind PipeGuard ingests (e.g.{' '}
+            <span className="font-mono">filtered_vcf</span>) to author a path here.
+          </p>
+        ) : (
+          locators.map((l) => (
+            <div key={l.k} className="mb-3 rounded-[10px] border border-line p-3">
+              <div className="mb-2.5 flex items-center justify-between gap-2">
+                <span className="font-mono text-[12px] font-semibold text-text">{l.k}</span>
+                <span className="rounded border border-line bg-card-2 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.3px] text-text-2">{l.role}</span>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div>
+                  <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">{l.field}</div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      value={l.loc}
+                      readOnly={!locEditable}
+                      onChange={(e) => onSetLoc(l.k, 'loc', e.target.value)}
+                      className={`min-w-0 flex-1 rounded-md border px-2 py-1.5 font-mono text-[11px] text-text outline-none ${
+                        locEditable ? 'border-line-strong bg-card focus:border-accent' : 'border-line bg-card-2'
+                      }`}
+                    />
+                    {locEditable && (
+                      <button
+                        onClick={() =>
+                          onBrowse({
+                            title: `Pick a server path for ${l.k}`,
+                            kinds: fileKindsFor(l.k),
+                            onPick: (p) => onSetLoc(l.k, 'loc', p),
+                          })
+                        }
+                        title="Browse server files"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line bg-card px-2 py-1.5 text-[10.5px] font-medium text-text-2 hover:border-line-strong"
+                      >
+                        <FolderOpen size={12} />
+                        Browse
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">parser</div>
+                    <input
+                      value={l.parser}
+                      readOnly={!locEditable}
+                      onChange={(e) => onSetLoc(l.k, 'parser', e.target.value)}
+                      className={`w-full rounded-md border px-2 py-1.5 font-mono text-[11px] text-text outline-none ${
+                        locEditable ? 'border-line-strong bg-card focus:border-accent' : 'border-line bg-card-2'
+                      }`}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">on_multiple</div>
+                    <button
+                      onClick={() => locEditable && onCycleOnMultiple(l.k)}
+                      className={`w-full rounded-md border border-line bg-card-2 px-2 py-1.5 text-left font-mono text-[11px] text-text-2 ${
+                        locEditable ? 'cursor-pointer hover:border-line-strong' : 'cursor-default'
+                      }`}
+                      title={locEditable ? `→ ${ON_CYCLE[l.on as OnMultiple]}` : undefined}
+                    >
+                      {l.on}
+                    </button>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-0.5 text-[9.5px] uppercase tracking-[0.3px] text-text-3">required</div>
+                    <button
+                      onClick={() => locEditable && onToggleRequired(l.k)}
+                      className={`w-full rounded-md border px-2 py-1.5 text-center font-mono text-[11px] ${
+                        l.required ? 'border-[#cfe0fb] bg-accent-weak text-accent-strong' : 'border-line bg-card-2 text-text-3'
+                      } ${locEditable ? 'cursor-pointer' : 'cursor-default'}`}
+                    >
+                      {l.required ? 'required' : 'optional'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+
+        {!isView && (
+          <button
+            onClick={() => onDelete(node.id)}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-escalate-bd bg-escalate-bg px-3 py-1.5 text-[12.5px] font-medium text-escalate-fg hover:opacity-90"
+          >
+            <Trash2 size={13} />
+            Delete node
+          </button>
+        )}
+      </div>
+    </aside>
+  )
+}
+
+// Typed port rows for the custom inspector — a kind picker per port (from ARTIFACT_KINDS), plus an
+// emit-glob input on OUTPUT ports. add/remove reuse the screen's callbacks (which record history +
+// reconcile edges). Read-only in View.
+function PortRows({
+  node,
+  dir,
+  label,
+  isView,
+  globs,
+  onAddPort,
+  onRemovePort,
+  onSetPortKind,
+  onSetOutGlob,
+}: {
+  node: UserNode
+  dir: 'ins' | 'outs'
+  label: string
+  isView: boolean
+  globs: string[]
+  onAddPort: (id: string, dir: 'ins' | 'outs', kind: string) => void
+  onRemovePort: (id: string, dir: 'ins' | 'outs', idx: number) => void
+  onSetPortKind: (id: string, dir: 'ins' | 'outs', idx: number, kind: string) => void
+  onSetOutGlob: (id: string, idx: number, glob: string) => void
+}) {
+  const ports = node[dir]
+  return (
+    <div className="mb-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">{label}</span>
+        {!isView && (
+          <button
+            onClick={() => onAddPort(node.id, dir, ARTIFACT_KINDS[0])}
+            className="inline-flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-[10.5px] font-medium text-text-2 hover:border-line-strong"
+          >
+            <Plus size={11} />
+            Add
+          </button>
+        )}
+      </div>
+      {ports.length === 0 && <p className="text-[10.5px] text-text-3">No {dir === 'ins' ? 'inputs' : 'outputs'}.</p>}
+      <div className="flex flex-col gap-1.5">
+        {ports.map((k, idx) => (
+          <div key={idx} className="flex items-center gap-1.5">
+            {isView ? (
+              <span className="min-w-0 flex-1 truncate rounded-md border border-line bg-card-2 px-2 py-1 font-mono text-[11px] text-text-2">{k}</span>
+            ) : (
+              <select
+                value={k}
+                onChange={(e) => onSetPortKind(node.id, dir, idx, e.target.value)}
+                className="min-w-0 flex-1 rounded-md border border-line-strong bg-card px-2 py-1 font-mono text-[11px] text-text outline-none focus:border-accent"
+              >
+                {ARTIFACT_KINDS.map((ak) => (
+                  <option key={ak} value={ak}>
+                    {ak}
+                  </option>
+                ))}
+              </select>
+            )}
+            {dir === 'outs' && (
+              <input
+                value={globs[idx] ?? '*'}
+                readOnly={isView}
+                onChange={(e) => onSetOutGlob(node.id, idx, e.target.value)}
+                title="emit glob"
+                placeholder="*"
+                className={`w-[104px] shrink-0 rounded-md border px-2 py-1 font-mono text-[10.5px] text-text-2 outline-none ${
+                  isView ? 'border-line bg-card-2' : 'border-line-strong bg-card focus:border-accent'
+                }`}
+              />
+            )}
+            {!isView && (
+              <button
+                onClick={() => onRemovePort(node.id, dir, idx)}
+                title="Remove port"
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-text-3 hover:text-escalate-fg"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }

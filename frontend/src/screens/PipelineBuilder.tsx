@@ -41,11 +41,14 @@ import type { AlignKind, DistributeAxis } from '../components/SelectionActionBar
 import {
   ArchivistModal,
   AuthorToolNodeModal,
+  CustomScriptInspector,
   NextflowExportModal,
   PipelineRepairModal,
   RunPipelineModal,
 } from '../components/BuilderModals'
+import { FileBrowser } from '../components/FileBrowser'
 import {
+  CUSTOM_NODE_NAME,
   GRAPH_ID,
   ICONS,
   LINKED_RUN,
@@ -53,17 +56,22 @@ import {
   ON_CYCLE,
   REFS,
   TOOLS,
+  alignOutGlobs,
   curLocMap,
   duplicateNode,
   germlineTemplate,
+  isCustomNode,
   isEditableProfile,
+  makeCustomNode,
   makeUserNode,
   mergedLoc,
   nodeHeight,
+  normalizeSavedNode,
   reconcileEdges,
   renameNode,
   savedLocators,
   setNodeIcon,
+  toCompileNode,
   yamlFor,
   type BuilderGraphPayload,
   type ConsoleTab,
@@ -78,7 +86,7 @@ import {
 import { useTopologyHistory } from '../hooks/useTopologyHistory'
 import { useRole } from '../context/RoleContext'
 import { api } from '../api'
-import type { DiffResult, DryRunResult, PipelineGraph } from '../types'
+import type { DiffResult, DryRunResult, FileKind, PipelineGraph } from '../types'
 
 // Live alignment-guide snap threshold (content px) + a small module helper: for a dragged node's
 // {left, centerX, right}/{top, middle, bottom} anchors, find the nearest other-node anchor within
@@ -144,7 +152,9 @@ const SAVE_ST: Record<SaveStatus, { label: string; cls: string }> = {
 // `used` = this node/reference/agent is actually present in the CURRENT pipeline; the palette shows
 // used items by default and hides the rest behind a per-section "all" expander (builder-cards §5 /
 // UIC-16 "the tools palette shows the current pipeline's tools with a `>` expander to all available").
-type PaletteItem = { name: string; sub: string; icon: IconKey; disabled?: boolean; alwaysEnabled?: boolean; used?: boolean; onClick?: () => void }
+// `tone: 'warn'` marks a tile that is distinct from a catalogued tool / a source — used for the
+// operator-authored Custom-script card (ADR-0020), so it reads as a different, riskier kind of node.
+type PaletteItem = { name: string; sub: string; icon: IconKey; disabled?: boolean; alwaysEnabled?: boolean; used?: boolean; tone?: 'warn'; onClick?: () => void }
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
@@ -211,6 +221,12 @@ export function PipelineBuilder() {
   const [authorOpen, setAuthorOpen] = useState(false)
   const [repairOpen, setRepairOpen] = useState(false)
   const [archivistOpen, setArchivistOpen] = useState(false)
+
+  // Server-side file picker (ADR-0020 / files.py). `openBrowse` opens it with a per-field onPick; it
+  // returns a server-relative path the caller writes into its type-a-path field (browse is ADDITIVE —
+  // the manual input stays). Wired to the custom-script inspector's locator authoring.
+  const [browse, setBrowse] = useState<null | { title: string; kinds?: FileKind[]; onPick: (p: string) => void }>(null)
+  const openBrowse = (opts: { title: string; kinds?: FileKind[]; onPick: (p: string) => void }) => setBrowse(opts)
 
   // Active-document identity: the builder normally opens the one seeded germline pipeline (the
   // LINKED doc). "New pipeline" switches to a fresh draft — 'blank' (empty canvas) or 'germline'
@@ -322,6 +338,8 @@ export function PipelineBuilder() {
   // A composed user node WINS over any seeded subject: a template/forked draft reuses seeded ids
   // (n_fastp, …) but must resolve to the EDITABLE inspector, never the read-only seeded card (§3.1).
   const selUserNode = useMemo(() => userNodes.find((n) => n.id === selected) ?? null, [userNodes, selected])
+  // A custom-script card gets its OWN inspector panel (script/runtime authoring), swapped in below.
+  const isCustomSel = !!(selUserNode && isCustomNode(selUserNode))
   const selTool = useMemo(() => (selUserNode ? null : (TOOLS.find((t) => t.id === selected) ?? null)), [selUserNode, selected])
   const selRef = useMemo(() => (selUserNode ? null : (REFS.find((r) => r.id === selected) ?? null)), [selUserNode, selected])
   const isGate = !selUserNode && selected === 'g_gate'
@@ -423,7 +441,9 @@ export function PipelineBuilder() {
       const ack = await api.savePipeline({
         name,
         graph: {
-          nodes: userNodes,
+          // Normalize custom-script nodes to their ACTIVE runtime so the STORED graph the approved-run
+          // path re-compiles matches the export preview (WYSIWYG, ADR-0020); other nodes pass through.
+          nodes: userNodes.map(normalizeSavedNode),
           edges: userEdges,
           // The merged full locator LIST (backend-consumable shape) so dry-run/diff can resolve a
           // saved pipeline; keep the raw edits too for a future load path to rehydrate the UI.
@@ -508,6 +528,37 @@ export function PipelineBuilder() {
     hist.record()
     setUserNodes((arr) => [...arr, makeUserNode(name, kind, arr.length)])
   }
+  // Operator-authored custom-script card (ADR-0020): add it AND select it so its inspector opens for
+  // authoring immediately. It wires like any card; a human authors the verbatim body + runtime there.
+  const addCustomNode = () => {
+    if (isView) return
+    hist.record()
+    const node = makeCustomNode(userNodes.length)
+    setUserNodes((arr) => [...arr, node])
+    setSelected(node.id)
+    setSelNodes(new Set([node.id]))
+    setSelEdge(null)
+    dirtyToDraft()
+    toast('Added a custom-script card — author the script & runtime in the inspector. It runs on the compute host; sandbox in production.', 'info')
+  }
+  // Custom-node content edits (script/runtime/container/conda/emit-glob). Like locator edits, these are
+  // NOT topology history (they don't add/remove nodes or edges), so they don't flood undo — they mark
+  // the graph dirty so Save reflects unsaved authoring. (History is nodes/edges only, per the hook.)
+  const onSetCustom = (id: string, patch: Partial<UserNode>) => {
+    setUserNodes((ns) => ns.map((n) => (n.id === id ? { ...n, ...patch } : n)))
+    dirtyToDraft()
+  }
+  const setOutGlob = (id: string, idx: number, glob: string) => {
+    setUserNodes((ns) =>
+      ns.map((n) => {
+        if (n.id !== id) return n
+        const g = alignOutGlobs(n.outGlobs, n.outs)
+        g[idx] = glob
+        return { ...n, outGlobs: g }
+      }),
+    )
+    dirtyToDraft()
+  }
 
   // ── delete policy (the maintainer's "no accidental cascade" rule) ──
   // A delete that severs ≥1 wire, or a multi-node delete, is a cascade → confirm first (danger tone).
@@ -586,12 +637,26 @@ export function PipelineBuilder() {
   }
   const addPort = (id: string, dir: 'ins' | 'outs', kind: string) => {
     hist.record()
-    setUserNodes((ns) => ns.map((n) => (n.id === id ? { ...n, [dir]: [...n[dir], kind] } : n)))
+    setUserNodes((ns) =>
+      ns.map((n) => {
+        if (n.id !== id) return n
+        const next: UserNode = { ...n, [dir]: [...n[dir], kind] }
+        // Keep a custom node's emit-glob array aligned to its outputs (ADR-0020): append '*' for the new output.
+        if (dir === 'outs' && isCustomNode(n)) next.outGlobs = [...alignOutGlobs(n.outGlobs, n.outs), '*']
+        return next
+      }),
+    )
   }
   const removePort = (id: string, dir: 'ins' | 'outs', idx: number) => {
     hist.record()
     const side = dir === 'ins' ? 'to' : 'from'
-    const nextNodes = userNodes.map((n) => (n.id === id ? { ...n, [dir]: n[dir].filter((_, i) => i !== idx) } : n))
+    const nextNodes = userNodes.map((n) => {
+      if (n.id !== id) return n
+      const upd: UserNode = { ...n, [dir]: n[dir].filter((_, i) => i !== idx) }
+      // Drop the removed output's emit-glob so the parallel array stays aligned (ADR-0020).
+      if (dir === 'outs' && isCustomNode(n)) upd.outGlobs = alignOutGlobs(n.outGlobs, n.outs).filter((_, i) => i !== idx)
+      return upd
+    })
     // Drop wires on the removed port; re-index wires on later ports of this node (shift down by one).
     const nextEdges = userEdges
       .filter((e) => !(e[side].node === id && e[side].idx === idx))
@@ -973,6 +1038,7 @@ export function PipelineBuilder() {
   // canvas (so it's "used" only in the linked view); the other advisory agents are consult-only tools,
   // never part of the graph. References are all on the linked canvas; on a draft they match by name.
   const isUsedItem = (heading: string, name: string): boolean => {
+    if (name === CUSTOM_NODE_NAME) return true // the add-a-custom-script affordance is always offered
     if (heading === 'Gate') return true
     if (heading === 'Agents') return name === 'QC-triage' && isLinked
     if (heading === 'References') return isLinked || currentNodeNames.has(name)
@@ -989,6 +1055,14 @@ export function PipelineBuilder() {
         { name: 'bcftools call', sub: 'vcf', icon: 'dna', onClick: () => addNode('bcftools call', 'vcf') },
         { name: 'bcftools norm', sub: 'filtered_vcf', icon: 'funnel', onClick: () => addNode('bcftools norm', 'filtered_vcf') },
         { name: 'MultiQC', sub: 'multiqc_json', icon: 'layers', onClick: () => addNode('MultiQC', 'multiqc_json') },
+      ],
+    },
+    {
+      // Operator-authored custom process (ADR-0020) — a HUMAN writes the verbatim Nextflow body. Toned
+      // 'warn' so it reads as a distinct, riskier kind of node (it runs on the compute host).
+      heading: 'Custom',
+      items: [
+        { name: CUSTOM_NODE_NAME, sub: 'operator-authored process', icon: 'terminal', tone: 'warn', onClick: addCustomNode },
       ],
     },
     {
@@ -1310,32 +1384,57 @@ export function PipelineBuilder() {
           onDeleteSel={deleteSelection}
         />
 
-        {inspectorOn && (
-          <BuilderInspector
-            tool={selTool}
-            reference={selRef}
-            userNode={selUserNode}
-            isGate={isGate}
-            isAgent={isAgent}
-            isView={isView}
-            tab={tab}
-            locEdits={locEdits}
-            locEditable={locEditable}
-            refLoc={refLoc}
-            onTab={setTab}
-            onSetLoc={setLoc}
-            onToggleRequired={toggleRequired}
-            onCycleOnMultiple={cycleOnMultiple}
-            onSetRefLoc={(id, value) => setRefLoc((m) => ({ ...m, [id]: value }))}
-            onRenameNode={renameNodeTo}
-            onSetNodeIcon={setNodeIconTo}
-            onAddPort={addPort}
-            onRemovePort={removePort}
-            onSetPortKind={setPortKind}
-            onDeleteNode={(id) => void deleteNodes([id])}
-            onClose={clearSelection}
-          />
-        )}
+        {inspectorOn &&
+          (isCustomSel && selUserNode ? (
+            // A custom-script card authors its OWN inspector (label · typed ports · script · runtime ·
+            // locators-with-Browse) — the human-authoring surface ADR-0020 presupposes.
+            <CustomScriptInspector
+              node={selUserNode}
+              isView={isView}
+              locEdits={locEdits}
+              locEditable={locEditable}
+              onRename={renameNodeTo}
+              onAddPort={addPort}
+              onRemovePort={removePort}
+              onSetPortKind={setPortKind}
+              onSetOutGlob={setOutGlob}
+              onSetScript={(id, v) => onSetCustom(id, { script: v })}
+              onSetRuntime={(id, r) => onSetCustom(id, { runtime: r })}
+              onSetContainer={(id, v) => onSetCustom(id, { container: v })}
+              onSetConda={(id, v) => onSetCustom(id, { conda: v })}
+              onSetLoc={setLoc}
+              onToggleRequired={toggleRequired}
+              onCycleOnMultiple={cycleOnMultiple}
+              onDelete={(id) => void deleteNodes([id])}
+              onClose={clearSelection}
+              onBrowse={openBrowse}
+            />
+          ) : (
+            <BuilderInspector
+              tool={selTool}
+              reference={selRef}
+              userNode={selUserNode}
+              isGate={isGate}
+              isAgent={isAgent}
+              isView={isView}
+              tab={tab}
+              locEdits={locEdits}
+              locEditable={locEditable}
+              refLoc={refLoc}
+              onTab={setTab}
+              onSetLoc={setLoc}
+              onToggleRequired={toggleRequired}
+              onCycleOnMultiple={cycleOnMultiple}
+              onSetRefLoc={(id, value) => setRefLoc((m) => ({ ...m, [id]: value }))}
+              onRenameNode={renameNodeTo}
+              onSetNodeIcon={setNodeIconTo}
+              onAddPort={addPort}
+              onRemovePort={removePort}
+              onSetPortKind={setPortKind}
+              onDeleteNode={(id) => void deleteNodes([id])}
+              onClose={clearSelection}
+            />
+          ))}
       </div>
 
       {/* ── console ── */}
@@ -1376,7 +1475,7 @@ export function PipelineBuilder() {
             <RunPipelineModal
               graph={{
                 name: docName,
-                nodes: src.nodes.map((n) => ({ id: n.id, name: n.name, ins: n.ins, outs: n.outs })),
+                nodes: src.nodes.map(toCompileNode), // threads a custom node's script/runtime (ADR-0020)
                 edges: src.edges.map((e) => ({ from: e.from, to: e.to })),
               }}
               // Run the APPROVED stored baseline by slug name + the approved (emitted) version —
@@ -1396,7 +1495,7 @@ export function PipelineBuilder() {
             <NextflowExportModal
               graph={{
                 name: docName,
-                nodes: src.nodes.map((n) => ({ id: n.id, name: n.name, ins: n.ins, outs: n.outs })),
+                nodes: src.nodes.map(toCompileNode), // threads a custom node's script/runtime (ADR-0020)
                 edges: src.edges.map((e) => ({ from: e.from, to: e.to })),
               }}
               onClose={() => setNfOpen(false)}
@@ -1410,6 +1509,18 @@ export function PipelineBuilder() {
       {loadOpen && <LoadSavedModal onClose={() => setLoadOpen(false)} onLoad={loadSavedPipeline} />}
       {boundaryOpen && <DecisionBoundaryModal onClose={() => setBoundaryOpen(false)} />}
       {menu && <BuilderContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}
+      {browse && (
+        <FileBrowser
+          title={browse.title}
+          kinds={browse.kinds}
+          onPick={(p) => {
+            browse.onPick(p)
+            setBrowse(null)
+            toast(`Selected ${p}`, 'success')
+          }}
+          onClose={() => setBrowse(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1675,15 +1786,22 @@ function Palette({
                   {visibleItems.map((it) => {
                     const Icon = ICONS[it.icon]
                     const disabled = it.disabled || (isView && !it.alwaysEnabled)
+                    // A 'warn'-toned tile (the operator-authored Custom-script card) reads amber — a
+                    // distinct, riskier kind of node than a catalogued tool or a source (ADR-0020).
+                    const warn = it.tone === 'warn' && !disabled
                     return (
                       <div
                         key={it.name}
                         onClick={() => !disabled && it.onClick?.()}
                         className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 ${
-                          disabled ? 'cursor-not-allowed border-line bg-card-2 opacity-[0.65]' : 'cursor-pointer border-line bg-card hover:border-line-strong'
+                          disabled
+                            ? 'cursor-not-allowed border-line bg-card-2 opacity-[0.65]'
+                            : warn
+                              ? 'cursor-pointer border-hold-bd bg-hold-bg hover:border-hold-fg'
+                              : 'cursor-pointer border-line bg-card hover:border-line-strong'
                         }`}
                       >
-                        <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-card-2 ${disabled ? 'text-text-3' : 'text-text-2'}`}>
+                        <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${warn ? 'bg-card text-hold-fg' : 'bg-card-2'} ${disabled ? 'text-text-3' : warn ? '' : 'text-text-2'}`}>
                           <Icon size={14} />
                         </span>
                         <span className="min-w-0 flex-1">

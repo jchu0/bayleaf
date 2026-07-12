@@ -15,6 +15,7 @@ import type {
   DryRunResult,
   FeedbackAck,
   FeedbackIn,
+  FileListing,
   IntakeStatus,
   MetricCatalog,
   MonitoringMetrics,
@@ -276,6 +277,16 @@ export const api = {
   // human — it never auto-adds a card or authors a runnable command.
   nodeProposal: (request: string) =>
     get<NodeProposal>(`/api/builder/node-proposal?${new URLSearchParams({ request }).toString()}`),
+
+  // ── sandboxed server-side file browser (off-gate, read-only) ──
+  // Lists one level under an allowlisted root (default 'data') for the Builder's "Browse…" data
+  // pickers — the GB-scale server-resident inputs never leave the host, only their metadata does.
+  // `path` omitted → the root itself; entries are dirs-first then name.
+  browseFiles: (root: string, path?: string) => {
+    const p = new URLSearchParams({ root })
+    if (path) p.set('path', path)
+    return get<FileListing>(`/api/files?${p.toString()}`)
+  },
 
   // ── export (download link; no fetch needed for the CSV) ──
   exportUrl: (params: Record<string, string> = {}) =>

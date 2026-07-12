@@ -16,9 +16,11 @@ import {
   Layers,
   Scissors,
   ShieldCheck,
+  Terminal,
   Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import type { FileKind } from '../types'
 
 export const GRAPH_ID = 'PIPE-2026-07-08-GERMLINE-PANEL'
 export const LINKED_RUN = 'RUN-2026-07-07-A'
@@ -34,11 +36,11 @@ export type OnMultiple = 'first' | 'all' | 'error'
 // One icon vocabulary shared by seeded tool cards, palette tiles, and user-composed nodes.
 export type IconKey =
   | 'scissors' | 'merge' | 'copy' | 'bars' | 'dna' | 'funnel' | 'layers'
-  | 'activity' | 'wrench' | 'archive' | 'shield' | 'db'
+  | 'activity' | 'wrench' | 'archive' | 'shield' | 'db' | 'terminal'
 export const ICONS: Record<IconKey, LucideIcon> = {
   scissors: Scissors, merge: GitMerge, copy: Copy, bars: BarChart3, dna: Dna,
   funnel: Filter, layers: Layers, activity: Activity, wrench: Wrench,
-  archive: Archive, shield: ShieldCheck, db: Database,
+  archive: Archive, shield: ShieldCheck, db: Database, terminal: Terminal,
 }
 
 export type Port = { kind: string; ref?: boolean }
@@ -78,6 +80,21 @@ export type UserNode = {
   x: number
   y: number
   vstatus?: VStatus
+  // ── Operator-authored custom-script process (ADR-0020) ──────────────────────
+  // `custom` marks a custom-script card — a distinct thing from a catalogued tool or a source: a
+  // HUMAN authored a verbatim Nextflow `script:` body, and the compiler renders THAT body (never
+  // the tool catalog), wired from this node's own typed ports. `runtime` picks which packaging is
+  // sent to the compiler (a container image OR a conda spec — both kept so a toggle doesn't lose
+  // text). `outGlobs` is the operator's per-output emit glob, PARALLEL to `outs` (an authoring aid:
+  // the emitted process captures the whole work dir via `path("*")`, ADR-0020 follow-up — the glob
+  // is not yet consumed by the command). All optional/absent on an ordinary card, so the change is
+  // purely additive — the seeded chain carries none and its compiled output is byte-identical.
+  custom?: boolean
+  script?: string
+  runtime?: 'container' | 'conda'
+  container?: string
+  conda?: string
+  outGlobs?: string[]
 }
 export type UserEdge = { from: { node: string; idx: number }; to: { node: string; idx: number } }
 
@@ -246,6 +263,129 @@ export function makeUserNode(name: string, kind: string, index: number): UserNod
   const x = 150 + (index % 3) * 200
   const y = 80 + Math.floor(index / 3) * 160
   return { id: `u${Date.now().toString(36)}${index}`, name, kind, version: spec.version, icon: spec.icon, ins: spec.ins, outs, x, y }
+}
+
+// ── Operator-authored custom-script process card (ADR-0020) ──────────────────────────────────────
+// A HUMAN authors a verbatim Nextflow `script:` body on this card; the compiler renders it as a REAL
+// process (never the tool catalog), wired from the card's own typed ports. It is NOT a curated tool —
+// it runs whatever the operator wrote on the compute host — so it carries an honest label and reaches
+// a compute host ONLY behind the W1 approval gate (compose ≠ execute; the core never runs a tool).
+export const CUSTOM_NODE_NAME = 'Custom script'
+export const CUSTOM_NODE_VERSION = 'operator-authored'
+// The honest sentence surfaced on/near the card (ADR-0020 safety [ii]) — kept here so the UI and the
+// emitted process header say the same thing, never a softer paraphrase.
+export const CUSTOM_SAFETY_LABEL =
+  'operator-authored — runs on the compute host; production needs sandboxing'
+export const DEFAULT_CUSTOM_CONTAINER = 'quay.io/biocontainers/bcftools:1.20--h8b25389_0'
+export const DEFAULT_CUSTOM_CONDA = 'bioconda::bcftools=1.20'
+// A believable starter body — a step OFF the curated catalog (the exact case ADR-0020 motivates).
+// It references only `${vcf}` (the wired input port — the compiler names each input path variable
+// after its port KIND) and `${meta.id}` (the per-sample meta, always present), so the emitted process
+// is self-consistent. The operator edits it; PipeGuard transcribes it verbatim, never rewriting it.
+export const DEFAULT_CUSTOM_SCRIPT = `# operator-authored — transcribed verbatim into the emitted process (compose ≠ execute)
+# example: split multiallelic sites on a called VCF, then index the result
+bcftools norm -m -both -Oz -o \${meta.id}.norm.vcf.gz \${vcf}
+tabix -p vcf \${meta.id}.norm.vcf.gz`
+
+export function isCustomNode(n: UserNode): boolean {
+  return n.custom === true
+}
+
+// A fresh custom-script card: a typed vcf→filtered_vcf process seeded with the starter body + a
+// container runtime. `filtered_vcf` output is chosen deliberately — it has a GIAB_LOC locator, so the
+// inspector's locator authoring (and its Browse picker) has something to point at out of the box.
+export function makeCustomNode(index: number): UserNode {
+  const x = 150 + (index % 3) * 220
+  const y = 90 + Math.floor(index / 3) * 200
+  return {
+    id: `u${Date.now().toString(36)}${index}c`,
+    name: CUSTOM_NODE_NAME,
+    kind: 'filtered_vcf',
+    version: CUSTOM_NODE_VERSION,
+    icon: 'terminal',
+    ins: ['vcf'],
+    outs: ['filtered_vcf'],
+    outGlobs: ['*.norm.vcf.gz'],
+    x,
+    y,
+    custom: true,
+    runtime: 'container',
+    container: DEFAULT_CUSTOM_CONTAINER,
+    conda: DEFAULT_CUSTOM_CONDA,
+    script: DEFAULT_CUSTOM_SCRIPT,
+  }
+}
+
+// Keep `outGlobs` aligned to `outs` (same length) after a port add/remove — an undefined array
+// initializes to one '*' per existing output, so the parallel-array invariant never drifts.
+export function alignOutGlobs(outGlobs: string[] | undefined, outs: string[]): string[] {
+  const g = outGlobs ?? []
+  return outs.map((_, i) => g[i] ?? '*')
+}
+
+// The node shape POST /api/pipelines/compile (and .../run) accepts. Structurally identical to
+// NextflowGraphBody['nodes'][number] in types.ts (kept in sync by hand).
+export type CompileNodePayload = {
+  id: string
+  name: string
+  ins: string[]
+  outs: string[]
+  script?: string
+  container?: string
+  conda?: string
+}
+
+// Project a builder node into the compile/run node shape. A custom-script card threads its
+// operator-authored `script` + the ACTIVE runtime's packaging (container OR conda) so the backend
+// renders the operator's real Nextflow process (ADR-0020). An ordinary catalogued/source card omits
+// all three, leaving the pre-existing wire shape byte-identical. A blank custom script is sent AS-IS
+// (`''`): the compiler REJECTS it (422) rather than fabricating a command — an honest error, never an
+// invented one (ADR-0020 safety [v]).
+export function toCompileNode(n: UserNode): CompileNodePayload {
+  const base: CompileNodePayload = { id: n.id, name: n.name, ins: n.ins, outs: n.outs }
+  if (!isCustomNode(n)) return base
+  const container = n.runtime !== 'conda' ? n.container?.trim() : undefined
+  const conda = n.runtime === 'conda' ? n.conda?.trim() : undefined
+  return {
+    ...base,
+    script: n.script ?? '',
+    ...(container ? { container } : {}),
+    ...(conda ? { conda } : {}),
+  }
+}
+
+// Normalize a node for the SAVE payload so the STORED graph (which the approved-run path re-compiles
+// server-side, ADR-0020 safety [i]) matches what the export/compile preview shows: a custom node keeps
+// only its ACTIVE runtime's packaging, so preview == run (WYSIWYG — the backend run path reads a stored
+// node's container/conda directly). UI-only fields (runtime/outGlobs/script/custom) are preserved so a
+// reload restores the authoring surface. A non-custom node is returned untouched.
+export function normalizeSavedNode(n: UserNode): UserNode {
+  if (!isCustomNode(n)) return n
+  return {
+    ...n,
+    container: n.runtime !== 'conda' ? n.container : undefined,
+    conda: n.runtime === 'conda' ? n.conda : undefined,
+  }
+}
+
+// Map an artifact/locator KIND (the builder vocabulary) → the FileKind(s) the server-side file browser
+// infers from a file extension (files.py), so a kind-scoped Browse picker (e.g. a filtered_vcf locator)
+// only lets a MATCHING file be selected. A kind with no clean extension mapping returns undefined → no
+// filter (every file selectable). Lives here (a component-free module) so the FileBrowser stays a
+// single-component file (react-refresh only-export-components).
+const KIND_TO_FILEKINDS: Record<string, FileKind[]> = {
+  fastq: ['fastq'],
+  bam: ['bam'],
+  vcf: ['vcf'],
+  filtered_vcf: ['vcf'],
+  joint_vcf: ['vcf'],
+  gvcf: ['vcf'],
+  truth_vcf: ['vcf'],
+  reference_fasta: ['reference_fasta'],
+  panel_bed: ['panel_bed'],
+}
+export function fileKindsFor(artifactKind: string): FileKind[] | undefined {
+  return KIND_TO_FILEKINDS[artifactKind]
 }
 
 // ── On-canvas editing helpers (PB2) ────────────────────────────────────────
@@ -745,6 +885,7 @@ export function duplicateNode(n: UserNode, index = 0, offset = 24): UserNode {
     name: `${n.name} copy`,
     ins: [...n.ins],
     outs: [...n.outs],
+    outGlobs: n.outGlobs ? [...n.outGlobs] : undefined, // deep-copy the parallel emit-glob array (ADR-0020)
     x: n.x + offset,
     y: n.y + offset,
   }
