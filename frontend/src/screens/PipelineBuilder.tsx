@@ -1176,16 +1176,11 @@ export function PipelineBuilder() {
                       setMoreOpen(false)
                       setRunOpen(true)
                     }}
-                    disabled={saveStatus !== 'approved'}
-                    title={
-                      saveStatus === 'approved'
-                        ? 'Run the approved version of this pipeline'
-                        : 'Approve this version to run it'
-                    }
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-page disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+                    title="Run an approved pipeline — pick it (defaults to germline-panel) in the dialog"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-page"
                   >
                     <Play size={14} className="shrink-0 text-text-3" />
-                    Run hand-off
+                    Run pipeline
                   </button>
                   <button
                     onClick={() => {

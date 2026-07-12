@@ -250,9 +250,13 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    version is a **409**, not a silent bypass. Only then does it run the compiled graph via the same
    Nextflow driver (202 + `GET /api/pipelines/run/{id}` poll), distinct from
    `pipelines_lifecycle.py`'s Save→Submit→Approve profile flow (which mints the approval this
-   endpoint consumes). The Builder's "Run" action stays disabled until the current pipeline is
-   approved. `scripts/seed_approved_germline.py` (idempotent compose→save→submit→approve of the
-   seeded germline chain) seeds a runnable `germline-panel` baseline so a fresh store still has
+   endpoint consumes). The Builder's `RunPipelineModal` now opens a **pipeline PICKER** — a dropdown
+   of the APPROVED stored pipelines (`GET /api/pipelines`, `status=approved`, latest per name),
+   defaulting to the seeded `germline-panel` baseline — so Run targets an approved *stored* graph by
+   name, decoupled from the live canvas (the Run toolbar action is no longer gated on the current
+   canvas's approval; an empty picker shows an honest "approve one / seed the baseline" state).
+   `scripts/seed_approved_germline.py` (idempotent compose→save→submit→approve of the
+   seeded germline chain) seeds that runnable `germline-panel` baseline so a fresh store still has
    something to run by name. `GET
    /api/runbook`'s `RunbookThreshold` now also carries `pipeline_gate` (the registry gate)
    distinct from the numeric `gate` value, powering the decision card's honest three-gate

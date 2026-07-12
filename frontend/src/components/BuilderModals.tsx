@@ -809,6 +809,12 @@ export function RunPipelineModal({
   const [sample, setSample] = useState('HG002')
   const [phase, setPhase] = useState<'form' | 'running' | 'complete' | 'failed'>('form')
   const [err, setErr] = useState<string | null>(null)
+  // The pipeline to run — a picker over APPROVED stored pipelines, defaulting to the seeded
+  // germline-panel baseline. The run executes that approved STORED graph by name (ADR-0014),
+  // decoupled from the live canvas; `graph` still drives the input-category picker below.
+  const [pipes, setPipes] = useState<{ name: string; version: number }[]>([])
+  const [selName, setSelName] = useState(name)
+  const selVersion = pipes.find((p) => p.name === selName)?.version ?? version
   const needed = requiredCategories(graph)
 
   useEffect(() => {
@@ -828,8 +834,40 @@ export function RunPipelineModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Approved pipelines for the run picker — default to the seeded germline-panel baseline.
+  useEffect(() => {
+    api
+      .listPipelines()
+      .then((list) => {
+        const latest = new Map<string, number>()
+        for (const p of list) {
+          if (p.status !== 'approved') continue
+          const cur = latest.get(p.name)
+          if (cur == null || p.version > cur) latest.set(p.name, p.version)
+        }
+        const approved = [...latest.entries()].map(([n, v]) => ({ name: n, version: v }))
+        // germline-panel first (the demo default), then alphabetical.
+        approved.sort((a, b) =>
+          a.name === 'germline-panel' ? -1 : b.name === 'germline-panel' ? 1 : a.name.localeCompare(b.name),
+        )
+        setPipes(approved)
+        const preferred =
+          approved.find((p) => p.name === 'germline-panel') ??
+          approved.find((p) => p.name === name) ??
+          approved[0]
+        if (preferred) setSelName(preferred.name)
+      })
+      .catch(() => {}) // non-fatal — the picker stays empty, Run disabled with an honest message
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const missing = needed.filter((k) => !choice[k])
-  const canRun = phase === 'form' && runId.trim() !== '' && missing.length === 0
+  const canRun =
+    phase === 'form' &&
+    pipes.length > 0 &&
+    selName.trim() !== '' &&
+    runId.trim() !== '' &&
+    missing.length === 0
 
   const poll = (id: string) => {
     const tick = () =>
@@ -861,8 +899,8 @@ export function RunPipelineModal({
       // Run the APPROVED baseline by name (+ pinned version) — the backend resolves + compiles the
       // stored approved graph, never this posted one (the approval gate, ADR-0014).
       const ack = await api.runPipeline({
-        name,
-        ...(version != null ? { version } : {}),
+        name: selName,
+        ...(selVersion != null ? { version: selVersion } : {}),
         run_id: runId.trim(),
         sample: sample.trim() || 'HG002',
         inputs: choice,
@@ -883,8 +921,8 @@ export function RunPipelineModal({
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-semibold text-text">Run pipeline</div>
           <div className="mt-0.5 text-[12px] leading-relaxed text-text-2">
-            Runs the <strong>approved version</strong> of this pipeline (the current canvas graph,
-            once approved) against your chosen inputs → a gate-able run. PipeGuard composes;{' '}
+            Runs the <strong>approved version</strong> of the selected pipeline against your chosen
+            inputs → a gate-able run. PipeGuard composes;{' '}
             <strong>Nextflow executes</strong> (only AI agents stay off the tools — operators run
             pipelines).
           </div>
@@ -920,6 +958,31 @@ export function RunPipelineModal({
           </div>
         ) : (
           <div className="flex flex-col gap-3.5">
+            <label className="text-[11.5px] text-text-3">
+              Pipeline
+              <select
+                value={selName}
+                onChange={(e) => setSelName(e.target.value)}
+                disabled={phase === 'running' || pipes.length === 0}
+                className="mt-1 w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12.5px] text-text outline-none focus:border-accent"
+              >
+                {pipes.length === 0 ? (
+                  <option value="">No approved pipeline — approve one first</option>
+                ) : (
+                  pipes.map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name} · v{p.version}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+            {pipes.length === 0 && (
+              <div className="text-[12px] text-hold-fg">
+                No approved pipeline to run — approve one in the Builder, or seed the baseline
+                (<code>scripts/seed_approved_germline.py</code>).
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <label className="text-[11.5px] text-text-3">
                 Run id
