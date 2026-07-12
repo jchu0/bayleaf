@@ -27,26 +27,34 @@ import os
 import re
 import sys
 import threading
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from api.auth import Actor, require_role
+from api.authored_pipeline import (
+    compile_record,
+    materialize_bundle,
+    resolve_approved,
+)
 from api.job_store import (
+    HELD_STATUSES,
     KIND_INTAKE,
     TERMINAL_STATUSES,
     get_job_store,
     now_iso,
     run_driver,
 )
+from api.pipeline_store import get_pipeline_store
 
 router = APIRouter(prefix="/api", tags=["intake"])
 
 _REPO = Path(__file__).resolve().parent.parent.parent
 _DATA = _REPO / "data"
+_NF_RUNS = _REPO / ".nf-runs"
 _SCRIPT = _REPO / "scripts" / "run_giab_pipeline.py"
 # The only sample with real panel reads on disk (see run_giab_pipeline.py). A real multi-sample
 # run would need the other GIAB reads fetched + a multi-sample pipeline — out of scope.
@@ -72,7 +80,18 @@ class SampleIn(BaseModel):
 
 
 class SubmitRunIn(BaseModel):
-    """The samplesheet a Submit hands off — registration metadata + the samples to process."""
+    """The samplesheet a Submit hands off — registration metadata + the samples to process.
+
+    ``pipeline`` (ADR-0021): the NAME of a saved, approver-blessed pipeline to run this run's
+    samples through. Present → sample processing runs THAT authored pipeline (resolved + compiled
+    via the same approval gate as ``POST /api/pipelines/run``; a 409 if the name has no approved
+    version). Absent → the committed ``germline-panel`` reference the driver defaults to.
+
+    ``mode`` (ADR-0021): the processing gate. ``immediate`` (default) fires the driver now;
+    ``hold`` registers the run WITHOUT firing (an operator releases it later); ``schedule`` stores
+    ``scheduled_at`` and parks the run the same way (a time-based auto-release is a DEFERRED seam —
+    an operator releases it manually via ``POST /api/runs/{id}/release``).
+    """
 
     model_config = ConfigDict(extra="forbid")
     run_name: str
@@ -80,6 +99,12 @@ class SubmitRunIn(BaseModel):
     assay: str = ""
     platform: str = "NovaSeq X"
     samples: list[SampleIn]
+    # Optional authored-pipeline name + pinned approved version (else latest approved).
+    pipeline: str | None = None
+    pipeline_version: int | None = None
+    # Processing gate. ``scheduled_at`` is an ISO-8601 timestamp, required when mode == schedule.
+    mode: Literal["immediate", "hold", "schedule"] = "immediate"
+    scheduled_at: str | None = None
 
 
 class SubmitRunAck(BaseModel):
@@ -107,6 +132,12 @@ class IntakeStatus(BaseModel):
     # Per-sample progress for a multi-sample run (W4). Additive: an older persisted job with no
     # ``samples`` key simply yields an empty list. The run-level ``status`` above stays the summary.
     samples: list[SampleStatus] = []
+    # ADR-0021 processing-gate fields (additive; an older persisted job yields the defaults).
+    # ``mode`` is the requested gate; ``scheduled_at`` is set only for a scheduled run; ``pipeline``
+    # names the authored pipeline this run runs (``None`` → the germline-panel reference default).
+    mode: str = "immediate"
+    scheduled_at: str | None = None
+    pipeline: str | None = None
 
 
 def _bioconda_env() -> dict[str, str]:
@@ -156,6 +187,10 @@ def _reconcile(run_id: str, job: dict[str, Any]) -> dict[str, Any]:
     """
     if job.get("status") in TERMINAL_STATUSES:
         return job
+    if job.get("status") in HELD_STATUSES:
+        # Operator-parked (hold/schedule): it INTENTIONALLY never launched a thread, so it is not in
+        # ``_active`` — but it is not lost either. Return it as-is (release fires the driver later).
+        return job
     with _lock:
         live = run_id in _active
     if live:
@@ -171,15 +206,29 @@ def _reconcile(run_id: str, job: dict[str, Any]) -> dict[str, Any]:
     return job
 
 
-def _run_pipeline(run_id: str, platform: str, run_date: str, submitted_by: str) -> None:
-    """Background job: drive the external pipeline, then flip the job to complete/failed."""
+def _run_pipeline(run_id: str) -> None:
+    """Background job: drive the external pipeline, then flip the job to complete/failed.
+
+    Reads the driver params (platform / run_date / submitted_by / the optional compiled authored
+    ``pipeline_path``) from the persisted job record, so an ``immediate`` submit and a later manual
+    ``release`` of a held/scheduled run take the exact same path.
+    """
+    rec = get_job_store().get(run_id, KIND_INTAKE) or {}
+    platform = str(rec.get("platform") or "")
+    run_date = str(rec.get("run_date") or date.today().isoformat())
+    submitted_by = str(rec.get("submitted_by") or "")
+    pipeline_path = rec.get("pipeline_path")
     _mark(run_id, "running")
+    cmd = [
+        sys.executable, str(_SCRIPT), "--run-id", run_id, "--platform", platform,
+        "--run-date", run_date, "--submitted-by", submitted_by,
+    ]  # fmt: skip
+    # Present → run the operator's approved authored pipeline; absent → the driver's committed
+    # germline-panel reference default (backward-compatible). compose ≠ execute holds at the core.
+    if pipeline_path:
+        cmd += ["--pipeline", str(pipeline_path)]
     try:
-        proc = run_driver(
-            [sys.executable, str(_SCRIPT), "--run-id", run_id, "--platform", platform,
-             "--run-date", run_date, "--submitted-by", submitted_by],
-            cwd=str(_REPO), env=_bioconda_env(),
-        )  # fmt: skip
+        proc = run_driver(cmd, cwd=str(_REPO), env=_bioconda_env())
         ok = proc.returncode == 0 and (_DATA / run_id / "SampleSheet.csv").exists()
         if ok:
             _mark(run_id, "complete")
@@ -195,16 +244,46 @@ def _run_pipeline(run_id: str, platform: str, run_date: str, submitted_by: str) 
             _active.discard(run_id)
 
 
+def _prepare_authored_pipeline(run_id: str, name: str, version: int | None) -> str:
+    """Resolve + compile the named APPROVED pipeline and materialize it to this run's scratch.
+
+    The SAME approval gate as ``POST /api/pipelines/run`` (ADR-0014/0021): a 409 if the name has no
+    approved version, a 422 if the approved graph won't compile / has no tool node. Returns the path
+    to the compiled ``main.nf`` the driver runs via ``--pipeline``. Never a raw client graph.
+    """
+    record = resolve_approved(get_pipeline_store(), name, version)
+    _graph, bundle = compile_record(record, name)
+    main_nf = materialize_bundle(bundle, _NF_RUNS / run_id / "pipeline")
+    return str(main_nf)
+
+
 @router.post("/runs", status_code=202)
 def submit_run(
     body: SubmitRunIn, actor: Actor = Depends(require_role("reviewer", "approver"))
 ) -> SubmitRunAck:
-    """Register a run + kick off processing. Returns 202 immediately; poll intake-status."""
+    """Register a run + gate processing (ADR-0021). Returns 202 immediately; poll intake-status.
+
+    ``pipeline`` runs an operator-authored approved pipeline (else the germline-panel default);
+    ``mode`` decides whether the driver fires now (``immediate``), is parked for a manual release
+    (``hold``), or is scheduled (``schedule`` + ``scheduled_at``, released manually — auto-release
+    is a deferred seam). Running a non-default authored pipeline still requires reviewer/approver
+    (the endpoint gate). compose ≠ execute holds at the core — only the driver shells out."""
     run_id = body.run_name.strip()
     if not _RUN_ID_RE.match(run_id):
         run_id = re.sub(r"[^A-Za-z0-9._-]+", "-", body.run_name).strip("-") or "RUN"
     if (_DATA / run_id).exists():  # fast pre-check (the authoritative one is under _lock below)
         raise HTTPException(status_code=409, detail=f"run '{run_id}' already exists")
+
+    if body.mode == "schedule":
+        raw = (body.scheduled_at or "").strip()
+        if not raw:
+            raise HTTPException(status_code=422, detail="mode 'schedule' requires 'scheduled_at'")
+        try:  # validate it parses as ISO-8601 (tolerate a trailing 'Z')
+            datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(
+                status_code=422, detail="scheduled_at must be an ISO-8601 timestamp"
+            ) from None
 
     submitted = [s.sample for s in body.samples]
     processed = [s for s in submitted if s in _FIXTURE_SAMPLES]
@@ -215,57 +294,110 @@ def submit_run(
             detail="no processable sample — only HG002 has panel reads on disk for this demo",
         )
 
-    # Reserve the run id + persist the queued job ATOMICALLY under the lock: re-check the run dir
-    # and the in-flight reservation set together, so two concurrent submits of the same id can't
-    # both proceed (only the winner registers + launches a thread; the loser gets a 409).
+    # Resolve + compile the authored pipeline (if named) BEFORE reserving the run id, so a 409/422
+    # from the approval gate leaves no half-registered job. Absent → the driver's germline default.
+    pipeline_path = (
+        _prepare_authored_pipeline(run_id, body.pipeline, body.pipeline_version)
+        if body.pipeline
+        else None
+    )
+
+    # The processing gate (ADR-0021): immediate fires the driver now; hold/schedule register the run
+    # WITHOUT launching a thread (an operator releases it later). Initial status mirrors the mode.
+    initial_status = {"immediate": "queued", "hold": "held", "schedule": "scheduled"}[body.mode]
+
     now = now_iso()
-    # Per-sample job state (W4): a processed sample starts ``queued`` (it will track the run's
-    # lifecycle); a skipped sample is ``skipped`` up front (no reads on disk, it never runs). Order
-    # follows the submitted samplesheet so the UI can render them in the operator's order.
+    # Per-sample job state (W4): a processed sample starts at the run's initial status (it tracks
+    # the run's lifecycle); a skipped sample is ``skipped`` up front (no reads on disk, never runs).
+    # Order follows the submitted samplesheet so the UI can render them in the operator's order.
     sample_states = [
-        {"sample": s, "status": "queued" if s in _FIXTURE_SAMPLES else "skipped"} for s in submitted
+        {"sample": s, "status": initial_status if s in _FIXTURE_SAMPLES else "skipped"}
+        for s in submitted
     ]
+    record = {
+        "kind": KIND_INTAKE,
+        "run_id": run_id,
+        "status": initial_status,
+        "error": None,
+        "created_at": now,
+        "updated_at": now,
+        "processed": processed,
+        "skipped": skipped,
+        "samples": sample_states,
+        # Driver params, persisted so a later manual release fires the driver identically.
+        "platform": body.platform,
+        "run_date": date.today().isoformat(),
+        "submitted_by": actor.id,
+        "pipeline": body.pipeline,
+        "pipeline_path": pipeline_path,
+        "mode": body.mode,
+        "scheduled_at": body.scheduled_at,
+    }
+    # Reserve the run id + persist the job ATOMICALLY under the lock: re-check the run dir, the
+    # in-flight reservation set, AND any persisted PARKED (held/scheduled) job together — two
+    # concurrent submits of the same id can't both proceed. The parked-job check is what covers a
+    # held/scheduled run: it has no data dir and is not in ``_active`` (no thread), so neither of
+    # the other two guards would catch a duplicate of it. A stale queued/running persisted job
+    # (owner process died) is deliberately NOT a conflict — ``_reconcile`` resolves it to
+    # complete/lost, and blocking a fresh resubmit on it would strand the run id. Only an
+    # ``immediate`` run reserves ``_active`` (it launches a thread); a parked run is registered
+    # without one.
     conflict = False
     with _lock:
-        if (_DATA / run_id).exists() or run_id in _active:
+        existing = get_job_store().get(run_id, KIND_INTAKE)
+        if (
+            (_DATA / run_id).exists()
+            or run_id in _active
+            or (existing is not None and existing.get("status") in HELD_STATUSES)
+        ):
             conflict = True
         else:
-            _active.add(run_id)
-            get_job_store().upsert(
-                {
-                    "kind": KIND_INTAKE,
-                    "run_id": run_id,
-                    "status": "queued",
-                    "error": None,
-                    "created_at": now,
-                    "updated_at": now,
-                    "processed": processed,
-                    "skipped": skipped,
-                    "samples": sample_states,
-                }
-            )
+            if body.mode == "immediate":
+                _active.add(run_id)
+            get_job_store().upsert(record)
     if conflict:
         raise HTTPException(status_code=409, detail=f"run '{run_id}' already exists")
 
-    threading.Thread(
-        target=_run_pipeline,
-        args=(run_id, body.platform, date.today().isoformat(), actor.id),
-        daemon=True,
-    ).start()
+    if body.mode == "immediate":
+        threading.Thread(target=_run_pipeline, args=(run_id,), daemon=True).start()
     return SubmitRunAck(
-        run_id=run_id, status="queued", processed_samples=processed, skipped_samples=skipped
+        run_id=run_id,
+        status=initial_status,
+        processed_samples=processed,
+        skipped_samples=skipped,
     )
 
 
-@router.get("/runs/{run_id}/intake-status")
-def intake_status(run_id: str) -> IntakeStatus:
-    """queued | running | complete | failed | lost for a submitted run (or complete if on disk)."""
+@router.post("/runs/{run_id}/release", status_code=202)
+def release_run(
+    run_id: str, actor: Actor = Depends(require_role("reviewer", "approver"))
+) -> IntakeStatus:
+    """Release a HELD or SCHEDULED run → fire the driver now (ADR-0021).
+
+    The manual counterpart to a time-based auto-release scheduler (a DEFERRED seam): an operator
+    decides a parked run may process now. Only a ``held``/``scheduled`` job is releasable — a 404 if
+    unknown, a 409 if it is already queued/running/terminal. Requires reviewer/approver."""
     job = get_job_store().get(run_id, KIND_INTAKE)
     if job is None:
-        if (_DATA / run_id / "SampleSheet.csv").exists():
-            return IntakeStatus(run_id=run_id, status="complete")
         raise HTTPException(status_code=404, detail=f"no intake job for '{run_id}'")
-    job = _reconcile(run_id, job)
+    if job.get("status") not in HELD_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"run '{run_id}' is not held/scheduled (status={job.get('status')})",
+        )
+    # Reserve in ``_active`` BEFORE flipping off the parked status, so a concurrent poll never sees
+    # a non-parked job not in ``_active`` and mis-reconciles the now-live run as lost. Then fire the
+    # driver thread (which reads the persisted driver params + re-marks running, idempotently).
+    with _lock:
+        _active.add(run_id)
+    _mark(run_id, "running")
+    threading.Thread(target=_run_pipeline, args=(run_id,), daemon=True).start()
+    job = get_job_store().get(run_id, KIND_INTAKE) or job
+    return _status_out(run_id, job)
+
+
+def _status_out(run_id: str, job: dict[str, Any]) -> IntakeStatus:
+    """Project a persisted job record into the wire ``IntakeStatus``."""
     return IntakeStatus(
         run_id=run_id,
         status=job["status"],
@@ -273,4 +405,19 @@ def intake_status(run_id: str) -> IntakeStatus:
         processed_samples=job.get("processed", []),
         skipped_samples=job.get("skipped", []),
         samples=[SampleStatus(**s) for s in job.get("samples", [])],
+        mode=str(job.get("mode") or "immediate"),
+        scheduled_at=job.get("scheduled_at"),
+        pipeline=job.get("pipeline"),
     )
+
+
+@router.get("/runs/{run_id}/intake-status")
+def intake_status(run_id: str) -> IntakeStatus:
+    """queued | held | scheduled | running | complete | failed | lost (or complete if on disk)."""
+    job = get_job_store().get(run_id, KIND_INTAKE)
+    if job is None:
+        if (_DATA / run_id / "SampleSheet.csv").exists():
+            return IntakeStatus(run_id=run_id, status="complete")
+        raise HTTPException(status_code=404, detail=f"no intake job for '{run_id}'")
+    job = _reconcile(run_id, job)
+    return _status_out(run_id, job)

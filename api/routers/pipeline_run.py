@@ -29,9 +29,10 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
 from api.auth import Actor, require_role
+from api.authored_pipeline import compile_record, resolve_approved
 from api.job_store import (
     KIND_BUILDER_RUN,
     TERMINAL_STATUSES,
@@ -39,10 +40,14 @@ from api.job_store import (
     now_iso,
     run_driver,
 )
-from api.pipeline_store import PipelineGraphStore, get_pipeline_store, last_emitted
-from api.routers.nextflow import CompileRequest
-from pipeguard.nextflow import NfEdge, NfGraph, NfNode, compile_graph, required_inputs
-from pipeguard.nextflow.compiler import CompileError
+from api.pipeline_store import get_pipeline_store
+from pipeguard.nextflow import required_inputs
+
+# ``resolve_approved`` (the approval gate) and the graph→NfGraph adapter now live in
+# ``api.authored_pipeline`` so the intake sample-processing path shares this exact resolve+compile
+# mechanism (never a raw client graph). Re-exported here under the old private name so the rest of
+# this router (and any test that reaches ``pr._resolve_approved``) is unchanged.
+_resolve_approved = resolve_approved
 
 router = APIRouter(prefix="/api", tags=["pipeline-run"])
 
@@ -201,63 +206,6 @@ class RunStatusOut(BaseModel):
     error: str | None = None
 
 
-def _to_graph(req: CompileRequest) -> NfGraph:
-    # Thread any operator-authored custom-script fields through (the stored graph round-trips them,
-    # ADR-0020) so an APPROVED custom pipeline actually runs the operator's body here — this is the
-    # execution point ADR-0020 safety [i] names (only an approver-blessed graph reaches this gate).
-    # Absent on ordinary catalogued nodes, so the germline/approved-baseline path is byte-unchanged.
-    return NfGraph(
-        name=req.name,
-        nodes=[
-            NfNode(
-                id=n.id,
-                tool=n.name,
-                ins=list(n.ins),
-                outs=list(n.outs),
-                script=n.script,
-                container=n.container,
-                conda=n.conda,
-            )
-            for n in req.nodes
-        ],
-        edges=[NfEdge(e.src.node, e.src.idx, e.to.node, e.to.idx) for e in req.edges],
-    )
-
-
-def _resolve_approved(store: PipelineGraphStore, name: str, version: int | None) -> dict[str, Any]:
-    """Resolve the APPROVED (emitted) stored envelope for ``name`` — the run's execution contract.
-
-    The approval gate (ADR-0014): only an approver-blessed version may run. Approval stamps
-    ``emitted_at`` on that version (``record_emission``), so "approved baseline" = the emitted
-    snapshot. ``version`` pins an exact approved revision; omitted → the newest emitted one
-    (``last_emitted``). A name with no emitted version (never approved, or unknown) is a **409** —
-    the gate, not a silent bypass. A store backend hiccup degrades to a generic 503 (never leaks a
-    path/DSN — mirrors the save/lifecycle routers).
-    """
-    try:
-        if version is None:
-            record = last_emitted(store, name)
-        else:
-            record = next(
-                (
-                    r
-                    for r in store.get_versions(name)
-                    if int(r.get("version") or 0) == version and r.get("emitted_at")
-                ),
-                None,
-            )
-    except Exception:  # store backend hiccup → generic 503, never leak a path/DSN
-        raise HTTPException(status_code=503, detail="pipeline store unavailable") from None
-    if record is None:
-        detail = (
-            f"no approved version of pipeline '{name}' — submit and approve it before running"
-            if version is None
-            else f"version {version} of pipeline '{name}' is not approved"
-        )
-        raise HTTPException(status_code=409, detail=detail)
-    return record
-
-
 @router.get("/pipelines/run/inputs")
 def list_run_inputs() -> RunInputsCatalog:
     """The server-side inputs an operator can pick from (only what is present on disk)."""
@@ -289,22 +237,9 @@ def run_pipeline(
 
     # The approval gate: resolve the approved (emitted) snapshot for this name and compile THAT
     # graph — never a client-posted one (409 if the pipeline has no approved version, ADR-0014).
-    record = _resolve_approved(get_pipeline_store(), body.name, body.version)
-    graph_dict = record.get("graph") or {}
-    try:
-        graph = _to_graph(CompileRequest.model_validate({**graph_dict, "name": body.name}))
-        bundle = compile_graph(graph)
-    except (CompileError, ValidationError, ValueError) as exc:
-        raise HTTPException(
-            status_code=422, detail=f"cannot compile approved pipeline '{body.name}': {exc}"
-        ) from exc
-
-    # An empty / no-tool-node graph compiles to an empty topo order (``compile_graph`` does NOT
-    # treat that as an error — only source/reference nodes and no tool to run), but launching the
-    # driver on it fails late and opaquely ("produced no results dir"). Reject it up front with the
-    # same reason ``/api/pipelines/compile`` gives, so an operator gets an immediate cause.
-    if not any(not n.is_source() for n in graph.nodes):
-        raise HTTPException(status_code=422, detail="the graph has no tool nodes to run")
+    # ``resolve_approved`` + ``compile_record`` are the shared mechanism the intake path reuses.
+    record = resolve_approved(get_pipeline_store(), body.name, body.version)
+    graph, bundle = compile_record(record, body.name)
 
     # Validate the operator supplied every input KIND the graph consumes, and resolve each choice to
     # a real server-side path by KEY (never a raw client path — traversal-safe).

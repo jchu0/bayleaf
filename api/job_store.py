@@ -66,6 +66,15 @@ KIND_BUILDER_RUN = "builder-run"
 # ``_reconcile``); the driver itself only ever sets queued/running/complete/failed.
 TERMINAL_STATUSES = frozenset({"complete", "failed", "lost"})
 
+# Operator-parked statuses (ADR-0021): an intake run submitted with ``mode=hold`` (``held``) or
+# ``mode=schedule`` (``scheduled``) is registered WITHOUT launching the driver — the operator gates
+# or schedules processing, then releases it (``POST /api/runs/{id}/release``). These are non-
+# terminal but INTENTIONALLY never launched a thread, so ``_reconcile`` must treat them as parked
+# (returned as-is), never mis-reconcile them to ``lost`` the way it does a job whose owner process
+# actually died mid-run. A time-based auto-release scheduler is a DEFERRED seam (ADR-0021) — release
+# is manual.
+HELD_STATUSES = frozenset({"held", "scheduled"})
+
 # One timeout for BOTH routers (was 900 s intake / 1800 s Builder). The larger value: a real live
 # HG002 run through ``nextflow run`` can take a while, and prematurely reaping it mid-run is worse
 # than waiting. Illustrative/configurable, not a clinical or SLA guarantee.

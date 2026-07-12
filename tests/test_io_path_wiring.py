@@ -44,6 +44,7 @@ from fastapi.testclient import TestClient
 
 import api.routers.intake as intake
 import api.routers.pipeline_run as pr
+from api.job_store import KIND_INTAKE
 from api.main import app
 from pipeguard.nextflow.catalog import REFERENCE_PARAM
 
@@ -370,29 +371,48 @@ def test_io_card_kind_maps_to_the_correct_nextflow_param() -> None:
 
 
 def test_intake_submit_path_uses_driver_defaults_no_input_selection(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """DOCUMENTS the OTHER execution path: ``POST /api/runs`` (Submit) carries NO operator input
     selection — its driver argv passes only run identity, so the driver falls back to its committed
     HG002 defaults. Only the Builder-Run path (above) selects I/O by catalog key. Asserting the
-    intake driver cmd has no ``--read1/--reference/--panel-bed`` pins that boundary."""
+    intake driver cmd has no ``--read1/--reference/--panel-bed`` pins that boundary. The driver
+    params now come from the persisted job record (ADR-0021): seed one, then run the thread body."""
     captured: dict[str, Any] = {}
 
     def fake_run_driver(cmd: list[str], *, cwd: str, env: dict[str, str]) -> Any:
         captured["cmd"] = cmd
         return subprocess.CompletedProcess(cmd, 1, "", "stub")
 
+    monkeypatch.setenv("PIPEGUARD_JOB_STORE", "jsonl")
+    monkeypatch.setenv("PIPEGUARD_JOB_PATH", str(tmp_path / "jobs.jsonl"))
     monkeypatch.setattr(intake, "run_driver", fake_run_driver)
     monkeypatch.setattr(intake, "_mark", lambda *a, **k: None)
+    # A default (no authored pipeline) intake job record — the seeded germline path.
+    intake.get_job_store().upsert(
+        {
+            "kind": KIND_INTAKE,
+            "run_id": "RUN-IO-INTAKE",
+            "status": "queued",
+            "created_at": intake.now_iso(),
+            "updated_at": intake.now_iso(),
+            "platform": "NovaSeq X",
+            "run_date": "2026-07-11",
+            "submitted_by": "op",
+            "pipeline": None,
+            "pipeline_path": None,
+        }
+    )
 
-    intake._run_pipeline("RUN-IO-INTAKE", "NovaSeq X", "2026-07-11", "op")
+    intake._run_pipeline("RUN-IO-INTAKE")
 
     cmd = captured["cmd"]
     assert str(intake._SCRIPT) in cmd
     assert cmd[cmd.index("--run-id") + 1] == "RUN-IO-INTAKE"
     assert cmd[cmd.index("--platform") + 1] == "NovaSeq X"
-    # No input-path selection on the Submit path — the driver uses its HG002 defaults.
-    for flag in ("--read1", "--read2", "--reference", "--panel-bed"):
+    # No input-path selection on the Submit path — the driver uses its HG002 defaults; and no
+    # ``--pipeline`` (the default germline path), unlike an authored-pipeline submit.
+    for flag in ("--read1", "--read2", "--reference", "--panel-bed", "--pipeline"):
         assert flag not in cmd
 
 
