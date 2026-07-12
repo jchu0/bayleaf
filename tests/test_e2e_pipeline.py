@@ -67,9 +67,13 @@ _GERMLINE_STEPS_HEAD = ["FASTP", "BWA_MEM2_MEM"]
 
 
 def _isolate_store(tmp_path: Path, monkeypatch: Any) -> None:
-    """Point every ``get_pipeline_store()`` caller (save / lifecycle / run) at a tmp JSONL."""
+    """Point every ``get_*_store()`` caller (pipeline / share) at a tmp JSONL, so a test never reads
+    real, session-polluted local state — e.g. a stray ``data.exported`` a local Share left in the
+    gitignored ``share.events.jsonl`` (the stores read the env fresh per call, no cache)."""
     monkeypatch.delenv("PIPEGUARD_PIPELINE_STORE", raising=False)  # default jsonl, whatever the env
     monkeypatch.setenv("PIPEGUARD_PIPELINE_PATH", str(tmp_path / "pipeline_graphs.jsonl"))
+    monkeypatch.delenv("PIPEGUARD_SHARE_STORE", raising=False)
+    monkeypatch.setenv("PIPEGUARD_SHARE_PATH", str(tmp_path / "share.events.jsonl"))
 
 
 def _fake_catalog(tmp_path: Path) -> dict[str, list[pr._InputOption]]:
@@ -261,11 +265,12 @@ def test_report_route_to_human_quotes_clinvar_verbatim() -> None:
     assert "makes no pathogenicity determination" in rth["detail"]
 
 
-def test_downstream_provenance_stages_read_honestly() -> None:
+def test_downstream_provenance_stages_read_honestly(tmp_path: Path, monkeypatch: Any) -> None:
     """W3 downstream lineage honesty. The frontend Provenance ``review | filter | share`` nodes
     derive from the API DATA this test asserts: the route-to-human REVIEW node reads ESCALATE (the
     fired variant gate WINS over "skipped"), while FILTER / SHARE honestly read "not run in this
     build" (no artifact / no share event) — never a fabricated green."""
+    _isolate_store(tmp_path, monkeypatch)  # isolate the SHARE store — no stray local export
     detail = client.get(f"/api/runs/{_RTH}").json()
     arts = client.get(f"/api/runs/{_RTH}/artifacts").json()
 
