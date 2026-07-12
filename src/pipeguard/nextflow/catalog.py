@@ -93,7 +93,12 @@ _SPECS: tuple[ProcessSpec, ...] = (
             # PROMOTED reserved ports → real outputs. The `--unpaired1/--unpaired2` flags below make
             # fastp write the surviving mate of a broken PE pair, and `--failed_out` writes every
             # read that fails a filter — both are genuine fastp products with these flags on, so the
-            # ports now map to real published channels instead of dangling dashed slots.
+            # ports now map to real published channels instead of dangling dashed slots. These stay
+            # MANDATORY outputs (not `optional`): fastp opens the writer eagerly when the flag is
+            # present, so the file is ALWAYS created — verified on real HG002 reads, incl. the
+            # zero-failure case where fastp still writes an empty (828-byte) gzip. So the Nextflow
+            # mandatory-output glob never misfires here (the "may break at step 1" concern was
+            # empirically refuted). See test_nextflow_promoted_ports.py's real-path guard.
             Port("unpaired_fastq", 'path("*.unpaired.fastq.gz")', emit="unpaired_fastq"),
             Port("failed_fastq", 'path("*.failed.fastq.gz")', emit="failed_fastq"),
         ),
