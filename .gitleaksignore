@@ -1,0 +1,9 @@
+# gitleaks allowlist — scoped false positives only.
+#
+# The two fingerprints below point at a genomics QC metric-key NAME (a dotted
+# lowercase identifier) shown in doc code snippets inside
+# audit/gap_analysis/ws-04-giab-concordance.md. gitleaks' generic-api-key rule
+# fires on its entropy (3.53), but it is a field name, not a credential —
+# verified by reading both lines. Everything else is still scanned normally.
+audit/gap_analysis/ws-04-giab-concordance.md:generic-api-key:33
+audit/gap_analysis/ws-04-giab-concordance.md:generic-api-key:175
