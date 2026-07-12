@@ -332,7 +332,7 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    open) and `GET /api/pipelines/{name}/diff` (added/changed/removed vs the approved baseline) —
    falling back to the client-side preview before Save (T-096); compose ≠ execute holds (a
    dry-run globs paths, runs nothing). **T-069 narrows** to the remaining Run-hand-off /
-   pipeline-repair / archivist Builder modals (`RunHandoffModal`/`PipelineRepairModal`/
+   pipeline-repair / archivist Builder modals (the Run-hand-off preview, `PipelineRepairModal`,
    `ArchivistModal`, still static `phase-2` previews; `api.archiveDigest`/`api.archiveIndex`
    still uncalled) and saved-profiles.
    **Batch 7 (2026-07-10, commits `34bca5d`→`adfd7aa`, T-069/T-070/T-072), closes the last of
@@ -352,8 +352,9 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    "confidence"**; "Send to review queue" navigates to `/queue`, no fabricated ticket);
    `ArchivistModal` → `GET /api/archive/index` → the real cross-run `ArchiveDigest`
    (archive-ready counts, origins verbatim, proposed action, disclaimer; "Queue archive" stays
-   inert, no write endpoint); `RunHandoffModal` now shows the real composed `run_layout.yaml`
-   (copy-not-execute, no network call). **Saved-profiles** ships too: a new toolbar "Open" action
+   inert, no write endpoint); the Run-hand-off preview showed the real composed `run_layout.yaml`
+   (copy-not-execute, no network call) — that standalone preview modal has since been superseded by
+   the live `RunPipelineModal` and removed as orphaned dead code. **Saved-profiles** ships too: a new toolbar "Open" action
    lists `GET /api/pipelines` and hydrates the canvas from a chosen saved graph (approved graphs
    open read-only; re-saving mints a new draft; a foreign envelope with no restorable topology
    loads empty with a labelled toast, never fabricated nodes). Frontend-only for all three

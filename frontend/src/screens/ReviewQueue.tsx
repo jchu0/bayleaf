@@ -17,9 +17,9 @@ import {
 import { api } from '../api'
 import { DEMO_ACCOUNTS } from '../auth'
 import { PageHeader } from '../components/PageHeader'
+import { Pager, type PerPage } from '../components/Pager'
 import { ReviewRepairCard, type RepairApproval } from '../components/ReviewRepairCard'
 import { ReviewStatusBar, type ReviewStatusSegment } from '../components/ReviewStatusBar'
-import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { Tabs } from '../components/Tabs'
 import { ErrorBox, Loading } from '../components/States'
 import { useToast } from '../components/Toast'
@@ -73,14 +73,6 @@ const STATUS_FILTERS: { key: 'all' | TicketStatus; label: string }[] = [
   { key: 'open', label: 'Open' },
   { key: 'in_review', label: 'In review' },
   { key: 'resolved', label: 'Resolved' },
-]
-
-// Ticket pagination, mirroring Monitoring's recurring-signature pager so the two lists are consistent.
-type TicketPerPage = '25' | '50' | '100'
-const TICKET_PER_PAGE: SegmentOption<TicketPerPage>[] = [
-  { value: '25', label: '25' },
-  { value: '50', label: '50' },
-  { value: '100', label: '100' },
 ]
 
 // Resolved-tab recency window (task 4). The Resolved tab defaults to recently-opened resolved
@@ -208,7 +200,7 @@ export function ReviewQueue() {
   // Default to Open so resolved (and in-review) tickets leave the active list but stay reachable via
   // their facet chip (part c) — resolved is still a searchable TicketStatus, never dropped.
   const [filter, setFilter] = useState<'all' | TicketStatus>('open')
-  const [perPage, setPerPage] = useState<TicketPerPage>('25')
+  const [perPage, setPerPage] = useState<PerPage>('25')
   const [page, setPage] = useState(1)
   const [open, setOpen] = useState<Record<string, boolean>>({})
   // Free-text search (task 2) over the loaded tickets — run id / sample id / rule id / title /
@@ -827,53 +819,8 @@ export function ReviewQueue() {
             })}
           </div>
 
-          {view.total > 0 && (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-[11.5px] text-text-2">
-              <span>
-                Showing {view.fromIdx}–{view.toIdx} of {view.total} tickets
-              </span>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11.5px] text-text-3">Per page</span>
-                  <SegmentedControl<TicketPerPage> options={TICKET_PER_PAGE} value={perPage} onChange={setPerPage} />
-                </div>
-                {view.pages > 1 && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setPage(Math.max(1, view.curPage - 1))}
-                      className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
-                      aria-label="Previous page"
-                    >
-                      ‹
-                    </button>
-                    {Array.from({ length: view.pages }, (_, i) => i + 1).map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => setPage(n)}
-                        className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] transition-colors ${
-                          n === view.curPage
-                            ? 'bg-accent font-semibold text-white'
-                            : 'border border-line bg-card text-text-2 hover:border-line-strong'
-                        }`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setPage(Math.min(view.pages, view.curPage + 1))}
-                      className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
-                      aria-label="Next page"
-                    >
-                      ›
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          {/* Canonical shared <Pager> (UIUX-03) */}
+          <Pager total={view.total} page={page} perPage={perPage} onPage={setPage} onPerPage={setPerPage} noun="tickets" />
         </>
       )}
     </div>

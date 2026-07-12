@@ -15,7 +15,6 @@ import {
 import { api } from '../api'
 import { FALLBACK_SUMMARY } from './ReviewRepairCard'
 import { useToast } from './Toast'
-import { RUN_STEPS } from './BuilderShared'
 import type {
   AgentProposal,
   ArchiveDigest,
@@ -66,113 +65,6 @@ function CloseBtn({ onClose }: { onClose: () => void }) {
     <button onClick={onClose} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-line bg-card text-text-2 hover:bg-page">
       <X size={14} />
     </button>
-  )
-}
-
-// ── Run hand-off (composes ≠ executes) ───────────────────────────────────────
-export function RunHandoffModal({
-  envHint,
-  profile,
-  yaml,
-  curLoc,
-  savedName,
-  onEmit,
-  onClose,
-}: {
-  envHint: string
-  profile: string
-  yaml: string
-  curLoc: Record<string, string>
-  savedName: string | null
-  onEmit: () => void
-  onClose: () => void
-}) {
-  const [copied, setCopied] = useState(false)
-  // Copy the REAL composed layout; also fire the builder's compose-only Emit (logs it, runs nothing).
-  const onCopy = () => {
-    navigator.clipboard
-      ?.writeText(yaml)
-      .then(() => {
-        setCopied(true)
-        window.setTimeout(() => setCopied(false), 1500)
-      })
-      .catch(() => {})
-    onEmit()
-  }
-  return (
-    <ModalShell width={560} onClose={onClose}>
-      <div className="flex items-center gap-2.5 border-b border-line px-4 py-3.5">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-weak text-accent-strong">
-          <Play size={16} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-semibold text-text">Run this pipeline</div>
-          <div className="text-[11.5px] text-text-3">
-            a hand-off to the engine — <strong className="text-text-2">PipeGuard composes, it does not execute</strong>
-          </div>
-        </div>
-        <CloseBtn onClose={onClose} />
-      </div>
-      <div className="px-4 py-4">
-        <div className="mb-3.5 flex items-start gap-2 rounded-[9px] border border-hold-bd bg-hold-bg px-3 py-2.5 text-[11.5px] text-hold-fg">
-          <TriangleAlert size={14} className="mt-0.5 shrink-0" />
-          <span>
-            No tool runs inside PipeGuard. This emits <span className="font-mono">run_layout.yaml</span> and hands it to your execution engine; the
-            deterministic gate still decides the verdict afterward.
-          </span>
-        </div>
-        {/* The REAL composed run_layout the builder emits (yamlFor(profile, locEdits)) — the same
-            string the Emit console renders, derived from the profile's locators (not the canvas nodes). */}
-        <div className="mb-3.5">
-          <div className="mb-1.5 flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.5px] text-text-3">Composed run_layout</span>
-            <span className="font-mono text-[10px] text-text-3">
-              profile {profile} · {Object.keys(curLoc).length} locators
-            </span>
-            {!savedName && <span className="ml-auto text-[10px] text-text-3">reflects your current draft</span>}
-          </div>
-          <pre className="m-0 max-h-[168px] overflow-auto whitespace-pre rounded-[9px] border border-line bg-card-2 p-3 font-mono text-[10px] leading-relaxed text-text-2">
-            {yaml}
-          </pre>
-          <div className="mt-1 text-[10px] text-text-3">
-            Derived from the <span className="font-mono">{profile}</span> profile’s locators — not from arbitrary canvas nodes.
-          </div>
-        </div>
-        <div className="flex flex-col">
-          {RUN_STEPS.map((s, i) => (
-            <div key={s.title} className="flex items-start gap-3">
-              <div className="flex shrink-0 flex-col items-center">
-                <span
-                  className={`grid h-[22px] w-[22px] place-items-center rounded-full text-[11px] font-semibold ${
-                    i === 0 ? 'bg-accent text-white' : 'border border-line-strong bg-card-2 text-text-2'
-                  }`}
-                >
-                  {i + 1}
-                </span>
-                {i < RUN_STEPS.length - 1 && <span className="min-h-[14px] w-0.5 flex-1 bg-line" />}
-              </div>
-              <div className="pb-3.5">
-                <div className="text-[13px] font-semibold text-text">{s.title}</div>
-                <div className="text-[11.5px] leading-snug text-text-2">{s.desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="flex items-center gap-2.5 border-t border-line px-4 py-3">
-        <span className="flex-1 font-mono text-[10.5px] text-text-3">{envHint}</span>
-        <button onClick={onClose} className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong">
-          Cancel
-        </button>
-        <button
-          onClick={onCopy}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow-card hover:opacity-90"
-        >
-          {copied ? <Check size={14} /> : <Copy size={14} />}
-          {copied ? 'Copied run_layout.yaml' : 'Copy run_layout.yaml'}
-        </button>
-      </div>
-    </ModalShell>
   )
 }
 

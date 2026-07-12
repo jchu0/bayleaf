@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-08 (MST) |
+| **Last updated** | 2026-07-11 (MST) |
 | **Audience** | presenter / judges |
 | **Related** | [run-of-show.md](run-of-show.md) (timed live script), [one-pager.md](one-pager.md) (judge summary), [architecture.md](../design/architecture.md), [provenance.md](../data/provenance.md), [qc_metrics.md](../data/qc_metrics.md), [quality/evaluation.md](../quality/evaluation.md), [quality/risks.md](../quality/risks.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) |
 
@@ -44,6 +44,21 @@ npm --prefix frontend run dev                  # React UI (proxies /api -> :8010
 5. **Review queue** — the cross-run "needs attention" worklist, most-urgent first.
 6. **Monitoring** — verdict distribution + per-gate flag rate. **Settings** — the runbook
    thresholds (labelled illustrative, not clinical).
+
+> **The walkthrough above is a curated 6-beat happy path, not the full app.** The shipped UI
+> is **12 operator screens across three nav groups + an approver-only Admin group + a demo
+> Login** (14 routes total), all behind `/login`:
+> - **Operate** — Inbox (`/inbox`), Review queue (`/queue`), Sample accessioning
+>   (`/accession`), Submit samplesheet (`/submit`), Intake gate (`/runs/:id/intake`),
+>   Decision cards (`/runs/:id`), Runs (`/`).
+> - **Analyze** — Provenance (`/runs/:id/provenance`), Agent triage (`/runs/:id/agent`),
+>   Monitoring (`/monitoring`).
+> - **Configure** — Pipeline builder (`/builder`), Settings (`/settings`).
+> - **Admin** (`/admin`, off the deterministic gate — governance/audit only) and **Login**
+>   (`/login`, a demo auth screen; production auth seams are labelled not-implemented).
+>
+> The demo drives the hero path (Runs → Decision cards → triage → Provenance, glancing the
+> Review queue); the remaining screens are available if a judge explores or asks.
 
 ## The "wow" moments
 

@@ -31,7 +31,7 @@ import { useConfirm } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
 import { Pager, PER_PAGE_25, type PerPage } from '../components/Pager'
 import { Truncate } from '../components/Truncate'
-import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
+import { Tabs } from '../components/Tabs'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { useToast } from '../components/Toast'
 import {
@@ -63,7 +63,7 @@ import {
 } from '../inbox'
 
 type Tab = 'inbox' | 'board' | 'calendar' | 'notes'
-const TABS: SegmentOption<Tab>[] = [
+const TABS: { value: Tab; label: string }[] = [
   { value: 'inbox', label: 'Inbox' },
   { value: 'board', label: 'Board' },
   { value: 'calendar', label: 'Calendar' },
@@ -1544,23 +1544,17 @@ export function Inbox() {
         ))}
       </div>
 
+      {/* UIUX-04: the page-level view selector is the canonical <Tabs> (SegmentedControl is reserved
+          for compact toggle settings). The unread badge maps to the Tabs count API on the Inbox tab. */}
       <div className="mb-4">
-        <SegmentedControl<Tab>
-          options={TABS.map((t) => {
+        <Tabs<Tab>
+          items={TABS.map((t) => {
             const Icon = TAB_ICON[t.value]
             return {
               value: t.value,
-              label: (
-                <span className="inline-flex items-center gap-1.5">
-                  <Icon size={14} />
-                  {t.label}
-                  {t.value === 'inbox' && unreadCount > 0 && (
-                    <span className="grid h-[16px] min-w-[16px] place-items-center rounded-full bg-escalate px-1 font-mono text-[9.5px] font-semibold text-white">
-                      {unreadCount}
-                    </span>
-                  )}
-                </span>
-              ),
+              label: t.label,
+              icon: <Icon size={14} />,
+              count: t.value === 'inbox' && unreadCount > 0 ? unreadCount : undefined,
             }
           })}
           value={tab}

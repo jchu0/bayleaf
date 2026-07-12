@@ -28,17 +28,46 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  // Focus management (UIUX-08): move focus to the confirm button on open, and trap Tab within the
+  // panel so keyboard/AT users can't tab out to the page behind the modal overlay.
+  const panelRef = useRef<HTMLDivElement>(null)
+  const confirmBtnRef = useRef<HTMLButtonElement>(null)
+
   const close = useCallback((v: boolean) => {
     resolver.current?.(v)
     resolver.current = null
     setOpts(null)
   }, [])
 
-  // Escape cancels — a deliberate dismissal, never an accidental confirm.
+  // Focus the confirm button once the dialog mounts (the primary action, per the a11y spec).
+  useEffect(() => {
+    if (opts) confirmBtnRef.current?.focus()
+  }, [opts])
+
+  // Escape cancels — a deliberate dismissal, never an accidental confirm. Tab is trapped inside the
+  // panel (wraps first↔last focusable) so focus never lands behind the overlay.
   useEffect(() => {
     if (!opts) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close(false)
+      if (e.key === 'Escape') {
+        close(false)
+        return
+      }
+      if (e.key === 'Tab' && panelRef.current) {
+        const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        )
+        if (focusable.length === 0) return
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -55,6 +84,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           onClick={() => close(false)}
         >
           <div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-dialog-title"
+            aria-describedby={opts.body ? 'confirm-dialog-body' : undefined}
             className="w-[420px] max-w-full overflow-hidden rounded-2xl border border-line-strong bg-card shadow-pop"
             onClick={(e) => e.stopPropagation()}
           >
@@ -68,8 +102,14 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                   <AlertTriangle size={16} />
                 </span>
                 <div className="min-w-0">
-                  <div className="text-[15px] font-semibold text-text">{opts.title}</div>
-                  {opts.body && <div className="mt-1 text-[12.5px] leading-relaxed text-text-2">{opts.body}</div>}
+                  <div id="confirm-dialog-title" className="text-[15px] font-semibold text-text">
+                    {opts.title}
+                  </div>
+                  {opts.body && (
+                    <div id="confirm-dialog-body" className="mt-1 text-[12.5px] leading-relaxed text-text-2">
+                      {opts.body}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -82,6 +122,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 {opts.cancelLabel ?? 'Cancel'}
               </button>
               <button
+                ref={confirmBtnRef}
                 type="button"
                 onClick={() => close(true)}
                 className={`rounded-lg px-3.5 py-1.5 text-[13px] font-semibold text-white ${

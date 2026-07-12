@@ -1293,8 +1293,11 @@ class MonitoringMetrics(BaseModel):
 
 @app.get("/api/monitoring")
 def get_monitoring(
+    response: Response,
     window: str = "all",
     sig_limit: int | None = Query(None, ge=1, alias="signatures_limit"),
+    page: int = Query(1, ge=1),
+    limit: int | None = Query(None, ge=1),
 ) -> MonitoringMetrics:
     """Pre-aggregated monitoring dashboard metrics (the §7 screen).
 
@@ -1310,6 +1313,13 @@ def get_monitoring(
     the ranked signature list (uncapped by default); `n_signatures_total` always reports the
     full distinct count. Counts are lifetime tallies, not calibrated rates (life-science
     guardrail 2).
+
+    `page`/`limit` paginate ONLY the per-run throughput array (`runs[]`) — the payload-size
+    guard for a many-run window, mirroring `GET /api/runs` exactly (same param names, same
+    header names, same clamping). Pagination applies only when `limit` is given (`page` is
+    1-based); the pre-slice run total + active page/limit ride response headers so the body
+    stays the same shape. The KPI roll-up, per-gate rates, and signatures aggregate over the
+    WHOLE window regardless of the page — only the throughput list is sliced.
     """
     if window not in _WINDOWS:
         raise HTTPException(status_code=400, detail=f"window must be one of {list(_WINDOWS)}")
@@ -1431,6 +1441,16 @@ def get_monitoring(
         MonitoringGate(gate=g.value, flagged=gate_flagged[g.value], total=n_cards)
         for g in _GATE_ORDER
     ]
+
+    # Paginate the throughput array only (the aggregates above already cover the whole window).
+    # Total is the pre-slice run count so a client can size its pager; mirrors GET /api/runs.
+    response.headers["X-PipeGuard-Total-Count"] = str(len(rows))
+    if limit is not None:
+        start = (page - 1) * limit
+        rows = rows[start : start + limit]
+        response.headers["X-PipeGuard-Page"] = str(page)
+        response.headers["X-PipeGuard-Limit"] = str(limit)
+
     return MonitoringMetrics(
         window=window,
         n_runs_excluded_no_date=excluded,

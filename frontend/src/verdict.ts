@@ -3,10 +3,15 @@ import type { Gate, RunStatus, Severity, Verdict } from './types'
 // Real run-status → pill dot + display label. Driven off RunSummary.status, NEVER inferred from
 // n_attention (F17): a `running` run with 0 flagged samples is "Sequencing", not "Released".
 // Shared by the Runs list and the top-bar run switcher so both read status identically.
+// UIUX-02: lifecycle dots use a palette RESERVED away from the verdict hues (proceed/hold/rerun/
+// escalate) so a run-lifecycle dot can never be misread as a sample verdict — the old mapping put
+// amber `bg-hold` (= verdict Hold) on "Needs review" and green `bg-proceed` (= verdict Proceed) on
+// "Released", stacking two amber/green signals on one Runs card. accent (needs a human), teal
+// (machine sequencing), and neutral grey (released/filed) are none of the four verdict colors.
 export const RUN_STATUS_META: Record<RunStatus, { dot: string; label: string }> = {
-  needs_review: { dot: 'bg-hold', label: 'Needs review' },
-  running: { dot: 'bg-info', label: 'Sequencing' },
-  released: { dot: 'bg-proceed', label: 'Released' },
+  needs_review: { dot: 'bg-accent', label: 'Needs review' },
+  running: { dot: 'bg-variant', label: 'Sequencing' },
+  released: { dot: 'bg-text-3', label: 'Released' },
 }
 
 export const VERDICT_LABEL: Record<Verdict, string> = {

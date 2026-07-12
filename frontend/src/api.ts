@@ -178,6 +178,39 @@ async function fetchTicketsPage(opts: TicketsQuery = {}): Promise<TicketsPage> {
   return { data, total: totalHeader ? Number(totalHeader) : null }
 }
 
+// ── monitoring page query ──────────────────────────────────────────────────────
+export type MonitoringPageQuery = { page?: number; limit?: number; signaturesLimit?: number }
+// One monitoring response, carrying the header-borne per-run (`runs[]`) total the header-blind
+// `api.monitoring` drops. Only the throughput array is paginated server-side; the KPIs, gate
+// rates, and signatures inside `data` stay aggregated over the whole window (mirrors RunsPage).
+export type MonitoringPage = {
+  data: MonitoringMetrics
+  total: number
+  page: number | null
+  limit: number | null
+}
+async function fetchMonitoringPage(
+  window: MonitoringWindow = 'all',
+  opts: MonitoringPageQuery = {},
+): Promise<MonitoringPage> {
+  const p = new URLSearchParams({ window })
+  if (opts.signaturesLimit != null) p.set('signatures_limit', String(opts.signaturesLimit))
+  if (opts.page != null) p.set('page', String(opts.page))
+  if (opts.limit != null) p.set('limit', String(opts.limit))
+  const res = await fetch(`/api/monitoring?${p.toString()}`)
+  if (!res.ok) throw await httpError(res)
+  const data = (await res.json()) as MonitoringMetrics
+  const totalHeader = res.headers.get('X-PipeGuard-Total-Count')
+  const pageHeader = res.headers.get('X-PipeGuard-Page')
+  const limitHeader = res.headers.get('X-PipeGuard-Limit')
+  return {
+    data,
+    total: totalHeader ? Number(totalHeader) : data.runs.length,
+    page: pageHeader ? Number(pageHeader) : null,
+    limit: limitHeader ? Number(limitHeader) : null,
+  }
+}
+
 const enc = encodeURIComponent
 
 // The body POST /api/pipelines/run accepts: a run NAMES a saved pipeline (its APPROVED baseline is
@@ -221,6 +254,11 @@ export const api = {
     if (signaturesLimit != null) p.set('signatures_limit', String(signaturesLimit))
     return get<MonitoringMetrics>(`/api/monitoring?${p.toString()}`)
   },
+  // Header-aware variant: the body is MonitoringMetrics, but the pre-slice per-run total rides the
+  // X-PipeGuard-Total-Count header a plain get<T> drops — mirrors runsPage. Used by the Monitoring
+  // screen to server-paginate the throughput array without capping the KPIs/gates/signatures.
+  monitoringPage: (window: MonitoringWindow = 'all', opts?: MonitoringPageQuery) =>
+    fetchMonitoringPage(window, opts),
 
   // ── advisory agent reads (off-gate) ──
   signatureRepair: (signature: string) =>

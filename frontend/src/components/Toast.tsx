@@ -32,12 +32,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{ toast }}>
       {children}
-      <div className="pointer-events-none fixed bottom-5 right-5 z-[100] flex max-w-[360px] flex-col gap-2">
+      {/* aria-live region (UIUX-05) so screen readers announce the backend outcomes this component
+          exists to surface. The container is polite; error toasts opt into role="alert" (assertive)
+          so a failure interrupts, while success/info wait for a pause. */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="pointer-events-none fixed bottom-5 right-5 z-[100] flex max-w-[360px] flex-col gap-2"
+      >
         {toasts.map((t) => {
           const I = ICON[t.kind]
           return (
             <div
               key={t.id}
+              role={t.kind === 'error' ? 'alert' : undefined}
               className={`pg-fade pointer-events-auto flex items-start gap-2 rounded-lg border px-3.5 py-2.5 text-[13px] leading-snug shadow-pop ${STYLE[t.kind]}`}
             >
               <I size={16} className="mt-px shrink-0" />

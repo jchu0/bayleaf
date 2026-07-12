@@ -4,6 +4,7 @@ import { AlertTriangle } from 'lucide-react'
 import { api } from '../api'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { PageHeader } from '../components/PageHeader'
+import { Pager } from '../components/Pager'
 import { Truncate } from '../components/Truncate'
 import { AgentComposer } from '../components/AgentComposer'
 import { AgentSourceToggle } from '../components/AgentSourceToggle'
@@ -185,42 +186,9 @@ export function AgentTriage() {
                 )
               })}
             </div>
+            {/* Canonical shared <Pager> (UIUX-03) — fixed 10/page, so the per-page control is hidden. */}
             {flagged.length > PER && (
-              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-text-2">
-                <span>
-                  Showing {(curPage - 1) * PER + 1}–{Math.min(curPage * PER, flagged.length)} of {flagged.length} flagged
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setPage(Math.max(1, curPage - 1))}
-                    className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 hover:border-line-strong"
-                    aria-label="Previous page"
-                  >
-                    ‹
-                  </button>
-                  {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setPage(n)}
-                      className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] ${
-                        n === curPage ? 'bg-accent font-semibold text-white' : 'border border-line bg-card text-text-2 hover:border-line-strong'
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setPage(Math.min(pages, curPage + 1))}
-                    className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 hover:border-line-strong"
-                    aria-label="Next page"
-                  >
-                    ›
-                  </button>
-                </div>
-              </div>
+              <Pager total={flagged.length} page={page} perPage="10" onPage={setPage} hidePerPage noun="flagged" />
             )}
           </div>
 

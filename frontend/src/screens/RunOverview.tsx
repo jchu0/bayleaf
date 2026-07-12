@@ -5,6 +5,7 @@ import { api } from '../api'
 import { SegmentBar } from '../components/Bar'
 import { DateRangePicker } from '../components/DateRangePicker'
 import { PageHeader } from '../components/PageHeader'
+import { Pager, type PerPage } from '../components/Pager'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { Tabs } from '../components/Tabs'
 import { useApiHealth, type Health } from '../hooks/useApiHealth'
@@ -14,7 +15,6 @@ import { RUN_STATUS_META as STATUS_META, VERDICT_BAR, VERDICT_LABEL } from '../v
 const VERDICTS = ['proceed', 'hold', 'rerun', 'escalate'] as const
 type StatusFacet = 'all' | RunStatus
 type SortKey = 'recent' | 'urgent'
-type PerPage = '25' | '50' | '100'
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 // ISO "2026-07-08" → "Jul 8, 2026" without a Date() round-trip (avoids a TZ day-shift).
@@ -28,11 +28,6 @@ function formatRunDate(iso: string | null): string | null {
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'recent', label: 'Recent' },
   { value: 'urgent', label: 'Urgent' },
-]
-const PER_PAGE_OPTIONS: { value: PerPage; label: string }[] = [
-  { value: '25', label: '25' },
-  { value: '50', label: '50' },
-  { value: '100', label: '100' },
 ]
 const FACETS: { key: StatusFacet; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -274,8 +269,6 @@ export function RunOverview() {
   const total = filtered.length
   const pages = Math.max(1, Math.ceil(total / per))
   const currentPage = Math.min(page, pages) // clamp so a narrowing filter can't strand the pager
-  const from = total === 0 ? 0 : (currentPage - 1) * per + 1
-  const to = Math.min(currentPage * per, total)
   const pageRuns = filtered.slice((currentPage - 1) * per, currentPage * per)
 
   // Facet counts come from the header (full set, filter-independent); fall back to a client tally.
@@ -365,52 +358,8 @@ export function RunOverview() {
                 ))}
               </div>
 
-              {/* pagination footer */}
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <span className="text-[12px] text-text-3">
-                  Showing {from}–{to} of {total} runs
-                </span>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11.5px] text-text-3">Per page</span>
-                    <SegmentedControl<PerPage> options={PER_PAGE_OPTIONS} value={perPage} onChange={onPerPage} />
-                  </div>
-                  {pages > 1 && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setPage(Math.max(1, currentPage - 1))}
-                        className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
-                        aria-label="Previous page"
-                      >
-                        ‹
-                      </button>
-                      {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => setPage(n)}
-                          className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] transition-colors ${
-                            n === currentPage
-                              ? 'bg-accent font-semibold text-white'
-                              : 'border border-line bg-card text-text-2 hover:border-line-strong'
-                          }`}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => setPage(Math.min(pages, currentPage + 1))}
-                        className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
-                        aria-label="Next page"
-                      >
-                        ›
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
+              {/* pagination footer — canonical shared <Pager> (UIUX-03) */}
+              <Pager total={total} page={page} perPage={perPage} onPage={setPage} onPerPage={onPerPage} noun="runs" />
             </>
           )}
         </>

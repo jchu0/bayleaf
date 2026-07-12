@@ -6,6 +6,7 @@ import { MeterBar } from '../components/Bar'
 import { DateRangePicker } from '../components/DateRangePicker'
 import { MonitoringSignatureRow } from '../components/MonitoringSignatureRow'
 import { PageHeader } from '../components/PageHeader'
+import { Pager, PER_PAGE_25, type PerPage as PagerPerPage } from '../components/Pager'
 import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { useRefresh } from '../hooks/useRefresh'
@@ -129,6 +130,13 @@ export function Monitoring() {
   const [openSigs, setOpenSigs] = useState<Set<string>>(new Set())
   const [sigPerPage, setSigPerPage] = useState<PerPage>('25')
   const [sigPage, setSigPage] = useState(1)
+  // Server-side pagination of the per-run throughput array (`runs[]`), the payload-size guard at
+  // volume (T-072). Only the throughput chart is sliced; the KPIs, gate rates, and signatures
+  // inside `data` stay aggregated over the whole window server-side. `runsTotal` is the pre-slice
+  // run count from the X-PipeGuard-Total-Count header, so the Pager sizes correctly.
+  const [runsPerPage, setRunsPerPage] = useState<PagerPerPage>('25')
+  const [runsPage, setRunsPage] = useState(1)
+  const [runsTotal, setRunsTotal] = useState(0)
   // Signatures the operator has cleared from view (M4) — a REVERSIBLE, client-side view filter
   // (localStorage-persisted, keyed by the unique signature id), never a DB purge. Cleared signatures
   // stay searchable/recoverable via the "Cleared" toggle + each row's Restore action.
@@ -172,14 +180,23 @@ export function Monitoring() {
   const load = useCallback(async () => {
     const id = ++reqId.current
     setError(null)
-    const d = await api.monitoring(window)
-    if (id === reqId.current) setData(d)
-  }, [window])
+    const p = await api.monitoringPage(window, { page: runsPage, limit: Number(runsPerPage) })
+    if (id === reqId.current) {
+      setData(p.data)
+      setRunsTotal(p.total)
+    }
+  }, [window, runsPage, runsPerPage])
   const { spinning, updatedLabel, refresh } = useRefresh(load)
 
   useEffect(() => {
     refresh().catch((e) => setError(String(e)))
   }, [refresh])
+
+  // A window switch re-scopes the whole payload, so restart the throughput pager at page 1 (the
+  // signatures pager resets on the same signals just below). The reqId guard drops the stale fetch.
+  useEffect(() => {
+    setRunsPage(1)
+  }, [window])
 
   const windowShort = window
   const windowLabel = WINDOW_LABEL[window] ?? 'window'
@@ -383,6 +400,19 @@ export function Monitoring() {
               )
             })}
           </div>
+
+          {/* Server-side throughput pager (T-072): pages the `runs[]` array so a many-run window
+              doesn't ship an uncapped payload. The KPI tiles, gate-pass rates, and signatures stay
+              whole-window (server-aggregated) — only this chart's bars are the current page. */}
+          <Pager
+            total={runsTotal}
+            page={runsPage}
+            perPage={runsPerPage}
+            onPage={setRunsPage}
+            onPerPage={setRunsPerPage}
+            perPageOptions={PER_PAGE_25}
+            noun="runs"
+          />
         </div>
 
         <div className="rounded-[14px] border border-line bg-card px-[18px] py-4">

@@ -836,6 +836,41 @@ def test_monitoring_signature_cap_reports_full_total():
     assert client.get("/api/monitoring", params={"signatures_limit": 0}).status_code == 422
 
 
+def test_monitoring_runs_pagination_slices_and_reports_total():
+    # The per-run throughput array is server-paginated (T-072/F-INT-09); it mirrors GET /api/runs
+    # exactly (same params, same headers). Only `runs[]` slices — the whole-window aggregates
+    # (overall / gates / signatures) are computed before the slice, so a page can't distort them.
+    full = client.get("/api/monitoring").json()
+    all_runs = [r["run_id"] for r in full["runs"]]
+    total = len(all_runs)
+    assert total >= 4  # fixtures carry many dated runs, enough to page
+
+    resp1 = client.get("/api/monitoring", params={"limit": 2, "page": 1})
+    body1 = resp1.json()
+    assert [r["run_id"] for r in body1["runs"]] == all_runs[0:2]  # sliced to the page
+    assert resp1.headers["x-pipeguard-total-count"] == str(total)  # total is pre-slice
+    assert resp1.headers["x-pipeguard-limit"] == "2" and resp1.headers["x-pipeguard-page"] == "1"
+    # The aggregates ignore the page: overall.n_runs counts the WHOLE window, not the 2-run slice.
+    assert body1["overall"]["n_runs"] == total
+    assert body1["n_signatures_total"] == full["n_signatures_total"]
+    assert body1["gates"] == full["gates"]
+
+    p2 = client.get("/api/monitoring", params={"limit": 2, "page": 2}).json()["runs"]
+    assert [r["run_id"] for r in p2] == all_runs[2:4]
+    # A page past the end is an empty run slice, not an error (aggregates still whole-window).
+    past = client.get("/api/monitoring", params={"limit": 2, "page": 999}).json()
+    assert past["runs"] == [] and past["overall"]["n_runs"] == total
+    # With no limit the runs are unpaginated + no page/limit headers (backward-compatible); the
+    # total-count header is still emitted so a client can decide whether to page.
+    resp_default = client.get("/api/monitoring")
+    assert "x-pipeguard-page" not in resp_default.headers
+    assert "x-pipeguard-limit" not in resp_default.headers
+    assert resp_default.headers["x-pipeguard-total-count"] == str(total)
+    # The limit/page floors are enforced by the query constraint (422, not a crash), as /api/runs.
+    assert client.get("/api/monitoring", params={"limit": 0}).status_code == 422
+    assert client.get("/api/monitoring", params={"page": 0}).status_code == 422
+
+
 def test_monitoring_window_validation_and_invariants():
     assert client.get("/api/monitoring", params={"window": "bogus"}).status_code == 400
     body = client.get("/api/monitoring", params={"window": "7d"}).json()

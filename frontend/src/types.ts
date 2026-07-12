@@ -71,9 +71,9 @@ export type DecisionCard = {
   findings: Finding[]
   generated_by: string
   analysis_run_id: string | null
-  // Registry-normalized QC metrics for this sample (T-025). Optional: absent on samples
-  // with no QC row, and a full metrics panel is not yet built (types-only for now).
-  metric_values?: MetricValue[]
+  // Registry-normalized QC metrics for this sample (T-025). Always emitted (backend
+  // `default_factory=list`): an empty array when a sample has no QC row, never absent.
+  metric_values: MetricValue[]
   gate_results: GateResult[]
   content_hash: string
 }
@@ -225,6 +225,8 @@ export type TriageNote = {
   agent: string
   sample_id: string | null
   addresses_rule_ids: string[]
+  // Semantic finding signatures this note addresses (backend serves it alongside rule_ids).
+  addresses_signatures: string[]
   likely_cause: string
   suggested_action: string
   citations: TriageCitation[]
@@ -232,14 +234,26 @@ export type TriageNote = {
   model: string | null
 }
 
+// The raw core QC threshold as served by GET /api/config (Runbook.model_dump). `our_key` is the
+// registry controlled-vocabulary key this threshold gates on; `required=false` means a MISSING
+// metric is NOT a finding (an optional, non-blocking check). gate/hard_fail are canonical units.
 export type QCThreshold = {
   metric: string
+  our_key: string
   label: string
   gate: number
   hard_fail: number
   higher_is_better: boolean
   borderline_band: number
   unit: string
+  required: boolean
+}
+
+// Off-by-default route-to-human policy (ADR-0018 D2). Disarmed when `significances` is empty (the
+// shipped default). Tuples serialize to arrays over the wire.
+export type RouteToHumanPolicy = {
+  significances: string[]
+  review_statuses: string[]
 }
 
 export type Runbook = {
@@ -247,6 +261,8 @@ export type Runbook = {
   require_metadata_fields: string[]
   qc_thresholds: QCThreshold[]
   log_failure_markers: string[]
+  trace_failure_statuses: string[]
+  route_to_human: RouteToHumanPolicy
 }
 
 // One registered metric type from the canonical registry (GET /api/metrics/registry).
@@ -783,9 +799,12 @@ export type SubmitRunAck = {
   processed_samples: string[]
   skipped_samples: string[]
 }
+// `lost` is the restart-recovery terminal state: a job whose launching process died with no run
+// dir on disk (api/job_store.TERMINAL_STATUSES = complete|failed|lost). The pydantic field is an
+// open `str`; this mirrors the actual values the intake router emits.
 export type IntakeStatus = {
   run_id: string
-  status: 'queued' | 'running' | 'complete' | 'failed'
+  status: 'queued' | 'running' | 'complete' | 'failed' | 'lost'
   error?: string | null
   processed_samples: string[]
   skipped_samples: string[]
