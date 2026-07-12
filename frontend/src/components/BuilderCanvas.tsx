@@ -87,7 +87,7 @@ const MM_W = 210 // minimap width
 const MM_H = 108 // minimap height — a bigger, squarer canvas mirror than the old 168×46 strip
 const MM_SCALE = MM_W / INNER_W // uniform proportional scale (no x/y distortion)
 const MM_VPAD = (MM_H - INNER_H * MM_SCALE) / 2 // vertically center the canvas strip in the box
-const ZMIN = 0.6
+const ZMIN = 0.4 // low enough that Fit can frame a wide pipeline (its downstream cards) in a narrow pane
 const ZMAX = 1.4
 const clampZoom = (z: number): number => Math.min(ZMAX, Math.max(ZMIN, +z.toFixed(2)))
 const UW = NODE_W // user-node width — MUST equal BuilderShared.NODE_W (port anchors sit at n.x + UW)
@@ -252,15 +252,14 @@ export function BuilderCanvas(props: CanvasProps) {
   // (ADR-0001). Seeded from the layout landmark; a drag rewrites x/y; nothing here persists in the version.
   const [agentPos, setAgentPos] = useState<{ x: number; y: number }>({ x: AGENT_X, y: AGENT_Y })
 
-  // Center the viewport on the pipeline once on mount (README §6: "loads centered").
+  // Fit the whole pipeline into view once on mount (README §6: "loads centered") — so the downstream
+  // cards are visible right away instead of off the right edge. Uses the same fit-to-frame as the Fit button.
   useEffect(() => {
     const el = scrollRef.current
     if (!el || centered.current) return
     centered.current = true
     requestAnimationFrame(() => {
-      el.scrollLeft = Math.max(0, CENTER_X - el.clientWidth / 2)
-      el.scrollTop = Math.max(0, CENTER_Y - el.clientHeight / 2)
-      updateVpRef.current()
+      fitRef.current()
     })
   }, [])
 
@@ -308,20 +307,35 @@ export function BuilderCanvas(props: CanvasProps) {
   // Fit: reset zoom + scroll so the pipeline is centered — the seeded DAG, or the user nodes' bbox
   // when composing a draft. Content coords include the 360/480 margin the inner div carries.
   const fitToDag = useCallback(() => {
-    props.onZoom(1)
     const el = scrollRef.current
     if (!el) return
-    let tx = CENTER_X
-    let ty = CENTER_Y
+    // Content bounding box in inner coords (card extent included); fall back to the plane centre when empty.
+    let minX = CENTER_X - 360 - 240
+    let maxX = CENTER_X - 360 + 240
+    let minY = CENTER_Y - 480 - 200
+    let maxY = CENTER_Y - 480 + 200
     if (userNodes.length) {
       const xs = userNodes.map((n) => n.x)
       const ys = userNodes.map((n) => n.y)
-      tx = 360 + (Math.min(...xs) + Math.max(...xs) + UW) / 2
-      ty = 480 + (Math.min(...ys) + Math.max(...ys)) / 2 + 40
+      minX = Math.min(...xs)
+      maxX = Math.max(...xs) + UW
+      minY = Math.min(...ys)
+      maxY = Math.max(...ys) + 260 // approx card height so the bottom row is fully framed
     }
+    const PAD = 70
+    const bw = maxX - minX + PAD * 2
+    const bh = maxY - minY + PAD * 2
+    // TRUE fit-to-frame: scale so the whole padded bbox fits the viewport (only zoom OUT past 1), floored
+    // at ZMIN — so a pipeline wider than the viewport (its downstream cards) becomes fully visible, instead
+    // of the old "reset zoom to 1 + centre" that left the right end off-screen.
+    const z = clampZoom(Math.min(1, el.clientWidth / bw, el.clientHeight / bh))
+    props.onZoom(z)
+    const cx = 360 + (minX + maxX) / 2 // bbox centre in content coords (inner + the plane's 360/480 margin)
+    const cy = 480 + (minY + maxY) / 2
     requestAnimationFrame(() => {
-      el.scrollLeft = Math.max(0, tx - el.clientWidth / 2)
-      el.scrollTop = Math.max(0, ty - el.clientHeight / 2)
+      // The inner plane uses CSS `zoom`, so a content coord renders at coord*z px — scroll in scaled units.
+      el.scrollLeft = Math.max(0, cx * z - el.clientWidth / 2)
+      el.scrollTop = Math.max(0, cy * z - el.clientHeight / 2)
       updateVpRef.current()
     })
     // props.onZoom + userNodes are the only inputs; both are read fresh each call.
