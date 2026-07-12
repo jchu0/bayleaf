@@ -215,6 +215,23 @@ only emits what its own tools actually produced — `breadth_20x`/`breadth_30x` 
 mosdepth (real: 99.24%/97.07%, both PASS) — `cluster_pf` and everything else above stays blank/no
 finding, never invented.
 
+**Labeling honesty (audit P3-10 / P3-1).** Three as-built clarifications, so the tables above are not
+read as more than what runs:
+1. **Duplication source is fastp, not Picard.** The Gate 2 table cites Picard `PERCENT_DUPLICATION`
+   as the literature/reference field, but the as-built live driver
+   (`scripts/run_giab_pipeline.py::parse_fastp`) parses the duplication rate from **fastp.json**
+   (`duplication.rate`); the reference germline pipeline dedups with `samtools markdup`, whose metrics
+   file is not the gated source. The registry entry now names fastp as the source (Picard/MultiQC keys
+   stay supported alternates via aliases).
+2. **The variant gate is DP-only.** Of Gate 3, only **Depth (DP)** (`variant.dp`) is a threshold.
+   GQ (`variant.gq`) and Ti/Tv (`variant.titv`) are ungated observations; allele-balance and gnomAD AF
+   are **not computed** (no parser). This is a genotype-depth gate, not a full variant-quality gate.
+3. **cluster_pf HOLD is structural and expected.** `cluster_pf` is `required=True` yet a reads-only
+   fastq→BAM path structurally can't produce this run-level SAV/InterOp metric, so every reads-based run
+   HOLDs on it — the honest "cluster_pf-missing" signal the pinned demo relies on (HG002 → HOLD), not a
+   QC failure. Making PROCEED reachable on the live path means sourcing cluster_pf from a real SAV/InterOp
+   feed — a **deferred** policy decision, **not** a `required` flip (ADR-0001).
+
 ## Config model & test-data validation
 
 Thresholds live in an operator-owned runbook **profile** keyed on **assay × sample

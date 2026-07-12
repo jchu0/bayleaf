@@ -20,16 +20,31 @@ Design (MVP-first, production-ready seam):
     (not 401) when the caller's role is not in the allowed set, and otherwise **returns the
     Actor** so a guarded endpoint gets identity and authorization from one dependency.
 
-**Production seam (documented, not built).** The permissive header-trust here is a *dev shim*,
-not an identity system: any client can name itself. A real deployment swaps :func:`current_actor`
+**⚠ PRODUCTION SEAM — DEV PERMISSIVE AUTH, NOT AN IDENTITY SYSTEM (audit AS-03).** The
+header-trust here is a *dev shim*: the RBAC role is read from the client-supplied, UNVERIFIED
+``X-PipeGuard-Role`` header — **any caller can self-assert any role** — and a header-less request
+defaults to the permissive ``approver`` so the offline demo/tests clear every gate with zero auth
+wiring. This means the shipped ``require_role("approver")`` egress/exec gates are *advisory*, not
+enforced. This is intentional and safe for the offline, single-operator, contrived-data demo; it
+**MUST NOT ship to a shared/production deployment**. A real deployment swaps :func:`current_actor`
 for a verified identity provider (session cookie / OIDC / signed JWT) that returns the same
 :class:`Actor` — every ``require_role(...)`` gate and every ``actor.id`` capture site keeps
 working unchanged because they depend only on the :class:`Actor` contract, never on how it was
 derived. That swap is the single chokepoint to harden; nothing downstream moves.
+
+**Opt-in tightening (default unchanged).** Setting ``PIPEGUARD_AUTH_STRICT`` defaults a *header-
+less* request to ``viewer`` instead of ``approver`` — a small hardening for a deployment that has
+not yet swapped the IdP but wants header-less callers to be least-privileged. It is **off by
+default**, so the demo's permissive header-less-approver flow is byte-for-byte unchanged; it does
+NOT verify the header (a real IdP is still the only fix), it only changes the no-header fallback.
+On first use of :func:`current_actor` the module logs a single loud warning that permissive dev
+auth is active (never raises — logging must not break the offline demo).
 """
 
 from __future__ import annotations
 
+import logging
+import os
 from collections.abc import Callable
 from typing import Literal, get_args
 
@@ -45,9 +60,22 @@ Role = Literal["viewer", "reviewer", "approver"]
 # The permissive dev principal returned when no auth headers are present. Permissive on PURPOSE:
 # the offline demo and the existing endpoints/tests must run with zero auth wiring, so the
 # default can satisfy any ``require_role`` gate. A real identity provider replaces this shim
-# (see the module docstring) — this default never ships as the production auth decision.
+# (see the module docstring) — this default never ships as the production auth decision (AS-03).
 DEV_DEFAULT_ID = "dev"
 DEV_DEFAULT_ROLE: Role = "approver"
+
+# Opt-in hardening (AS-03): when ``PIPEGUARD_AUTH_STRICT`` is truthy, a *header-less* request
+# defaults to the least-privileged ``viewer`` instead of ``approver``. OFF by default so the
+# offline demo's permissive header-less-approver flow is unchanged. This does NOT verify the
+# (still-trusted) role header — a real IdP swap remains the only enforcement fix; it only lowers
+# the no-header fallback for a deployment that wants least-privilege before that swap lands.
+_ENV_AUTH_STRICT = "PIPEGUARD_AUTH_STRICT"
+_STRICT_DEFAULT_ROLE: Role = "viewer"
+
+# One-shot loud warning that permissive dev auth is live. Logged (never raised) on first use of
+# ``current_actor`` so it surfaces in server logs without breaking the offline demo/tests.
+_logger = logging.getLogger("pipeguard.auth")
+_permissive_warning_emitted = False
 
 # The valid role tokens, derived from the Literal so this can never drift from ``Role``.
 _ROLES: tuple[Role, ...] = get_args(Role)
@@ -95,16 +123,48 @@ def _normalize_actor_id(raw: str | None) -> str:
     return value
 
 
-def _normalize_role(raw: str | None) -> Role:
-    """Trim + validate the role header, falling back to the permissive dev role when absent.
+def _headerless_default_role() -> Role:
+    """The role for a *header-less* request: ``viewer`` under ``PIPEGUARD_AUTH_STRICT``, else
+    ``approver`` (the demo default). Read from the env per call (mirroring ``api.deid``) so a test
+    can toggle it without a reimport. The default (env unset) is unchanged — AS-03."""
+    strict = os.environ.get(_ENV_AUTH_STRICT, "").strip().lower() in {"1", "true", "yes", "on"}
+    return _STRICT_DEFAULT_ROLE if strict else DEV_DEFAULT_ROLE
 
-    Absent/blank -> the dev default role. Present-but-unknown is a hard 400: silently coercing
-    an unrecognized role would be a privilege decision made by accident, so an explicit unknown
-    role must fail loudly instead of defaulting (which could over- or under-grant).
+
+def _warn_permissive_auth_once() -> None:
+    """Log a single loud warning that the permissive dev-shim auth is active (AS-03).
+
+    Fires at most once per process, on first :func:`current_actor` use. Logged (never raised) so
+    it is visible in real deployment logs but cannot break the offline, log-quiet demo/tests.
+    """
+    global _permissive_warning_emitted
+    if _permissive_warning_emitted:
+        return
+    _permissive_warning_emitted = True
+    _logger.warning(
+        "DEV PERMISSIVE AUTH ACTIVE — the RBAC role is read from the client-supplied, UNVERIFIED "
+        "%s header (any caller can self-assert any role) and a header-less request defaults to "
+        "role '%s'. This is a development shim and MUST NOT ship to production: swap "
+        "current_actor() for a verified identity provider (OIDC / signed JWT / session cookie). "
+        "Set %s=1 to default header-less callers to '%s' instead.",
+        _ROLE_HEADER,
+        _headerless_default_role(),
+        _ENV_AUTH_STRICT,
+        _STRICT_DEFAULT_ROLE,
+    )
+
+
+def _normalize_role(raw: str | None) -> Role:
+    """Trim + validate the role header, falling back to the header-less default role when absent.
+
+    Absent/blank -> :func:`_headerless_default_role` (``approver`` by default; ``viewer`` under
+    ``PIPEGUARD_AUTH_STRICT``). Present-but-unknown is a hard 400: silently coercing an
+    unrecognized role would be a privilege decision made by accident, so an explicit unknown role
+    must fail loudly instead of defaulting (which could over- or under-grant).
     """
     value = (raw or "").strip().lower()
     if not value:
-        return DEV_DEFAULT_ROLE
+        return _headerless_default_role()
     if value not in _ROLES:
         # Roles are not secret, so naming the allowed set is a usability win, not a leak.
         raise HTTPException(status_code=400, detail=f"unknown role (allowed: {', '.join(_ROLES)})")
@@ -118,15 +178,19 @@ def current_actor(
 ) -> Actor:
     """FastAPI dependency resolving the current principal from the dev-shim auth headers.
 
-    Reads ``X-PipeGuard-Actor`` / ``X-PipeGuard-Role``. With **no headers** it returns the
-    permissive dev default (``id="dev"``, ``role="approver"``) so the offline demo and the
-    existing tests run with zero auth wiring and no endpoint behavior changes. Each header is
-    resolved independently and tolerantly (a partial header set still works); a *present but
-    malformed* value is a 400 (see the ``_normalize_*`` helpers) rather than a silent coercion.
+    ⚠ **Dev shim, not enforcement (AS-03).** The role is read from the UNVERIFIED
+    ``X-PipeGuard-Role`` header — any caller can self-assert any role — and with **no headers** it
+    returns the permissive dev default (``id="dev"``, ``role="approver"``; ``viewer`` under
+    ``PIPEGUARD_AUTH_STRICT``) so the offline demo and the existing tests run with zero auth wiring
+    and no endpoint behavior changes. Each header is resolved independently and tolerantly (a
+    partial header set still works); a *present but malformed* value is a 400 (see the
+    ``_normalize_*`` helpers) rather than a silent coercion. A one-shot loud warning is logged on
+    first use.
 
     Swap this one function for a verified identity provider in production (module docstring);
     everything that depends on it keys off the returned :class:`Actor`, not the header trust.
     """
+    _warn_permissive_auth_once()
     return Actor(id=_normalize_actor_id(actor_header), role=_normalize_role(role_header))
 
 

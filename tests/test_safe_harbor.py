@@ -123,6 +123,25 @@ def test_card_narration_freetext_is_scrubbed() -> None:
     assert "ops@lab.org" not in out["rationale"]
 
 
+def test_mixed_case_cohort_key_is_not_passed_through_raw() -> None:
+    # AS-05: the deid-fallback lookup must be case-insensitive. A differently-cased cohort column
+    # (`Tissue`) is a GATE_BY_ORIGIN field — on a NON-guarded origin it must be pseudonymized, not
+    # egressed raw as it would be if the lookup only matched the lowercase policy key.
+    out = redact_record({"Tissue": "liver"}, origin="synthetic")
+    assert out["Tissue"] != "liver"  # not raw
+    assert out["Tissue"].startswith("pseudo_")  # origin-gated pseudonym, like lowercase `tissue`
+    # And on a guarded origin the mixed-case cohort key must be DROPPED, not leaked as a column.
+    assert "Tissue" not in redact_record({"Tissue": "liver"}, origin="real-giab")
+
+
+def test_mixed_case_direct_identifier_is_dropped() -> None:
+    # AS-05 (belt-and-suspenders): a mixed-case operator-PII column (`Submitted_By`) resolves its
+    # DROP action case-insensitively and is removed entirely, not exported raw.
+    out = redact_record({"Submitted_By": "j.smith", "run_id": "R1"}, origin="synthetic")
+    assert "Submitted_By" not in out
+    assert out["run_id"] == "R1"
+
+
 # ── honesty boundary ────────────────────────────────────────────────────────────────
 def test_policy_is_labelled_style_not_certified() -> None:
     # The policy id must say "style" — this is Safe-Harbor-STYLE, never an attested de-id claim.

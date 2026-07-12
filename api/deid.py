@@ -94,8 +94,15 @@ class DeidPolicy:
     policy_id: str = DEID_POLICY_ID
 
     def action_for(self, field_name: str) -> DeidAction:
-        """The action for ``field_name`` (``PASSTHROUGH`` if the policy does not name it)."""
-        return self.field_actions.get(field_name, DeidAction.PASSTHROUGH)
+        """The action for ``field_name`` (``PASSTHROUGH`` if the policy does not name it).
+
+        Matching is **case-insensitive** (audit AS-05): the lookup key is trimmed + lower-cased so
+        a differently-cased column (``Tissue``, ``Submitted_By``) still resolves to its policy
+        action instead of silently falling through to ``PASSTHROUGH`` and egressing raw. Policy
+        keys are authored lowercase (see :func:`default_policy`), so this is a strict tightening —
+        a mixed-case identifier now gets dropped/gated rather than leaking.
+        """
+        return self.field_actions.get(field_name.strip().lower(), DeidAction.PASSTHROUGH)
 
 
 def _pseudonymize(value: str, salt: str) -> str:

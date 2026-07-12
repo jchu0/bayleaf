@@ -96,6 +96,14 @@ class Runbook(BaseModel):
                 hard_fail=15.0,
                 unit="x",
             ),
+            # STRUCTURAL, EXPECTED HOLD (audit P3-1): cluster_pf is a RUN-LEVEL SAV/InterOp metric
+            # (Illumina %PF clusters). A reads-only fastq→BAM path (the live GIAB driver,
+            # scripts/run_giab_pipeline.py) structurally CANNOT produce it, so it arrives absent and
+            # this required=True threshold NA-flags → every reads-based run HOLDs. That HOLD is the
+            # honest "cluster_pf-missing" signal the pinned demo relies on (HG002 → HOLD), NOT a QC
+            # failure. Keeping required=True is a deliberate honesty choice: reaching PROCEED on the
+            # live path means SOURCING cluster_pf from a real SAV/InterOp feed (a deferred policy
+            # decision), never flipping this flag. Do NOT change `required` (ADR-0001/G1).
             QCThreshold(
                 metric="cluster_pf",
                 our_key="qc.cluster_pf",
@@ -154,6 +162,12 @@ class Runbook(BaseModel):
                 required=False,
                 unit="%",
             ),
+            # VARIANT-GATE SCOPE (audit P3-10): the variant gate is DP-ONLY — `variant.dp` is the
+            # only variant-tier THRESHOLD here. GQ (`variant.gq`) and Ts/Tv (`variant.titv`) are
+            # registered + wired but UNGATED observations (a phred / target-band metric the
+            # one-sided gate can't score); allele-balance (`variant.allele_balance`) and gnomAD AF
+            # are NOT computed (no parser). This is a genotype-DEPTH gate, not a full
+            # variant-quality gate; label it as such wherever it surfaces (fuller variant QC later).
             QCThreshold(
                 metric="variant_dp",
                 our_key="variant.dp",

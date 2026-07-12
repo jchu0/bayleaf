@@ -52,22 +52,24 @@ metrics:
 | `qc.q30` | qc | base_quality | fraction | higher_is_better | fastp | `after_filtering_q30_rate` |
 | `qc.reads_passing_filter` | qc | yield | fraction | higher_is_better | fastp | `filtering_result_passed_filter_reads` / `pct_surviving` |
 | `qc.cluster_pf` | qc | yield | fraction | higher_is_better | sav_interop | `Cluster PF` |
-| `qc.duplication` | qc | duplication | fraction | lower_is_better | picard_markduplicates | `PERCENT_DUPLICATION` |
+| `qc.duplication` | qc | duplication | fraction | lower_is_better | fastp *(as-built; Picard/MultiQC alt via aliases)* | fastp.json `duplication.rate` |
 | `qc.pct_mapped` | qc | alignment | fraction | higher_is_better | samtools | flagstat mapped |
 | `qc.on_target` | qc | enrichment | fraction | higher_is_better | picard_collecthsmetrics | `PCT_SELECTED_BASES` |
 | `qc.mean_target_coverage` | qc | coverage | x | higher_is_better | picard_collecthsmetrics | `MEAN_TARGET_COVERAGE` |
 | `qc.breadth_20x` | qc | coverage | fraction | higher_is_better | picard_collecthsmetrics / mosdepth | `PCT_TARGET_BASES_20X` / `20_x_pc` |
 | `qc.breadth_30x` | qc | coverage | fraction | higher_is_better | picard_collecthsmetrics | `PCT_TARGET_BASES_30X` |
-| `qc.zero_cov_targets` | qc | coverage | fraction | lower_is_better | picard_collecthsmetrics | `ZERO_CVG_TARGETS_PCT` |
-| `qc.fold_enrichment` | qc | enrichment | ratio | target_band | picard_collecthsmetrics | `FOLD_ENRICHMENT` |
-| `qc.fold_80` | qc | uniformity | ratio | lower_is_better | picard_collecthsmetrics | `FOLD_80_BASE_PENALTY` |
-| `identity.ngscheckmate_match` | qc | identity | bool | higher_is_better | ngscheckmate | `ngscheckmate_matched.txt` |
-| `identity.sex_concordance` | qc | identity | bool | higher_is_better | ngscheckmate / mosdepth | declared_sex vs coverage |
-| `contamination.freemix` | qc | contamination | fraction | lower_is_better | verifybamid2 *(optional, non-sarek-default)* | `FREEMIX` |
+| `qc.zero_cov_targets` † | qc | coverage | fraction | lower_is_better | picard_collecthsmetrics | `ZERO_CVG_TARGETS_PCT` |
+| `qc.fold_enrichment` † | qc | enrichment | ratio | target_band | picard_collecthsmetrics | `FOLD_ENRICHMENT` |
+| `qc.fold_80` † | qc | uniformity | ratio | lower_is_better | picard_collecthsmetrics | `FOLD_80_BASE_PENALTY` |
+| `identity.ngscheckmate_match` † | qc | identity | bool | higher_is_better | ngscheckmate | `ngscheckmate_matched.txt` |
+| `identity.sex_concordance` † | qc | identity | bool | higher_is_better | ngscheckmate / mosdepth | declared_sex vs coverage |
+| `contamination.freemix` † | qc | contamination | fraction | lower_is_better | verifybamid2 *(optional, non-sarek-default)* | `FREEMIX` |
 | `variant.dp` | variant | depth | x | higher_is_better | vcf | `FORMAT/DP` |
 | `variant.gq` | variant | genotype_quality | phred | higher_is_better | vcf | `GQ` |
-| `variant.allele_balance` | variant | genotype_quality | fraction | target_band | vcf | `AD` → AB |
+| `variant.allele_balance` † | variant | genotype_quality | fraction | target_band | vcf | `AD` → AB |
 | `variant.titv` | variant | sanity | ratio | target_band | bcftools / picard | `ts/tv` |
+
+**†** = **NOT COMPUTED** (audit P3-10): registered-only, no parser wired yet — the `module`/`source_field` above name the *designed* source, not a value produced today. See **Wiring status** below.
 
 ## Rules
 

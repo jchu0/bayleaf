@@ -8,6 +8,8 @@ failure points at the auth seam, not at unrelated wiring.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
@@ -66,6 +68,34 @@ def test_header_provided_actor_is_read() -> None:
 def test_role_header_is_case_insensitive() -> None:
     # Roles arrive from a header; a stray uppercase must not spuriously 400.
     resp = client.get("/whoami", headers={"X-PipeGuard-Role": "APPROVER"})
+    assert resp.json()["role"] == "approver"
+
+
+# --- AS-03: PIPEGUARD_AUTH_STRICT opt-in tightens the header-less default (default UNCHANGED) ----
+
+
+def test_default_headerless_role_unchanged_without_strict(monkeypatch: Any) -> None:
+    # GUARDRAIL: with the env explicitly UNSET the header-less default is the permissive approver,
+    # exactly as before AS-03 — the offline demo/tests must be byte-for-byte unaffected.
+    monkeypatch.delenv("PIPEGUARD_AUTH_STRICT", raising=False)
+    assert client.get("/whoami").json() == {"id": "dev", "role": "approver"}
+    assert client.get("/approver-only").status_code == 200
+
+
+def test_strict_mode_defaults_headerless_to_viewer(monkeypatch: Any) -> None:
+    # AS-03 opt-in: with PIPEGUARD_AUTH_STRICT set, a header-LESS request drops to least-privilege
+    # viewer instead of approver, so the approver-only gate now 403s a no-header caller. Off by
+    # default, so this changes nothing for the demo unless a deployment explicitly opts in.
+    monkeypatch.setenv("PIPEGUARD_AUTH_STRICT", "1")
+    assert client.get("/whoami").json() == {"id": "dev", "role": "viewer"}
+    assert client.get("/approver-only").status_code == 403
+
+
+def test_strict_mode_still_honors_explicit_role_header(monkeypatch: Any) -> None:
+    # Strict mode only lowers the no-header fallback; it does NOT verify the header (a real IdP is
+    # the only enforcement fix). An explicit role header is still trusted and read as-is.
+    monkeypatch.setenv("PIPEGUARD_AUTH_STRICT", "1")
+    resp = client.get("/whoami", headers={"X-PipeGuard-Role": "approver"})
     assert resp.json()["role"] == "approver"
 
 

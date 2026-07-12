@@ -34,6 +34,17 @@ SAFE_HARBOR_POLICY_ID = "safe-harbor-style-v1"
 # The 18 §164.514(b)(2) identifier classes, for reference + the manifest/UI. Each maps to how this
 # module handles it: structured fields are dropped/hashed by name; free-text and dates are scrubbed
 # by pattern. This table documents the intent; it is not the enforcement (that is the code below).
+#
+# HONEST-LABELING NOTE (audit AS-08). This list documents the classes the scrub *considers* — its
+# coverage INTENT — NOT 18 independently running detectors. Read the per-class text below for the
+# real status of each: only a subset have an active mechanical detector (email/phone/SSN/date/URL/
+# IP/ZIP/long-id via `_FREETEXT_PATTERNS`, plus the by-name structured drops/hashes); several are
+# **documented seams with NO detector** because the class does not appear in this data model —
+# `vehicle`, `device`, `biometric`, `photo` (each labelled "not present … documented seam"); and
+# `names` in free text is only weakly regex-adjacent (no NLP name model). So the manifest's
+# `safe_harbor_classes` array is "classes considered," not "18 classes actively scrubbed." The
+# prominent `_SHARE_DISCLAIMER` at the egress endpoint already states the scrub is uncertified and
+# will miss prose identifiers; this note keeps the class list itself from reading as over-claiming.
 HIPAA_SAFE_HARBOR_CLASSES: tuple[tuple[str, str], ...] = (
     (
         "names",
@@ -174,7 +185,11 @@ def redact_record(row: Mapping[str, Any], origin: str) -> dict[str, Any]:
         # BEFORE the `None` branch — otherwise an absent gated field (e.g. `tissue` on a guarded
         # `real-giab` run whose sample has no metadata) would emit `null` and leak that the column
         # exists (mirrors the correct ordering in `api.deid.redact`).
-        action = base.action_for(key)
+        # Look up with the case-folded key (audit AS-05): the field-name sets above match on `lkey`,
+        # so a differently-cased identifier column (`Tissue`) must resolve its GATE_BY_ORIGIN/DROP
+        # action here too rather than falling through to PASSTHROUGH and egressing raw.
+        # (`action_for` also case-folds defensively; passing `lkey` keeps the intent explicit here.)
+        action = base.action_for(lkey)
         if action is DeidAction.DROP:
             continue
         if action is DeidAction.GATE_BY_ORIGIN and guarded:

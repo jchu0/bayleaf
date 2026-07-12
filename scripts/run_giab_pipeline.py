@@ -39,6 +39,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import IO
 
 from pipeguard import run_gate_from_dir
 
@@ -103,6 +104,243 @@ def _detect_profile() -> str:
     the executor is chosen here (compose ≠ execute). CONFIG-VERIFIED, not cluster-verified — this
     env has no ``sbatch``, so the demo always takes the local-serial branch."""
     return "slurm" if shutil.which("sbatch") else "standard"
+
+
+# --------------------------------------------------------------------------------------------------
+# Pre-flight guards (P3-3/P3-4/P3-5) — cheap, LOUD, and run BEFORE the Nextflow launch so a bad
+# input fails in milliseconds with a clear message instead of burning a full launch that dies deep
+# inside bwa-mem2 (or, worse, yields a silently-wrong result). Each raises SystemExit (via sys.exit,
+# the driver's existing failure idiom) with an actionable message; none EVER silently proceeds. They
+# are pure functions of their path args so they can be unit-tested without Nextflow on PATH.
+# --------------------------------------------------------------------------------------------------
+
+_GZIP_MAGIC = b"\x1f\x8b"
+
+# The index sidecars the germline pipeline's reference channel needs on disk — `.fai` (samtools
+# faidx, used by mosdepth/bcftools) plus the bwa-mem2 index set. main.nf globs `${reference}.*`, so
+# a missing member would only surface as a bwa-mem2 crash mid-run; we assert them up front instead.
+_REQUIRED_INDEX_SUFFIXES: tuple[str, ...] = (
+    ".fai", ".0123", ".amb", ".ann", ".bwt.2bit.64", ".pac",
+)  # fmt: skip
+
+# Resolved-version probes (P3-6). Provenance capture only — these RECORD what is on PATH, they do
+# NOT pin or change anything. bwa-mem2 uses the bare `version` subcommand; the rest take --version.
+_VERSION_PROBES: tuple[tuple[str, list[str]], ...] = (
+    ("nextflow", ["nextflow", "-version"]),
+    ("fastp", ["fastp", "--version"]),
+    ("bwa-mem2", ["bwa-mem2", "version"]),
+    ("samtools", ["samtools", "--version"]),
+    ("mosdepth", ["mosdepth", "--version"]),
+    ("bcftools", ["bcftools", "--version"]),
+    ("multiqc", ["multiqc", "--version"]),
+)
+
+
+def _open_maybe_gzip(path: Path) -> IO[str]:
+    """Open a FASTQ/FASTA as text, detecting gzip by MAGIC BYTE (not extension) so a mislabelled
+    file is handled honestly rather than mis-parsed."""
+    with path.open("rb") as raw:
+        is_gz = raw.read(2) == _GZIP_MAGIC
+    if is_gz:
+        return gzip.open(path, "rt", encoding="utf-8", errors="replace")
+    return path.open("r", encoding="utf-8", errors="replace")
+
+
+def _read_id_core(header: str) -> str:
+    """Normalize a FASTQ header to a MATE-INDEPENDENT read id for pairing comparison: drop the
+    leading '@', any whitespace-delimited comment (Casava 1.8 '1:N:0:…'), and a trailing '/1'|'/2'
+    mate suffix — so proper mates compare equal but two unrelated files do not."""
+    core = header[1:] if header.startswith("@") else header
+    parts = core.split()
+    core = parts[0] if parts else core
+    if core.endswith(("/1", "/2")):
+        core = core[:-2]
+    return core
+
+
+def _next_record(fh: IO[str]) -> tuple[str, str, str, str] | None:
+    """Read the next 4-line FASTQ record (header, seq, plus, qual); None at clean EOF."""
+    header = fh.readline()
+    if header == "":
+        return None
+    seq, plus, qual = fh.readline(), fh.readline(), fh.readline()
+    return header.rstrip("\n"), seq.rstrip("\n"), plus.rstrip("\n"), qual.rstrip("\n")
+
+
+def _validate_record(rec: tuple[str, str, str, str], label: str, path: Path, idx: int) -> None:
+    """Structural FASTQ sanity for one record — catches non-FASTQ / truncated / corrupt input."""
+    header, seq, plus, qual = rec
+    if not header.startswith("@"):
+        sys.exit(
+            f"preflight: {label} ({path.name}) record {idx} is not FASTQ — header {header[:24]!r} "
+            "does not start with '@'. Input is not FASTQ (or is corrupt); failing before launch."
+        )
+    if not plus.startswith("+"):
+        sys.exit(
+            f"preflight: {label} ({path.name}) record {idx} is malformed — 3rd line {plus[:24]!r} "
+            "does not start with '+'. Truncated or non-FASTQ; failing before launch."
+        )
+    if len(seq) != len(qual):
+        sys.exit(
+            f"preflight: {label} ({path.name}) record {idx} seq/qual length mismatch "
+            f"({len(seq)} vs {len(qual)}). Corrupt FASTQ; failing before launch."
+        )
+
+
+def _preflight_fastqs(read1: Path, read2: Path) -> None:
+    """P3-3: R1/R2 exist + readable, look like FASTQ, and pass a pairing sanity check.
+
+    A swapped/mismatched pair, a non-FASTQ input, or unequal mate counts must fail HERE with a clear
+    message — not silently yield a wrong result downstream. Streams both files in lockstep,
+    validating each record and comparing mate-independent read ids; equal read counts are the
+    classic pairing gate. This is an O(reads) pass, acceptable at panel scale (and far cheaper than
+    a Nextflow launch) — the driver is HG002-panel-scoped; a huge-WGS sampled-window variant is a
+    later refinement.
+    """
+    for label, p in (("R1", read1), ("R2", read2)):
+        if not p.is_file():
+            sys.exit(f"preflight: {label} fastq is not a readable file: {p}")
+        if p.stat().st_size == 0:
+            sys.exit(f"preflight: {label} fastq is empty: {p}")
+    if read1.resolve() == read2.resolve():
+        sys.exit(f"preflight: R1 and R2 are the SAME file ({read1}) — that is not a read pair")
+
+    n = 0
+    with _open_maybe_gzip(read1) as fh1, _open_maybe_gzip(read2) as fh2:
+        while True:
+            rec1, rec2 = _next_record(fh1), _next_record(fh2)
+            if rec1 is None and rec2 is None:
+                break
+            if rec1 is None or rec2 is None:
+                longer = "R2" if rec1 is None else "R1"
+                sys.exit(
+                    f"preflight: FASTQ pair length mismatch — {longer} has more reads "
+                    f"(R1={read1.name}, R2={read2.name}). Mates must have equal read counts; "
+                    "the pair looks truncated or mismatched. Failing before launch."
+                )
+            _validate_record(rec1, "R1", read1, n)
+            _validate_record(rec2, "R2", read2, n)
+            id1, id2 = _read_id_core(rec1[0]), _read_id_core(rec2[0])
+            if id1 != id2:
+                sys.exit(
+                    f"preflight: FASTQ read {n} does not pair — R1 id {id1!r} != R2 id {id2!r} "
+                    f"(R1={read1.name}, R2={read2.name}). R1/R2 look swapped or from different "
+                    "samples. Failing before launch."
+                )
+            n += 1
+    if n == 0:
+        sys.exit(f"preflight: no FASTQ records found in {read1.name} / {read2.name}")
+    _log("preflight", f"FASTQ pair OK — {n} paired reads, ids matched ({read1.name}/{read2.name})")
+
+
+def _reference_contigs(reference: Path) -> set[str]:
+    """Contig names of the reference — from the `.fai` if present (cheap), else FASTA headers."""
+    fai = Path(f"{reference}.fai")
+    if fai.is_file():
+        return {ln.split("\t")[0] for ln in fai.read_text().splitlines() if ln.strip()}
+    contigs: set[str] = set()
+    with _open_maybe_gzip(reference) as fh:
+        for line in fh:
+            if line.startswith(">"):
+                contigs.add(line[1:].split()[0])
+    return contigs
+
+
+def _bed_contigs(panel_bed: Path) -> set[str]:
+    """Contig names (col 1) of a BED, skipping comment / track / browser lines."""
+    contigs: set[str] = set()
+    for line in panel_bed.read_text().splitlines():
+        s = line.strip()
+        if not s or s.startswith(("#", "track", "browser")):
+            continue
+        contigs.add(s.split()[0])
+    return contigs
+
+
+def _preflight_contigs(reference: Path, panel_bed: Path) -> None:
+    """P3-4: assert every panel-BED contig exists in the reference (e.g. '20' vs 'chr20').
+
+    A reference/BED naming mismatch does not crash — it silently yields ~0% panel breadth (mosdepth
+    finds no overlap), which is far worse than a loud failure. Fail here instead.
+    """
+    ref = _reference_contigs(reference)
+    if not ref:
+        sys.exit(
+            f"preflight: could not read any contigs from reference {reference} "
+            "(no .fai and no FASTA '>' headers). Cannot verify contig naming."
+        )
+    bed = _bed_contigs(panel_bed)
+    if not bed:
+        _log("preflight", f"panel BED {panel_bed.name} has no rows — skipping contig check", "WARN")
+        return
+    missing = sorted(bed - ref)
+    if missing:
+        sys.exit(
+            f"preflight: panel BED contig(s) {missing} are absent from reference {reference.name} "
+            f"(reference has {sorted(ref)[:8]}). Likely a build/naming mismatch (e.g. '20' vs "
+            "'chr20') — this would yield a silent ~0% panel breadth. Fix the BED or the reference."
+        )
+    _log("preflight", f"contig naming OK — panel BED {sorted(bed)} is a subset of the reference")
+
+
+def _preflight_reference_index(reference: Path) -> None:
+    """P3-5: verify the reference index sidecars exist BEFORE the launch.
+
+    Without these, the run would launch, run fastp, and only then die inside bwa-mem2 — burning the
+    whole launch. Checking on disk first turns that into an instant, actionable failure.
+    """
+    missing = [sfx for sfx in _REQUIRED_INDEX_SUFFIXES if not Path(f"{reference}{sfx}").is_file()]
+    if missing:
+        sys.exit(
+            f"preflight: reference index sidecar(s) missing for {reference.name}: {missing}. "
+            f"Build them before launching: `samtools faidx {reference.name}` (.fai) and "
+            f"`bwa-mem2 index {reference.name}` (.0123/.amb/.ann/.bwt.2bit.64/.pac). Failing now "
+            "avoids a full Nextflow launch that would die in bwa-mem2."
+        )
+    _log("preflight", f"reference index OK — all sidecars present for {reference.name}")
+
+
+def _probe_version(label: str, argv: list[str]) -> str:
+    """Best-effort single version line for one tool. Tolerant by design: a missing or failing tool
+    is RECORDED, never fatal — capturing provenance must not break a run."""
+    exe = shutil.which(argv[0])
+    if exe is None:
+        return f"{label}: not found on PATH"
+    try:
+        out = subprocess.run(
+            [exe, *argv[1:]], capture_output=True, text=True, timeout=30, check=False
+        )
+    except (OSError, subprocess.SubprocessError) as exc:  # pragma: no cover - defensive
+        return f"{label}: unavailable ({type(exc).__name__})"
+    lines = [ln.strip() for ln in (out.stdout + out.stderr).splitlines() if ln.strip()]
+    if not lines:
+        return f"{label}: (no version output)"
+    # Prefer a line mentioning "version" (nextflow/multiqc), else the first line (samtools/etc).
+    chosen = next((ln for ln in lines if "version" in ln.lower()), lines[0])
+    return f"{label}: {chosen}"
+
+
+def capture_versions(cfg: RunConfig) -> None:
+    """P3-6: record the RESOLVED tool/Nextflow versions that ran this run into `versions.txt`.
+
+    Provenance capture ONLY — this RECORDS what was on PATH; it does NOT pin or change any container
+    or conda tag (that is deliberately out of scope, Medium risk). "Deterministic reruns" for this
+    project mean wiring + gate re-derivation, not bitwise-identical outputs — the module pins are
+    floating tags + a version floor, so a per-run snapshot of what actually resolved is the honest
+    reproducibility artifact. Every probe is best-effort (see `_probe_version`).
+    """
+    cfg.run_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    lines = [
+        f"# Resolved tool versions captured at run time (provenance, NOT a re-pin) {stamp}",
+        f"# run_id: {cfg.run_id}",
+        f"# pipeline: {cfg.pipeline}",
+        f"python: {sys.version.split()[0]}",
+    ]
+    lines.extend(_probe_version(label, argv) for label, argv in _VERSION_PROBES)
+    out = cfg.run_dir / "versions.txt"
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    _log("provenance", f"captured resolved tool versions -> {cfg.run_dir.name}/versions.txt")
 
 
 def run_nextflow(cfg: RunConfig) -> Path:
@@ -238,10 +476,20 @@ def write_run_dir(
         "[BCLConvert_Data]\nSample_ID,index,index2\n"
         f"{cfg.sample},NA,NA\n",
     )
+    # P3-9 HONESTY NOTE: this sample_metadata.csv is FIXTURE-AUTHORED, not real subject metadata.
+    # The live driver has no LIMS/subject feed, so subject_id and tissue are PLACEHOLDERS: subj_id
+    # is set to the sample_id and tissue is hardcoded 'blood' (true for HG002, but NOT sourced from
+    # any subject record). The trailing `metadata_origin` column marks this IN THE FILE so a
+    # downstream reader can never mistake it for accessioned subject data. We use an extra COLUMN
+    # (parse-safe — it lands in Sample.extra) rather than a leading '#' comment line because the
+    # core parser (parse_sample_metadata -> pd.read_csv, no comment= set) would read a '#' line as
+    # the header row and drop every sample. Rewiring the driver to a real subject feed is a deferred
+    # data-platform seam; the audit (P3-9) prefers this note over that rewire.
     w(
         "sample_metadata.csv",
-        "sample_id,subject_id,tissue,library_prep,submitted_by\n"
-        f"{cfg.sample},{cfg.sample},blood,PCR-free,{cfg.submitted_by}\n",
+        "sample_id,subject_id,tissue,library_prep,submitted_by,metadata_origin\n"
+        f"{cfg.sample},{cfg.sample},blood,PCR-free,{cfg.submitted_by},"
+        "fixture-authored-placeholder\n",
     )
     # Real read count from fastp; single sample so 100% of reads are this sample.
     w("demux_stats.csv", f"SampleID,Index,# Reads,% Reads\n{cfg.sample},NA,{total_reads},100.0\n")
@@ -295,6 +543,10 @@ def main() -> int:
             sys.exit(f"required input missing: {path} — {hint}")
 
     _log("intake", f"registering run {cfg.run_id} — sample {cfg.sample}")
+    # Pre-flight guards (P3-3/4/5) — fail LOUDLY before the Nextflow launch, never silently proceed.
+    _preflight_reference_index(cfg.reference)
+    _preflight_contigs(cfg.reference, cfg.panel_bed)
+    _preflight_fastqs(cfg.read1, cfg.read2)
     results = run_nextflow(cfg)
     q30, reads_pf, dup, total_reads = parse_fastp(_one(results, "*.fastp.json"))
     coverage, b20, b30 = parse_mosdepth(
@@ -307,6 +559,7 @@ def main() -> int:
         f"cov {coverage:.1f}x, dup {dup:.3f}%, {n_variants} variants)",
     )
     write_run_dir(cfg, q30, reads_pf, coverage, dup, total_reads, b20, b30)
+    capture_versions(cfg)  # P3-6: snapshot the resolved tool/Nextflow versions that ran this run
 
     _, cards = run_gate_from_dir(cfg.run_dir)  # default runbook — the read-API's recompute
     card = cards[0]

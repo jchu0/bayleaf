@@ -21,6 +21,15 @@
 # entry declares `raw_units_allowed` and normalization keys on the *caller-supplied*
 # raw_unit, never on the field name. `qc.breadth_20x` below is the canonical example:
 # Picard `PCT_TARGET_BASES_20X` is a fraction, mosdepth-via-MultiQC `20_x_pc` is a percent.
+#
+# PARSE STATUS (audit P3-10 — registry honesty). A `parser:` value names the DESIGNED parser for
+# an entry; it does NOT assert a value is actually computed today. Of the 20 registered keys, 13
+# are wired end-to-end (mapping.py `_QCMETRICS_MAP`) and the other 7 are REGISTERED-ONLY / NOT
+# COMPUTED (no parser wired) — each is flagged inline below with a `# NOT COMPUTED (audit P3-10)`
+# comment: qc.zero_cov_targets, qc.fold_enrichment, qc.fold_80, identity.ngscheckmate_match,
+# identity.sex_concordance, contamination.freemix, variant.allele_balance. The variant GATE is
+# DP-only (only `variant.dp` is a threshold; `variant.gq`/`variant.titv` are ungated observations;
+# allele-balance/AF are not computed). See docs/data/metric_registry.md "Wiring status".
 
 metric_registry_version: 1
 
@@ -74,6 +83,9 @@ metrics:
     parser_version: null
     aliases: [filtering_result_passed_filter_reads]
 
+  # STRUCTURAL HOLD (audit P3-1): a run-level SAV/InterOp metric a reads-only fastq→BAM path can't
+  # produce, so it typically arrives absent → its required=True runbook threshold NA-flags → an
+  # expected HOLD on every reads-based run (the pinned demo relies on HG002 → HOLD). SAV source deferred.
   qc.cluster_pf:
     display_name: Cluster PF
     gate: qc
@@ -98,13 +110,19 @@ metrics:
     value_type: float
     direction: lower_is_better
     source:
-      module: picard_markduplicates
-      source_file: markdup_metrics
-      raw_field: PERCENT_DUPLICATION
-    # Picard PERCENT_DUPLICATION is a fraction (0-1) despite the name; the
-    # MultiQC-surfaced pct_duplication / percent_duplicates variants are percents.
+      module: fastp
+      source_file: fastp.json
+      json_path: duplication.rate
+      raw_field: duplication_rate
+    # AS-BUILT SOURCE (audit P3-10): the live driver (scripts/run_giab_pipeline.py::parse_fastp)
+    # reads the duplication rate from fastp.json (`duplication.rate`, a 0-1 fraction it scales to a
+    # percent), NOT from Picard MarkDuplicates. The reference germline pipeline dedups with
+    # `samtools markdup`, whose metrics file is not the gated source. Picard PERCENT_DUPLICATION
+    # (a 0-1 fraction despite the name) and the MultiQC-surfaced pct_duplication /
+    # percent_duplicates keys stay supported alternates via `aliases`; raw_units_allowed keeps
+    # both fraction and percent (the pct trap).
     raw_units_allowed: [fraction, percent]
-    parser: picard_markdup
+    parser: fastp_json
     parser_version: null
     aliases: [pct_duplication, percent_duplicates]
 
@@ -190,6 +208,7 @@ metrics:
     parser_version: null
     aliases: [30_x_pc]
 
+  # NOT COMPUTED (audit P3-10): registered-only — no parser wired; `parser` names the designed source.
   qc.zero_cov_targets:
     display_name: Zero-coverage targets
     gate: qc
@@ -206,6 +225,7 @@ metrics:
     parser_version: null
     aliases: [zero_cvg_targets_pct]
 
+  # NOT COMPUTED (audit P3-10): registered-only — no parser wired; `parser` names the designed source.
   qc.fold_enrichment:
     display_name: Fold enrichment
     gate: qc
@@ -222,6 +242,7 @@ metrics:
     parser_version: null
     aliases: [fold_enrichment]
 
+  # NOT COMPUTED (audit P3-10): registered-only — no parser wired; `parser` names the designed source.
   qc.fold_80:
     display_name: Fold-80 base penalty
     gate: qc
@@ -238,6 +259,7 @@ metrics:
     parser_version: null
     aliases: [fold_80_base_penalty]
 
+  # NOT COMPUTED (audit P3-10): registered-only — no parser wired; `parser` names the designed source.
   identity.ngscheckmate_match:
     display_name: NGSCheckMate identity match
     gate: qc
@@ -254,6 +276,7 @@ metrics:
     parser_version: null
     aliases: [ngscheckmate_matched]
 
+  # NOT COMPUTED (audit P3-10): registered-only — no parser wired; `parser` names the designed source.
   identity.sex_concordance:
     display_name: Sex concordance
     gate: qc
@@ -270,6 +293,7 @@ metrics:
     parser_version: null
     aliases: [sex_concordant]
 
+  # NOT COMPUTED (audit P3-10): registered-only — no parser wired; `parser` names the designed source.
   contamination.freemix:
     display_name: Contamination (FREEMIX)
     gate: qc
@@ -287,6 +311,9 @@ metrics:
     parser_version: null
     aliases: [freemix]
 
+  # VARIANT GATE IS DP-ONLY (audit P3-10): only `variant.dp` below is a runbook threshold. `variant.gq`
+  # and `variant.titv` are registered + wired but UNGATED observations; `variant.allele_balance` is
+  # not computed (above). A genotype-depth gate, not a full variant-quality gate.
   variant.dp:
     display_name: Genotype depth (DP)
     gate: variant
@@ -319,6 +346,7 @@ metrics:
     parser_version: null
     aliases: [gq]
 
+  # NOT COMPUTED (audit P3-10): registered-only — no parser wired; `parser` names the designed source.
   variant.allele_balance:
     display_name: Allele balance
     gate: variant

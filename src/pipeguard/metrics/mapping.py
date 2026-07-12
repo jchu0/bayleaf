@@ -50,9 +50,14 @@ def metric_values_for(
     """Build normalized ``MetricValue`` records from one sample's ``QCMetrics``.
 
     A missing (``None``) field is skipped, not defaulted — a missing metric is a signal,
-    not a crash (CLAUDE.md data-handling). Unmapped fields (e.g. ``cluster_pf``) are omitted
-    until the registry gains an entry for them. Order follows ``_QCMETRICS_MAP`` so the
-    output is stable.
+    not a crash (CLAUDE.md data-handling). Order follows ``_QCMETRICS_MAP`` so the output is
+    stable.
+
+    Note on ``cluster_pf`` (audit P3-1/P3-10): it IS mapped (``_QCMETRICS_MAP`` above) and
+    registered, but a reads-only fastq→BAM path can't produce this run-level SAV/InterOp metric,
+    so it typically arrives ``None`` here → its required=True runbook threshold NA-flags → a
+    STRUCTURAL, EXPECTED HOLD on every reads-based run (the pinned demo relies on HG002 → HOLD).
+    That is a deferred SAV-source policy, not a mapping gap; see ``runbook.py`` cluster_pf.
     """
     reg = registry or default_registry()
     values: list[MetricValue] = []

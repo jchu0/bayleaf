@@ -21,10 +21,9 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
 import sys
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -33,6 +32,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from api.auth import Actor, require_role
+from api.job_store import (
+    KIND_BUILDER_RUN,
+    TERMINAL_STATUSES,
+    get_job_store,
+    now_iso,
+    run_driver,
+)
 from api.pipeline_store import PipelineGraphStore, get_pipeline_store, last_emitted
 from api.routers.nextflow import CompileRequest
 from pipeguard.nextflow import NfEdge, NfGraph, NfNode, compile_graph, required_inputs
@@ -93,15 +99,14 @@ def _catalog() -> dict[str, list[_InputOption]]:
     return {cat: [o for o in opts if all(p.exists() for p in o.paths)] for cat, opts in raw.items()}
 
 
-@dataclass
-class _Job:
-    status: str  # queued | running | complete | failed
-    run_id: str
-    error: str | None = None
-    steps: list[str] = field(default_factory=list)
-
-
-_jobs: dict[str, _Job] = {}
+# Run ids THIS process has reserved (a thread was — or is about to be — launched for them). Guarded
+# by ``_lock``, it does double duty exactly like the intake router's set: (1) the ATOMIC
+# duplicate-run-id guard — a run id is claimed under the lock before it is released, so two
+# concurrent submits of the same id can't both proceed; (2) restart RECOVERY — a persisted
+# non-terminal job whose id is NOT in this set was launched by a process that has since died, and
+# ``_reconcile`` resolves it honestly (complete if the run dir is on disk, else lost). Job state
+# itself is DURABLE in ``api/job_store.py`` — it survives a restart, closing the poller-hang gap.
+_active: set[str] = set()
 _lock = threading.Lock()
 
 
@@ -112,6 +117,44 @@ def _bioconda_env() -> dict[str, str]:
     if bin_dir:
         env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
     return env
+
+
+def _mark(run_id: str, status: str, *, error: str | None = None) -> None:
+    """Persist a job status transition (queued → running → complete/failed). A no-op if the record
+    has gone (never in normal flow — the record is written before the thread starts)."""
+    store = get_job_store()
+    rec = store.get(run_id, KIND_BUILDER_RUN)
+    if rec is None:
+        return
+    rec["status"] = status
+    rec["updated_at"] = now_iso()
+    if error is not None:
+        rec["error"] = error
+    store.upsert(rec)
+
+
+def _reconcile(run_id: str, job: dict[str, Any]) -> dict[str, Any]:
+    """Resolve a persisted job that may have outlived the process that launched it (restart).
+
+    A terminal job is returned as-is; a non-terminal job whose id IS in this process's ``_active``
+    set is genuinely in-flight → returned as-is. Otherwise a prior process died mid-run: the run
+    finished if its dir is on disk (→ ``complete``), else the work is gone (→ ``lost``). The
+    reconciliation is persisted so subsequent polls see a stable terminal state.
+    """
+    if job.get("status") in TERMINAL_STATUSES:
+        return job
+    with _lock:
+        live = run_id in _active
+    if live:
+        return job
+    if (_DATA / run_id / "SampleSheet.csv").exists():
+        job["status"] = "complete"
+    else:
+        job["status"] = "lost"
+        job["error"] = job.get("error") or "job owner process is gone (backend restarted mid-run)"
+    job["updated_at"] = now_iso()
+    get_job_store().upsert(job)
+    return job
 
 
 class InputOptionOut(BaseModel):
@@ -286,8 +329,31 @@ def run_pipeline(
         for line in bundle.files["README.md"].splitlines()
         if re.match(r"^\d+\. `", line)
     ]
+    # Reserve the run id + persist the queued job ATOMICALLY under the lock (re-checking the run dir
+    # and the in-flight reservation set together), so two concurrent same-id submits can't both
+    # launch a thread — only the winner registers; the loser gets a 409 (the concurrent duplicate
+    # compiles harmlessly to the same idempotent scratch files before losing the reservation).
+    now = now_iso()
+    conflict = False
     with _lock:
-        _jobs[run_id] = _Job(status="queued", run_id=run_id, steps=steps)
+        if (_DATA / run_id).exists() or run_id in _active:
+            conflict = True
+        else:
+            _active.add(run_id)
+            get_job_store().upsert(
+                {
+                    "kind": KIND_BUILDER_RUN,
+                    "run_id": run_id,
+                    "status": "queued",
+                    "error": None,
+                    "created_at": now,
+                    "updated_at": now,
+                    "steps": steps,
+                }
+            )
+    if conflict:
+        raise HTTPException(status_code=409, detail=f"run '{run_id}' already exists")
+
     threading.Thread(
         target=_execute,
         args=(run_id, pipeline_dir / "main.nf", body.sample, body.platform, actor.id, origin,
@@ -309,8 +375,7 @@ def _execute(
     panel: _InputOption | None,
 ) -> None:
     """Background job: run the compiled pipeline via the driver, then flip complete/failed."""
-    with _lock:
-        _jobs[run_id].status = "running"
+    _mark(run_id, "running")
     cmd = [
         sys.executable, str(_SCRIPT), "--run-id", run_id, "--pipeline", str(pipeline),
         "--sample", sample, "--platform", platform, "--run-date", date.today().isoformat(),
@@ -323,26 +388,33 @@ def _execute(
     if panel:
         cmd += ["--panel-bed", str(panel.paths[0])]
     try:
-        proc = subprocess.run(
-            cmd, cwd=str(_REPO), env=_bioconda_env(), capture_output=True, text=True, timeout=1800
-        )
+        proc = run_driver(cmd, cwd=str(_REPO), env=_bioconda_env())
         ok = proc.returncode == 0 and (_DATA / run_id / "SampleSheet.csv").exists()
+        if ok:
+            _mark(run_id, "complete")
+        else:
+            tail = (proc.stderr or proc.stdout or "run failed").strip()
+            _mark(run_id, "failed", error=tail[-400:])
+    except Exception as e:  # incl. a driver timeout (the process group is already reaped)
+        _mark(run_id, "failed", error=str(e)[-400:])
+    finally:
+        # Release the reservation only AFTER the terminal status is persisted (see the intake router
+        # for why the ordering matters — a concurrent poll must never mis-reconcile a live run).
         with _lock:
-            if ok:
-                _jobs[run_id].status = "complete"
-            else:
-                _jobs[run_id].status = "failed"
-                _jobs[run_id].error = (proc.stderr or proc.stdout or "run failed").strip()[-400:]
-    except Exception as e:
-        with _lock:
-            _jobs[run_id].status = "failed"
-            _jobs[run_id].error = str(e)[-400:]
+            _active.discard(run_id)
 
 
 @router.get("/pipelines/run/{run_id}")
 def run_status(run_id: str) -> RunStatusOut:
-    with _lock:
-        job = _jobs.get(run_id)
+    """queued | running | complete | failed | lost for a Builder run (or complete if on disk).
+
+    The disk fallback mirrors the intake router: a run whose job record is unknown to this store but
+    whose result dir is already on disk reads ``complete`` rather than a misleading 404.
+    """
+    job = get_job_store().get(run_id, KIND_BUILDER_RUN)
     if job is None:
+        if (_DATA / run_id / "SampleSheet.csv").exists():
+            return RunStatusOut(run_id=run_id, status="complete")
         raise HTTPException(status_code=404, detail=f"no run job '{run_id}'")
-    return RunStatusOut(run_id=job.run_id, status=job.status, error=job.error)
+    job = _reconcile(run_id, job)
+    return RunStatusOut(run_id=run_id, status=job["status"], error=job.get("error"))
