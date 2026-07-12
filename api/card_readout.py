@@ -187,15 +187,35 @@ class CardHeader(BaseModel):
     )
 
 
+class QcReportLink(BaseModel):
+    """A link to a QC HTML report artifact found on disk for the run (WS-07 Q1).
+
+    The AI-off default fabricates no advice; instead the readout points the operator at the REAL
+    QC reports (``fastp.html`` / ``multiqc_report.html``) the run published, when present. ``url``
+    targets the existing read-only inline artifact-serve endpoint (``GET /api/runs/{id}/artifacts/
+    {name}``) — this model *discovers* the file, it never serves or fabricates one. A run with no
+    HTML report (e.g. the synthetic mock_run_01, CSVs only) yields an empty list — honest absence,
+    not boilerplate.
+    """
+
+    name: str = Field(..., description="Bare artifact filename, e.g. 'multiqc_report.html'")
+    label: str = Field(..., description="Human label, e.g. 'MultiQC report'")
+    url: str = Field(..., description="Inline artifact-serve link (GET /api/runs/{id}/artifacts/…)")
+    scope: str = Field(..., description="'sample' (per-sample report) or 'run' (run-level report)")
+
+
 class CardReadout(BaseModel):
-    """Side-channel view attached to a decision card: its header + its QC readout.
+    """Side-channel view attached to a decision card: its header + its QC readout + QC-report links.
 
     Purely additive and OFF the deterministic gate (ADR-0001). It re-presents metrics the gate
-    already emitted; it carries no verdict-setting power.
+    already emitted and points at the QC report artifacts on disk; it carries no verdict-setting
+    power. ``qc_reports`` is the AI-off suggestion surface: the real reports + this metric readout,
+    never fabricated next_steps (WS-07 Q1). Empty when the run published no HTML report.
     """
 
     header: CardHeader
     readout: QcReadout
+    qc_reports: list[QcReportLink] = Field(default_factory=list)
 
 
 # --- Display helpers ------------------------------------------------------------------------
@@ -448,12 +468,67 @@ def _origin_marker(run_dir: Path) -> str | None:
     return None
 
 
+# QC HTML reports the germline pipeline publishes: per-sample `${id}.fastp.html` and the run-level
+# `multiqc_report.html`. A file is a QC report when its stem carries one of these tool tokens; the
+# label is derived from the token (never guessed). Extend this map as new report-emitting tools are
+# cataloged — an unknown `.html` is left unsurfaced rather than mislabelled.
+_QC_REPORT_TOKENS: dict[str, str] = {"fastp": "fastp report", "multiqc": "MultiQC report"}
+
+
+def _report_scope(name: str, sample_id: str, all_ids: list[str]) -> str | None:
+    """Classify a QC-report file for one card: 'sample' (this sample's report), 'run' (run-level),
+    or None (a DIFFERENT sample's per-sample report — excluded so it can't leak onto this card).
+
+    The germline convention is ``${id}.<tool>.html``, so a per-sample report's filename STARTS with
+    its sample id + '.'. A run-level report (``multiqc_report.html``) starts with no sample id.
+    """
+    if name.startswith(f"{sample_id}."):
+        return "sample"
+    for other in all_ids:
+        if other != sample_id and name.startswith(f"{other}."):
+            return None  # belongs to another sample — not this card's report
+    return "run"
+
+
+def _scan_qc_reports(
+    run_dir: Path, run_id: str, sample_id: str, all_ids: list[str]
+) -> list[QcReportLink]:
+    """Discover the QC HTML reports on disk for ``sample_id``'s card (WS-07 Q1).
+
+    Read-only directory scan (no tool runs): every ``*.html`` file in the run dir whose stem carries
+    a known QC-report tool token, scoped so a sibling sample's per-sample report never leaks onto
+    this card. Each link targets the existing inline artifact-serve endpoint. Empty ⇒ the run
+    published no report (honest absence), and the caller falls back to the metric readout alone.
+    """
+    reports: list[QcReportLink] = []
+    for p in sorted(run_dir.glob("*.html")):
+        if not p.is_file():
+            continue
+        stem = p.name.lower()
+        label = next((lbl for tok, lbl in _QC_REPORT_TOKENS.items() if tok in stem), None)
+        if label is None:
+            continue  # an unrelated .html — not a QC report; leave it unsurfaced, never mislabelled
+        scope = _report_scope(p.name, sample_id, all_ids)
+        if scope is None:
+            continue
+        reports.append(
+            QcReportLink(
+                name=p.name,
+                label=label,
+                url=f"/api/runs/{run_id}/artifacts/{p.name}",
+                scope=scope,
+            )
+        )
+    return reports
+
+
 @router.get("/runs/{run_id}/cards/{sample_id}/qc-readout")
 def get_card_readout(run_id: str, sample_id: str) -> CardReadout:
-    """The QC readout + header for one decision card (additive side-channel; off the gate).
+    """The QC readout + header + QC-report links for one decision card (additive side-channel).
 
-    Re-derives the run's cards deterministically (`run_gate_from_dir`) and projects the requested
-    sample's card. Read-only: it sets no verdict and writes nothing.
+    Re-derives the run's cards deterministically (`run_gate_from_dir`), projects the requested
+    sample's card, and scans the run dir for the real QC HTML reports (WS-07 Q1). Read-only: it
+    sets no verdict and writes nothing.
     """
     run_dir = _data_root() / run_id
     if not (run_dir / "SampleSheet.csv").exists():
@@ -466,4 +541,9 @@ def get_card_readout(run_id: str, sample_id: str) -> CardReadout:
 
     sample = next((s for s in artifacts.samples if s.sample_id == sample_id), None)
     header = build_card_header(card, origin=_origin_marker(run_dir), sample=sample)
-    return CardReadout(header=header, readout=build_qc_readout(card, DEFAULT_RUNBOOK))
+    reports = _scan_qc_reports(run_dir, run_id, sample_id, artifacts.sample_ids())
+    return CardReadout(
+        header=header,
+        readout=build_qc_readout(card, DEFAULT_RUNBOOK),
+        qc_reports=reports,
+    )

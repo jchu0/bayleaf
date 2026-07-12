@@ -500,7 +500,12 @@ export type CardHeader = {
   origin: string | null
   not_captured: string[]
 }
-export type CardReadout = { header: CardHeader; readout: QcReadout }
+// A link to a QC HTML report artifact the run published (fastp.html / multiqc_report.html), when
+// present on disk. This is the AI-off suggestion surface: the real reports + the metric readout,
+// never fabricated next_steps (WS-07 Q1). `scope` is 'sample' (this sample's report) or 'run'
+// (run-level). `url` targets the read-only inline artifact-serve endpoint. Empty ⇒ honest absence.
+export type QcReportLink = { name: string; label: string; url: string; scope: 'sample' | 'run' }
+export type CardReadout = { header: CardHeader; readout: QcReadout; qc_reports: QcReportLink[] }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Operator-facing runbook policy (GET /api/runbook) — disclaimer-bearing, with `our_key` +

@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Check, CheckCircle2, GitBranch, Sparkles } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, FileText, GitBranch, Sparkles } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
@@ -22,6 +22,7 @@ import type {
   CardReadout,
   DecisionCard,
   Gate,
+  QcReportLink,
   RunbookPolicy,
   RunDetail as RunDetailData,
   Verdict,
@@ -419,6 +420,41 @@ function AiNarration({
   )
 }
 
+// WS-07 Q1: the AI-off suggestion surface. Instead of fabricated per-verdict "next steps", the
+// stub card points the operator at the REAL QC artifacts — the run's fastp.html / multiqc_report
+// .html reports if published, always alongside the metric readout above. Each link opens the
+// read-only inline artifact-serve endpoint. When the run published no HTML report (e.g. a CSV-only
+// synthetic run), the absence is stated honestly — never boilerplate advice. When Claude authored
+// the narration, the "Recommended next steps" in AiNarration are real; this block complements it.
+function QcReports({ reports }: { reports: QcReportLink[] }) {
+  return (
+    <>
+      <SectionLabel className="mt-4">QC reports</SectionLabel>
+      {reports.length === 0 ? (
+        <p className="mt-2 text-[12.5px] leading-[1.5] text-text-3">
+          No QC report artifact was published for this run — review the metric readout above.
+        </p>
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {reports.map((r) => (
+            <a
+              key={r.name}
+              href={r.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-text-3"
+            >
+              <FileText size={14} className="text-accent" />
+              {r.label}
+              {r.scope === 'run' && <span className="text-text-3">· run</span>}
+            </a>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
 function CleanPanel({ brief = false }: { brief?: boolean }) {
   return (
     <div className="mt-4 flex items-center gap-2.5 rounded-[10px] border border-proceed-bd bg-proceed-bg px-3.5 py-3">
@@ -528,6 +564,7 @@ function CardBody({
                 <CleanPanel />
               ) : null}
               <AiNarration rationale={card.rationale} steps={card.next_steps} variant="arrow" />
+              <QcReports reports={readout?.qc_reports ?? []} />
               <DecisionFeedback
                 runId={runId}
                 sampleId={card.sample_id}
@@ -571,6 +608,7 @@ function CardBody({
             </>
           )}
           <AiNarration rationale={card.rationale} steps={card.next_steps} variant="numbered" />
+          <QcReports reports={readout?.qc_reports ?? []} />
           <div className="mt-3.5 flex gap-2.5">
             <RailButton to={`/runs/${runId}/provenance`}>
               <GitBranch size={14} /> View lineage

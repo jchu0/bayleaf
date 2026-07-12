@@ -323,7 +323,11 @@ def test_stub_card_is_grounded():
     assert s4.generated_by == "stub"
     assert s4.confidence is None  # confidence omitted until grounded (T-019)
     assert s4.findings  # findings carried onto the card
-    assert s4.next_steps
+    # The stub fabricates NO next_steps (WS-07 Q1): the honest AI-off fallback points the operator
+    # at the real QC artifacts (reports + metric readout, surfaced by api/card_readout.py), never
+    # boilerplate advice. Real next_steps only exist on the live Claude path. See
+    # tests/test_stub_next_steps.py for the full anti-boilerplate guard.
+    assert s4.next_steps == []
 
 
 def test_hard_fail_sample_reruns():

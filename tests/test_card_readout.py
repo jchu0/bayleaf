@@ -9,6 +9,10 @@ mounted, so nothing here depends on api/main.py.
 
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -276,3 +280,59 @@ def test_qc_hold_blocks_the_downstream_variant_gate() -> None:
 
     clear = next(c for c in cards if not c.gate_results)  # no findings ⇒ every gate clear
     assert all(g.blocked_by is None for g in build_qc_readout(clear).gates)
+
+
+# --- QC-report artifact surfacing (WS-07 Q1) ------------------------------------------------
+#
+# The AI-off default (the stub) fabricates no next_steps; instead the readout points the operator
+# at the REAL QC artifacts — the run's fastp.html / multiqc_report.html reports if present on disk,
+# always alongside the metric readout. A run with no HTML report (mock_run_01, CSVs only) reports
+# that absence honestly (empty ``qc_reports``) — never boilerplate advice.
+
+
+def _run_dir_with_reports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *names: str) -> None:
+    """Copy the pinned mock_run_01 into a tmp data root and drop the named HTML reports beside its
+    CSVs, then repoint ``PIPEGUARD_DATA_ROOT`` at it. The endpoint re-derives the card from this
+    copy and scans it for QC reports — nothing runs Nextflow."""
+    dst = tmp_path / "mock_run_01"
+    shutil.copytree(_RUN_DIR, dst)
+    for name in names:
+        (dst / name).write_text("<html>fake QC report</html>", encoding="utf-8")
+    monkeypatch.setenv("PIPEGUARD_DATA_ROOT", str(tmp_path))
+
+
+def test_qc_reports_surfaced_when_present(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the run dir carries QC HTML reports, the readout links each one to the read-only
+    artifact-serve endpoint — the sample-scoped fastp report AND the run-level MultiQC report,
+    while the metric readout is still fully populated (the fallback is reports + readout)."""
+    _run_dir_with_reports(tmp_path, monkeypatch, "S5.fastp.html", "multiqc_report.html")
+    body = _client().get("/api/runs/mock_run_01/cards/S5/qc-readout").json()
+
+    reports = body["qc_reports"]
+    by_name = {r["name"]: r for r in reports}
+    assert set(by_name) == {"S5.fastp.html", "multiqc_report.html"}
+    # Links resolve to the existing inline artifact-serve endpoint (real, followable).
+    assert by_name["S5.fastp.html"]["url"] == "/api/runs/mock_run_01/artifacts/S5.fastp.html"
+    assert by_name["S5.fastp.html"]["scope"] == "sample"
+    assert by_name["multiqc_report.html"]["scope"] == "run"
+    # The metric readout is still there — reports AUGMENT it, never replace it.
+    assert body["readout"]["flagged_count"] == 2
+
+
+def test_qc_reports_exclude_a_different_samples_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A per-sample report belonging to ANOTHER sample must not leak onto this card; the run-level
+    report still surfaces."""
+    _run_dir_with_reports(tmp_path, monkeypatch, "S4.fastp.html", "multiqc_report.html")
+    body = _client().get("/api/runs/mock_run_01/cards/S5/qc-readout").json()
+    names = {r["name"] for r in body["qc_reports"]}
+    assert names == {"multiqc_report.html"}  # S4's fastp report is excluded from S5's card
+
+
+def test_qc_reports_absent_is_honest_for_mock_run_01() -> None:
+    """The pinned mock_run_01 has only CSVs — no HTML report. The endpoint reports that absence
+    honestly (empty ``qc_reports``) and the metric readout still stands (never boilerplate)."""
+    body = _client().get("/api/runs/mock_run_01/cards/S5/qc-readout").json()
+    assert body["qc_reports"] == []
+    assert body["readout"]["flagged_count"] == 2  # the real fallback: the metric readout
