@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed (design) |
-| **Last updated** | 2026-07-13 (MST) — initial design |
+| **Status** | 🚧 Built (P1 core) — chat surface + `chat_store` shipped; archivist cross-run DB retrieval + scope-by-wiring grounding deferred |
+| **Last updated** | 2026-07-13 (MST) — P1 built: `api/chat_store.py`, `api/chat.py`, `api/agent_chat.py`, `api/routers/agent_chat.py`, `frontend/src/screens/SystemAgents.tsx`; live-verified on pipeline-repair (Opus). Prior: initial design |
 | **Audience** | software / design / reviewers |
 | **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (advisory only), [ADR-0022](../adr/ADR-0022-agent-observation-binding.md) (System-agents taxonomy), [ADR-0024](../adr/ADR-0024-scope-by-wiring.md) (agent file access), [agents.md](agents.md), [structure-for-ML memory], [restrict-costly-subagents memory] |
 
