@@ -22,7 +22,7 @@ from .registry import MetricRegistry, default_registry
 # runbook `unit`) must be *declared*, never guessed (the pct_* trap the registry defends).
 _QCMETRICS_MAP: tuple[tuple[str, str, str], ...] = (
     ("q30", "qc.q30", "percent"),
-    ("pct_reads_identified", "qc.reads_passing_filter", "percent"),
+    ("reads_passing_filter", "qc.reads_passing_filter", "percent"),
     ("mean_coverage", "qc.mean_target_coverage", "x"),
     ("dup_rate", "qc.duplication", "percent"),
     ("cluster_pf", "qc.cluster_pf", "percent"),

@@ -355,7 +355,7 @@ class QCMetrics(BaseModel):
 
     sample_id: str
     q30: float | None = None
-    pct_reads_identified: float | None = None
+    reads_passing_filter: float | None = None
     mean_coverage: float | None = None
     dup_rate: float | None = None
     cluster_pf: float | None = None

@@ -207,7 +207,7 @@ def _qc_values(i: int, mode: FailureMode) -> dict[str, float]:
     """
     values = {
         "q30": _PASS_Q30_BASE + (i % 5) * 0.6,
-        "pct_reads_identified": _PASS_PCT_ID_BASE + (i % 4) * 1.5,
+        "reads_passing_filter": _PASS_PCT_ID_BASE + (i % 4) * 1.5,
         "mean_coverage": _PASS_COVERAGE_BASE + (i % 6) * 1.4,
         "dup_rate": _PASS_DUP_BASE + (i % 5) * 1.2,
         "cluster_pf": _PASS_CLUSTER_PF_BASE + (i % 4) * 1.0,
@@ -353,13 +353,13 @@ def _render_qc(spec: RunSpec) -> str:
     extra QC / variant tier) so a contrived run's decision card shows a full three-gate readout.
     """
     lines = [
-        "sample_id,q30,pct_reads_identified,mean_coverage,dup_rate,cluster_pf,"
+        "sample_id,q30,reads_passing_filter,mean_coverage,dup_rate,cluster_pf,"
         "phix_aligned,breadth_20x,breadth_30x,pct_mapped,on_target,variant_dp,variant_gq,variant_titv"
     ]
     for i, s in enumerate(spec.samples):
         v = _qc_values(i, s.mode)
         lines.append(
-            f"{s.sample_id},{v['q30']:.1f},{v['pct_reads_identified']:.1f},"
+            f"{s.sample_id},{v['q30']:.1f},{v['reads_passing_filter']:.1f},"
             f"{v['mean_coverage']:.1f},{v['dup_rate']:.1f},{v['cluster_pf']:.1f},"
             f"{v['phix_aligned']:.2f},{v['breadth_20x']:.3f},{v['breadth_30x']:.3f},"
             f"{v['pct_mapped']:.3f},{v['on_target']:.3f},{v['variant_dp']:.0f},"

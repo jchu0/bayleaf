@@ -156,12 +156,12 @@ class Runbook(BaseModel):
                 metric="q30", our_key="qc.q30", label="Q30", gate=0.85, hard_fail=0.75, unit="%"
             ),
             QCThreshold(
-                metric="pct_reads_identified",
+                metric="reads_passing_filter",
                 our_key="qc.reads_passing_filter",
                 # WS-06 §9c: this our_key is fastp's `pct_surviving` (reads passing filter), NOT a
-                # demux "reads identified" share — label it as the registry display_name does. (The
-                # `metric`/CSV field name stays for the parser binding; the operator-facing label is
-                # what was mislabelled.)
+                # demux "reads identified" share — label it as the registry display_name does.
+                # T-034: the flat `metric`/CSV field name was renamed to match (was the misleading
+                # `pct_reads_identified`); the parser keeps a back-compat fallback for old CSVs.
                 label="Reads passing filter",
                 gate=0.70,
                 hard_fail=0.50,

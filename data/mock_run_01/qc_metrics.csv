@@ -1,4 +1,4 @@
-sample_id,q30,pct_reads_identified,mean_coverage,dup_rate,cluster_pf
+sample_id,q30,reads_passing_filter,mean_coverage,dup_rate,cluster_pf
 S1,92.3,88.5,42.1,12.4,89.2
 S2,90.8,86.1,38.7,14.0,88.0
 S3,91.5,82.3,35.2,17.6,87.5

@@ -1,2 +1,2 @@
-sample_id,q30,pct_reads_identified,mean_coverage,dup_rate,cluster_pf,phix_aligned,breadth_20x,breadth_30x,pct_mapped,on_target,variant_dp,variant_gq,variant_titv
+sample_id,q30,reads_passing_filter,mean_coverage,dup_rate,cluster_pf,phix_aligned,breadth_20x,breadth_30x,pct_mapped,on_target,variant_dp,variant_gq,variant_titv
 HG002,92.0,90.0,41.0,12.0,90.0,0.72,0.978,0.945,0.992,0.860,38,58,2.05

@@ -220,7 +220,14 @@ def parse_qc_metrics(path: Path) -> list[QCMetrics]:
             QCMetrics(
                 sample_id=sample_id,
                 q30=_to_float(row.get("q30")),
-                pct_reads_identified=_to_float(row.get("pct_reads_identified")),
+                # T-034: the flat column was renamed `pct_reads_identified` ->
+                # `reads_passing_filter` (the old name wrongly implied a demux "reads identified"
+                # share; it is fastp's % surviving = reads passing filter). Read the new column,
+                # falling back to the legacy name so a pre-rename CSV (e.g. the frozen-five the GIAB
+                # driver still emits) maps its value instead of silently dropping it.
+                reads_passing_filter=_to_float(
+                    row.get("reads_passing_filter", row.get("pct_reads_identified"))
+                ),
                 mean_coverage=_to_float(row.get("mean_coverage")),
                 dup_rate=_to_float(row.get("dup_rate")),
                 cluster_pf=_to_float(row.get("cluster_pf")),
