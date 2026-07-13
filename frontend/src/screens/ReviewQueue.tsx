@@ -65,8 +65,11 @@ const STATUS_META: Record<TicketStatus, { label: string; dot: string; chip: stri
   resolved: { label: 'Resolved', dot: 'bg-proceed', chip: 'border-proceed-bd bg-proceed-bg text-proceed-fg' },
 }
 
+// Status is a partition (a ticket is in exactly one) — no catch-all "All" peer (decision A): the
+// queue defaults to Open (the actionable set), In review / Resolved are their own tabs, and a
+// SEARCH escapes the status facet to span every status (below). "all" survives only as the
+// internal "no status filter" sentinel a search sets — never a tab.
 const STATUS_FILTERS: { key: 'all' | TicketStatus; label: string }[] = [
-  { key: 'all', label: 'All' },
   { key: 'open', label: 'Open' },
   { key: 'in_review', label: 'In review' },
   { key: 'resolved', label: 'Resolved' },
@@ -330,8 +333,9 @@ export function ReviewQueue() {
     const inResolvedWindow = (t: QueueTicket): boolean =>
       !windowActive || recentResolvedKeys.has(keyOf(t))
     const shown = tickets.filter(
-      (t) =>
-        (filter === 'all' || statusOf(t) === filter) && matchesSearch(t) && inResolvedWindow(t),
+      // A search escapes the status facet (q !== '' spans every status), so dropping the "All" tab
+      // never hides a ticket — you reach any status by searching. Otherwise it's the one active tab.
+      (t) => (q !== '' || statusOf(t) === filter) && matchesSearch(t) && inResolvedWindow(t),
     )
     // Client-side pagination over the visible tickets, mirroring Monitoring's recurring-signature
     // pager. Clamp the current page so a narrowing filter can't strand the pager on an empty page.
