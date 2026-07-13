@@ -24,6 +24,7 @@ from .models import (
     QCMetrics,
     RunArtifacts,
     Sample,
+    SampleMetrics,
     SampleSheetEntry,
     Severity,
     SourceKind,
@@ -87,7 +88,7 @@ def _check_presence(
     sid: str,
     meta: Sample | None,
     sheet: SampleSheetEntry | None,
-    qc: QCMetrics | None,
+    qc: QCMetrics | SampleMetrics | None,  # presence-only — either ingested shape (WS-06)
 ) -> list[Finding]:
     findings: list[Finding] = []
     # Sequenced/QC'd but never declared on the sample sheet -> provenance gap.

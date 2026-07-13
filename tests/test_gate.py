@@ -19,8 +19,11 @@ from pipeguard.models import (
     Finding,
     Gate,
     QCMetrics,
+    RawObservation,
     RunArtifacts,
     Sample,
+    SampleMetrics,
+    SampleSheetEntry,
     Severity,
     SourceKind,
 )
@@ -402,6 +405,40 @@ def test_check_coverage_excluded_from_content_hash():
     assert s1.verdict is detached.verdict  # verdict-neutral
     dumped = s1.model_dump(mode="json")  # survives JSON serialization (API/ML, ADR-0007)
     assert dumped["check_coverage"]["checks_expected"] == s1.check_coverage.checks_expected
+
+
+# ── WS-06·PR2: the gate consumes ingested SampleMetrics (real-run ingestion) ────────
+
+
+def test_run_gate_accepts_sample_metrics_qc():
+    """WS-06·PR2: RunArtifacts.qc holds the registry-keyed SampleMetrics a real-run adapter emits
+    (WS-03), and the gate normalizes + thresholds them exactly like the frozen-CSV QCMetrics —
+    proving the ingested contract gates END-TO-END. A failing q30 as a SampleMetrics observation
+    yields the same QC-Q30 finding + verdict it would as a QCMetrics field."""
+    art = RunArtifacts(
+        run_id="R",
+        sample_sheet=[SampleSheetEntry(sample_id="S1")],
+        samples=[
+            Sample(
+                sample_id="S1", subject_id="X", tissue="blood", library_prep="p", submitted_by="u"
+            )
+        ],
+        qc=[
+            SampleMetrics(
+                sample_id="S1",
+                raw={
+                    "qc.q30": RawObservation(raw_value=60.0, raw_unit="percent", source_field="q30")
+                },
+            )
+        ],
+    )
+    s1 = {c.sample_id: c for c in run_gate(art, synthesizer=StubSynthesizer())}["S1"]
+    # q30 60% → 0.60 < hard_fail 0.75 → QC-Q30 hard-fail → RERUN, from a SampleMetrics observation.
+    assert any(f.rule_id == "QC-Q30" for f in s1.findings)
+    assert s1.verdict is Verdict.RERUN
+    # The registry-normalized metric flowed onto the card, byte-identical to the QCMetrics path.
+    by_key = {mv.metric_key: mv for mv in s1.metric_values}
+    assert by_key["qc.q30"].normalized_value == 0.60
 
 
 # ── WS-06 metric correctness (source/label honesty; Gaps 4 & 5) ────────────────────

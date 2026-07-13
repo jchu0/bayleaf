@@ -525,7 +525,13 @@ class RunArtifacts(BaseModel):
     samples: list[Sample] = Field(default_factory=list)
     sample_sheet: list[SampleSheetEntry] = Field(default_factory=list)
     demux: list[DemuxRecord] = Field(default_factory=list)
-    qc: list[QCMetrics] = Field(default_factory=list)
+    # WS-06 transition: holds the frozen-CSV `QCMetrics` (the current parser output) OR the
+    # registry-keyed `SampleMetrics` a real-run adapter emits (WS-03). Both normalize through
+    # `metrics.metric_values_for`, and every reader of `.qc` uses only `.sample_id` + that loop, so
+    # the gate is agnostic to which shape a run carries — an ingested `results/` dir gates exactly
+    # like the frozen CSV. The hard flip to SampleMetrics-only (dropping QCMetrics + the frozen-CSV
+    # parser rewrite) is a later cleanup, once nothing constructs QCMetrics.
+    qc: list[QCMetrics | SampleMetrics] = Field(default_factory=list)
     log_lines: list[str] = Field(default_factory=list)
     # Structured Nextflow/nf-core execution trace (`trace.txt`) — READ, never run (EXEC-001).
     execution_trace: list[TraceRecord] = Field(default_factory=list)
