@@ -37,7 +37,7 @@ def test_maps_qcmetrics_to_normalized_metric_values() -> None:
     qc = QCMetrics(
         sample_id="S5",
         q30=84.1,
-        pct_reads_identified=78.2,
+        reads_passing_filter=78.2,
         mean_coverage=29.2,
         dup_rate=22.6,
         cluster_pf=83.4,

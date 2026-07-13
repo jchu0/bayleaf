@@ -509,7 +509,7 @@ def test_reads_passing_filter_label_is_not_a_demux_concept():
     """WS-06 §9c: the qc.reads_passing_filter threshold renders 'Reads passing filter' (fastp's
     survival metric, matching the registry display_name), never '% reads identified' (a demux
     concept it is not). The label flows into finding title/detail/content_hash, so this pins it."""
-    threshold = DEFAULT_RUNBOOK.threshold_for("pct_reads_identified")
+    threshold = DEFAULT_RUNBOOK.threshold_for("reads_passing_filter")
     assert threshold is not None and threshold.label == "Reads passing filter"
     mv = default_registry().observe(
         metric_key="qc.reads_passing_filter", raw_value=60.0, raw_unit="percent", sample_id="SX"

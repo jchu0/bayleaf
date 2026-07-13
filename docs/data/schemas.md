@@ -95,7 +95,7 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > review. This is a config object on the runbook, **not** a persisted record — see
 > [qc_metrics.md](qc_metrics.md) for the rule it drives (**VAR-FFR-001**) and its verdict.
 >
-> **`QCMetrics` (T-082).** The frozen-CSV five (`q30` · `pct_reads_identified` ·
+> **`QCMetrics` (T-082).** The frozen-CSV five (`q30` · `reads_passing_filter` ·
 > `mean_coverage` · `dup_rate` · `cluster_pf`, every run carries these) plus **8 additional
 > `float | None` fields** a richer QC report may also emit: `phix_aligned` (preflight tier);
 > `breadth_20x` · `breadth_30x` · `pct_mapped` · `on_target` (extra QC tier); `variant_dp` ·

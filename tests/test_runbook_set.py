@@ -77,7 +77,7 @@ def _panel_run(sid: str = "P1") -> RunArtifacts:
             QCMetrics(
                 sample_id=sid,
                 q30=90.0,  # 0.90 ≥ gate 0.85
-                pct_reads_identified=90.0,  # 0.90 ≥ gate 0.70
+                reads_passing_filter=90.0,  # 0.90 ≥ gate 0.70
                 mean_coverage=40.0,  # 40 ≥ gate 30
                 cluster_pf=90.0,  # 0.90 ≥ gate 0.80
                 dup_rate=10.0,  # 0.10 ≤ gate 0.30

@@ -61,7 +61,7 @@ def _reads_only_run(*, waived: frozenset[str], mean_coverage: float = 54.2) -> R
             QCMetrics(
                 sample_id="S1",
                 q30=88.22,
-                pct_reads_identified=99.31,
+                reads_passing_filter=99.31,
                 mean_coverage=mean_coverage,
                 dup_rate=0.0057,
                 cluster_pf=None,  # absent — the SAV/InterOp metric a reads-only path can't produce

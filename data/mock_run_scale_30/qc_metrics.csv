@@ -1,4 +1,4 @@
-sample_id,q30,pct_reads_identified,mean_coverage,dup_rate,cluster_pf,phix_aligned,breadth_20x,breadth_30x,pct_mapped,on_target,variant_dp,variant_gq,variant_titv
+sample_id,q30,reads_passing_filter,mean_coverage,dup_rate,cluster_pf,phix_aligned,breadth_20x,breadth_30x,pct_mapped,on_target,variant_dp,variant_gq,variant_titv
 S01,90.0,84.0,22.0,11.0,86.0,0.60,0.965,0.925,0.985,0.800,32,52,2.020
 S02,90.6,85.5,35.4,12.2,87.0,0.75,0.971,0.933,0.989,0.820,34,54,2.040
 S03,91.2,87.0,36.8,40.0,88.0,0.90,0.977,0.941,0.993,0.840,36,56,2.060

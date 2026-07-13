@@ -24,13 +24,13 @@ function displayValue(value: number, unit: string): string {
 }
 
 // Run-QC rollup: registry metric_key → runbook threshold key (the two vocabularies differ,
-// e.g. qc.reads_passing_filter ↔ pct_reads_identified). Only the run-health metrics we
+// e.g. qc.mean_target_coverage ↔ mean_coverage). Only the run-health metrics we
 // genuinely observe from FASTQ — instrument InterOp tiles (PhiX, cluster density, error
 // rate) are not captured in this build, so we don't fabricate them.
 const RUN_TILES: { key: string; metric: string; label: string; sequencing?: boolean }[] = [
   { key: 'qc.q30', metric: 'q30', label: 'Run Q30', sequencing: true },
   { key: 'qc.cluster_pf', metric: 'cluster_pf', label: 'Cluster PF', sequencing: true },
-  { key: 'qc.reads_passing_filter', metric: 'pct_reads_identified', label: '% reads identified' },
+  { key: 'qc.reads_passing_filter', metric: 'reads_passing_filter', label: 'Reads passing filter' },
   { key: 'qc.mean_target_coverage', metric: 'mean_coverage', label: 'Mean coverage' },
   { key: 'qc.duplication', metric: 'dup_rate', label: 'Duplication' },
 ]
@@ -126,12 +126,12 @@ export function Intake() {
     return out
   }, [run, runbook])
 
-  // The yield admission cutoff is the runbook's own `pct_reads_identified` gate (0.70,
+  // The yield admission cutoff is the runbook's own `reads_passing_filter` gate (0.70,
   // canonical fraction) — surfaced so the operator sees the real threshold instead of a
   // magic number. Falls back to the literal 70% if the runbook didn't load; it matches
   // the code path (`yield_ < gate`) either way.
   const yieldTarget = useMemo(() => {
-    const th = runbook?.qc_thresholds.find((q) => q.metric === 'pct_reads_identified')
+    const th = runbook?.qc_thresholds.find((q) => q.metric === 'reads_passing_filter')
     const gate = th?.gate ?? 0.7
     const unit = th?.unit ?? '%'
     return { gate, unit, display: displayThreshold(gate, unit) }
