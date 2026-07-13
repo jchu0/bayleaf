@@ -562,14 +562,22 @@ class AskRequest(BaseModel):
 
 
 @app.post("/api/runs/{run_id}/cards/{sample_id}/ask")
-def ask_card_agent(run_id: str, sample_id: str, body: AskRequest) -> AgentReply:
+def ask_card_agent(
+    run_id: str,
+    sample_id: str,
+    body: AskRequest,
+    _actor: Actor = Depends(require_role("viewer", "reviewer", "approver")),
+) -> AgentReply:
     """Ask the advisory QC-triage agent a free-text question about a sample's card (ADR-0009).
 
     The interactive sibling of GET .../triage: advisory only (ADR-0001 — never sets or overrides a
     verdict), OFF the deterministic path, offline stub by default (PIPEGUARD_TRIAGE_AGENT=claude to
-    go live). Unlike triage, a CLEAN card can also be asked about. 404 for an unknown sample. The
-    live path costs an API call, gated by the same off-by-default env flag as triage; a real
-    deployment can add a role/cost gate here.
+    go live). Unlike triage, a CLEAN card can also be asked about. 404 for an unknown sample.
+
+    Unlike the read-only GET .../triage, this POST can incur a live API call, so it requires an
+    authenticated actor (the permissive dev floor — any real role clears it). Cost stays gated by
+    the same off-by-default env flag as triage; a deployment wanting cost control can raise this
+    floor to reviewer+ in one word.
     """
     card = next((c for c in _evaluate(run_id).cards if c.sample_id == sample_id), None)
     if card is None:
