@@ -144,3 +144,12 @@ core (ADR-0002), AI off by default (ADR-0006), and Nextflow for compute portabil
    separate; citations, provenance, and uncertainty are preserved. Variant claims stay grounded in
    ClinVar/GIAB truth; the tool never invents pathogenicity.
 5. **No PHI** — public/synthetic data only.
+
+---
+
+## Contributors
+
+- **James Hu** — maintainer
+- **[Claude Code](https://claude.com/claude-code)** (Anthropic · Opus 4.8) — AI pair programmer
+  across design, implementation, tests, and docs; co-author on commits
+  (`Co-Authored-By` trailer).
