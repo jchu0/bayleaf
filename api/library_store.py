@@ -8,9 +8,10 @@ the deterministic decision gate (ADR-0001): a library entry NEVER re-enters the 
 set or override a verdict/finding/confidence — the accepted proposal carries no such field.
 
 This mirrors the other off-gate sinks (``api/review_store.py`` / ``api/share_store.py`` /
-``api/job_store.py``) — a pluggable store, env-selected via ``PIPEGUARD_LIBRARY_STORE`` (default
-``jsonl``); a DB adapter **degrades to the offline JSONL** if selection fails (unwritable path), so
-a misconfigured DB never breaks the accept path — it just falls back to the file.
+``api/job_store.py``) over the shared :mod:`api.base_store` generic — a pluggable store env-selected
+via ``PIPEGUARD_LIBRARY_STORE`` (default ``jsonl``); a DB adapter **degrades to the offline JSONL**
+if selection fails (unwritable path), so a misconfigured DB never breaks the accept path — it just
+falls back to the file.
 
   - :class:`JsonlLibraryStore` — default, zero-dep append file (``PIPEGUARD_LIBRARY_PATH``).
   - :class:`SqliteLibraryStore` — a ``library_entries`` table (stdlib; ``PIPEGUARD_LIBRARY_DB``).
@@ -28,12 +29,13 @@ honest single-worker limit the other sinks document: a per-row lock / DB transac
 from __future__ import annotations
 
 import json
-import logging
 import os
-import sqlite3
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
+
+from api.base_store import JsonlDocStore, SqliteStore, select_backend
 
 # The store Protocol has a method named ``list`` (per its contract), which shadows the builtin
 # ``list`` inside the class bodies — so a ``-> list[...]`` return annotation would resolve to the
@@ -53,8 +55,8 @@ _DEFAULT_LIBRARY_DB = _REPO_ROOT / "library_entries.sqlite"
 # Serialize file/DB writes within a worker so two concurrent accepts can't interleave a JSONL line
 # or race a rewrite. Multi-worker (or two writes to the SAME entry) needs a file lock / per-row DB
 # transaction — a documented seam, not built (the same honest limit as ADR-0016 / the other sinks).
+# Shared by both adapters of THIS store.
 _WRITE_LOCK = threading.Lock()
-_log = logging.getLogger(__name__)
 
 # The indexed columns lifted out of a record for filtering; the full entry always rides along as a
 # JSON document, so nothing is lost and an entry round-trips exactly.
@@ -116,37 +118,22 @@ def library_path() -> Path:
     return Path(raw) if raw else _DEFAULT_LIBRARY_PATH
 
 
-class JsonlLibraryStore:
+class JsonlLibraryStore(JsonlDocStore):
     """One accepted entry per line in a JSONL file — the zero-dependency default.
 
-    ``json.dumps`` escapes every value so an arbitrary ``summary``/``rationale`` with ``\\n`` or
-    ``"`` can never forge a second record. Reads are tolerant: a missing file → ``[]`` and a
-    partial/corrupt line is skipped, not raised (a crashed append is a signal, not a crash).
+    The shared base's ``json.dumps`` escapes every value so an arbitrary ``summary``/``rationale``
+    with ``\\n`` or ``"`` can never forge a second record. Reads are tolerant: a missing file →
+    ``[]`` and a partial/corrupt line is skipped (a crashed append is a signal, not a crash).
     """
 
-    def _read_all(self) -> _Records:
-        path = library_path()
-        if not path.exists():
-            return []
-        out: _Records = []
-        for raw in path.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if not line:
-                continue
-            try:
-                out.append(json.loads(line))
-            except ValueError:
-                continue  # tolerate a partial/corrupt line
-        return out
+    _lock = _WRITE_LOCK
+    _tolerant = True
+
+    def _resolve_path(self) -> Path:
+        return library_path()
 
     def add(self, record: _Record) -> _Record:
-        line = json.dumps(record, ensure_ascii=False) + "\n"
-        path = library_path()
-        with _WRITE_LOCK:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8") as fh:
-                fh.write(line)
-        return record
+        return self._append(record)
 
     def get(self, entry_id: str) -> _Record | None:
         return next((r for r in self._read_all() if r.get("id") == entry_id), None)
@@ -164,19 +151,14 @@ def library_db_path() -> str:
     return os.environ.get(_ENV_LIBRARY_DB, "").strip() or str(_DEFAULT_LIBRARY_DB)
 
 
-class SqliteLibraryStore:
+class SqliteLibraryStore(SqliteStore):
     """A ``library_entries`` table in SQLite (stdlib). A fresh connection per op keeps it
     thread-safe under FastAPI's sync threadpool without pinning a connection to one thread."""
 
-    def __init__(self, path: str | None = None) -> None:
-        self._path = path or library_db_path()
-        # Fail fast at selection (so get_library_store can degrade) if the dir is unwritable.
-        self._connect().close()
+    _ddl = _LIBRARY_DDL_SQLITE
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path)
-        conn.execute(_LIBRARY_DDL_SQLITE)
-        return conn
+    def __init__(self, path: str | None = None) -> None:
+        super().__init__(path or library_db_path())
 
     def add(self, record: _Record) -> _Record:
         with _WRITE_LOCK:
@@ -230,15 +212,9 @@ def get_library_store() -> LibraryStore:
     """Select the library sink from the environment (default: the offline JSONL file).
 
     ``PIPEGUARD_LIBRARY_STORE=sqlite`` swaps in the SQLite adapter; ANY failure constructing it (an
-    unwritable path) degrades to the JSONL store — logged by exception *type* only. Any other value
-    (incl. the default) is JSONL. There is no Postgres adapter (see the module docstring).
+    unwritable path) degrades to the JSONL store — see :func:`api.base_store.select_backend`. Any
+    other value (incl. the default) is JSONL. No Postgres adapter (see the module docstring).
     """
-    choice = os.environ.get(_ENV_LIBRARY_STORE, "jsonl").strip().lower()
-    if choice == "sqlite":
-        try:
-            return SqliteLibraryStore()
-        except Exception as exc:  # degrade on ANY failure; never break the accept path
-            _log.warning(
-                "PIPEGUARD_LIBRARY_STORE=sqlite unavailable (%s); using JSONL.", type(exc).__name__
-            )
-    return JsonlLibraryStore()
+    jsonl: Callable[[], LibraryStore] = JsonlLibraryStore
+    sqlite: Callable[[], LibraryStore] = SqliteLibraryStore
+    return select_backend(_ENV_LIBRARY_STORE, jsonl=jsonl, sqlite=sqlite)

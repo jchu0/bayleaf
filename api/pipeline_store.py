@@ -2,10 +2,10 @@
 
 A saved builder graph is product state, a **separate concern** from the decision projection
 (the ``Repository`` port): its rows never mix with runs/cards/events and never re-enter the
-gate. This mirrors ``api/feedback_store.py`` exactly — three adapters, env-selected via
-``PIPEGUARD_PIPELINE_STORE`` (default ``jsonl``); the DB adapters mirror the persistence seam
-and **degrade to the offline JSONL** if selection fails (missing extra / no DSN / unreachable
-server), so a misconfigured DB never breaks the save path — it just falls back to the file.
+gate. This mirrors ``api/feedback_store.py`` over the shared :mod:`api.base_store` generic — three
+adapters, env-selected via ``PIPEGUARD_PIPELINE_STORE`` (default ``jsonl``); the DB adapters
+**degrade to the offline JSONL** if selection fails (missing extra / no DSN / unreachable server),
+so a misconfigured DB never breaks the save path — it just falls back to the file.
 
   - :class:`JsonlPipelineGraphStore` — default, zero-dep append-only file
     (``PIPEGUARD_PIPELINE_PATH``).
@@ -22,14 +22,15 @@ feedback sink documents (multi-worker needs a file lock / a real DB sequence, a 
 from __future__ import annotations
 
 import json
-import logging
 import os
-import sqlite3
 import threading
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
+
+from api.base_store import JsonlDocStore, SqliteStore, select_backend
 
 # The store Protocol has a method named ``list`` (per its contract), which shadows the builtin
 # ``list`` inside the class bodies — so a ``-> list[...]`` return annotation resolves to the method,
@@ -48,9 +49,9 @@ _DEFAULT_PIPELINE_DB = _REPO_ROOT / "pipeline_graphs.sqlite"
 
 # Serialize appends within a worker so concurrent saves can't interleave a JSONL line or race the
 # max-version read-then-write. Multi-worker needs a file lock / a DB sequence — a documented seam,
-# not built (same honest limit as the JSONL note in ADR-0016 / feedback_store.py).
+# not built (same honest limit as the JSONL note in ADR-0016 / feedback_store.py). Shared by all
+# three adapters of THIS store.
 _WRITE_LOCK = threading.Lock()
-_log = logging.getLogger(__name__)
 
 # The indexed columns lifted out of a record for querying; the full record is always kept as a
 # JSON document alongside, so nothing is lost and the graph payload round-trips exactly.
@@ -123,33 +124,22 @@ def pipeline_path() -> Path:
     return Path(raw) if raw else _DEFAULT_PIPELINE_PATH
 
 
-class JsonlPipelineGraphStore:
-    """Append-only JSONL file — the zero-dependency default. ``json.dumps`` escapes every value
-    so an arbitrary ``graph`` payload with ``\\n`` or ``"`` can never forge a second line."""
+class JsonlPipelineGraphStore(JsonlDocStore):
+    """Append-only JSONL file — the zero-dependency default. The base's ``json.dumps`` escapes every
+    value so an arbitrary ``graph`` payload with ``\\n`` or ``"`` can't forge a second line."""
 
-    def _read_all(self) -> _Records:
-        path = pipeline_path()
-        if not path.exists():
-            return []
-        out: _Records = []
-        with path.open(encoding="utf-8") as fh:
-            for raw in fh:
-                line = raw.strip()
-                if line:
-                    out.append(json.loads(line))
-        return out
+    _lock = _WRITE_LOCK
+    _tolerant = False
+
+    def _resolve_path(self) -> Path:
+        return pipeline_path()
 
     def append(self, record: _Record) -> _Record:
-        # Read-then-append UNDER the lock so the max-version scan and the write are one atomic
-        # step within the worker — no two concurrent saves of a name can pick the same version.
-        with _WRITE_LOCK:
-            stored = {**record, "version": _next_version(self._read_all(), str(record["name"]))}
-            line = json.dumps(stored, ensure_ascii=False) + "\n"
-            path = pipeline_path()
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8") as fh:
-                fh.write(line)
-        return stored
+        # Read-then-append UNDER one lock (the base's ``_append_authored``) so the max-version scan
+        # and the write are one atomic step — no two concurrent name-saves pick the same version.
+        return self._append_authored(
+            lambda rows: {**record, "version": _next_version(rows, str(record["name"]))}
+        )
 
     def list(self, name: str | None = None) -> _Records:
         rows = self._read_all()
@@ -170,19 +160,14 @@ def pipeline_db_path() -> str:
     return os.environ.get(_ENV_PIPELINE_DB, "").strip() or str(_DEFAULT_PIPELINE_DB)
 
 
-class SqlitePipelineGraphStore:
+class SqlitePipelineGraphStore(SqliteStore):
     """A ``pipeline_graphs`` table in SQLite (stdlib). A fresh connection per op keeps it
     thread-safe under FastAPI's sync threadpool without pinning a connection to one thread."""
 
-    def __init__(self, path: str | None = None) -> None:
-        self._path = path or pipeline_db_path()
-        # Fail fast at selection (so get_pipeline_store can degrade) if the dir is unwritable.
-        self._connect().close()
+    _ddl = _PIPELINE_DDL_SQLITE
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path)
-        conn.execute(_PIPELINE_DDL_SQLITE)
-        return conn
+    def __init__(self, path: str | None = None) -> None:
+        super().__init__(path or pipeline_db_path())
 
     def append(self, record: _Record) -> _Record:
         with _WRITE_LOCK:
@@ -298,26 +283,13 @@ def get_pipeline_store() -> PipelineGraphStore:
     """Select the pipeline sink from the environment (default: the offline JSONL file).
 
     ``PIPEGUARD_PIPELINE_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing
-    it (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store —
-    logged by exception *type* only, never ``str(exc)`` (which could carry a DSN password).
+    it (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store — see
+    :func:`api.base_store.select_backend` (the shared degrade-to-JSONL ladder).
     """
-    choice = os.environ.get(_ENV_PIPELINE_STORE, "jsonl").strip().lower()
-    if choice == "postgres":
-        try:
-            return PostgresPipelineGraphStore()
-        except Exception as exc:  # degrade on ANY failure; never leak the DSN
-            _log.warning(
-                "PIPEGUARD_PIPELINE_STORE=postgres unavailable (%s); using JSONL.",
-                type(exc).__name__,
-            )
-    elif choice == "sqlite":
-        try:
-            return SqlitePipelineGraphStore()
-        except Exception as exc:  # degrade on ANY failure
-            _log.warning(
-                "PIPEGUARD_PIPELINE_STORE=sqlite unavailable (%s); using JSONL.", type(exc).__name__
-            )
-    return JsonlPipelineGraphStore()
+    jsonl: Callable[[], PipelineGraphStore] = JsonlPipelineGraphStore
+    sqlite: Callable[[], PipelineGraphStore] = SqlitePipelineGraphStore
+    postgres: Callable[[], PipelineGraphStore] = PostgresPipelineGraphStore
+    return select_backend(_ENV_PIPELINE_STORE, jsonl=jsonl, sqlite=sqlite, postgres=postgres)
 
 
 # --- Lifecycle transitions over the append-only versioned stream (ADR-0014) -----------------

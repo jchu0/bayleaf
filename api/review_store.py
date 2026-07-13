@@ -4,10 +4,10 @@ A review ticket is a human-in-the-loop worklist item: an operator opened it agai
 sample so a reviewer/approver can acknowledge → resolve/suppress → (re)open it. It is product
 state, a **separate concern** from the decision projection (the ``Repository`` port): a ticket
 NEVER re-enters the deterministic gate and can never set or override a verdict/finding/confidence
-(ADR-0001). This mirrors ``api/pipeline_store.py`` — three adapters, env-selected via
-``PIPEGUARD_REVIEW_STORE`` (default ``jsonl``); the DB adapters mirror the persistence seam and
-**degrade to the offline JSONL** if selection fails (missing extra / no DSN / unreachable
-server), so a misconfigured DB never breaks the write path — it just falls back to the file.
+(ADR-0001). This mirrors ``api/pipeline_store.py`` over the shared :mod:`api.base_store` generic —
+three adapters, env-selected via ``PIPEGUARD_REVIEW_STORE`` (default ``jsonl``); the DB adapters
+**degrade to the offline JSONL** if selection fails (missing extra / no DSN / unreachable server),
+so a misconfigured DB never breaks the write path — it just falls back to the file.
 
   - :class:`JsonlReviewStore` — default, zero-dep file (``PIPEGUARD_REVIEW_PATH``).
   - :class:`SqliteReviewStore` — a ``review_tickets`` table (stdlib; ``PIPEGUARD_REVIEW_DB``).
@@ -24,12 +24,13 @@ across workers — a per-ticket lock / a DB transaction is the documented (not-b
 from __future__ import annotations
 
 import json
-import logging
 import os
-import sqlite3
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
+
+from api.base_store import JsonlDocStore, SqliteStore, select_backend
 
 # The store Protocol has a method named ``list`` (per its contract), which shadows the builtin
 # ``list`` inside the class bodies — so a ``-> list[...]`` return annotation would resolve to the
@@ -49,9 +50,9 @@ _DEFAULT_REVIEW_DB = _REPO_ROOT / "review_tickets.sqlite"
 
 # Serialize file/DB writes within a worker so two concurrent requests can't interleave a JSONL
 # line or race a rewrite. Multi-worker (or two actions on the SAME ticket) needs a file lock /
-# a per-row DB transaction — a documented seam, not built (same honest limit as ADR-0016).
+# a per-row DB transaction — a documented seam, not built (same honest limit as ADR-0016). Shared
+# by all three adapters of THIS store.
 _WRITE_LOCK = threading.Lock()
-_log = logging.getLogger(__name__)
 
 # The indexed columns lifted out of a record for filtering; the full ticket (incl. actions[]) is
 # always kept as a JSON document alongside, so nothing is lost and a ticket round-trips exactly.
@@ -148,46 +149,22 @@ def review_path() -> Path:
     return Path(raw) if raw else _DEFAULT_REVIEW_PATH
 
 
-class JsonlReviewStore:
+class JsonlReviewStore(JsonlDocStore):
     """One ticket per line in a JSONL file — the zero-dependency default.
 
-    ``json.dumps`` escapes every value so an arbitrary ``title`` with ``\\n`` or ``"`` can never
-    forge a second record. An ``update`` rewrites the whole file (read → replace the matching
-    line → atomic ``os.replace``); at demo scale rewriting is fine, and the temp-file swap means
-    a crash mid-write leaves the old file intact rather than a half-written one.
+    The shared base's ``json.dumps`` escapes every value so an arbitrary ``title`` with ``\\n`` or
+    ``"`` can never forge a second record. An ``update`` rewrites the whole file atomically (the
+    base's temp-file ``os.replace`` swap), so a crash mid-write leaves the old file intact.
     """
 
-    def _read_all(self) -> _Records:
-        path = review_path()
-        if not path.exists():
-            return []
-        out: _Records = []
-        with path.open(encoding="utf-8") as fh:
-            for raw in fh:
-                line = raw.strip()
-                if line:
-                    out.append(json.loads(line))
-        return out
+    _lock = _WRITE_LOCK
+    _tolerant = False
 
-    def _rewrite(self, rows: _Records) -> None:
-        # Write to a sibling temp file then atomically replace, so a crash mid-rewrite can't
-        # truncate the ticket store — the boring-robust choice over an in-place rewrite.
-        path = review_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        with tmp.open("w", encoding="utf-8") as fh:
-            for row in rows:
-                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-        tmp.replace(path)
+    def _resolve_path(self) -> Path:
+        return review_path()
 
     def create(self, record: _Record) -> _Record:
-        line = json.dumps(record, ensure_ascii=False) + "\n"
-        path = review_path()
-        with _WRITE_LOCK:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8") as fh:
-                fh.write(line)
-        return record
+        return self._append(record)
 
     def get(self, ticket_id: str) -> _Record | None:
         return next((r for r in self._read_all() if r.get("id") == ticket_id), None)
@@ -204,17 +181,17 @@ class JsonlReviewStore:
 
     def update(self, record: _Record) -> _Record:
         ticket_id = str(record["id"])
-        with _WRITE_LOCK:
-            rows = self._read_all()
+
+        def mutate(rows: _Records) -> _Records:
             for i, r in enumerate(rows):
                 if r.get("id") == ticket_id:
                     rows[i] = record
-                    break
-            else:
-                # Update of a ticket that isn't there — the router 404s before this, so reaching
-                # here is a programming error, surfaced loudly rather than silently appending.
-                raise KeyError(ticket_id)
-            self._rewrite(rows)
+                    return rows
+            # Update of a ticket that isn't there — the router 404s before this, so reaching here
+            # is a programming error, surfaced loudly rather than silently appending.
+            raise KeyError(ticket_id)
+
+        self._rewrite(mutate)
         return record
 
 
@@ -226,19 +203,14 @@ def review_db_path() -> str:
     return os.environ.get(_ENV_REVIEW_DB, "").strip() or str(_DEFAULT_REVIEW_DB)
 
 
-class SqliteReviewStore:
+class SqliteReviewStore(SqliteStore):
     """A ``review_tickets`` table in SQLite (stdlib). A fresh connection per op keeps it
     thread-safe under FastAPI's sync threadpool without pinning a connection to one thread."""
 
-    def __init__(self, path: str | None = None) -> None:
-        self._path = path or review_db_path()
-        # Fail fast at selection (so get_review_store can degrade) if the dir is unwritable.
-        self._connect().close()
+    _ddl = _REVIEW_DDL_SQLITE
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path)
-        conn.execute(_REVIEW_DDL_SQLITE)
-        return conn
+    def __init__(self, path: str | None = None) -> None:
+        super().__init__(path or review_db_path())
 
     def create(self, record: _Record) -> _Record:
         with _WRITE_LOCK:
@@ -393,23 +365,10 @@ def get_review_store() -> ReviewStore:
     """Select the review-ticket sink from the environment (default: the offline JSONL file).
 
     ``PIPEGUARD_REVIEW_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing it
-    (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store —
-    logged by exception *type* only, never ``str(exc)`` (which could carry a DSN password).
+    (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store — see
+    :func:`api.base_store.select_backend` (the shared degrade-to-JSONL ladder).
     """
-    choice = os.environ.get(_ENV_REVIEW_STORE, "jsonl").strip().lower()
-    if choice == "postgres":
-        try:
-            return PostgresReviewStore()
-        except Exception as exc:  # degrade on ANY failure; never leak the DSN
-            _log.warning(
-                "PIPEGUARD_REVIEW_STORE=postgres unavailable (%s); using JSONL.",
-                type(exc).__name__,
-            )
-    elif choice == "sqlite":
-        try:
-            return SqliteReviewStore()
-        except Exception as exc:  # degrade on ANY failure
-            _log.warning(
-                "PIPEGUARD_REVIEW_STORE=sqlite unavailable (%s); using JSONL.", type(exc).__name__
-            )
-    return JsonlReviewStore()
+    jsonl: Callable[[], ReviewStore] = JsonlReviewStore
+    sqlite: Callable[[], ReviewStore] = SqliteReviewStore
+    postgres: Callable[[], ReviewStore] = PostgresReviewStore
+    return select_backend(_ENV_REVIEW_STORE, jsonl=jsonl, sqlite=sqlite, postgres=postgres)

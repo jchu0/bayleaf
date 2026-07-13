@@ -2,9 +2,10 @@
 
 Feedback is product telemetry, a **separate concern** from the decision projection (the
 `Repository` port): its rows never mix with runs/cards/events. Three adapters, env-selected via
-``PIPEGUARD_FEEDBACK_STORE`` (default ``jsonl``); the DB adapters mirror the persistence seam
-and **degrade to the offline JSONL** if selection fails (missing extra / no DSN / unreachable
-server), so a misconfigured DB never breaks the write path — it just falls back to the file.
+``PIPEGUARD_FEEDBACK_STORE`` (default ``jsonl``); the JSONL + SQLite plumbing is the shared
+:mod:`api.base_store` generic, and the DB adapters **degrade to the offline JSONL** if selection
+fails (missing extra / no DSN / unreachable server), so a misconfigured DB never breaks the write
+path — it just falls back to the file.
 
   - :class:`JsonlFeedbackStore` — default, zero-dep append-only file (``PIPEGUARD_FEEDBACK_PATH``).
   - :class:`SqliteFeedbackStore` — a ``feedback`` table (stdlib; ``PIPEGUARD_FEEDBACK_DB``).
@@ -17,12 +18,13 @@ corpus out-of-band — there is still no read-back HTTP endpoint (telemetry neve
 from __future__ import annotations
 
 import json
-import logging
 import os
-import sqlite3
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
+
+from api.base_store import JsonlDocStore, SqliteStore, select_backend
 
 _ENV_FEEDBACK_STORE = "PIPEGUARD_FEEDBACK_STORE"
 _ENV_FEEDBACK_PATH = "PIPEGUARD_FEEDBACK_PATH"
@@ -35,9 +37,9 @@ _DEFAULT_FEEDBACK_DB = _REPO_ROOT / "feedback.sqlite"
 
 # Serialize file/DB appends within a worker so concurrent requests can't interleave a JSONL
 # line or race a short-lived connection. Multi-worker needs a file lock / a pooled DB — a
-# documented seam, not built (same honest limit as the JSONL note in ADR-0016).
+# documented seam, not built (same honest limit as the JSONL note in ADR-0016). Shared by all
+# three adapters of THIS store.
 _WRITE_LOCK = threading.Lock()
-_log = logging.getLogger(__name__)
 
 # The indexed columns lifted out of a record for querying; the full record is always kept as a
 # JSON document alongside, so nothing is lost and read_all round-trips exactly.
@@ -98,29 +100,21 @@ def feedback_path() -> Path:
     return Path(raw) if raw else _DEFAULT_FEEDBACK_PATH
 
 
-class JsonlFeedbackStore:
-    """Append-only JSONL file — the zero-dependency default. ``json.dumps`` escapes every
-    value so a message with ``\\n`` or ``"`` can never forge a second line."""
+class JsonlFeedbackStore(JsonlDocStore):
+    """Append-only JSONL file — the zero-dependency default. ``json.dumps`` (in the shared base)
+    escapes every value so a message with ``\\n`` or ``"`` can never forge a second line."""
+
+    _lock = _WRITE_LOCK
+    _tolerant = False
+
+    def _resolve_path(self) -> Path:
+        return feedback_path()
 
     def append(self, record: dict[str, Any]) -> None:
-        line = json.dumps(record, ensure_ascii=False) + "\n"
-        path = feedback_path()
-        with _WRITE_LOCK:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8") as fh:
-                fh.write(line)
+        self._append(record)
 
     def read_all(self) -> list[dict[str, Any]]:
-        path = feedback_path()
-        if not path.exists():
-            return []
-        out: list[dict[str, Any]] = []
-        with path.open(encoding="utf-8") as fh:
-            for raw in fh:
-                line = raw.strip()
-                if line:
-                    out.append(json.loads(line))
-        return out
+        return self._read_all()
 
 
 # --- SQLite (a real DB, still offline + zero-dep) -------------------------------------------
@@ -131,19 +125,14 @@ def feedback_db_path() -> str:
     return os.environ.get(_ENV_FEEDBACK_DB, "").strip() or str(_DEFAULT_FEEDBACK_DB)
 
 
-class SqliteFeedbackStore:
+class SqliteFeedbackStore(SqliteStore):
     """A ``feedback`` table in SQLite (stdlib). A fresh connection per op keeps it thread-safe
     under FastAPI's sync threadpool without pinning a connection to one thread."""
 
-    def __init__(self, path: str | None = None) -> None:
-        self._path = path or feedback_db_path()
-        # Fail fast at selection (so get_feedback_store can degrade) if the dir is unwritable.
-        self._connect().close()
+    _ddl = _FEEDBACK_DDL_SQLITE
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path)
-        conn.execute(_FEEDBACK_DDL_SQLITE)
-        return conn
+    def __init__(self, path: str | None = None) -> None:
+        super().__init__(path or feedback_db_path())
 
     def append(self, record: dict[str, Any]) -> None:
         with _WRITE_LOCK:
@@ -213,23 +202,10 @@ def get_feedback_store() -> FeedbackStore:
     """Select the feedback sink from the environment (default: the offline JSONL file).
 
     ``PIPEGUARD_FEEDBACK_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing
-    it (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store —
-    logged by exception *type* only, never ``str(exc)`` (which could carry a DSN password).
+    it (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store — see
+    :func:`api.base_store.select_backend` (the shared degrade-to-JSONL ladder).
     """
-    choice = os.environ.get(_ENV_FEEDBACK_STORE, "jsonl").strip().lower()
-    if choice == "postgres":
-        try:
-            return PostgresFeedbackStore()
-        except Exception as exc:  # degrade on ANY failure; never leak the DSN
-            _log.warning(
-                "PIPEGUARD_FEEDBACK_STORE=postgres unavailable (%s); using JSONL.",
-                type(exc).__name__,
-            )
-    elif choice == "sqlite":
-        try:
-            return SqliteFeedbackStore()
-        except Exception as exc:  # degrade on ANY failure
-            _log.warning(
-                "PIPEGUARD_FEEDBACK_STORE=sqlite unavailable (%s); using JSONL.", type(exc).__name__
-            )
-    return JsonlFeedbackStore()
+    jsonl: Callable[[], FeedbackStore] = JsonlFeedbackStore
+    sqlite: Callable[[], FeedbackStore] = SqliteFeedbackStore
+    postgres: Callable[[], FeedbackStore] = PostgresFeedbackStore
+    return select_backend(_ENV_FEEDBACK_STORE, jsonl=jsonl, sqlite=sqlite, postgres=postgres)
