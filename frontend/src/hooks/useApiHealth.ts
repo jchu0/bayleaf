@@ -8,20 +8,49 @@ import { api } from '../api'
 // tell the same truth (a hardcoded green dot lies during an outage).
 export type Health = 'checking' | 'ready' | 'offline'
 
+// UX-DUP #9: ONE module-level poller shared by every consumer. Before this each `useApiHealth()`
+// call spun its OWN 20s `setInterval` + fetch, so the TopBar pill and the Runs hero polled
+// `/api/health` twice every 20s and could transiently disagree (one flips to offline up to 20s
+// before the other). Now the first subscriber starts the single poll, the last to unmount stops it,
+// and everyone reads one shared state — same cadence, one fetch, no disagreement.
+let current: Health = 'checking'
+const subscribers = new Set<(h: Health) => void>()
+let timer: number | null = null
+
+function publish(next: Health): void {
+  current = next
+  for (const notify of subscribers) notify(next)
+}
+
+function check(): void {
+  api
+    .health()
+    .then((h) => publish(h.status === 'ok' ? 'ready' : 'offline'))
+    .catch(() => publish('offline'))
+}
+
+function ensurePolling(): void {
+  if (timer != null) return
+  check() // fire immediately for the first subscriber (mirrors the old on-mount check)
+  timer = window.setInterval(check, 20_000)
+}
+
+function maybeStopPolling(): void {
+  if (subscribers.size === 0 && timer != null) {
+    window.clearInterval(timer)
+    timer = null
+  }
+}
+
 export function useApiHealth(): Health {
-  const [state, setState] = useState<Health>('checking')
+  const [state, setState] = useState<Health>(current)
   useEffect(() => {
-    let live = true
-    const check = () =>
-      api
-        .health()
-        .then((h) => live && setState(h.status === 'ok' ? 'ready' : 'offline'))
-        .catch(() => live && setState('offline'))
-    check()
-    const t = window.setInterval(check, 20_000)
+    subscribers.add(setState)
+    setState(current) // sync to the shared latest the moment we subscribe
+    ensurePolling()
     return () => {
-      live = false
-      window.clearInterval(t)
+      subscribers.delete(setState)
+      maybeStopPolling()
     }
   }, [])
   return state

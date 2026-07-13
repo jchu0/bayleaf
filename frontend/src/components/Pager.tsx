@@ -7,6 +7,22 @@ import { SegmentedControl, type SegmentOption } from './SegmentedControl'
 // slicing; this only renders the controls and reports intent.
 
 export type PerPage = '10' | '25' | '50' | '100'
+
+// Windowed page list: first + last + current±1, with '…' gaps — so a large collection doesn't
+// render one button per page (2,000 rows at 25/page = 80 buttons before this, UX-DUP #10). Up to 7
+// pages render in full (no gaps needed).
+function pageWindow(cur: number, pages: number): (number | '…')[] {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1)
+  const out: (number | '…')[] = [1]
+  const start = Math.max(2, cur - 1)
+  const end = Math.min(pages - 1, cur + 1)
+  if (start > 2) out.push('…')
+  for (let n = start; n <= end; n++) out.push(n)
+  if (end < pages - 1) out.push('…')
+  out.push(pages)
+  return out
+}
+
 export const PER_PAGE_25: SegmentOption<PerPage>[] = [
   { value: '25', label: '25' },
   { value: '50', label: '50' },
@@ -71,22 +87,28 @@ export function Pager({
             >
               ‹
             </button>
-            {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => onPage(n)}
-                aria-current={n === cur ? 'page' : undefined}
-                aria-label={`Page ${n}`}
-                className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] transition-colors ${
-                  n === cur
-                    ? 'bg-accent font-semibold text-white'
-                    : 'border border-line bg-card text-text-2 hover:border-line-strong'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
+            {pageWindow(cur, pages).map((n, i) =>
+              n === '…' ? (
+                <span key={`gap-${i}`} className="px-1 text-text-3" aria-hidden="true">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => onPage(n)}
+                  aria-current={n === cur ? 'page' : undefined}
+                  aria-label={`Page ${n}`}
+                  className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] transition-colors ${
+                    n === cur
+                      ? 'bg-accent font-semibold text-white'
+                      : 'border border-line bg-card text-text-2 hover:border-line-strong'
+                  }`}
+                >
+                  {n}
+                </button>
+              ),
+            )}
             <button
               type="button"
               onClick={() => onPage(Math.min(pages, cur + 1))}

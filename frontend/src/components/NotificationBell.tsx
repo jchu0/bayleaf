@@ -26,13 +26,11 @@ function AssigneeChip({ id }: { id: string }) {
 const MAX_ROWS = 6
 
 export function NotificationBell() {
-  const { items, unreadCount, markRead, toggleFlag, markAllRead } = useInbox()
+  const { recentActivity, nonDoneCount, unreadCount, markRead, toggleFlag, markAllRead } = useInbox()
   const [open, setOpen] = useState(false)
-  // Unread first, then newest; the workspace holds the exhaustive, organizable view.
-  const recent = [...items]
-    .filter((i) => i.column !== 'done')
-    .sort((a, b) => (a.read === b.read ? 0 : a.read ? 1 : -1))
-    .slice(0, MAX_ROWS)
+  // Unread first, then newest; the workspace holds the exhaustive, organizable view. `recentActivity`
+  // is memoized in InboxContext (UX-DUP #6), so this is a cheap slice, not a per-render re-sort.
+  const recent = recentActivity.slice(0, MAX_ROWS)
 
   return (
     <div className="relative">
@@ -114,7 +112,7 @@ export function NotificationBell() {
               className="flex items-center justify-between border-t border-line bg-card px-3.5 py-2.5 hover:bg-card-2"
             >
               <span className="text-[12px] font-semibold text-accent-strong">Open inbox</span>
-              <span className="text-[11px] text-text-3">{items.filter((i) => i.column !== 'done').length} items →</span>
+              <span className="text-[11px] text-text-3">{nonDoneCount} items →</span>
             </Link>
           </div>
         </>

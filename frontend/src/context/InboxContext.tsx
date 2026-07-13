@@ -87,6 +87,12 @@ export type InboxItem = {
 type InboxState = {
   items: InboxItem[]
   unreadCount: number
+  // UX-DUP #6: memoized selectors for the always-mounted top-bar bell, so it stops re-sorting the
+  // whole list on every render (an O(n log n) sort in the top bar on every inbox mutation, on every
+  // page). `recentActivity` = non-done items, unread-first (the bell's exact ordering); the bell
+  // slices it. `nonDoneCount` = the bell footer's "N items" without a second full-array scan.
+  recentActivity: InboxItem[]
+  nonDoneCount: number
   folders: string[]
   comments: Record<string, InboxComment[]> // IB14 — keyed by item id
   loading: boolean
@@ -279,6 +285,14 @@ export function InboxProvider({ children }: { children: ReactNode }) {
 
   // Unread = not yet read and not archived (the "done" column is the archive). This drives the bell.
   const unreadCount = useMemo(() => items.filter((i) => !i.read && i.column !== 'done').length, [items])
+  // One non-done pass feeds the bell's count + its unread-first ordering (UX-DUP #6). The sort is
+  // stable, so within read/unread the derivation's newest-first order is preserved.
+  const nonDone = useMemo(() => items.filter((i) => i.column !== 'done'), [items])
+  const recentActivity = useMemo(
+    () => [...nonDone].sort((a, b) => (a.read === b.read ? 0 : a.read ? 1 : -1)),
+    [nonDone],
+  )
+  const nonDoneCount = nonDone.length
 
   const patch = useCallback((id: string, meta: ItemMeta) => {
     setOverlay((prev) => ({ ...prev, [id]: { ...prev[id], ...meta } }))
@@ -437,6 +451,8 @@ export function InboxProvider({ children }: { children: ReactNode }) {
   const value: InboxState = {
     items,
     unreadCount,
+    recentActivity,
+    nonDoneCount,
     folders,
     comments,
     loading,
