@@ -464,6 +464,10 @@ export function ReviewQueue() {
   // confirms. Never a status transition, never a verdict (ADR-0001).
   const assign = (t: QueueTicket, assignee: string | null) => {
     const key = keyOf(t)
+    // Snapshot the slice BEFORE the optimistic patch so a rejected write can revert to it (mirrors
+    // syncAction) — otherwise a failed assignTicket strands the WRONG owner in the queue overlay,
+    // now visibly disagreeing with the Inbox, which re-reads the real backend owner on bumpTickets.
+    const prev = uiRef.current[key]
     patch(key, { assignee }) // optimistic
     const run = async () => {
       let id = serverIdRef.current[key] ?? uiRef.current[key]?.serverId
@@ -483,6 +487,9 @@ export function ReviewQueue() {
       )
     }
     const next = (pendingRef.current[key] ?? Promise.resolve()).then(run).catch((e) => {
+      // Roll back the optimistic assignee on a rejected write (403/409/…), then surface the error —
+      // don't leave the wrong owner stranded in the overlay (mirrors syncAction's restore-on-catch).
+      restore(key, prev)
       toast(`Couldn't assign ticket — ${errMsg(e)}`, 'error')
     })
     pendingRef.current[key] = next
