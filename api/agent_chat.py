@@ -72,11 +72,15 @@ def _repair_grounding(
 def _archive_grounding(
     question: str, context_refs: dict[str, Any]
 ) -> tuple[str, list[ChatCitation]]:
-    """Ground in one run's archive digest when a run is named (MVP; the cross-run DB-retrieval tool
-    is the deferred P3 upgrade, design/agent-capabilities.md §1). No run named → no grounding."""
+    """Ground the archivist chat: one run's digest when a run is named, else the cross-run historic
+    aggregate (P3 — read-only DB retrieval with a run-dir-derivation fallback,
+    design/agent-capabilities.md §1)."""
     run_id = str(context_refs.get("run_id") or "").strip()
     if not run_id or not (_DATA / run_id / "SampleSheet.csv").exists():
-        return "", []
+        # No specific run → answer organizational/historical questions over the whole run history.
+        from api.archivist_retrieval import historic_grounding
+
+        return historic_grounding(question)
     from api.archivist import archive_digest, build_run_input_from_dir
 
     digest = archive_digest([build_run_input_from_dir(_DATA / run_id)])
