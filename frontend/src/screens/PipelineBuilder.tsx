@@ -300,6 +300,11 @@ export function PipelineBuilder() {
     setDocName(pg.name)
     setUserNodes(nodes)
     setUserEdges(edges)
+    // Re-fit the viewport to the just-loaded pipeline — the same fit the canvas runs once on mount.
+    // Without this, an IN-APP load keeps the previous viewport, so the loaded graph's off-centre cards
+    // (notably the advisory-agent landmark below the QC nodes) sit off-screen until a full page reload
+    // re-mounts and re-fits. Bumping the nonce reproduces the mount fit without a reload.
+    setFitNonce((v) => v + 1)
     setLocEdits(g.locator_edits ?? {})
     setRefLoc(g.reference_locators ?? {})
     // Rehydrate the persisted observation bindings, pruned to the loaded nodes (a foreign/older
