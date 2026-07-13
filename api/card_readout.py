@@ -32,7 +32,8 @@ from pydantic import BaseModel, Field
 
 from pipeguard import DecisionCard, Runbook, run_gate_from_dir
 from pipeguard.metrics import default_registry
-from pipeguard.models import CanonicalUnit, Gate, MetricValue, Sample, Verdict
+from pipeguard.models import CanonicalUnit, Gate, MetricValue, Sample, Severity, Verdict
+from pipeguard.rules import _evaluate_metric
 from pipeguard.runbook import DEFAULT_RUNBOOK, QCThreshold
 
 
@@ -64,6 +65,7 @@ class Direction(str, Enum):
 
     AT_LEAST = ">="  # higher_is_better: value must be >= gate
     AT_MOST = "<="  # lower_is_better: value must be <= gate
+    WITHIN = "within"  # target_band: value must be WITHIN a [low, high] band (a both-tails gate)
     UNKNOWN = "?"  # no threshold → direction is not derivable; surfaced, not fabricated
 
 
@@ -284,6 +286,63 @@ def _classify(value: float, threshold: QCThreshold) -> tuple[ReadoutStatus, bool
     return ReadoutStatus.BORDERLINE, within
 
 
+def _band_row(mv: MetricValue, threshold: QCThreshold) -> MetricReadout:
+    """Build a readout row for a BOTH-TAILS (``target_band``) threshold (WS-06 Gap 2).
+
+    Status is PROJECTED from the core rule (``rules._evaluate_metric`` → ``_evaluate_target_band``),
+    never re-decided here (ADR-0001 — the API only re-presents what the gate computed): a None
+    finding is PASS, a WARN is BORDERLINE (out of the target band but inside the hard band, either
+    tail), a CRITICAL is FAIL (outside the hard band). The one-sided ``_classify`` cannot score a
+    band — ``value >= gate`` silently reads every high-tail value as PASS — so the band decision is
+    delegated to the core rather than duplicated. The Threshold column shows the target band
+    ``[low, high]`` and the hard-fail column the hard (acceptable) band, rendered in the operator
+    display unit exactly like the one-sided path — never a single ``>=``/``<=`` comparator, which
+    would misdescribe a two-tailed gate.
+    """
+    # The QCThreshold validator guarantees all four edges for kind=="target_band"; narrow the
+    # float | None fields to float for mypy and document that invariant (mirrors rules.py).
+    assert (
+        threshold.target_low is not None
+        and threshold.target_high is not None
+        and threshold.hard_low is not None
+        and threshold.hard_high is not None
+    )
+    # PROJECT the core's both-tails decision — do NOT re-derive the band scoring in the API.
+    finding = _evaluate_metric(mv.sample_id, threshold, mv)
+    if finding is None:
+        status = ReadoutStatus.PASS
+    elif finding.severity is Severity.CRITICAL:
+        status = ReadoutStatus.FAIL
+    else:  # a WARN finding — out of the target band but still inside the hard band
+        status = ReadoutStatus.BORDERLINE
+
+    obs_num, obs_sym = _to_display(mv.normalized_value, mv.canonical_unit, threshold.unit)
+    # Both bands render in the same display unit as the observed value (symbol is identical).
+    tlo, _ = _to_display(threshold.target_low, mv.canonical_unit, threshold.unit)
+    thi, _ = _to_display(threshold.target_high, mv.canonical_unit, threshold.unit)
+    hlo, _ = _to_display(threshold.hard_low, mv.canonical_unit, threshold.unit)
+    hhi, _ = _to_display(threshold.hard_high, mv.canonical_unit, threshold.unit)
+
+    flagged = status in (ReadoutStatus.FAIL, ReadoutStatus.BORDERLINE)
+    return MetricReadout(
+        metric=mv.metric_key,
+        label=threshold.label,
+        gate=mv.gate,
+        status=status,
+        direction=Direction.WITHIN,
+        observed_value=mv.normalized_value,
+        canonical_unit=mv.canonical_unit,
+        observed_unit=obs_sym,
+        observed_display=f"{_fmt(obs_num)}{obs_sym}",
+        threshold_display=f"[{_fmt(tlo)}, {_fmt(thi)}]{obs_sym}",
+        hard_fail_display=f"[{_fmt(hlo)}, {_fmt(hhi)}]{obs_sym}",
+        # `within_borderline_band` is a one-sided near-miss concept; a band already distinguishes
+        # WARN (in hard band) from CRITICAL (outside it) via `status`, so leave it False.
+        within_borderline_band=False,
+        flagged=flagged,
+    )
+
+
 def _row_for(mv: MetricValue, threshold: QCThreshold | None) -> MetricReadout:
     """Build one readout row by joining a metric value to its runbook threshold (or None)."""
     if threshold is None:
@@ -305,6 +364,12 @@ def _row_for(mv: MetricValue, threshold: QCThreshold | None) -> MetricReadout:
             within_borderline_band=False,
             flagged=False,
         )
+
+    # A both-tails (target_band) gate can't be scored or labelled by the one-sided path below (its
+    # `value >= gate` reads every high-tail value as PASS and its `>=` label misdescribes a band);
+    # delegate to the core rule for the decision and render the band (WS-06 Gap 2).
+    if threshold.kind == "target_band":
+        return _band_row(mv, threshold)
 
     status, within = _classify(mv.normalized_value, threshold)
     direction = Direction.AT_LEAST if threshold.higher_is_better else Direction.AT_MOST

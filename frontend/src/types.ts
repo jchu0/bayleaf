@@ -480,7 +480,9 @@ export type MonitoringMetrics = {
 // Gate-grouped, flagged-first Metric·Observed·Threshold·Status rows.
 // ─────────────────────────────────────────────────────────────────────────────
 export type ReadoutStatus = 'pass' | 'borderline' | 'fail' | 'not_gated'
-export type ReadoutDirection = '>=' | '<=' | '?'
+// 'within' is a both-tails (target_band) gate: the value must sit WITHIN a [low, high] band, so its
+// threshold_display is a band ('[2, 2.1]'), not a one-sided comparator (WS-06 Gap 2).
+export type ReadoutDirection = '>=' | '<=' | 'within' | '?'
 export type MetricReadout = {
   metric: string
   label: string
