@@ -66,9 +66,12 @@ uv run python -c "from bayleaf import run_gate_from_dir; \
    Caveats: keep tightly-coupled edits to the *same* file single-author (parallel writers
    collide); serialize steps with a real data dependency; use read-only agents (Explore) for
    audits/reviews. When unsure whether two tasks are independent, they usually are — split them.
+   **Prioritize background execution:** default to pushing non-blocking work to background agents
+   (`run_in_background`) / Workflows so the main interaction surface stays free for decisions and
+   synthesis rather than being consumed by long inline processing — report results when they land.
 
 **Architecture guardrails**
-1. `src/bayleaf/` stays framework-agnostic — no Streamlit/FastAPI imports in the core.
+1. `src/bayleaf/` stays framework-agnostic — no FastAPI/React imports in the core.
 2. Reuse existing utilities, models, and patterns before adding new ones; no duplicate abstractions.
 3. Don't move files across `src/`, `app/`, `data/`, `docs/`, `tests/` without explaining why.
 
@@ -150,7 +153,7 @@ uv run python -c "from bayleaf import run_gate_from_dir; \
 > [docs/HISTORY.md](docs/HISTORY.md) (git-archived, **not** loaded each session). This is
 > current-state only (what exists NOW, per subsystem); the *why* is in the ADRs ([docs/adr/](docs/adr/)).
 
-1. **Core (`src/bayleaf/`) — framework-agnostic (no Streamlit/FastAPI imports).**
+1. **Core (`src/bayleaf/`) — framework-agnostic (no FastAPI/React imports).**
    a. `rules` emits cited, immutable `Finding`s (each derives its gate + a rule-version-independent
       signature + `content_hash`); `synthesis/base.py` aggregates the verdict (**never** the LLM,
       ADR-0001); confidence omitted until grounded (T-019). Fraction QC metrics render as percent
@@ -201,7 +204,7 @@ uv run python -c "from bayleaf import run_gate_from_dir; \
       HOLDs under `DEFAULT_RUNBOOK_SET`, driven by `QC-EXPECTED-QC.BREADTH_20X`/`_30X`). **Deferred,
       labelled:** the Settings→runbook config-apply loop (`api/main.py::_active_runbook` still returns
       one run-level `Runbook`) and the assay×tissue frontend UI.
-   d. `runbook.RouteToHumanPolicy` + `rules._check_route_to_human` (**VAR-RTH-001**, ADR-0018 D2): a
+   d. `runbook.FlagForReviewPolicy` + `rules._check_flag_for_review` (**VAR-FFR-001**, ADR-0018 D2): a
       distinct, off-by-default variant-gate rule — never gates call quality; routes a sample to
       mandatory human review when an operator-armed ClinVar significance is present on an
       externally-annotated `VariantCall` (read from `variants.csv`, never authored — quotes ClinVar
@@ -360,8 +363,8 @@ uv run python -c "from bayleaf import run_gate_from_dir; \
          the same bundle as JSON or a `.zip`. `scripts/seed_approved_germline.py` seeds the runnable
          `germline-panel` baseline. Feature routers (settings / review-queue / pipelines-lifecycle:
          save→submit→approve / dry-run / diff) fold into `main.py`.
-   b. `frontend/` = React + Vite + Tailwind: 12 operator screens in a three-group nav (Operate /
-      Analyze / Configure) + Admin + Inbox + Accession, behind a demo login (T-081, every production
+   b. `frontend/` = React + Vite + Tailwind: 13 operator screens in a three-group nav (Operate —
+      incl. Inbox + Accession / Analyze / Configure) + Admin, behind a demo login (T-081, every production
       auth seam labelled NOT implemented). Two **frontend-only** governance capabilities over the wire
       roles — `isAdmin` and page-access (`access.ts`/`AccessContext`) — gate **VIEWS, not the API**:
       **NOT authorization; `require_role` still checks every real write server-side.** Charts via

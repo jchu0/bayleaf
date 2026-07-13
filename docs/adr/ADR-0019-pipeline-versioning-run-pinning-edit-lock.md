@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed (maintainer design input 2026-07-11 MST — git-backing recommended, staged build; not yet built) |
+| **Status** | Accepted · Slice 1 (frontend edit-lock lifecycle + editable germline UserNodes + Save-mints-a-new-version) realized in `PipelineBuilder.tsx` (`runLocked` while a run is active, editable when complete; Save mints a NEW version while the run stays pinned); Slice 2 (backend run→{name,version} immutability + git-backed store seam) deferred. Maintainer design input 2026-07-11 MST — git-backing recommended, staged build. |
 | **Date** | 2026-07-11 (MST) |
 | **Deciders** | maintainer (design dialogue 2026-07-11), Pipeline Builder implementation pass |
 | **Related** | [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute; Nextflow/git pipeline portability), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md) (event-driven provenance ledger — run→version is provenance), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve authoring lifecycle; the versioned `PipelineGraphStore`, T-049), [ADR-0015](ADR-0015-layered-data-contract.md) (layered data contract), [ADR-0016](ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0014](ADR-0014-productionization-fastapi-react.md) (FastAPI/React productionization), [design/frontend/README.md](../design/frontend/README.md) §6 (Pipeline Builder), [design/builder-cards/README.md](../design/builder-cards/README.md), [requirements/functional.md](../requirements/functional.md) (Pipeline Builder REQs), [planning/tasks.md](../planning/tasks.md) |

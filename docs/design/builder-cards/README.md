@@ -105,7 +105,7 @@ Items 1–3 below (ports, card size, half-circle visual) **shipped 2026-07-11** 
    render and wire-endpoint math call the **same** function, so a wire can never detach from its
    port when a card's port count changes (the old hardcoded-SVG-path failure mode this doc used to
    warn about is gone).
-2. **Cards are larger — CLOSED.** `NODE_W = 232` (was the fixed `168`/`208` this section used to
+2. **Cards are larger — CLOSED.** `NODE_W = 320` (was the fixed `168`/`208` this section used to
    cite), `cardHeight()` grows with the max of the left-in/right-out port count — the §3 enlarged,
    port-count-driven card is now real.
 3. **Half-circle typed ports are the visual — CLOSED.** `PORT_R` (half-circle radius) + `overflow

@@ -104,10 +104,10 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > `our_key` with a declared raw unit (`metrics/mapping.py` `_QCMETRICS_MAP` —
 > [metric_registry.md](metric_registry.md)); a present value populates the decision card's
 > **preflight** and **variant** gate groups (previously always empty for every run). `runbook.QCThreshold`
-> correspondingly gains `required: bool = True` — 5 of the 8 (breadth_20x/30x, pct_mapped,
-> on_target, variant_dp) get an **optional** (`required=False`) threshold that scores a present
-> value but never NA-flags an absent one (`rules._evaluate_metric`); `phix_aligned`/`variant_gq`/
-> `variant_titv` stay ungated observations. See [qc_metrics.md](qc_metrics.md) for the concrete
+> correspondingly gains `required: bool = True` — 6 of the 8 (breadth_20x/30x, pct_mapped,
+> on_target, variant_dp, variant_titv (`target_band`)) get an **optional** (`required=False`) threshold that scores a present
+> value but never NA-flags an absent one (`rules._evaluate_metric`); `phix_aligned`/`variant_gq`
+> stay ungated observations. See [qc_metrics.md](qc_metrics.md) for the concrete
 > thresholds.
 >
 > **`SampleMetrics` / `RawObservation` — the registry-keyed ingestion contract (WS-06·PR1/PR2,

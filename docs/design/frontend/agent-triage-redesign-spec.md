@@ -74,9 +74,9 @@ ADMIN        Admin panel        (isAdmin only; feedback-triage surfaces here)
 
 Concrete wiring (mirrors every existing page — do not invent a new pattern):
 
-1. **`WS-1a`** — Route: add `<Route path="/agents" …>` in `App.tsx`, page-gated `<RequirePage page="system-agents">` like its siblings (`App.tsx:71-80`).
-2. **`WS-1b`** — Access catalog: add `'system-agents'` to `PageId` and `PAGE_CATALOG` (`access.ts:19-31, 38-51`) in group `'Analyze'`, label **"System agents"**. This satisfies **UIC-6** (every page admin-assignable) automatically.
-3. **`WS-1c`** — Nav: add one `Item` to the Analyze group in `Sidebar.tsx:87-106` — label "System agents", a non-run-scoped `to: '/agents'` (a **fixed** path, unlike the per-run `/runs/:run/agent`), icon suggestion `Bot`/`Sparkles`, `page: 'system-agents'`.
+1. **`WS-1a`** — Route: the dedicated route is `<Route path="/system-agents" …>` in `App.tsx`, page-gated `<RequirePage page="systemAgents">` like its siblings (`App.tsx:71-80`); the `/agents` route is retained as a **legacy alias** gated `page="agent"`.
+2. **`WS-1b`** — Access catalog: add `'systemAgents'` to `PageId` and `PAGE_CATALOG` (`access.ts:19-31, 38-51`) in group `'Analyze'`, label **"System agents"**. This satisfies **UIC-6** (every page admin-assignable) automatically.
+3. **`WS-1c`** — Nav: add one `Item` to the Analyze group in `Sidebar.tsx:87-106` — label "System agents", a non-run-scoped `to: '/system-agents'` (a **fixed** path, unlike the per-run `/runs/:run/agent`), icon suggestion `Bot`/`Sparkles`, `page: 'systemAgents'`.
 4. **`WS-1d`** — Keep the existing **"Agent triage"** item exactly as-is (per-run, `page: 'agent'`). Two nav items now read clearly: *Agent triage* = "triage this run's flagged samples"; *System agents* = "the cross-run advisory agents". Naming disambiguation is deliberate (see Open Q1 if the maintainer prefers a single "Agents" hub).
 
 **Do NOT** deep-link the workspace from `DecisionContextRail`'s "Ask agent to triage" button (`DecisionContextRail.tsx:80-87`) — that button is correctly QC-triage/run-scoped and stays pointed at `/runs/:run/agent`.
@@ -249,7 +249,7 @@ Independently shippable slices, win/risk-ordered:
 
 | # | Slice | Effort | Notes |
 |---|---|---|---|
-| 1 | **IA move** — new `/agents` route + `system-agents` PageId + nav item; delete the two launchers from `AgentTriage.tsx`; promote the two modal bodies into workspace panels | **M** | Pure relocation; mostly reuses `BuilderModals` bodies. No new backend. |
+| 1 | **IA move** — new `/system-agents` route + `systemAgents` PageId + nav item; delete the two launchers from `AgentTriage.tsx`; promote the two modal bodies into workspace panels | **M** | Pure relocation; mostly reuses `BuilderModals` bodies. No new backend. |
 | 2 | **`AgentDockProvider`** (hoisted, persistent) + one **floating window** with drag/resize/min/close + position persistence | **L** | The core new interaction; no scrim; clamp-to-viewport is the fiddly part. |
 | 3 | **Ask contract wiring** — `openAsk`, context capture, quick-asks, streaming + Stop, source pill, citations reuse | **M** | Against the parallel backend; falls back to the honest stub if unarmed. |
 | 4 | **Dock chips + multi-session** (`AW-10`) + maximize/dock states | **M** | Ship after the single window works; capped, scale-aware. |
@@ -267,7 +267,7 @@ Independently shippable slices, win/risk-ordered:
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/frontend/src/components/BuilderModals.tsx  (PipelineRepair/Archivist bodies → workspace panels)
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/frontend/src/components/AgentSubjectCard.tsx  (citation + advisory-copy idioms to reuse)
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/frontend/src/App.tsx  (add route; mount AgentDockProvider above the router)
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/frontend/src/access.ts  (add `system-agents` PageId + catalog row)
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/frontend/src/access.ts  (add `systemAgents` PageId + catalog row)
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/frontend/src/components/Sidebar.tsx  (add the Analyze nav item)
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/frontend/src/context/PrefsContext.tsx  (persist window position/size)
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/docs/design/agents.md  (taxonomy source of truth — keep in sync)

@@ -52,7 +52,7 @@ e. **Live Slack ops integration.** An outbound port turns each *actionable* card
 
 ## 4. Why it's real (not a mock-up)
 
-a. **320 offline tests across 19 files (317 pass; 3 Postgres live-integration skips)**, all runnable with no API key
+a. **789 offline tests across 65 files (781 pass; 8 machine-gated live-integration skips)**, all runnable with no API key
    (`uv sync --all-extras && uv run pytest`) — pinning verdicts, the ledger→DB rebuild,
    the units contract, the AI-degrades-to-stub path, and the notify seam.
 b. **Real GIAB HG002 data runs through the FULL gate** on a bioconda toolchain — the fetch is
@@ -67,9 +67,9 @@ b. **Real GIAB HG002 data runs through the FULL gate** on a bioconda toolchain �
 c. **Byte-identical reproducibility.** A fixed run + pinned runbook yield identical
    verdicts, findings, and content hashes every time; the ledger→DB rebuild is idempotent
    and hash-preserving (the DB is a pure function of the log).
-d. **Three delivery layers run today** over one framework-agnostic core: Streamlit (the
-   always-green offline fallback), a FastAPI read-API (the production seam), and a React +
-   Vite + Tailwind UI.
+d. **Two delivery layers run today** over one framework-agnostic core: a FastAPI read-API
+   (the production seam) and a React + Vite + Tailwind UI — the full stack runs offline by
+   default (stub-first agents, $0).
 
 ## 5. Honest guardrails
 

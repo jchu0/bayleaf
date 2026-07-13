@@ -46,13 +46,13 @@ npm --prefix frontend run dev                  # React UI (proxies /api -> :8010
    thresholds (labelled illustrative, not clinical).
 
 > **The walkthrough above is a curated 6-beat happy path, not the full app.** The shipped UI
-> is **12 operator screens across three nav groups + an approver-only Admin group + a demo
-> Login** (14 routes total), all behind `/login`:
+> is **13 operator screens across three nav groups + an approver-only Admin group + a demo
+> Login** (16 routes total), all behind `/login`:
 > - **Operate** — Inbox (`/inbox`), Review queue (`/queue`), Sample accessioning
 >   (`/accession`), Submit samplesheet (`/submit`), Intake gate (`/runs/:id/intake`),
 >   Decision cards (`/runs/:id`), Runs (`/`).
 > - **Analyze** — Provenance (`/runs/:id/provenance`), Agent triage (`/runs/:id/agent`),
->   Monitoring (`/monitoring`).
+>   Monitoring (`/monitoring`), System agents (`/system-agents`).
 > - **Configure** — Pipeline builder (`/builder`), Settings (`/settings`).
 > - **Admin** (`/admin`, off the deterministic gate — governance/audit only) and **Login**
 >   (`/login`, a demo auth screen; production auth seams are labelled not-implemented).

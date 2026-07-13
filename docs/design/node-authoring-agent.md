@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Built, narrower than proposed (2026-07-10, T-046, commit `71d4ff9`)** — roster agent #5. The core Python agent (`src/bayleaf/node_author/`) is built and tested; the flow this doc originally proposed (drop a tool's docs → parse → propose) was **not** what shipped — see "What actually shipped" below. **Updated 2026-07-11 (W2, T-127): a read-only `api/` endpoint + Pipeline-Builder wiring now exist** — the builder's "Author a tool node" modal renders the real proposal instead of a static `phase-2` preview. **Updated again 2026-07-11 (W2 backend, T-135): accept→library, a conformance harness, and a structured doc-drop importer are now built (backend-only)** — `POST /api/builder/node-proposal/accept` + `api/library_store.py` + `src/bayleaf/node_author/conformance.py` + `src/bayleaf/node_author/importer.py`. **Still deferred:** the Builder's own "Accept to library" button (no frontend caller yet), the `draft→approved` transition, and the free-text `--help`/README half of the importer — see item 5 below + [agent-authoring-contract.md](agent-authoring-contract.md). **Corrected: the corpus is 9 cards** — the unwired Truth VCF reference-node card was retired (Branch A, `feat/custom-script-io`, 11→10), then NGSCheckMate was retired-but-pinned from the *proposable* corpus (10→9): its card is commented out in `tool_cards.jsonl` so `load_tool_card_corpus()` skips it, while the `ngscheckmate` KIND stays in the vocabulary. See item 7 below. |
+| **Status** | **Built, narrower than proposed (2026-07-10, T-046, commit `71d4ff9`)** — roster agent #5. The core Python agent (`src/bayleaf/node_author/`) is built and tested; the flow this doc originally proposed (drop a tool's docs → parse → propose) was **not** what shipped — see "What actually shipped" below. **Updated 2026-07-11 (W2, T-127): a read-only `api/` endpoint + Pipeline-Builder wiring now exist** — the builder's "Author a tool node" modal renders the real proposal instead of a static `phase-2` preview. **Updated again 2026-07-11 (W2 backend, T-135): accept→library, a conformance harness, and a structured doc-drop importer are now built (backend-only)** — `POST /api/builder/node-proposal/accept` + `api/library_store.py` + `src/bayleaf/node_author/conformance.py` + `src/bayleaf/node_author/importer.py`. **Updated again 2026-07-13: the Builder's own "Accept to library" button is now built** (confirm-gated + reviewer/approver-gated, viewer→403; `BuilderModals.tsx` → `api.acceptNodeProposal`) — it persists a metadata-only draft `LibraryEntry`, it does **not** add a canvas node. **Still deferred:** the `draft→approved` transition and the free-text `--help`/README half of the importer — see item 5 below + [agent-authoring-contract.md](agent-authoring-contract.md). **Corrected: the corpus is 9 cards** — the unwired Truth VCF reference-node card was retired (Branch A, `feat/custom-script-io`, 11→10), then NGSCheckMate was retired-but-pinned from the *proposable* corpus (10→9): its card is commented out in `tool_cards.jsonl` so `load_tool_card_corpus()` skips it, while the `ngscheckmate` KIND stays in the vocabulary. See item 7 below. |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | all (contributors and Claude Code) |
 | **Related** | [design/agents.md](agents.md) (roster #5) · [design/agent-authoring-contract.md](agent-authoring-contract.md) (the boundaries MD this agent's endpoint + UI must satisfy) · [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) · [design/frontend/README.md](frontend/README.md) (§4 node model) · [design/frontend/handoffs/2026-07-09-review-to-design.md](frontend/handoffs/2026-07-09-review-to-design.md) (§4h, §6) · [design/builder-cards/](builder-cards/) (the tool-card corpus this agent retrieves over) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) (item 9, the library store) · [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the operator custom-script card — the human-authoring surface this agent's contract presupposes, and Branch A's corpus-count correction) · [scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#9, #11) · [planning/tasks.md](../planning/tasks.md) (T-044, T-046, T-127, T-135) · [functional.md](../requirements/functional.md) (REQ-F-025, REQ-F-089, REQ-F-096, REQ-F-098) · [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) · [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md) |
@@ -45,8 +45,9 @@ doc-drop pipeline this note originally proposed:
    write) makes `propose_node()` reachable; the Builder's `AuthorToolNodeModal`
    (`BuilderModals.tsx`) now fetches and renders the REAL proposal (typed live/reserved port
    chips, a `platform_version` stamp, heuristic-labelled citation scores) instead of the old
-   static mock. **What is still deferred, not silently dropped:** the modal's primary action stays
-   "Copy proposal" — it never auto-adds a card.
+   static mock. The modal now also carries a confirm-gated **"Accept to library"** action
+   (`BuilderModals.tsx` → `api.acceptNodeProposal`, built 2026-07-13) that persists a metadata-only
+   draft `LibraryEntry`; it still **never auto-adds a card** to the canvas.
 6. **Accept→library, a conformance harness, and a structured doc-drop importer, ALL BACKEND-ONLY
    (2026-07-11, W2 backend, T-135, commit `5a3dd6a`).** `POST /api/builder/node-proposal/accept`
    (`reviewer`/`approver`) re-derives the proposal server-side (never trusts a client-supplied
@@ -61,11 +62,11 @@ doc-drop pipeline this note originally proposed:
    an nf-core `nextflow_schema.json` into a `NodeProposal` for a tool **not** in the curated
    corpus — the structured, lowest-injection-risk half of the "bring your own tools" gap item 4
    above names; a param maps to a real `ARTIFACT_KINDS` kind only on a confident match, else a
-   `reserved` slot (never invented). **Deferred, not silently dropped:** the Builder's "Accept to
-   library" button (no frontend caller of either new endpoint exists —
-   `grep -rn "node-proposal/accept\|builder/library" frontend/src` returns nothing); the
-   `draft→approved` transition; the free-text `--help`/README half of the importer (its own
-   spike, per the module docstring). +34 tests (`test_library_store.py`,
+   `reserved` slot (never invented). **Built since (2026-07-13):** the Builder's "Accept to
+   library" button (confirm-gated + reviewer/approver-gated, viewer→403; `BuilderModals.tsx` →
+   `api.acceptNodeProposal`) — it persists a metadata-only draft `LibraryEntry`, it does **not** add
+   a canvas node. **Still deferred, not silently dropped:** the `draft→approved` transition; the
+   free-text `--help`/README half of the importer (its own spike, per the module docstring). +34 tests (`test_library_store.py`,
    `test_node_author_accept_api.py`, `test_node_author_conformance.py`,
    `test_node_author_importer.py`).
 7. **Corrected: the corpus is 9 cards, not 11.** Two retirements, both leaving their KIND in the
@@ -186,6 +187,8 @@ that isn't already captured by those.
    `src/bayleaf/node_author/importer.py`) is built, backend-only, no `api/` exposure. **Still
    unbuilt:** the free-text `--help`/README half (the unbounded-input, higher injection-risk
    parse, wants its own spike + safety tests) and any `api/` endpoint for either importer path.
-4. The Builder's own "Accept to library" button — `POST /api/builder/node-proposal/accept` +
-   `GET /api/builder/library` exist (T-135) but have no frontend caller yet.
+4. ~~The Builder's own "Accept to library" button~~ **DONE (2026-07-13)** — `BuilderModals.tsx`
+   calls `api.acceptNodeProposal` (`POST /api/builder/node-proposal/accept`), confirm-gated +
+   reviewer/approver-gated (viewer→403); persists a metadata-only draft `LibraryEntry`, does **not**
+   add a canvas node.
 5. The `draft→approved` library-entry transition (riding the `pipelines_lifecycle` RBAC pattern).

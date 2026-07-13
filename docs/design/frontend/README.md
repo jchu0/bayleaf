@@ -56,11 +56,11 @@ value isn't stated here, read it from `source/bayleaf.dc.html`.
   the code has always shipped three since T-064):
   - **Operate (reordered 2026-07-10, T-110, "Wave 8," G4; page names simplified 2026-07-13):**
     **Inbox** → **Review queue** →
-    Samplesheet → Runs → Intake → Decisions — Notification (Inbox) → Action
+    Samplesheet → Intake → Decisions → Runs — Notification (Inbox) → Action
     (Review queue) → Steps (the process flow), work/issue-tracking pages now sit above the
     process flow (was Submit → Runs → Intake → Decision cards → Review queue → Inbox).
     **Sample Metadata now leads the Steps sub-sequence (2026-07-10, T-117, "Wave 9," G1):**
-    accession → submit → runs → intake → decide — the CRM subject-registration step is upstream
+    accession → submit → intake → decide (Runs is pinned to the **bottom** of the Operate group per UIC-15) — the CRM subject-registration step is upstream
     of the wetlab samplesheet, preserving G4's Notification→Action→Steps order rather than
     sitting atop the whole group (see §5.12).
   - **Page-access view-gate (2026-07-10, T-117, "Wave 9," G1).** A second frontend-only
@@ -519,12 +519,13 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
   triage look like duplicate pages." `AgentTriage.tsx` now splits its content on
   `isSystemView = !runId`: the launchers render **only** on `/agents` ("System agents," a new
   title + subtitle); the per-run route shows only its flagged-samples table + composer (with a
-  "no run in context" empty state under it, and no launchers). Since both routes still share one
-  `PageId: 'agent'`, `TopBar.tsx` gains a route-aware `'system-agents'` crumb sentinel (mirroring
+  "no run in context" empty state under it, and no launchers). The dedicated `/system-agents` route now carries its own
+  `PageId: 'systemAgents'` (the `/agents` route is a legacy alias still gated `page: 'agent'`), and
+  `TopBar.tsx` gains a route-aware `'system-agents'` crumb sentinel (mirroring
   the existing `'admin'` pattern) so the two pages' titles don't collide. This is a lighter-weight
   landing of [agent-triage-redesign-spec.md](agent-triage-redesign-spec.md)'s Slice 1 — see that
-  doc's own corrected Status field for the gap (no dedicated `system-agents` `PageId`, so Admin
-  page-access still can't grant the two views separately) and
+  doc's own corrected Status field — Triage and System agents are now separately grantable via the
+  dedicated `systemAgents` `PageId` — and
   [journal 2026-07-13-audit-fixes-ia.md](../../journal/2026-07-13-audit-fixes-ia.md).
 - **Reads the shared `useRun(runId)` cache on the per-run route (Shipped 2026-07-13, T-167, commit
   `5daf1a9`, UX-DUP #4).** Same change as Provenance (§5.6) and Decision cards (§5.4): the run
@@ -904,7 +905,7 @@ content inside the read-only Decision-boundary view).
   **input** circle on another card; the elbow edge anchors to those exact ports. Enforce
   **typed-port compatibility** (an output kind connects only to a matching input kind).
   **Larger cards, four-sided ports (2026-07-11, UIC-16, commit `12a9913`):** cards grew from a
-  fixed 168/208px chip to `NODE_W = 232` and ports now sit on **all four sides**, not just
+  fixed 168/208px chip to `NODE_W = 320` and ports now sit on **all four sides**, not just
   left/right — `BuilderShared.portSide(kind, dir)` places reference/panel inputs on **top** and
   QC/metric outputs on **bottom** (matching [builder-cards/README.md §2](../builder-cards/README.md#2-port-placement-convention)),
   while the primary sample-data lane keeps its left-in/right-out flow. Render and wire-endpoint

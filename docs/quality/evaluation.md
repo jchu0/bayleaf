@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-13 (MST) — **route-to-human → flag-for-review** naming refresh: EVAL-012 + the test-file census entry `test_route_to_human` → `test_flag_for_review` (file renamed, count unchanged), rule id `VAR-FFR-001`. Also: census refresh 722/54 → **727/55** (re-derived: `uv run pytest --collect-only -q` → 727; `git ls-files 'tests/*.py' \| wc -l` → 55). One new file, `tests/test_real_giab_calibrated.py` (+3, live-genomics WS-02/WS-04 real-calibrated-data proof), plus one test each in `test_gate.py` (b03d1fa's `CheckCoverage` contamination-flip freeze) and `test_pipeline_run.py` (`7cef743`'s Builder-Run parse-contract-parity red-before-impl guard). `uv run pytest -q` → **719 passed / 8 skipped** (unchanged skip set). Prior: 2026-07-12 (MST) — gap-analysis-remediation census refresh (634/48 → 708/52 → 722/54; WS-01/03/05/06/07/08/09/10, then WS-02/WS-04 + a caught pre-existing drift, `test_card_readout` 17→21, from the un-recounted `61936d1` WS-06 Gap 2 API-wiring commit) |
+| **Last updated** | 2026-07-13 (MST) — **route-to-human → flag-for-review** naming refresh: EVAL-012 + the test-file census entry `test_route_to_human` → `test_flag_for_review` (file renamed, count unchanged), rule id `VAR-FFR-001`. Also: census refresh 727/55 → **789/65** (re-derived: `uv run pytest --collect-only -q` → 789; `git ls-files 'tests/*.py' \| wc -l` → 65). This refresh adds the 10 previously-uncounted test files (`test_agent_chat`, `test_chat_store`, `test_upstream_waiver`, `test_scope_by_wiring`, `test_agent_output_cache`, `test_agent_binding_store`, `test_triage_cache`, `test_node_author_scaffolds`, `test_archivist_retrieval`, `test_pipeline_repair_docs_corpus`; +51) plus incremental growth in already-listed files. `uv run pytest -q` → **781 passed / 8 skipped** (unchanged skip set). Prior: 2026-07-12 (MST) — gap-analysis-remediation census refresh (634/48 → 708/52 → 722/54; WS-01/03/05/06/07/08/09/10, then WS-02/WS-04 + a caught pre-existing drift, `test_card_readout` 17→21, from the un-recounted `61936d1` WS-06 Gap 2 API-wiring commit) |
 | **Audience** | software / all |
 | **Related** | [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) (the workstream tracker this census reflects), [journal/2026-07-12-gap-analysis-remediation-verification.md](../journal/2026-07-12-gap-analysis-remediation-verification.md), [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006, EVAL-009), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (flag-for-review, de-id, share egress, per-variant table EVAL-013), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (custom-script processes, EVAL-015; sandboxed file browser, EVAL-016; compiler robustness, EVAL-017), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (authored-pipeline intake + processing gate, EVAL-018), [HISTORY.md](../HISTORY.md) (archived census milestones), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) (EVAL-009, EVAL-013), [journal/2026-07-11-fleet.md](../journal/2026-07-11-fleet.md) (EVAL-008 update, EVAL-014), [journal/2026-07-11-custom-script-io.md](../journal/2026-07-11-custom-script-io.md) (EVAL-015, EVAL-016), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (EVAL-014), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
 
@@ -19,9 +19,15 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The suite is **727 tests across 55 files** — re-derived 2026-07-13 (MST) via
-`uv run pytest --collect-only -q` (727 collected) + `git ls-files 'tests/*.py' | wc -l` (55); was
-722/54 the prior day, 708/52 after the gap-analysis-remediation sweep, 634/48 before it. **One**
+The suite is **789 tests collected across 65 files** — re-derived 2026-07-13 (MST) via
+`uv run pytest --collect-only -q` (789 collected) + `git ls-files 'tests/*.py' | wc -l` (65); was
+727/55 earlier the same day, 722/54 the prior day, 708/52 after the gap-analysis-remediation sweep,
+634/48 before it. The 727→789 step this refresh adds the 10 test files the by-size breakdown below
+had omitted (`test_agent_chat`, `test_chat_store`, `test_upstream_waiver`, `test_scope_by_wiring`,
+`test_agent_output_cache`, `test_agent_binding_store`, `test_triage_cache`,
+`test_node_author_scaffolds`, `test_archivist_retrieval`, `test_pipeline_repair_docs_corpus`; +51
+tests) plus incremental growth in already-listed files — all pure-offline, so the skip set is
+unchanged at 8. **One**
 new file has landed since the 722/54 count: `tests/test_real_giab_calibrated.py` (commit `478d579`,
 +3 — the WS-02/WS-04 live-genomics pass, reading the REAL committed calibrated VerifyBamID2/hap.py
 tool outputs under `tests/fixtures/giab_real/` through the public `ingest_results_dir → run_gate`
@@ -35,7 +41,7 @@ pre-existing drift the sweep before that missed: `test_card_readout.py` grew fro
 `61936d1` ("card_readout: render target_band thresholds", WS-06 Gap 2 API wiring) — a commit that
 landed **after** that day's doc sweep and was never counted until the 722/54 recount. Pass/skip
 depends on whether `nextflow` is on `PATH`: verified here via `uv run pytest -q` with `nextflow`
-absent (this repo's default sandboxed dev/CI environment) — **719 pass / 8 skip** (727 collected
+absent (this repo's default sandboxed dev/CI environment) — **781 pass / 8 skip** (789 collected
 minus the 8 machine-gated skips below; every addition this round is a pure-offline stub/fixture/
 real-fixture-bytes test, no new skip).
 The **8 skips** are machine-gated live-integration checks: **3 `nextflow`-gated** stub-run checks
@@ -118,7 +124,12 @@ Slurm/local executor-profile auto-detection unit, incl. a new WS-10-adjacent cas
 (3, **new** — WS-06 Gap 6: all 7 off-gate stores share the generic `JsonlStore`/`SqliteStore` base,
 byte-identical output), `test_run_variants` (3, the per-variant Report endpoint
 `GET /api/runs/{id}/variants`, T-133, EVAL-013), `test_stub_next_steps` (2, **new** — WS-07 Q1's
-anti-boilerplate guard: the stub `next_steps` is never fabricated, across all four verdicts) —
+anti-boilerplate guard: the stub `next_steps` is never fabricated, across all four verdicts),
+`test_upstream_waiver` (8), `test_agent_chat` (7), `test_chat_store` (6), `test_scope_by_wiring`
+(5), `test_agent_output_cache` (5), `test_agent_binding_store` (5), `test_triage_cache` (4),
+`test_node_author_scaffolds` (4), `test_archivist_retrieval` (4), `test_pipeline_repair_docs_corpus`
+(3) (the trailing 10 files newly added to this by-size breakdown 2026-07-13 MST, previously
+omitted) —
 all runnable offline with no API key (`uv sync --all-extras && uv run pytest`; `test_api`/`test_triage`
 need the api/claude extras to import FastAPI, the API-endpoint suites drive a `TestClient`, and the
 core/agent/compiler suites run pure-offline over the core + pydantic).

@@ -49,10 +49,10 @@ Every finding and verdict is labelled with the gate it came from:
                                           │             verdict/notification events)
                             triage agent ─┘  (advisory, off the critical path, ADR-0009)
                                                           │           notify/ ◀────┘
-      ┌───────────────────────────────────────────────────┤        (outbound, off by
-      ▼                          ▼                         ▼         default, ADR-0010)
- app/ Streamlit           api/ FastAPI  ───────────▶  frontend/ React
- (offline fallback)       (read-API seam, ADR-0010)   (Vite+Tailwind, ADR-0014)
+                          ┌─────────────────────────────┤        (outbound, off by
+                          ▼                         ▼             default, ADR-0010)
+                     api/ FastAPI  ───────────▶  frontend/ React
+                     (read-API seam, ADR-0010)   (Vite+Tailwind, ADR-0014)
 ```
 
 1. **Core (`src/bayleaf/`), framework-agnostic.**
@@ -83,7 +83,7 @@ Every finding and verdict is labelled with the gate it came from:
    event trail into an `EventLedger` (in-memory + JSONL), anchored to one `AnalysisRun`.
    The event log is authoritative; the relational DB is a rebuildable projection via the
    `Repository` port + `rebuild-db`, selected by `get_repository()` — SqliteRepository *and* a
-   guarded, off-by-default PostgresRepository (ADR-0002/0016). A tenth `EventType`,
+   guarded, off-by-default PostgresRepository (ADR-0002/0016). A twelfth `EventType`,
    `DATA_EXPORTED`, is emitted by the read-API's de-identified share egress (not `run_gate`) into a
    **separate** sink (`api/share_store.py`), merged with the ledger at read time (ADR-0018 D3).
 3. **Advisory agents (OFF the deterministic critical path).** Five agents + the narration
@@ -106,12 +106,10 @@ Every finding and verdict is labelled with the gate it came from:
       `api/library_store.py` (`BAYLEAF_LIBRARY_STORE=jsonl|sqlite`, ADR-0016 item 9). A companion
       `node_author/importer.py` deterministically parses an nf-core `nextflow_schema.json` into a
       proposal for a tool outside the curated corpus (unknown kinds → reserved, never invented).
-      **Still deferred, labelled:** the Builder's own "Accept to library" button (no frontend caller
-      of the accept/library endpoints yet), the `draft→approved` transition, and the free-text
+      **Still deferred, labelled:** the `draft→approved` transition and the free-text
       `--help`/README half of the importer.
-4. **Delivery layers (thin, over the core).** `app/` = Streamlit demo (the guaranteed-working
-   offline fallback); `api/` = FastAPI read-API + off-gate writes (ADR-0010/0014/0016); `frontend/`
-   = React + Vite + Tailwind consuming the API. **13 operator screens** in a **three-group nav**
+4. **Delivery layers (thin, over the core).** `api/` = FastAPI read-API + off-gate writes
+   (ADR-0010/0014/0016); `frontend/` = React + Vite + Tailwind consuming the API. **13 operator screens** in a **three-group nav**
    (page names simplified 2026-07-13 to match `frontend/src/access.ts::PAGE_CATALOG`) —
    **Operate** (Sample Metadata → Samplesheet → Runs → Intake/preflight → Decisions → Review queue →
    Inbox), **Analyze** (Provenance → Triage → System Agents → Monitoring), **Configure** (Pipeline →
@@ -125,7 +123,8 @@ Every finding and verdict is labelled with the gate it came from:
    in [HISTORY.md](../HISTORY.md). The current `api/` surface:
    - **Feature-area routers.** New product surfaces live in `api/routers/`
      (`settings`, `review_queue`, `pipelines_lifecycle`, `nextflow`,
-     `node_author`, `intake`, `pipeline_run`, `files`) + `api/card_readout.py`, each an `APIRouter`
+     `node_author`, `node_observations`, `agent_chat`, `intake`, `pipeline_run`, `files`) +
+     `api/card_readout.py`, each an `APIRouter`
      mounted via `include_router` — kept out of `main.py` so feature areas evolve independently and
      none mutates a verdict, finding, or ledger event (ADR-0001/0014).
    - **Auth / RBAC primitive (`api/auth.py`).** One shared identity+authorization source for every
@@ -250,7 +249,7 @@ the deterministic path, and an approved config override records intent without m
 2. **AI is OFF by default** with a deterministic fallback; all six AI seams (synthesizer, QC-triage,
    feedback-triage, pipeline-repair, archivist, node-authoring) flip via env, $0 by default (ADR-0006).
 3. **Event log is authoritative**; the DB is a disposable, rebuildable projection (ADR-0002).
-4. **Core stays framework-agnostic** — no Streamlit/FastAPI/React imports in `src/bayleaf/`; ports & adapters (ADR-0003).
+4. **Core stays framework-agnostic** — no FastAPI/React imports in `src/bayleaf/`; ports & adapters (ADR-0003).
 5. **Findings are immutable + content-hashed**; confidence is omitted until grounded.
 6. **Off-gate product state never re-enters the gate** — in-app feedback, saved Pipeline Builder
    graphs, config-threshold overrides, and review-queue tickets are written by dedicated `api/` seams
@@ -306,7 +305,7 @@ versioned YAML/mapping, not by editing `rules`, keeping verdicts byte-identical 
 
 ## Deployment
 
-Local today: Streamlit (offline) + FastAPI (`uvicorn`) + React (Vite). The ports-&-adapters boundary
+Local today: FastAPI (`uvicorn`) + React (Vite), fully offline by default (stub-first). The ports-&-adapters boundary
 carries portability. **Nextflow (compute) is a realized seam for local execution** — `bayleaf.nextflow`
 compiles a card graph into a runnable pipeline and the intake driver runs it for real via `nextflow
 run -profile conda`/`standard`. Slurm / AWS Batch / HealthOmics **executor config** for that same
