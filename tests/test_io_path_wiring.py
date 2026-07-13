@@ -41,6 +41,7 @@ from typing import Any
 import pytest
 import scripts.run_giab_pipeline as drv
 from fastapi.testclient import TestClient
+from scripts.seed_approved_germline import germline_graph_dict
 
 import api.routers.intake as intake
 import api.routers.pipeline_run as pr
@@ -190,23 +191,11 @@ class _FakeStore:
 
 
 # A saved-envelope graph that consumes ALL THREE operator input kinds (fastq + reference_fasta +
-# panel_bed) so a run must resolve every category — the maximal I/O-card surface.
-_GRAPH_3KIND: dict[str, Any] = {
-    "nodes": [
-        {"id": "n_fastp", "name": "fastp", "ins": ["fastq"], "outs": ["fastq"]},
-        {"id": "n_bwa", "name": "bwa-mem2", "ins": ["fastq", "reference_fasta"], "outs": ["bam"]},
-        {
-            "id": "n_call",
-            "name": "bcftools call",
-            "ins": ["bam", "reference_fasta", "panel_bed"],
-            "outs": ["vcf"],
-        },
-    ],
-    "edges": [
-        {"from": {"node": "n_fastp", "idx": 0}, "to": {"node": "n_bwa", "idx": 0}},
-        {"from": {"node": "n_bwa", "idx": 0}, "to": {"node": "n_call", "idx": 0}},
-    ],
-}
+# panel_bed) so a run must resolve every category — the maximal I/O-card surface. This is the seeded
+# germline chain (via the shared ``germline_graph_dict()``), which needs exactly those three kinds
+# AND produces the frozen-five QC — so it also clears Builder-Run's submit-time parse contract
+# (a hand-built partial chain would be rejected before input resolution, defeating this test).
+_GRAPH_3KIND: dict[str, Any] = germline_graph_dict()
 
 
 def _approved(name: str, graph: dict[str, Any]) -> dict[str, Any]:

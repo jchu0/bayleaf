@@ -32,7 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.auth import Actor, require_role
-from api.authored_pipeline import compile_record, resolve_approved
+from api.authored_pipeline import check_parse_contract, compile_record, resolve_approved
 from api.job_store import (
     KIND_BUILDER_RUN,
     TERMINAL_STATUSES,
@@ -240,6 +240,12 @@ def run_pipeline(
     # ``resolve_approved`` + ``compile_record`` are the shared mechanism the intake path reuses.
     record = resolve_approved(get_pipeline_store(), body.name, body.version)
     graph, bundle = compile_record(record, body.name)
+
+    # Parity with the intake path (WS-09 #1 / audit G8): reject an approved pipeline whose outputs
+    # can't yield a gate-able card BEFORE launching the driver. Without this, a graph missing a
+    # frozen-five stage runs to completion in Nextflow and only THEN dies at parse — a full compute
+    # burn for a `failed` run. A structural check needing no tools, so it's cheap and offline-safe.
+    check_parse_contract(graph, body.name)
 
     # Validate the operator supplied every input KIND the graph consumes, and resolve each choice to
     # a real server-side path by KEY (never a raw client path — traversal-safe).
