@@ -187,9 +187,11 @@ uv run python -c "from bayleaf import run_gate_from_dir; \
       gated / 8 ungated** of 21 registered `our_key`s (`data/metric_registry.md`; was 11/9 of 20 before
       WS-02/WS-04, 2026-07-12, gated `contamination.freemix` (VerifyBamID2) + new key
       `concordance.snp_f1` (hap.py) — real ingest-adapter parsers, but **gated + parser-wired, not
-      pipeline-produced**: `verifybamid2.nf`/`happy.nf` are standalone Nextflow modules
-      (`pipelines/optional_modules/`) not wired into the drift-locked `pipelines/germline/` reference,
-      see item 1e). **Proven on real, calibrated tool output (2026-07-13, `478d579`):** both parsers
+      pipeline-produced by default**: `happy.nf` is still a standalone Nextflow module
+      (`pipelines/optional_modules/`) not wired into any pipeline; `verifybamid2.nf` is now wired
+      into the drift-locked `pipelines/germline/` reference as a **dormant** stage (T-071a, item 1e)
+      — still not pipeline-produced *by default* (armed only if an operator supplies the SVD panel).
+      **Proven on real, calibrated tool output (2026-07-13, `478d579`):** both parsers
       now additionally read GENUINE tool output (a genome-wide-calibrated VerifyBamID2 `.selfSM`,
       FREEMIX 0.000220096; a real hap.py `summary.csv` vs GIAB v4.2.1 truth, SNP-F1 0.989276) —
       committed as tiny fixtures (`tests/fixtures/giab_real/`) and proven through the public
@@ -220,6 +222,23 @@ uv run python -c "from bayleaf import run_gate_from_dir; \
       custom-script processes render **VERBATIM** via `_render_custom` (`NfNode.script/container/conda`,
       ADR-0020; a blank script → `CompileError`). Emits text only — **never runs a tool (compose ≠
       execute, ADR-0001/0003)**; see [design/nextflow-codegen.md](docs/design/nextflow-codegen.md).
+      **Optional external input + a dormant contamination stage (T-071a, PR #12, 2026-07-13):** a
+      new general compiler concept, `catalog.OPTIONAL_INPUT_PARAMS` (kind → params key), lets an
+      input be operator-suppliable but **not required** — it compiles to a param-gated source
+      channel (`params.x ? Channel.fromPath(params.x) : Channel.empty()`), deliberately kept OUT of
+      `required_inputs()`; unset → the consuming process gets an empty channel and runs **zero
+      tasks** (dormant, standard DSL2 semantics, not an error). `germline_graph()` (the canonical
+      reference) now wires a verifybamid2 contamination stage this way — its `svd_panel` is the
+      concept's first user — so the committed `pipelines/germline/` (regenerated, drift-lock still
+      green, `tests/test_nextflow_compile.py`) carries a real `VERIFYBAMID2` process that is
+      **dormant on the pinned/offline demo** (no `params.verifybamid_svd` supplied) and would emit
+      the `.selfSM` `ingest.nfcore._extract_verifybamid` (item 1g below) already parses, once armed.
+      **Contamination is now pipeline-*producible*, not yet pipeline-*live*: three follow-ups
+      remain** — `scripts/run_giab_pipeline.py` (the live intake driver) still doesn't parse
+      `.selfSM` (only the still-not-gate-called `ingest.nfcore` adapter does, item 1g); a live
+      *multi-sample* run needs the SVD panel staged as a broadcast value channel + a `--SVDPrefix`
+      sibling-file convention; the frontend Builder's seeded template has no verifybamid2 card yet.
+      Detail: [design/nextflow-codegen.md](docs/design/nextflow-codegen.md) rule 9.
    f. `synthetic/` — the failure-mode data generator incl. `scale.py` (`demo/scale/bulk` CLI, T-050).
    g. `ingest/nfcore.py` (WS-03, 2026-07-12): `ingest_results_dir()` turns a **real, published**
       nf-core/MultiQC `results/` dir into registry-keyed `SampleMetrics` — parses `fastp.json` +
@@ -238,15 +257,17 @@ uv run python -c "from bayleaf import run_gate_from_dir; \
       (2026-07-12):** `_extract_verifybamid`/`_extract_happy` added to this same adapter, parsing a
       present VerifyBamID2 `.selfSM` (FREEMIX) / hap.py `summary.csv` (SNP-F1 vs GIAB truth) into
       `contamination.freemix`/`concordance.snp_f1` — real, tested parsers, each gated by an optional
-      (`required=False`) `runbook.QCThreshold` (item 1c). **Same honest gap as above, one layer
-      earlier:** `verifybamid2.nf`/`happy.nf` (real `script:` + `stub:`) live in a new
-      `pipelines/optional_modules/` dir, **not wired into any runnable pipeline** — the committed
-      `pipelines/germline/` reference is drift-locked byte-for-byte to the compiler's own output
-      (`tests/test_nextflow_compile.py::test_committed_reference_pipeline_matches_the_compiler`), and
-      the compiler has no input-gated-conditional concept for an optional add-on tool. So no pipeline
-      in this repo produces either input; a live number needs an operator to run the standalone
-      module by hand (verifybamid2 additionally needs an SVD/UD panel, hap.py needs the GIAB truth
-      VCF + confident BED — labelled inputs, never fabricated, ADR-0004).
+      (`required=False`) `runbook.QCThreshold` (item 1c). **Was the same honest gap as above, one
+      layer earlier; half-closed 2026-07-13 (T-071a, PR #12):** `happy.nf` (real `script:` + `stub:`)
+      still lives unwired in `pipelines/optional_modules/` — **not wired into any runnable
+      pipeline**, a live SNP-F1 number still needs an operator to run it by hand (needs the GIAB
+      truth VCF + confident BED, labelled input, never fabricated, ADR-0004). `verifybamid2.nf`,
+      however, is **no longer unwired** — item 1e's new `catalog.OPTIONAL_INPUT_PARAMS` concept
+      wires it into the drift-locked `pipelines/germline/` reference as a dormant stage (the
+      "compiler has no input-gated-conditional concept" limitation this paragraph used to note is
+      resolved for THIS one input kind); a live FREEMIX number still needs an operator to arm
+      `params.verifybamid_svd` (an SVD/UD ancestry panel, labelled input, never fabricated,
+      ADR-0004) — see item 1e for the three follow-ups that remain before it is genuinely live.
 
 2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only event trail
    (`analysis_run.started` → per-sample findings/verdict → `completed`) into an `EventLedger`
@@ -385,14 +406,42 @@ uv run python -c "from bayleaf import run_gate_from_dir; \
       binding model, no run→executed-graph linkage); real, server-enforced access is by node scope
       (real) plus **wire role**, not the binding (`outputs` stays viewer+, the PII-adjacent `logs`
       grant now requires **reviewer+**, closing a hole where any viewer could read any node's log
-      tail). Full per-agent binding enforcement (persist bindings server-side, link a run to the graph
-      it executed, intersect grants) stays a documented deferral. System agents (pipeline-repair, archivist) moved off the Builder palette →
+      tail). System agents (pipeline-repair, archivist) moved off the Builder palette →
       Agent-triage; the Builder keeps node-attachable QC-triage + node-authoring. Every Builder port
       now maps to a **real Nextflow channel or is removed** (reserved-port honesty; `fastp adapter_fasta`
       the sole left-reserved). Plus compiler hardening (injection escaping + validators, `is_source`
       data-kind fix, collision/fan-in/dup-emit/port-drift `CompileError`s), the mosdepth Export-422 fix,
       and **`tsc -b` in pre-push**. Details: [ADR-0022](docs/adr/ADR-0022-agent-observation-binding.md),
       [design/agents.md](docs/design/agents.md); narrative in [HISTORY.md](docs/HISTORY.md).
+
+      **Scope-by-wiring, server-enforced (ADR-0024, built 2026-07-13, superseding the "documented
+      deferral" line above).** `api/agent_binding_store.py` (jsonl/sqlite) snapshots a run's
+      **executed-graph** agent bindings at launch, so `GET .../nodes/{node}/observations?agent=X`
+      really 403s an agent not wired to `node` and caps its grants to the binding — enforcement, not
+      just an advisory hint. Shipped first for Builder-Run (`api/routers/pipeline_run.py`).
+      **T-148 (PR #10, 2026-07-13) closes the intake half of ADR-0024's own deferred list:**
+      `api/routers/intake.py::submit_run` now also calls `agent_binding_store.record()` at submit —
+      an authored-pipeline intake run snapshots its real bindings, and the default germline
+      reference (which carries none) still snapshots an EMPTY set, so even an unbound intake run
+      403s an unwired `?agent=` request rather than going silently unenforced (previously: zero
+      enforcement on every intake-launched run). **Still deferred:** a real triage consumer
+      (`gather_node_observations` → `triage/agent.py` never calls it today) and the automatic
+      `?agent=` pass (nothing populates the query param from a caller's identity yet).
+      [ADR-0024](docs/adr/ADR-0024-scope-by-wiring.md).
+   c. `deploy/` — a containerized read-API + built frontend (T-041, PR #13, 2026-07-13, **Docker
+      only** — Terraform/IaC dropped per the maintainer, no cloud target shipped). `Dockerfile.api`:
+      a multi-stage build (stage 1 `node:22-bookworm-slim` builds the Vite SPA; stage 2
+      `python:3.14-slim-bookworm` runs `uv sync --frozen --no-dev --extra api` off the committed
+      lock, then `uvicorn api.main:app`), serving the read-API and the compiled SPA same-origin from
+      ONE container. `api/main.py` is container-ready with defaults that preserve today's offline
+      behavior: `DATA_ROOT` resolves via the existing `bayleaf.settings.run_store_root()`
+      (`BAYLEAF_DATA_ROOT`, else the repo's committed `data/`), CORS reads `BAYLEAF_CORS_ORIGINS`
+      (comma-separated, defaults to the two `:5173` dev hosts), and a guarded
+      `StaticFiles(html=True)` mount serves `frontend/dist` at `/` only when that dir exists
+      (present in the image, absent in dev/tests). `docker-compose.yml` adds a standalone `app`
+      service alongside the pre-existing `deploy/postgres/`/`deploy/telemetry/` bundles. Verified: a
+      `docker build` + a running container served `/api/health` (200), `/api/runs` (from the
+      mounted `data/`), and `/` (SPA index, 200) with CORS honoring the env override.
 
 ## Git conventions
 

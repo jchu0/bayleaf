@@ -1610,19 +1610,27 @@ had reserved or listed as *not-yet-built*.
     agent-context/semantic-retrieval/demo-default items remain open — see
     [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) for the live tracker.
 11. **WS-02/WS-04 (2026-07-12) — `contamination.freemix` and `concordance.snp_f1` are gated +
-    parser-wired, not pipeline-produced.** Same honest-gap shape as item 10, one layer earlier:
-    `ingest.nfcore._extract_verifybamid`/`_extract_happy` are real, tested parsers, and each metric
-    carries a real `runbook.QCThreshold` (REQ-F-071 above) — but **no pipeline committed in this
-    repo runs the producing tool.** `pipelines/optional_modules/verifybamid2.nf`/`happy.nf` (real
-    `script:` + `stub:`) are standalone Nextflow modules, deliberately **not** wired into
-    `pipelines/germline/main.nf`: that reference pipeline is drift-locked byte-for-byte to the
-    card-graph compiler's own output (a hand-edit breaks
-    `tests/test_nextflow_compile.py::test_committed_reference_pipeline_matches_the_compiler`), and
-    the compiler (REQ-F-085/item 9 above) has no input-gated-conditional concept for an optional
-    add-on tool today. A live FREEMIX or SNP-F1 value therefore requires an operator to run the
-    standalone module by hand and place its output where `ingest_results_dir` looks for it
-    (verifybamid2 additionally needs an SVD/UD ancestry panel; hap.py needs the GIAB truth VCF +
-    confident BED — both labelled pipeline inputs, never fabricated, ADR-0004). See
+    parser-wired, not pipeline-produced by default.** Same honest-gap shape as item 10, one layer
+    earlier: `ingest.nfcore._extract_verifybamid`/`_extract_happy` are real, tested parsers, and
+    each metric carries a real `runbook.QCThreshold` (REQ-F-071 above). `hap.py` is unchanged: no
+    pipeline committed in this repo runs it — `pipelines/optional_modules/happy.nf` (real `script:`
+    + `stub:`) is a standalone module, not wired into `pipelines/germline/main.nf`, so a live SNP-F1
+    value requires an operator to run it by hand (needs the GIAB truth VCF + confident BED —
+    labelled, never fabricated, ADR-0004). **`verifybamid2` moved as of 2026-07-13 (T-071a, PR
+    #12):** the compiler (REQ-F-085/item 9 above) gained exactly the input-gated-conditional
+    concept this item used to say it lacked — `catalog.OPTIONAL_INPUT_PARAMS` compiles an
+    operator-suppliable-but-not-required input to a param-gated channel
+    (`params.x ? Channel.fromPath(params.x) : Channel.empty()`) — and `germline_graph()` now wires
+    a `VERIFYBAMID2` stage this way into the drift-locked `pipelines/germline/main.nf` (regenerated,
+    still byte-locked to the compiler's own output,
+    `tests/test_nextflow_compile.py::test_committed_reference_pipeline_matches_the_compiler`). It is
+    **dormant unless armed**: unset `params.verifybamid_svd` → an empty channel → zero tasks, so the
+    pinned/offline demo is unaffected. A live FREEMIX value therefore now needs an operator to (1)
+    arm `params.verifybamid_svd` with an SVD/UD ancestry panel (labelled, never fabricated,
+    ADR-0004), (2) have `ingest_results_dir` (not the live intake driver,
+    `scripts/run_giab_pipeline.py`, which still doesn't parse `.selfSM`) read its output, and (3)
+    for multi-sample, stage the panel as a broadcast value channel (not yet built) — contamination
+    is pipeline-*producible*, not yet pipeline-*live*. See
     [metric_registry.md](../data/metric_registry.md) §Wiring status.
 
 ---

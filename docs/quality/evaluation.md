@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-13 (MST) — **route-to-human → flag-for-review** naming refresh: EVAL-012 + the test-file census entry `test_route_to_human` → `test_flag_for_review` (file renamed, count unchanged), rule id `VAR-FFR-001`. Also: census refresh 727/55 → **789/65** (re-derived: `uv run pytest --collect-only -q` → 789; `git ls-files 'tests/*.py' \| wc -l` → 65). This refresh adds the 10 previously-uncounted test files (`test_agent_chat`, `test_chat_store`, `test_upstream_waiver`, `test_scope_by_wiring`, `test_agent_output_cache`, `test_agent_binding_store`, `test_triage_cache`, `test_node_author_scaffolds`, `test_archivist_retrieval`, `test_pipeline_repair_docs_corpus`; +51) plus incremental growth in already-listed files. `uv run pytest -q` → **781 passed / 8 skipped** (unchanged skip set). Prior: 2026-07-12 (MST) — gap-analysis-remediation census refresh (634/48 → 708/52 → 722/54; WS-01/03/05/06/07/08/09/10, then WS-02/WS-04 + a caught pre-existing drift, `test_card_readout` 17→21, from the un-recounted `61936d1` WS-06 Gap 2 API-wiring commit) |
+| **Last updated** | 2026-07-13 (MST) — **hardening-bookkeeping sweep** (four merged PRs #10–13: T-148/T-034/T-071a/T-041): census refresh **789/65 → 798/65** (re-derived: `uv run pytest --collect-only -q` → 798; `git ls-files 'tests/*.py' \| wc -l` → 65, unchanged file count). +9 tests, all in three already-listed files: `test_intake_scheduling` 19→**22** (T-148's agent-binding-capture-at-submit cases, ADR-0024), `test_nextflow_compile` 16→**19** (T-071a's optional-input-channel + dormant-verifybamid2-stage cases), `test_node_observations` 10→**13** (T-148's scope-by-wiring-over-a-populated-publish-dir cases). T-034's flat-metric rename (`pct_reads_identified`→`reads_passing_filter`) touched `test_gate`/`test_metrics_mapping`/`test_runbook_set`/`test_upstream_waiver` but added no tests (counts verified unchanged). **Full-suite pass/skip NOT independently re-verified this round:** this worktree is missing gitignored, machine-local `data/real-giab/` + several generated `data/RUN-2026-*-GIAB-*` run dirs (a pre-existing local-provisioning gap in this isolated worktree, not caused by these merges — confirmed by running each merge's new/touched files in isolation: `uv run pytest tests/test_intake_scheduling.py tests/test_node_observations.py tests/test_nextflow_compile.py tests/test_gate.py tests/test_metrics_mapping.py tests/test_runbook_set.py tests/test_upstream_waiver.py -q` → 132 passed, 1 skipped, 1 failed — the one failure (`test_hg002_committed_run_has_no_spurious_qc_missing`) is the SAME missing-committed-run-dir cause, unrelated to the rename; the T-148 PR's own commit message independently records an identical "9 pre-existing, data-dependent failures... fail identically on clean main in this fresh worktree" finding on this machine). Re-verify the 781-pass baseline (now expected ~790) on a fully-provisioned machine. See [journal/2026-07-13-hardening-bookkeeping.md](../journal/2026-07-13-hardening-bookkeeping.md). Prior: 2026-07-13 (MST) — **route-to-human → flag-for-review** naming refresh: EVAL-012 + the test-file census entry `test_route_to_human` → `test_flag_for_review` (file renamed, count unchanged), rule id `VAR-FFR-001`. Also: census refresh 727/55 → **789/65** (re-derived: `uv run pytest --collect-only -q` → 789; `git ls-files 'tests/*.py' \| wc -l` → 65). This refresh adds the 10 previously-uncounted test files (`test_agent_chat`, `test_chat_store`, `test_upstream_waiver`, `test_scope_by_wiring`, `test_agent_output_cache`, `test_agent_binding_store`, `test_triage_cache`, `test_node_author_scaffolds`, `test_archivist_retrieval`, `test_pipeline_repair_docs_corpus`; +51) plus incremental growth in already-listed files. `uv run pytest -q` → **781 passed / 8 skipped** (unchanged skip set). Prior: 2026-07-12 (MST) — gap-analysis-remediation census refresh (634/48 → 708/52 → 722/54; WS-01/03/05/06/07/08/09/10, then WS-02/WS-04 + a caught pre-existing drift, `test_card_readout` 17→21, from the un-recounted `61936d1` WS-06 Gap 2 API-wiring commit) |
 | **Audience** | software / all |
 | **Related** | [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) (the workstream tracker this census reflects), [journal/2026-07-12-gap-analysis-remediation-verification.md](../journal/2026-07-12-gap-analysis-remediation-verification.md), [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006, EVAL-009), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (flag-for-review, de-id, share egress, per-variant table EVAL-013), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (custom-script processes, EVAL-015; sandboxed file browser, EVAL-016; compiler robustness, EVAL-017), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (authored-pipeline intake + processing gate, EVAL-018), [HISTORY.md](../HISTORY.md) (archived census milestones), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) (EVAL-009, EVAL-013), [journal/2026-07-11-fleet.md](../journal/2026-07-11-fleet.md) (EVAL-008 update, EVAL-014), [journal/2026-07-11-custom-script-io.md](../journal/2026-07-11-custom-script-io.md) (EVAL-015, EVAL-016), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (EVAL-014), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
 
@@ -19,10 +19,17 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The suite is **789 tests collected across 65 files** — re-derived 2026-07-13 (MST) via
-`uv run pytest --collect-only -q` (789 collected) + `git ls-files 'tests/*.py' | wc -l` (65); was
-727/55 earlier the same day, 722/54 the prior day, 708/52 after the gap-analysis-remediation sweep,
-634/48 before it. The 727→789 step this refresh adds the 10 test files the by-size breakdown below
+The suite is **798 tests collected across 65 files** — re-derived 2026-07-13 (MST, hardening-
+bookkeeping sweep) via `uv run pytest --collect-only -q` (798 collected) + `git ls-files
+'tests/*.py' | wc -l` (65, unchanged — no new test file). The 789→798 step is four merged PRs
+(#10–13): +3 `test_intake_scheduling.py` (T-148's agent-binding-capture-at-submit cases, ADR-0024),
++3 `test_nextflow_compile.py` (T-071a's optional-input-channel + dormant-verifybamid2-stage cases),
++3 `test_node_observations.py` (T-148's scope-by-wiring-over-a-populated-publish-dir cases); T-034's
+metric rename (`pct_reads_identified`→`reads_passing_filter`) and T-041's containerization added no
+tests (verified: `test_gate`/`test_metrics_mapping`/`test_runbook_set`/`test_upstream_waiver` counts
+unchanged after the rename). Was 727/55 earlier the same day, 722/54 the prior day, 708/52 after the
+gap-analysis-remediation sweep, 634/48 before it. The 727→789 step (the PRIOR refresh) added the 10
+test files the by-size breakdown below
 had omitted (`test_agent_chat`, `test_chat_store`, `test_upstream_waiver`, `test_scope_by_wiring`,
 `test_agent_output_cache`, `test_agent_binding_store`, `test_triage_cache`,
 `test_node_author_scaffolds`, `test_archivist_retrieval`, `test_pipeline_repair_docs_corpus`; +51
@@ -40,10 +47,20 @@ and `test_pipeline_run.py` 12→**13** (`test_run_rejects_a_non_gateable_approve
 pre-existing drift the sweep before that missed: `test_card_readout.py` grew from 17 to 21 tests in
 `61936d1` ("card_readout: render target_band thresholds", WS-06 Gap 2 API wiring) — a commit that
 landed **after** that day's doc sweep and was never counted until the 722/54 recount. Pass/skip
-depends on whether `nextflow` is on `PATH`: verified here via `uv run pytest -q` with `nextflow`
-absent (this repo's default sandboxed dev/CI environment) — **781 pass / 8 skip** (789 collected
-minus the 8 machine-gated skips below; every addition this round is a pure-offline stub/fixture/
-real-fixture-bytes test, no new skip).
+depends on whether `nextflow` is on `PATH`: verified 2026-07-13 (pre-hardening-sweep) via
+`uv run pytest -q` with `nextflow` absent (this repo's default sandboxed dev/CI environment) —
+**781 pass / 8 skip** (789 collected minus the 8 machine-gated skips below; every addition that
+round was a pure-offline stub/fixture/real-fixture-bytes test, no new skip). **By the same logic,
+798 collected − 8 machine-gated skips = 790 pass / 8 skip is the expected fully-provisioned
+figure post-hardening-sweep** (all 9 new tests are pure-offline, no new skip) — **not
+independently re-verified end-to-end this round**: this specific worktree is missing gitignored,
+machine-local `data/real-giab/` + several generated `data/RUN-2026-*-GIAB-*` run dirs (a
+pre-existing local-provisioning gap in this isolated worktree, unrelated to the four PRs — see the
+header cell above for the isolated-file-run evidence). `uv run pytest -q` here shows **7 failed,
+782 passed, 9 skipped** (one extra skip vs. the 8 below: `test_ingest.py`'s real-path check
+properly self-skips here too, since its own gitignored data is absent) — every one of the 7
+failures references a missing `data/real-giab/` or `data/RUN-2026-*-GIAB-*` path, none touch
+rename/binding/compiler logic. Re-verify 790/8 on a fully-provisioned machine.
 The **8 skips** are machine-gated live-integration checks: **3 `nextflow`-gated** stub-run checks
 (`test_nextflow_compile.py::test_generated_germline_stub_runs`, EVAL-006;
 `test_e2e_pipeline.py::test_approved_germline_pipeline_stub_runs_live`, EVAL-007;
@@ -67,19 +84,23 @@ metric-honesty guards) → 50, `b03d1fa` — the `CheckCoverage` contamination-f
 `test_triage` (23, was 16 — WS-07 Q2 `ask`-endpoint cases), `test_card_readout` (21, was 14 → 17
 (WS-07 Q1 `qc_reports` cases) → 21, `61936d1` — WS-06 Gap 2's API-side target_band rendering: in-band
 pass, out-of-target/out-of-hard tail flags, and an anti-drift guard the readout status mirrors
-`rules._evaluate_target_band`), `test_review_queue` (20), `test_node_author`
-(19, the advisory node-authoring agent, T-046), `test_intake_scheduling` (19, was 15 — WS-09
-submit-time parse-contract + input-parity + scheduling-honesty guards), `test_persistence` (17),
+`rules._evaluate_target_band`), `test_intake_scheduling` (22, was 19 — T-148's ADR-0024
+agent-binding-capture-at-submit cases, 2026-07-13; before that, WS-09's submit-time parse-contract +
+input-parity + scheduling-honesty guards took it 15→19), `test_review_queue` (20), `test_node_author`
+(19, the advisory node-authoring agent, T-046), `test_nextflow_compile` (19, was 16 — T-071a's
+optional-input-channel + dormant-verifybamid2-stage cases, 2026-07-13, incl. the mosdepth-5-output
+Export-to-Nextflow regression, EVAL-019), `test_persistence` (17),
 `test_nextflow_robustness` (17, the compiler robustness-hardening / hostile-input suite — one case per
 verified review fix: proc-name collision, File-input source wiring, novel-kind params channel,
 fan-in / dup-emit / port-drift guards, injection-escaped strings), `test_metrics` (17),
 `test_archivist` (17,
 the advisory archivist/librarian agent), `test_run_giab_preflight` (16, the
 four pre-flight guards in `scripts/run_giab_pipeline.py`, T-131), `test_pipeline_repair` (16, the
-advisory pipeline-repair agent), `test_job_store` (16), `test_nextflow_compile` (16, incl. the mosdepth-5-output
-Export-to-Nextflow regression, EVAL-019), `test_runbook_set` (14, **new** — WS-05 `RunbookSet`/`RunbookKey`
-per-sample resolution, incl. the `expected_metrics` loop-closes-end-to-end proof),
-`test_settings` (13, config-override authoring), `test_node_author_conformance` (13),
+advisory pipeline-repair agent), `test_job_store` (16), `test_runbook_set` (14, **new** — WS-05
+`RunbookSet`/`RunbookKey` per-sample resolution, incl. the `expected_metrics` loop-closes-end-to-end
+proof), `test_node_observations` (13, was 10 — T-148's scope-by-wiring-over-a-populated-publish-dir
+cases, 2026-07-13; before that, WS-08 interim's `logs`-grant-requires-reviewer+ access-control tests
+took it 8→10), `test_settings` (13, config-override authoring), `test_node_author_conformance` (13),
 `test_ingest` (13, **new** — WS-03 nf-core/MultiQC `results/` → `SampleMetrics` adapter,
 driver-equivalence + real-path acceptance), `test_auth`
 (13), `test_safe_harbor` (12),
@@ -89,8 +110,7 @@ genome-wide-calibrated VerifyBamID2 FREEMIX + real hap.py SNP-F1 vs GIAB v4.2.1 
 format-mimicking fixture), `test_pipeline_run` (13, was 12 — `7cef743` adds the
 Builder-Run non-gateable-pipeline 422 freeze test), `test_pipeline_lifecycle` (11,
 submit/approve/dry-run/diff), `test_flag_for_review` (10, the
-off-by-default flag-for-review gate rule VAR-FFR-001, ADR-0018 D2), `test_node_observations` (10,
-was 8 — WS-08 interim's `logs`-grant-requires-reviewer+ access-control tests), `test_files_api` (10,
+off-by-default flag-for-review gate rule VAR-FFR-001, ADR-0018 D2), `test_files_api` (10,
 the sandboxed `GET /api/files` browser: allowlist, traversal/absolute/symlink-escape rejection, kind
 inference, role gate, ADR-0020, EVAL-016), `test_e2e_pipeline` (10, the offline acceptance test threading
 sheet→intake→the W1 approval gate→report/provenance, EVAL-007 — its own module docstring already
@@ -648,7 +668,7 @@ specific hostile strings the review found, not proven exhaustively against all i
 | --- | --- |
 | **Target** | `api/routers/intake.py`, `api/authored_pipeline.py`, `api/job_store.py` (`POST /api/runs`, `POST /api/runs/{id}/release`) |
 | **Type** | Deterministic (execution-boundary control flow; off the decision gate) |
-| **Automated?** | Yes — `test_intake_scheduling.py` (15, offline — the background driver is monkeypatched, so no thread runs `nextflow`) |
+| **Automated?** | Yes — `test_intake_scheduling.py` (22, was 15; offline — the background driver is monkeypatched, so no thread runs `nextflow`). +3 as of 2026-07-13 (T-148, PR #10): `test_submit_snapshots_authored_pipeline_agent_bindings`/`test_submit_records_empty_binding_snapshot_for_default_reference`/`test_held_submit_snapshots_bindings_at_submit_not_release` — prove the ADR-0024 agent-binding snapshot this endpoint now records at submit (a related but distinct property from the scheduling gate below: WHICH agents get enforced read access to the run, not whether it runs) |
 
 **Definition of good.** Two properties, both off the deterministic gate (ADR-0001) and preserving
 compose ≠ execute (ADR-0003 — the core still never runs a tool). (1) **Authored pipeline via the
@@ -1023,7 +1043,7 @@ describes.
 |---|---|
 | **Target** | `GET /api/runs/{run_id}/nodes/{node_id}/observations` (`api/routers/node_observations.py`) + `api/deid.py` `scrub_text()` — the Phase-4 read of a Wave-2 `AgentBinding`'s grant (REQ-F-101, REQ-NF-028) |
 | **Type** | Faithfulness (egress transform, off the decision gate) |
-| **Automated?** | Yes — `test_node_observations.py` (8): `test_outputs_scoped_to_node_by_germline_id`, `test_outputs_scoped_by_tool_key`, `test_logs_opt_in_and_deidentified`, `test_node_with_no_outputs_is_honest_empty`, `test_unresolved_node_is_honest_empty`, `test_unknown_grant_is_422`, `test_viewer_allowed_invalid_principal_rejected`, `test_traversal_run_id_rejected` |
+| **Automated?** | Yes — `test_node_observations.py` (13, was 8; re-verified 2026-07-13 via `uv run pytest --collect-only tests/test_node_observations.py`): the original 8 (`test_outputs_scoped_to_node_by_germline_id`, `test_outputs_scoped_by_tool_key`, `test_logs_opt_in_and_deidentified`, `test_node_with_no_outputs_is_honest_empty`, `test_unresolved_node_is_honest_empty`, `test_unknown_grant_is_422`, `test_viewer_allowed_invalid_principal_rejected`, `test_traversal_run_id_rejected`) + WS-08 interim's `test_logs_grant_denied_to_viewer`/`test_logs_grant_allowed_to_reviewer` (2026-07-12) + T-148's scope-by-wiring-over-a-populated-publish-dir trio (2026-07-13, PR #10): `test_wired_agent_reads_scoped_outputs`, `test_unwired_agent_is_403`, `test_wired_agent_grants_capped_to_binding` — these three prove ADR-0024 enforcement (a `bound_run` fixture records a real `AgentBinding` via `agent_binding_store`), not just this section's static grant-scoping, but they live in the same file/endpoint and are counted here for that reason |
 
 **Definition of good.** An attached advisory agent reads a **narrowing** of what agents already
 observe, never a widening, and any free text is de-identified before it leaves the machine.

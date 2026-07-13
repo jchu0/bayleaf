@@ -106,6 +106,22 @@ genomics-tool execution (only needed to run a real pipeline, not for the demo).
 
 ---
 
+## Docker
+
+A single container serves the read-API and the built React SPA same-origin (Docker only — no
+Terraform/cloud target ships; this is a local/self-hosted deploy slice, T-041):
+
+```bash
+docker build -f deploy/Dockerfile.api -t bayleaf-api .
+docker run --rm -p 8010:8010 -v "$PWD/data:/data" -e BAYLEAF_DATA_ROOT=/data bayleaf-api
+# or: docker compose -f deploy/docker-compose.yml up --build
+```
+
+`BAYLEAF_DATA_ROOT` points at the run-data root (defaults to the repo's committed `data/`);
+`BAYLEAF_CORS_ORIGINS` overrides the allowed browser origins (see `.env.example`).
+
+---
+
 ## Project layout
 
 ```

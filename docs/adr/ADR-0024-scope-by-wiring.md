@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted — enforcement shipped (P2, 2026-07-13): `api/agent_binding_store.py` (run→bindings), capture at Builder-Run launch, `agent`-scoped enforcement on `GET .../observations`, Settings profile-bar removed. **Deferred:** intake-authored-run capture (only Builder-Run captures today) + the agent-consumption path that passes `agent` automatically. |
+| **Status** | Accepted — enforcement shipped (P2, 2026-07-13): `api/agent_binding_store.py` (run→bindings), capture at Builder-Run launch, `agent`-scoped enforcement on `GET .../observations`, Settings profile-bar removed. **Intake-authored-run capture shipped same day (T-148, PR #10, commit `675a085`):** `api/routers/intake.py::submit_run` now records the same executed-graph binding snapshot at submit, so an intake-launched run is enforced identically to a Builder-Run one (a bindings-less default reference still records an EMPTY, enforceable snapshot). **Deferred:** the agent-consumption path that passes `agent` automatically (nothing calls the endpoint with a caller's identity yet) and a real triage consumer (`gather_node_observations` exists but `triage/agent.py` doesn't call it). |
 | **Date** | 2026-07-13 (MST) |
 | **Deciders** | maintainer (James), Claude |
 | **Related** | [ADR-0022](ADR-0022-agent-observation-binding.md) (observation binding — this advances it), [ADR-0023](ADR-0023-agent-taxonomy-and-action-boundary.md), [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0020](ADR-0020-operator-authored-custom-processes.md) (sandboxed `GET /api/files`), [ADR-0005](ADR-0005-config-layer-and-profiles.md) (profiles), [design/agents.md](../design/agents.md) |
@@ -74,7 +74,7 @@ data root** (e.g. an external volume like `/Volumes/James_T7/bayleaf-data`), nev
 |---|---|
 | **Gains** | Least-privilege, operator-legible agent scope with zero extra config UI; closes ADR-0022's deferred enforcement; correct on external/operator-configured data roots. |
 | **Costs** | Must persist bindings + record the executed graph per run; must resolve tool→folder paths robustly across data roots; enforcement path needs tests (an unwired folder must be unreadable). |
-| **Follow-ups** | Persisted binding store + run→graph link; path resolver keyed on the configured data root; a test that an agent cannot read a tool folder it isn't wired to; the Settings profile-bar → Card-density consolidation. |
+| **Follow-ups** | ~~Persisted binding store + run→graph link~~ shipped (P2) for Builder-Run AND intake (T-148, 2026-07-13); ~~a test that an agent cannot read a tool folder it isn't wired to~~ shipped (`test_scope_by_wiring.py`, `test_node_observations.py`); ~~the Settings profile-bar → Card-density consolidation~~ shipped (§6). **Remaining:** path resolver keyed on the *configured* data root (today's binding store resolves against the repo-local run tree, not yet an operator-configured external root per the Context section's assumption 1); the automatic agent-consumption `?agent=` pass; a real triage consumer. |
 
 ## Revisit when
 
