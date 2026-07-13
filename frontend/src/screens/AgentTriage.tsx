@@ -16,6 +16,10 @@ const VERDICT_RANK: Record<string, number> = { escalate: 0, rerun: 1, hold: 2, p
 
 export function AgentTriage() {
   const { runId = '' } = useParams()
+  // Two distinct views share this component: the run-independent /agents route ("System agents" —
+  // the org-wide pipeline-repair/archivist launchers) vs /runs/:id/agent ("Agent triage" — this run's
+  // per-sample triage). Split the content so the two nav items aren't near-duplicate pages.
+  const isSystemView = !runId
   const [params] = useSearchParams()
   const [detail, setDetail] = useState<RunDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -98,28 +102,34 @@ export function AgentTriage() {
   return (
     <div className="pg-fade mx-auto max-w-[1080px]">
       <PageHeader
-        title="Agent triage"
-        subtitle="The agent advises; the human decides."
-        actions={active ? <AgentStatus armed={hasLiveModel} label={sourceLabel} /> : undefined}
+        title={isSystemView ? 'System agents' : 'Agent triage'}
+        subtitle={
+          isSystemView
+            ? 'Advisory agents that act across runs and the organization — never a single run, never a verdict.'
+            : 'The agent advises; the human decides.'
+        }
+        actions={!isSystemView && active ? <AgentStatus armed={hasLiveModel} label={sourceLabel} /> : undefined}
       />
 
       {/* System advisory agents — they act on runs / recurring signatures / the whole organization, not
           on a single pipeline node, so they live on this page (moved out of the Builder palette, Phase 3).
           Each opens a read-only, cited proposal; advisory + off-gate — neither sets a verdict (ADR-0001). */}
-      <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
-        <AgentLauncher
-          icon={<Wrench size={16} strokeWidth={2} />}
-          title="Pipeline-repair"
-          sub="Cited fix proposals for recurring failure signatures"
-          onOpen={() => setRepairOpen(true)}
-        />
-        <AgentLauncher
-          icon={<Archive size={16} strokeWidth={2} />}
-          title="Archivist"
-          sub="Organizes released runs for cold storage"
-          onOpen={() => setArchivistOpen(true)}
-        />
-      </div>
+      {isSystemView && (
+        <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+          <AgentLauncher
+            icon={<Wrench size={16} strokeWidth={2} />}
+            title="Pipeline-repair"
+            sub="Cited fix proposals for recurring failure signatures"
+            onOpen={() => setRepairOpen(true)}
+          />
+          <AgentLauncher
+            icon={<Archive size={16} strokeWidth={2} />}
+            title="Archivist"
+            sub="Organizes released runs for cold storage"
+            onOpen={() => setArchivistOpen(true)}
+          />
+        </div>
+      )}
 
       {/* Per-run triage section. It depends on a run in context; the system agents above do not, so
           when there's no run (the /agents route) or the run fails to load we surface that HERE only —
