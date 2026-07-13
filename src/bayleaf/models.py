@@ -6,8 +6,8 @@ These types are the contract between every layer of the system:
     rules    ->  Finding[]
     synthesis -> DecisionCard
 
-They are deliberately framework-agnostic (no Streamlit / FastAPI imports) so the
-same package backs the Streamlit MVP today and a FastAPI service later.
+They are deliberately framework-agnostic (no web-framework imports) so the same
+package backs the FastAPI service and any other delivery layer.
 
 The decision records carry the `schemas.md` trust layer: every `Finding` derives
 the **gate** it belongs to, a rule-version-independent **signature**, and a

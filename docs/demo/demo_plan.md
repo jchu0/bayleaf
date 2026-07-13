@@ -22,7 +22,7 @@ decide; AI advises** — the load-bearing safety property for a clinical-adjacen
 uv sync --all-extras
 uv run uvicorn api.main:app --port 8010        # backend
 npm --prefix frontend run dev                  # React UI (proxies /api -> :8010)
-# Fallback demo (offline, one process): uv run streamlit run app/streamlit_app.py
+# Offline + stub-first by default (no API key needed) — this full stack IS the demo.
 ```
 
 ## Walkthrough (the happy path)
@@ -90,8 +90,8 @@ events — one per actionable card (S4, S5). These are test-pinned, so the demo 
 
 1. Live Claude flaky/rate-limited → keep the **stub** (default, $0) — identical structure,
    templated prose.
-2. React/API issue → run the **Streamlit** app (`streamlit run app/streamlit_app.py`) — the
-   same core, one offline process, always green.
+2. React/API issue → drive the **deterministic core headless** (`uv run python -c "from bayleaf
+   import run_gate_from_dir; ..."`) — same verdicts, no UI, always green.
 3. Everything else → the recorded walkthrough / screenshots.
 
 ## Talking points if asked

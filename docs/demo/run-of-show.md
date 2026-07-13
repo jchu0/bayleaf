@@ -39,8 +39,8 @@ is skipped under pressure.
 7. **[ ] Sanity-check the pinned scenario** (proves the room is green before you talk):
    `uv run python -c "from bayleaf import run_gate_from_dir; _, c = run_gate_from_dir('data/mock_run_01'); print([(x.sample_id, x.verdict.value) for x in c])"`
    → expect `[('S4','escalate'), ('S5','hold'), ('S1','proceed'), ('S2','proceed'), ('S3','proceed')]`.
-8. **[ ] Streamlit fallback armed** in a 4th terminal, ready to launch if React/API dies:
-   `uv run streamlit run app/streamlit_app.py` (see Fallback ladder).
+8. **[ ] Headless-core fallback ready** if React/API dies — the deterministic gate runs offline
+   with no UI: `uv run python -c "from bayleaf import run_gate_from_dir; ..."` (see Fallback ladder).
 9. **[ ] (Only if showing the optional Builder Run beat) Seed the approved germline baseline:**
    `uv run python -m scripts.seed_approved_germline`. `POST /api/pipelines/run` only runs an
    **approver-blessed** pipeline (the W1 approval gate, ADR-0017) — a fresh store has none, so this
@@ -132,9 +132,8 @@ Layered so the presenter can always keep going — matches [demo_plan.md](demo_p
    moving, don't debug on stage.
 2. **Live Claude flaky / rate-limited** → stay on the **stub** (the default, $0) — same
    structure, templated prose. Skip the flip or relaunch the backend without the claude env.
-3. **React / API broken** → launch the **Streamlit** app
-   (`uv run streamlit run app/streamlit_app.py`) — the same core, one offline process,
-   always green. Re-tell Steps 1–3 there.
+3. **React / API broken** → drive the **deterministic core headless** (`run_gate_from_dir`) to show
+   the same verdicts with no UI, then fall back to the recorded walkthrough / screenshots.
 4. **Everything is uncooperative** → the recorded walkthrough / screenshots.
 
 ## Presenter notes
