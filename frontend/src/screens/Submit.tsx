@@ -316,8 +316,15 @@ export function Submit() {
   const joinPageRows = joinRows.slice((joinCurPage - 1) * joinPerN, (joinCurPage - 1) * joinPerN + joinPerN)
 
   const scheduleReady = mode !== 'schedule' || scheduledAt.trim() !== ''
-  const canSubmit = count > 0 && join.metadataPresent && joinApproved && scheduleReady
-  const submitBlockedReason = !join.metadataPresent
+  // Submitting a run is an execution boundary the API gates at reviewer/approver (require_role) —
+  // mirror that in the UI so a viewer sees a disabled button with a reason, not an enabled button
+  // that 403s only after the POST. (View-gate parity, not the security control — the server still
+  // authorizes every submit.)
+  const canRoleSubmit = actor.role === 'reviewer' || actor.role === 'approver'
+  const canSubmit = canRoleSubmit && count > 0 && join.metadataPresent && joinApproved && scheduleReady
+  const submitBlockedReason = !canRoleSubmit
+    ? 'Submitting a run requires a reviewer or approver role'
+    : !join.metadataPresent
     ? 'Attach sample metadata first'
     : join.blocking > 0
       ? `Resolve ${join.blocking} identity issue${join.blocking === 1 ? '' : 's'}`

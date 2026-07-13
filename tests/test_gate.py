@@ -365,6 +365,38 @@ def test_compute_check_coverage_marks_uncovered_categories():
     assert cov.checks_expected == len(cov.categories_ran) + len(cov.categories_not_run)
 
 
+def test_check_coverage_flips_contamination_when_freemix_is_examined():
+    """WS-01 sub-gap (audit reconciliation): contamination/identity are NOT unconditionally
+    not-examined. A sample that actually carries a FREEMIX observation (the WS-03 ingest path)
+    marks the contamination category as RAN — present = examined, pass OR fail, so an
+    examined-and-passed FREEMIX no longer reads "contamination not examined". identity, with no such
+    metric on this sample, stays honestly not-examined. Verdict/hash-neutral (narration only)."""
+    unit = default_registry().entry("contamination.freemix").canonical_unit.value
+    art = RunArtifacts(
+        run_id="R",
+        sample_sheet=[SampleSheetEntry(sample_id="S1")],
+        qc=[
+            SampleMetrics(
+                sample_id="S1",
+                raw={
+                    # a PASSING freemix (well below any contamination gate) — examined, no finding
+                    "contamination.freemix": RawObservation(
+                        raw_value=0.005, raw_unit=unit, source_field="FREEMIX"
+                    )
+                },
+            )
+        ],
+    )
+    findings = evaluate_sample("S1", art, DEFAULT_RUNBOOK)
+    cov = compute_check_coverage("S1", art, DEFAULT_RUNBOOK, findings)
+    # contamination was EXAMINED (freemix present) → ran, and NOT reported not-examined…
+    assert Category.CONTAMINATION in cov.categories_ran
+    assert "contamination" not in cov.not_examined
+    # …while identity (no metric on this sample) stays honestly not-examined.
+    assert Category.IDENTITY in cov.categories_not_run
+    assert "identity" in cov.not_examined
+
+
 def test_empty_findings_prose_states_coverage_not_all_passed():
     """WS-01 Gap B: a clean card's prose states coverage ('N/M categories ran; … not examined'),
     NEVER 'all checks passed', and carries the real CheckCoverage. The verdict stays PROCEED — a

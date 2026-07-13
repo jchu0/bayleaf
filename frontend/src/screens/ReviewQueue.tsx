@@ -169,7 +169,10 @@ function errMsg(e: unknown): string {
 // does NOT run a rerun or re-measure a metric (compose != execute), so we never assert a QC
 // outcome that did not occur. The rerun line is a next-step, not a fabricated result.
 function resolutionNote(verdict: Verdict): string {
-  if (verdict === 'rerun') return 'Requeue the sample to clear the rerun.'
+  // A rerun is a manual next-step, not a control here: the sample must be re-submitted under a NEW
+  // run id (both run endpoints 409 on a duplicate id), so we describe the action, never imply a
+  // one-click requeue button that doesn't exist.
+  if (verdict === 'rerun') return 'Re-run the sample under a new run id, then resolve this ticket.'
   if (verdict === 'escalate') return 'Escalation signed off by an approver.'
   return 'Cleared after manual review.'
 }

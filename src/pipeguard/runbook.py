@@ -263,11 +263,11 @@ class Runbook(BaseModel):
                 hard_fail=0.95,
                 required=False,
             ),
-            # VARIANT-GATE SCOPE (audit P3-10): the variant gate is DP-ONLY — `variant.dp` is the
-            # only variant-tier THRESHOLD here. GQ (`variant.gq`) and Ts/Tv (`variant.titv`) are
-            # registered + wired but UNGATED observations (a phred / target-band metric the
-            # one-sided gate can't score); allele-balance (`variant.allele_balance`) and gnomAD AF
-            # are NOT computed (no parser). This is a genotype-DEPTH gate, not a full
+            # VARIANT-GATE SCOPE (audit P3-10): the variant gate is DEPTH + Ts/Tv — `variant.dp`
+            # (the one-sided threshold here) plus `variant.titv` (the target_band gate added below,
+            # WS-06 Gap 2). GQ (`variant.gq`) is registered + wired but UNGATED (a phred metric this
+            # one-sided branch can't score); allele-balance (`variant.allele_balance`) and gnomAD AF
+            # are NOT computed (no parser). Still a genotype-DEPTH-centric gate, not a full
             # variant-quality gate; label it as such wherever it surfaces (fuller variant QC later).
             QCThreshold(
                 metric="variant_dp",

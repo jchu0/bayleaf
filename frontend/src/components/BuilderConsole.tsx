@@ -424,8 +424,8 @@ export function BuilderConsole(props: ConsoleProps) {
                 <div className="mt-3 flex items-start gap-2 rounded-lg border border-proceed-bd bg-proceed-bg px-3 py-2.5 text-[11px] text-proceed-fg">
                   <Check size={14} className="mt-0.5 shrink-0" />
                   <span>
-                    Wrote <span className="font-mono">src/pipeguard/layout/run_layout.yaml</span>. Emit writes the config only — no tool runs. The live
-                    gate's consumption of an arbitrary layout is Phase 2.
+                    Snapshotted the config as <span className="font-mono">run_layout.yaml</span> — Emit composes only: nothing is written to
+                    disk and no tool runs. Use Copy / Download to save it. The live gate's consumption of an arbitrary layout is Phase 2.
                   </span>
                 </div>
               )}

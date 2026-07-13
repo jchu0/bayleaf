@@ -662,11 +662,11 @@ def evaluate_run(
 
 
 # The FIXED catalog of check CATEGORIES a QC decision claims to cover — the denominator for
-# CheckCoverage (WS-01 Gap D). contamination + identity have NO parser today, so they are ALWAYS
-# reported not-examined (honest absence, never silently omitted). The rest run when the artifact
-# they read is present. A FIXED product claim, not runbook-derived — so an unexamined category can't
-# vanish just because the runbook has no threshold for it. WS-02 flips contamination/identity to
-# "ran" automatically (their first emitted finding does it — see below).
+# CheckCoverage (WS-01 Gap D). contamination + identity have no STATIC artifact proxy, so they are
+# reported not-examined UNLESS the sample actually carries a metric in that category (FREEMIX /
+# NGSCheckMate, supplied by the WS-03 ingest path) — see `_examined_metric_categories`. The rest run
+# when the artifact they read is present. A FIXED product claim, not runbook-derived — so an
+# unexamined category can't vanish just because the runbook has no threshold for it.
 _EXPECTED_CATEGORIES: tuple[Category, ...] = (
     Category.PROVENANCE,
     Category.METADATA,
@@ -676,6 +676,38 @@ _EXPECTED_CATEGORIES: tuple[Category, ...] = (
     Category.PIPELINE,
 )
 
+# Registry category string -> the CheckCoverage Category a PRESENT metric in it proves was examined.
+# Only the two coverage categories with no static artifact proxy need this (contamination/identity):
+# their check "ran" the moment the sample carries FREEMIX / NGSCheckMate / sex-concordance, pass OR
+# fail. Every other category (qc/coverage/variant/concordance/…) is proven by its own artifact-
+# presence proxy in `compute_check_coverage`, so it is deliberately absent here.
+_METRIC_CATEGORY_TO_COVERAGE: dict[str, Category] = {
+    "contamination": Category.CONTAMINATION,
+    "identity": Category.IDENTITY,
+}
+
+
+def _examined_metric_categories(
+    qc: QCMetrics | SampleMetrics | None, registry: MetricRegistry
+) -> set[Category]:
+    """Coverage categories a sample's PRESENT metrics prove were examined — present = examined = ran
+    (pass OR fail), the same rule that lets a finding-less clean QC gate count as ran. Maps each
+    present metric's registry category to its CheckCoverage Category for the two categories with no
+    static artifact proxy (contamination/identity). On the frozen-five driver path FREEMIX /
+    NGSCheckMate are absent (not in the flat metric map), so those stay honestly not-examined; the
+    WS-03 ingest path supplies them and flips the category to ran — closing the WS-01 sub-gap where
+    an examined FREEMIX still read "contamination not examined" (ADR-0001: this NARRATES coverage,
+    never a verdict). ``metric_key`` is always a registered ``our_key`` here (it came from
+    ``metric_values_for``'s ``reg.observe``), so ``entry`` cannot raise."""
+    if qc is None:
+        return set()
+    examined: set[Category] = set()
+    for mv in metric_values_for(qc, registry=registry):
+        cov = _METRIC_CATEGORY_TO_COVERAGE.get(registry.entry(mv.metric_key).category)
+        if cov is not None:
+            examined.add(cov)
+    return examined
+
 
 def compute_check_coverage(
     sid: str, artifacts: RunArtifacts, runbook: Runbook, findings: list[Finding]
@@ -684,26 +716,32 @@ def compute_check_coverage(
     sample vs. were NOT examined. A pure function of ``(artifacts, findings)`` computed in the trust
     anchor; it NARRATES coverage and never sets a verdict (ADR-0001).
 
-    A category **ran** when its rule/parser EXECUTED — proxied by "the artifact it reads is present
-    OR it emitted a finding for this sample" — NOT by "produced a finding". So a clean QC gate
-    (finding-less) counts as ran (never confused with a gate that never ran — the review's
+    A category **ran** when its rule/parser EXECUTED — proxied by "the artifact/metric it reads is
+    present OR it emitted a finding for this sample" — NOT by "produced a finding". So a clean QC
+    gate (finding-less) counts as ran (never confused with a gate that never ran — the review's
     ``gateRan`` fix), and a qc-only sample's provenance check (which emits PROV-002 on the missing
-    sheet) counts too. contamination/identity have no parser today → not-examined until WS-02 wires
-    FREEMIX / NGSCheckMate, at which point their first finding auto-flips them to ran. ``runbook``
-    is taken for signature stability so a future ``RunbookSet`` profile can widen the catalog
-    without a signature change.
+    sheet) counts too. contamination/identity have no static artifact proxy → they run iff the
+    sample carries a metric in that category (FREEMIX / NGSCheckMate, supplied by the WS-03 ingest
+    path): present = examined = ran, pass or fail, so an examined-and-passed FREEMIX no longer reads
+    "not examined". On the frozen-five driver path those metrics are absent, so they stay honestly
+    not-examined. ``runbook`` is taken for signature stability so a future ``RunbookSet`` profile
+    can widen the catalog without a signature change.
     """
     meta = next((s for s in artifacts.samples if s.sample_id == sid), None)
     sheet = next((e for e in artifacts.sample_sheet if e.sample_id == sid), None)
     demux = next((d for d in artifacts.demux if d.sample_id == sid), None)
     qc = next((q for q in artifacts.qc if q.sample_id == sid), None)
     found_categories = {f.category for f in findings}
+    # contamination/identity have no static artifact: they RAN iff the sample carries a metric in
+    # that category (FREEMIX / NGSCheckMate), which the WS-03 ingest path supplies and the
+    # frozen-five driver path does not — flips them to examined only when they genuinely were.
+    examined_metric_categories = _examined_metric_categories(qc, default_registry())
     artifact_present: dict[Category, bool] = {
         Category.PROVENANCE: sheet is not None or demux is not None,
         Category.METADATA: meta is not None,
         Category.QC: qc is not None,
-        Category.CONTAMINATION: False,  # no parser today — WS-02 wires FREEMIX
-        Category.IDENTITY: False,  # no parser today — WS-02 wires NGSCheckMate / sex-concordance
+        Category.CONTAMINATION: Category.CONTAMINATION in examined_metric_categories,
+        Category.IDENTITY: Category.IDENTITY in examined_metric_categories,
         Category.PIPELINE: bool(artifacts.log_lines) or bool(artifacts.execution_trace),
     }
     ran = {c: artifact_present[c] or c in found_categories for c in _EXPECTED_CATEGORIES}
