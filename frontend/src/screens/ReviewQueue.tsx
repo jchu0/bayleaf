@@ -383,13 +383,25 @@ export function ReviewQueue() {
   const patch = (key: string, next: Partial<TicketUi>) =>
     setUi((prev) => ({ ...prev, [key]: { ...prev[key], ...next } }))
 
+  // Restore a key's UI slice to a pre-action snapshot after a rejected wire write, so a 403/409
+  // never strands a ticket in a status the server never accepted. Replaces (not merges) the slice
+  // so the optimistic transition is fully undone; `serverIdRef` still holds any materialized id, so
+  // dropping it from the slice can't re-create the ticket on the next action.
+  const restore = (key: string, prev: TicketUi | undefined) =>
+    setUi((cur) => {
+      const nextMap = { ...cur }
+      if (prev === undefined) delete nextMap[key]
+      else nextMap[key] = prev
+      return nextMap
+    })
+
   // Optimistic local update, then a best-effort wire write (materializing the ticket on first
   // touch). These are off-gate advisory writes — a failed sync keeps the operator's intent
   // on-screen so the demo never stalls, and never touches a rules-decided verdict.
   // Per-key promise chain + the synchronous server-id ref (declared above) so a rapid
   // double-action on a not-yet-persisted ticket materializes exactly ONE server ticket (the
   // second action waits for the first createTicket, then reuses its id) instead of racing two POSTs.
-  const syncAction = (t: QueueTicket, action: ReviewActionName): Promise<void> => {
+  const syncAction = (t: QueueTicket, action: ReviewActionName, prev: TicketUi | undefined): Promise<void> => {
     const key = keyOf(t)
     const run = async () => {
       let id = serverIdRef.current[key] ?? uiRef.current[key]?.serverId
@@ -403,7 +415,10 @@ export function ReviewQueue() {
       patch(key, { status: updated.status }) // reconcile from the authoritative response
     }
     const next = (pendingRef.current[key] ?? Promise.resolve()).then(run).catch((e) => {
-      // Surface the real backend outcome (403/409/…) instead of silently diverging.
+      // Roll back the optimistic transition (mirrors PipelineBuilder's reconcile-on-catch) so a
+      // rejected write doesn't leave the card reading Resolved/In-review until a manual refetch,
+      // then surface the real backend outcome (403/409/…) instead of silently diverging.
+      restore(key, prev)
       toast(`Couldn't ${action} ticket — ${errMsg(e)}`, 'error')
     })
     pendingRef.current[key] = next
@@ -412,6 +427,8 @@ export function ReviewQueue() {
 
   const act = (t: QueueTicket, action: ReviewActionName) => {
     const key = keyOf(t)
+    // Snapshot the slice BEFORE the optimistic patch so syncAction can revert to it on a rejected write.
+    const prev = uiRef.current[key]
     if (action === 'acknowledge') patch(key, { status: 'in_review' })
     else if (action === 'resolve') patch(key, { status: 'resolved', resolvedBy: actor.id })
     else if (action === 'reopen') patch(key, { status: 'open' })
@@ -421,7 +438,7 @@ export function ReviewQueue() {
       const wasOpen = (uiRef.current[key]?.status ?? 'open') === 'open'
       patch(key, wasOpen ? { escalated: true, status: 'in_review' } : { escalated: true })
     } else if (action === 'suppress') patch(key, { suppressed: true })
-    void syncAction(t, action)
+    void syncAction(t, action, prev)
   }
 
   const toggleSuppress = (t: QueueTicket) => {
@@ -501,8 +518,10 @@ export function ReviewQueue() {
     assign(t, approverId)
     act(t, 'escalate')
   }
-  // Suppressing hides an issue class going forward (cascading) — confirm it; un-suppressing merely
-  // restores visibility (low-stakes), so it toggles straight through.
+  // Suppress resolves THIS ticket and marks the issue class handled; un-suppressing merely restores
+  // visibility (low-stakes), so it toggles straight through. Honesty: class-wide muting of *future*
+  // tickets of this rule_id across runs is a documented, not-built seam (review_queue.py) — the copy
+  // must not claim a cross-run mute that doesn't exist.
   const confirmSuppress = async (t: QueueTicket) => {
     if (uiRef.current[keyOf(t)]?.suppressed) {
       toggleSuppress(t)
@@ -510,7 +529,7 @@ export function ReviewQueue() {
     }
     const ok = await confirm({
       title: 'Suppress this issue class?',
-      body: `Future occurrences of ${t.primary.rule_id} across runs are hidden from the queue until un-suppressed. Recorded in the audit log.`,
+      body: `Resolves this ${t.primary.rule_id} ticket and marks the issue class handled here. It does not mute future occurrences on other runs (cross-run suppression is not built). Recorded in the audit log.`,
       confirmLabel: 'Suppress',
       tone: 'danger',
     })
@@ -1028,7 +1047,12 @@ function TicketCard({
               {t.primary.rule_id} · {t.primary.title}
             </span>
             {suppressed && (
-              <span className="text-[11px] italic text-text-3">suppressed — future runs won't re-prompt</span>
+              <span
+                className="text-[11px] italic text-text-3"
+                title="Marks this issue class handled on this ticket. Cross-run muting of future occurrences is not built."
+              >
+                suppressed — issue class marked handled here
+              </span>
             )}
           </div>
 
