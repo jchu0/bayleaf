@@ -34,7 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from bayleaf import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
+from bayleaf import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate
 from bayleaf.metrics import default_registry
 from bayleaf.models import DecisionCard, Gate, Sample, VariantCall, Verdict
 from bayleaf.parsers import parse_variant_calls
@@ -63,6 +63,7 @@ from .routers.review_queue import router as review_router
 from .routers.settings import router as settings_router
 from .safe_harbor import HIPAA_SAFE_HARBOR_CLASSES, SAFE_HARBOR_POLICY_ID, redact_record
 from .share_store import get_share_store
+from .triage_cache import get_or_create_triage
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
@@ -548,7 +549,9 @@ def get_card_triage(run_id: str, sample_id: str) -> TriageNote:
     card = next((c for c in _evaluate(run_id).cards if c.sample_id == sample_id), None)
     if card is None:
         raise HTTPException(status_code=404, detail=f"Unknown sample '{sample_id}'")
-    note = triage_card(card)
+    # Cache-through (api/triage_cache): served from the backend cache on a repeat request so
+    # navigating away and back doesn't regenerate (or re-call Claude for) an identical note.
+    note = get_or_create_triage(run_id, card)
     if note is None:
         raise HTTPException(
             status_code=404, detail=f"Sample '{sample_id}' is clean; no triage note"
