@@ -24,7 +24,7 @@ from .notify import NotifyPort, NotifyStatus
 from .parsers import load_run
 from .persistence import Repository, project_events
 from .provenance import AnalysisRun, EntityRef, EventLedger, EventType, ProvenanceEvent
-from .rules import evaluate_run
+from .rules import compute_check_coverage, evaluate_run
 from .runbook import DEFAULT_RUNBOOK, Runbook
 from .synthesis import StubSynthesizer, Synthesizer
 
@@ -134,7 +134,11 @@ def run_gate(
                 )
             )
 
-        card = synthesizer.synthesize(sample_id, findings, artifacts)
+        # Deterministic coverage telemetry (WS-01): computed in the trust anchor, passed INTO the
+        # synthesizer so the prose can say "N ran / M not examined" instead of "all checks passed",
+        # and attached to the card below. It narrates coverage; it never sets a verdict (ADR-0001).
+        coverage = compute_check_coverage(sample_id, artifacts, runbook, findings)
+        card = synthesizer.synthesize(sample_id, findings, artifacts, coverage)
         card.analysis_run_id = arun.id
         card.run_id = artifacts.run_id
         # Surface the registry-normalized QC metrics (T-025) on the card so they are
@@ -144,6 +148,8 @@ def run_gate(
         qc = qc_by_sample.get(sample_id)
         if qc is not None:
             card.metric_values = metric_values_for(qc, analysis_run_id=arun.id)
+        # Un-hashed contextual metadata (like metric_values); attaching it never moves the hash.
+        card.check_coverage = coverage
         ledger.emit(
             ProvenanceEvent(
                 event_type=EventType.VERDICT_DECIDED,

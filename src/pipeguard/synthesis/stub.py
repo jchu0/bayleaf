@@ -22,7 +22,7 @@ live Claude path (`synthesis/claude.py`) fills it, with grounded, run-specific s
 
 from __future__ import annotations
 
-from ..models import Category, DecisionCard, Finding, RunArtifacts, Verdict
+from ..models import Category, CheckCoverage, DecisionCard, Finding, RunArtifacts, Verdict
 from .base import Synthesizer, aggregate_verdict, top_finding
 
 _VERDICT_HEADLINE = {
@@ -33,29 +33,61 @@ _VERDICT_HEADLINE = {
 }
 
 
+def _and_list(items: list[str]) -> str:
+    """Join labels for prose: ['a']→'a'; ['a','b']→'a and b'; ['a','b','c']→'a, b, and c'."""
+    if len(items) <= 1:
+        return items[0] if items else ""
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return f"{', '.join(items[:-1])}, and {items[-1]}"
+
+
 class StubSynthesizer:
     name = "stub"
 
     def synthesize(
-        self, sample_id: str, findings: list[Finding], artifacts: RunArtifacts
+        self,
+        sample_id: str,
+        findings: list[Finding],
+        artifacts: RunArtifacts,
+        coverage: CheckCoverage | None = None,
     ) -> DecisionCard:
         verdict = aggregate_verdict(findings)
         lead = top_finding(findings)
 
         if lead is None:
-            headline = f"{_VERDICT_HEADLINE[verdict]} — all checks passed"
-            rationale = (
-                f"{sample_id} cleared every provenance, metadata, and QC check in the "
-                f"runbook. No inconsistencies were found across the intake sheet, sample "
-                f"sheet, demultiplexing stats, QC metrics, or run log."
-            )
+            # HONEST clean-card prose (WS-01 Gap B): a clean sample "raised no findings from the
+            # checks that RAN" — never "all checks passed", because contamination/identity are not
+            # examined today. The counts come from the deterministic CheckCoverage, not the prose.
+            if coverage is not None:
+                ran_labels = _and_list([c.value for c in coverage.categories_ran])
+                headline = (
+                    f"{_VERDICT_HEADLINE[verdict]} — "
+                    f"{coverage.checks_ran}/{coverage.checks_expected} check categories ran"
+                )
+                rationale = (
+                    f"{sample_id} raised no findings from the {coverage.checks_ran} check "
+                    f"categories that ran ({ran_labels})."
+                )
+                if coverage.not_examined:
+                    n = len(coverage.not_examined)
+                    rationale += (
+                        f" {_and_list(coverage.not_examined)} {'was' if n == 1 else 'were'} not "
+                        f"examined — no check for {'it' if n == 1 else 'them'} exists yet, so this "
+                        f"is not a blanket clearance."
+                    )
+            else:
+                # Back-compat when a caller invokes synthesize without coverage: still honest.
+                headline = f"{_VERDICT_HEADLINE[verdict]} — no rule objected"
+                rationale = (
+                    f"{sample_id} raised no findings from the checks that ran. This reflects the "
+                    f"checks examined, not a verified clearance of every category."
+                )
         else:
             headline = f"{_VERDICT_HEADLINE[verdict]} — {lead.title.lower()}"
             crit = [f for f in findings if f.severity.value == "critical"]
             warn = [f for f in findings if f.severity.value == "warn"]
-            parts = [
-                f"{sample_id}: {lead.detail}",
-            ]
+            parts = [f"{sample_id}: {lead.detail}"]
             if len(crit) + len(warn) > 1:
                 others = [f for f in findings if f is not lead]
                 by_cat: dict[Category, int] = {}
@@ -63,6 +95,12 @@ class StubSynthesizer:
                     by_cat[f.category] = by_cat.get(f.category, 0) + 1
                 summary = ", ".join(f"{n} {c.value}" for c, n in by_cat.items())
                 parts.append(f"Additional signals: {summary}.")
+            # A brief honest coverage tail so even a flagged card names what was NOT examined.
+            if coverage is not None and coverage.not_examined:
+                parts.append(
+                    f"Coverage: {coverage.checks_ran}/{coverage.checks_expected} categories ran; "
+                    f"{_and_list(coverage.not_examined)} not examined."
+                )
             rationale = " ".join(parts)
 
         return DecisionCard(

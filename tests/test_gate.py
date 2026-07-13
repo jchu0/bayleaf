@@ -14,6 +14,7 @@ from pipeguard import DEFAULT_RUNBOOK, Verdict, evaluate_run, load_run, run_gate
 from pipeguard.metrics import default_registry, metric_values_for
 from pipeguard.models import (
     Category,
+    CheckCoverage,
     Evidence,
     Finding,
     Gate,
@@ -25,7 +26,7 @@ from pipeguard.models import (
 )
 from pipeguard.parsers import parse_sample_sheet, parse_sample_sheet_header
 from pipeguard.provenance import EventLedger, EventType
-from pipeguard.rules import _evaluate_metric, evaluate_sample
+from pipeguard.rules import _evaluate_metric, compute_check_coverage, evaluate_sample
 from pipeguard.runbook import Runbook
 from pipeguard.synthesis import StubSynthesizer, aggregate_verdict
 
@@ -258,6 +259,67 @@ def test_hg002_committed_run_has_no_spurious_qc_missing():
     # …the existing structural cluster_pf NA-HOLD is retained, unchanged by WS-01.
     assert any(f.rule_id == "QC-CLUSTER_PF-NA" for f in findings)
     assert aggregate_verdict(findings) is Verdict.HOLD
+
+
+# ── WS-01 · PR2: CheckCoverage + honest "N ran / M not examined" prose ─────────────
+
+
+def test_compute_check_coverage_marks_uncovered_categories():
+    """WS-01 Gap D: contamination + identity have no parser → always reported NOT examined (never
+    silently omitted); a clean sample's ran-count is < expected; the labels name them. A clean QC
+    gate that ran finding-less STILL counts as ran (the gateRan fix — ran != produced a finding)."""
+    art = load_run(DATA)
+    findings = evaluate_sample("S1", art, DEFAULT_RUNBOOK)  # S1 is clean (no findings)
+    assert findings == []
+    cov = compute_check_coverage("S1", art, DEFAULT_RUNBOOK, findings)
+    assert {Category.CONTAMINATION, Category.IDENTITY} <= set(cov.categories_not_run)
+    assert cov.checks_ran < cov.checks_expected
+    assert "contamination" in cov.not_examined and "identity" in cov.not_examined
+    assert Category.QC in cov.categories_ran  # a clean gate RAN even with no QC finding
+    assert cov.checks_ran == len(cov.categories_ran)
+    assert cov.checks_expected == len(cov.categories_ran) + len(cov.categories_not_run)
+
+
+def test_empty_findings_prose_states_coverage_not_all_passed():
+    """WS-01 Gap B: a clean card's prose states coverage ('N/M categories ran; … not examined'),
+    NEVER 'all checks passed', and carries the real CheckCoverage. The verdict stays PROCEED — a
+    narration change only (I1)."""
+    s1 = {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}["S1"]
+    assert s1.verdict is Verdict.PROCEED
+    blob = (s1.headline + " " + s1.rationale).lower()
+    for banned in ("all checks passed", "cleared every", "no inconsistencies were found"):
+        assert banned not in blob
+    assert s1.check_coverage is not None
+    assert f"{s1.check_coverage.checks_ran}/{s1.check_coverage.checks_expected}" in s1.headline
+    assert "not examined" in s1.rationale.lower() and s1.check_coverage.not_examined
+
+
+def test_no_card_claims_all_checks_passed_when_a_category_not_run():
+    """WS-01 Gap B guard: over the whole demo run, no card's prose asserts blanket clearance while a
+    category was NOT examined, and the denominator is honest (expected == ran + not_run, and
+    contamination/identity are not-run on every card today)."""
+    for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer()):
+        cov = c.check_coverage
+        assert cov is not None
+        assert cov.checks_expected == len(cov.categories_ran) + len(cov.categories_not_run)
+        assert {Category.CONTAMINATION, Category.IDENTITY} <= set(cov.categories_not_run)
+        blob = (c.headline + " " + c.rationale).lower()
+        if cov.not_examined:
+            for banned in ("all checks passed", "cleared every", "no inconsistencies were found"):
+                assert banned not in blob, c.sample_id
+
+
+def test_check_coverage_excluded_from_content_hash():
+    """WS-01 cross-gap invariant (I3): CheckCoverage is contextual metadata (like metric_values) —
+    NOT in content_hash and never changes the verdict. Attaching/detaching leaves the hash
+    byte-identical, and it round-trips through model_dump(mode='json')."""
+    s1 = {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}["S1"]
+    assert isinstance(s1.check_coverage, CheckCoverage)
+    detached = s1.model_copy(update={"check_coverage": None})
+    assert s1.content_hash == detached.content_hash  # un-hashed
+    assert s1.verdict is detached.verdict  # verdict-neutral
+    dumped = s1.model_dump(mode="json")  # survives JSON serialization (API/ML, ADR-0007)
+    assert dumped["check_coverage"]["checks_expected"] == s1.check_coverage.checks_expected
 
 
 # ── WS-06 metric correctness (source/label honesty; Gaps 4 & 5) ────────────────────

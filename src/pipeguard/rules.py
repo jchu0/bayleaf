@@ -17,6 +17,7 @@ from __future__ import annotations
 from .metrics import MetricRegistry, default_registry, metric_values_for
 from .models import (
     Category,
+    CheckCoverage,
     Evidence,
     Finding,
     MetricValue,
@@ -562,3 +563,60 @@ def evaluate_run(
     """Run every rule against every sample. Returns findings keyed by sample_id."""
     runbook = runbook or DEFAULT_RUNBOOK
     return {sid: evaluate_sample(sid, artifacts, runbook) for sid in artifacts.sample_ids()}
+
+
+# The FIXED catalog of check CATEGORIES a QC decision claims to cover — the denominator for
+# CheckCoverage (WS-01 Gap D). contamination + identity have NO parser today, so they are ALWAYS
+# reported not-examined (honest absence, never silently omitted). The rest run when the artifact
+# they read is present. A FIXED product claim, not runbook-derived — so an unexamined category can't
+# vanish just because the runbook has no threshold for it. WS-02 flips contamination/identity to
+# "ran" automatically (their first emitted finding does it — see below).
+_EXPECTED_CATEGORIES: tuple[Category, ...] = (
+    Category.PROVENANCE,
+    Category.METADATA,
+    Category.QC,
+    Category.CONTAMINATION,
+    Category.IDENTITY,
+    Category.PIPELINE,
+)
+
+
+def compute_check_coverage(
+    sid: str, artifacts: RunArtifacts, runbook: Runbook, findings: list[Finding]
+) -> CheckCoverage:
+    """Deterministic coverage telemetry: which of the fixed expected check categories ran for this
+    sample vs. were NOT examined. A pure function of ``(artifacts, findings)`` computed in the trust
+    anchor; it NARRATES coverage and never sets a verdict (ADR-0001).
+
+    A category **ran** when its rule/parser EXECUTED — proxied by "the artifact it reads is present
+    OR it emitted a finding for this sample" — NOT by "produced a finding". So a clean QC gate
+    (finding-less) counts as ran (never confused with a gate that never ran — the review's
+    ``gateRan`` fix), and a qc-only sample's provenance check (which emits PROV-002 on the missing
+    sheet) counts too. contamination/identity have no parser today → not-examined until WS-02 wires
+    FREEMIX / NGSCheckMate, at which point their first finding auto-flips them to ran. ``runbook``
+    is taken for signature stability so a future ``RunbookSet`` profile can widen the catalog
+    without a signature change.
+    """
+    meta = next((s for s in artifacts.samples if s.sample_id == sid), None)
+    sheet = next((e for e in artifacts.sample_sheet if e.sample_id == sid), None)
+    demux = next((d for d in artifacts.demux if d.sample_id == sid), None)
+    qc = next((q for q in artifacts.qc if q.sample_id == sid), None)
+    found_categories = {f.category for f in findings}
+    artifact_present: dict[Category, bool] = {
+        Category.PROVENANCE: sheet is not None or demux is not None,
+        Category.METADATA: meta is not None,
+        Category.QC: qc is not None,
+        Category.CONTAMINATION: False,  # no parser today — WS-02 wires FREEMIX
+        Category.IDENTITY: False,  # no parser today — WS-02 wires NGSCheckMate / sex-concordance
+        Category.PIPELINE: bool(artifacts.log_lines) or bool(artifacts.execution_trace),
+    }
+    ran = {c: artifact_present[c] or c in found_categories for c in _EXPECTED_CATEGORIES}
+    categories_ran = [c for c in _EXPECTED_CATEGORIES if ran[c]]
+    categories_not_run = [c for c in _EXPECTED_CATEGORIES if not ran[c]]
+    return CheckCoverage(
+        checks_expected=len(_EXPECTED_CATEGORIES),
+        checks_ran=len(categories_ran),
+        not_examined=[c.value for c in categories_not_run],
+        categories_ran=categories_ran,
+        categories_not_run=categories_not_run,
+    )

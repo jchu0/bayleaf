@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from ..models import DecisionCard, Finding, RunArtifacts, Severity, Verdict
+from ..models import CheckCoverage, DecisionCard, Finding, RunArtifacts, Severity, Verdict
 
 # Higher rank wins when a sample trips multiple rules.
 _VERDICT_RANK = {
@@ -49,5 +49,9 @@ class Synthesizer(Protocol):
     name: str
 
     def synthesize(
-        self, sample_id: str, findings: list[Finding], artifacts: RunArtifacts
+        self,
+        sample_id: str,
+        findings: list[Finding],
+        artifacts: RunArtifacts,
+        coverage: CheckCoverage | None = None,
     ) -> DecisionCard: ...

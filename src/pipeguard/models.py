@@ -212,6 +212,27 @@ class GateResult(BaseModel):
     finding_rule_ids: list[str] = Field(default_factory=list)
 
 
+class CheckCoverage(BaseModel):
+    """Deterministic 'N ran / M not examined' coverage telemetry for one sample (WS-01).
+
+    Computed in the trust anchor (``rules.compute_check_coverage``) as a pure function of
+    ``(artifacts, runbook, findings)``. It exists to make PROCEED honest: a clean card must say
+    "the checks that ran found nothing", NOT "all checks passed" — because contamination/identity
+    have no parser today and are therefore NOT examined. Carried on the card as un-hashed contextual
+    metadata (like ``metric_values``); it NARRATES coverage and never sets or influences the verdict
+    (ADR-0001). ``ran`` means a category's rule/parser executed given the artifacts present — NOT
+    that it produced a finding — so a clean gate that ran is never confused with one that never ran.
+    """
+
+    checks_expected: int = Field(..., description="Size of the fixed expected-category catalog")
+    checks_ran: int = Field(..., description="How many expected categories actually ran")
+    not_examined: list[str] = Field(
+        default_factory=list, description="Labels of the categories that were NOT examined"
+    )
+    categories_ran: list[Category] = Field(default_factory=list)
+    categories_not_run: list[Category] = Field(default_factory=list)
+
+
 class DecisionCard(BaseModel):
     """The synthesized, operator-facing output for one sample.
 
@@ -250,6 +271,11 @@ class DecisionCard(BaseModel):
         default_factory=list,
         description="Registry-normalized QC metrics for this sample (T-025); contextual "
         "ML/audit metadata (ADR-0007) — like run_id, NOT part of content_hash",
+    )
+    check_coverage: CheckCoverage | None = Field(
+        None,
+        description="Deterministic 'N ran / M not examined' coverage telemetry (WS-01); contextual "
+        "metadata like metric_values — NOT hashed, and never sets a verdict (ADR-0001)",
     )
     schema_version: int = SCHEMA_VERSION
     created_at: datetime = Field(default_factory=utc_now)
