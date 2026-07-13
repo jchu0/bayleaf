@@ -9,6 +9,7 @@ import { VerdictBadge } from './VerdictBadge'
 import { DecisionVerdictBar } from './DecisionVerdictBar'
 import { Pager, type PerPage } from './Pager'
 import { Truncate } from './Truncate'
+import { Missing, formatScalar } from './Missing'
 import { fmtTime, readGateProvenance, readNum, readStr } from '../provenance'
 
 // The per-run "QC Decision & Provenance Report" (ADR-0018 §1.8 / D1, W3). A READ/SUMMARY surface
@@ -273,16 +274,23 @@ export function RunReport({ detail }: { detail: RunDetail }) {
       <section className="rounded-[14px] border border-line bg-card px-5 py-4">
         <SectionTitle icon={<Info size={14} strokeWidth={2} className="text-text-3" />}>Provenance &amp; sign-off</SectionTitle>
         <div className="mt-3 flex flex-wrap gap-x-8 gap-y-3">
-          <Pin label="Rule pack">{gp.rule_pack_version ?? '—'}</Pin>
-          <Pin label="Runbook metrics">{gp.runbook_metrics.length}</Pin>
+          <Pin label="Rule pack">{gp.rule_pack_version ?? <Missing variant="not-captured" />}</Pin>
+          {/* A count read from the run-started event. Absent that event we have NO provenance for
+              it — render an honest absence, never a fabricated "0" (absent ≠ zero metrics). */}
+          <Pin label="Runbook metrics">
+            {started ? formatScalar(gp.runbook_metrics.length, { absence: 'not-captured' }) : <Missing variant="not-captured" />}
+          </Pin>
           <Pin label="Narration">{narration}</Pin>
           <Pin label="Samples">
             {nSamples ?? detail.summary.n_samples}
             {runStatus ? ` · ${runStatus}` : ''}
           </Pin>
-          <Pin label="Events">{detail.events.length}</Pin>
-          <Pin label="Started">{started ? fmtTime(started.created_at) : '—'}</Pin>
-          <Pin label="Completed">{completed ? fmtTime(completed.created_at) : '—'}</Pin>
+          {/* An empty ledger means no events were recorded — a missing trail, not a real "0". */}
+          <Pin label="Events">
+            {detail.events.length > 0 ? detail.events.length : <Missing variant="not-captured" />}
+          </Pin>
+          <Pin label="Started">{started ? fmtTime(started.created_at) : <Missing variant="not-run" display="dash" />}</Pin>
+          <Pin label="Completed">{completed ? fmtTime(completed.created_at) : <Missing variant="not-run" display="dash" />}</Pin>
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-line bg-card-2 px-4 py-3">
           <div className="flex items-start gap-2.5 text-[12.5px] leading-[1.5] text-text-2">
