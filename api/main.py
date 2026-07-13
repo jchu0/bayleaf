@@ -34,16 +34,31 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from bayleaf import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
+from bayleaf import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate
 from bayleaf.metrics import default_registry
 from bayleaf.models import DecisionCard, Gate, Sample, VariantCall, Verdict
 from bayleaf.parsers import parse_variant_calls
-from bayleaf.pipeline_repair import RepairProposal, propose_repair, recurring_signature
+from bayleaf.pipeline_repair import (
+    RepairProposal,
+    get_repair_agent,
+    propose_repair,
+    recurring_signature,
+)
+from bayleaf.pipeline_repair.models import PIPELINE_REPAIR_CORPUS_VERSION
 from bayleaf.provenance import EntityRef, EventType, ProvenanceEvent
 from bayleaf.runbook import FlagForReviewPolicy, Runbook
 from bayleaf.triage import AgentReply, TriageNote, ask_agent
 
-from .archivist import ArchiveDigest, ArtifactRef, RunArchiveInput, _classify_kind, archive_digest
+from .agent_output_cache import cache_through
+from .archivist import (
+    ARCHIVIST_DIGEST_VERSION,
+    ArchiveDigest,
+    ArtifactRef,
+    RunArchiveInput,
+    _classify_kind,
+    archive_digest,
+    get_archivist_agent,
+)
 from .auth import Actor, require_role
 from .card_readout import router as card_readout_router
 from .deid import IDENTITY_FIELDS, DeidPolicy, default_policy, export_fields, redact
@@ -63,6 +78,7 @@ from .routers.review_queue import router as review_router
 from .routers.settings import router as settings_router
 from .safe_harbor import HIPAA_SAFE_HARBOR_CLASSES, SAFE_HARBOR_POLICY_ID, redact_record
 from .share_store import get_share_store
+from .triage_cache import get_or_create_triage
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
@@ -548,7 +564,9 @@ def get_card_triage(run_id: str, sample_id: str) -> TriageNote:
     card = next((c for c in _evaluate(run_id).cards if c.sample_id == sample_id), None)
     if card is None:
         raise HTTPException(status_code=404, detail=f"Unknown sample '{sample_id}'")
-    note = triage_card(card)
+    # Cache-through (api/triage_cache): served from the backend cache on a repeat request so
+    # navigating away and back doesn't regenerate (or re-call Claude for) an identical note.
+    note = get_or_create_triage(run_id, card)
     if note is None:
         raise HTTPException(
             status_code=404, detail=f"Sample '{sample_id}' is clean; no triage note"
@@ -1553,7 +1571,25 @@ def get_signature_repair(signature: str, window: str = "all") -> RepairProposal:
         raise HTTPException(
             status_code=404, detail=f"Signature not recurring in window: '{signature}'"
         )
-    return propose_repair(sig)
+    # Cache-through (api/agent_output_cache): a repeat request for the same signature is served from
+    # the backend, not regenerated (no Claude re-call on navigation). Off the gate (ADR-0001).
+    agent = get_repair_agent()
+    model = getattr(agent, "model", None) if agent.name == "claude" else None
+    cached = cache_through(
+        namespace="repair",
+        key_inputs={
+            "signature": sig.signature,
+            "count": sig.count,
+            "run_ids": list(sig.run_ids),
+            "agent": agent.name,
+            "model": model,
+            "corpus_version": PIPELINE_REPAIR_CORPUS_VERSION,
+        },
+        generate=lambda: propose_repair(sig, agent=agent),
+        model_cls=RepairProposal,
+        expected_by=agent.name,
+    )
+    return cached if cached is not None else propose_repair(sig, agent=agent)
 
 
 def _archive_input(run_id: str) -> RunArchiveInput:
@@ -1587,13 +1623,42 @@ def get_archive_digest(run_id: str) -> ArchiveDigest:
     Indexes/summarizes an already-decided run and PROPOSES an archival/organization action; it
     never opens/moves/deletes a file or relabels an origin, and carries no verdict (ADR-0001).
     """
-    return archive_digest([_archive_input(run_id)])
+    agent = get_archivist_agent()
+    model = getattr(agent, "model", None) if agent.name == "claude" else None
+    return cache_through(
+        namespace="archive",
+        key_inputs={
+            "scope": "run",
+            "run_id": run_id,
+            "agent": agent.name,
+            "model": model,
+            "digest_version": ARCHIVIST_DIGEST_VERSION,
+        },
+        generate=lambda: archive_digest([_archive_input(run_id)], agent=agent),
+        model_cls=ArchiveDigest,
+        expected_by=agent.name,
+    ) or archive_digest([_archive_input(run_id)], agent=agent)
 
 
 @app.get("/api/archive/index")
 def get_archive_index() -> ArchiveDigest:
     """Advisory cross-run organizational index over every served run (agent #3, off the gate)."""
-    return archive_digest([_archive_input(rid) for rid in _run_ids()])
+    agent = get_archivist_agent()
+    model = getattr(agent, "model", None) if agent.name == "claude" else None
+    rids = _run_ids()
+    return cache_through(
+        namespace="archive",
+        key_inputs={
+            "scope": "index",
+            "run_ids": rids,
+            "agent": agent.name,
+            "model": model,
+            "digest_version": ARCHIVIST_DIGEST_VERSION,
+        },
+        generate=lambda: archive_digest([_archive_input(rid) for rid in rids], agent=agent),
+        model_cls=ArchiveDigest,
+        expected_by=agent.name,
+    ) or archive_digest([_archive_input(rid) for rid in rids], agent=agent)
 
 
 def _render_prometheus() -> str:
