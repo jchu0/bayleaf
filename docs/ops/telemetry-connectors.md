@@ -105,7 +105,7 @@ bar) — no new series, config only. A stable `bayleaf-prometheus` datasource `u
 ([`grafana-datasource.yml`](../../deploy/telemetry/grafana-datasource.yml)) lets it bind
 deterministically.
 
-**Decision — demo sizzle only.** This stack is *not* on the offline Streamlit/API
+**Decision — demo sizzle only.** This stack is *not* on the offline API/UI
 demo path and is not required to run or demo bayleaf; the anonymous-admin Grafana
 and default password are for a throwaway localhost demo, not for exposure.
 

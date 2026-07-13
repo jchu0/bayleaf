@@ -196,8 +196,10 @@ calls the API.
 **Risk.** Node/Vite/port issues (we already hit an :8000 Docker clash → moved to :8010)
 break the React UI during setup.
 
-**Mitigation.** Layered fallback: React/API → offline **Streamlit** over the same core
-(one process, always green) → recorded walkthrough/screenshots
+**Mitigation.** The dev port is now **pinned** (`strictPort` on :5173, `frontend/vite.config.ts`) so
+a port clash fails loudly at startup instead of silently drifting to :5174 — off the port the app's
+CORS allowlist and `/metrics` swap assume. The full stack runs **offline** (stub-first, $0, no live
+service to fail mid-demo). If the React UI still won't come up → recorded walkthrough/screenshots
 ([demo_plan.md](../demo/demo_plan.md) §Fallbacks; [nonfunctional.md](../requirements/nonfunctional.md)
 REQ-NF-042).
 

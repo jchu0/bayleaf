@@ -61,8 +61,7 @@ The MVP core is standing; these in-scope pieces are now built and verified (see
    provenance (compute-DAG), agent triage, monitoring, pipeline builder, settings — in a nav
    restoring the 3-group Operate/Analyze/Configure split (T-064, reversing T-062's 2-group call
    per maintainer feedback) — **plus the Pipeline Builder** (T-044/#11, with free composition +
-   Connect mode + a "New pipeline" affordance since T-062/T-065); plus the Streamlit offline
-   fallback. The admin panel's Users & roles tab is an explicit **client-mock** (no backend user
+   Connect mode + a "New pipeline" affordance since T-062/T-065). The admin panel's Users & roles tab is an explicit **client-mock** (no backend user
    store — `api/auth.py` stays a header dev-shim, ADR-0017); Activity log + System are real reads.
    Seeded with volume for UI/UX testing: `scripts/seed_giab_demo.py` (T-064) adds ~24 synthetic
    (`origin=contrived`) GIAB-named runs, 29 discoverable runs total. Three product writes that

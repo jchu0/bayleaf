@@ -1,11 +1,18 @@
-# ADR-0014 — Productionize with FastAPI + React (Streamlit as the fallback)
+# ADR-0014 — Productionize with FastAPI + React (Streamlit fallback since removed)
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-07-08 (MST) |
+| **Status** | Accepted — amended 2026-07-13 (Streamlit fallback removed; see Amendment) |
+| **Date** | 2026-07-08 (MST); amended 2026-07-13 (MST) |
 | **Deciders** | James Hu, Claude Code |
 | **Related** | [ADR-0003](ADR-0003-deployment-agnostic-ports.md), [ADR-0010](ADR-0010-ticketing-notify-read-api.md), [design/frontend/](../design/frontend/) |
+
+> **Amendment (2026-07-13, MST).** Decision 3 below — *keep Streamlit as the guaranteed-working
+> demo fallback, never deleted* — was **reversed**. The Streamlit MVP (`app/streamlit_app.py`) was
+> **removed** (commit `7dab033`) once the React + FastAPI stack proved to run **fully offline,
+> stub-first ($0)** as its own always-green demo, making a second parallel UI redundant to maintain.
+> The fallback is no longer a separate app — it is the same stack run offline. Decisions 1, 2, and 4
+> stand. The original decision text is preserved below as the historical record.
 
 ## Context
 
