@@ -11,8 +11,8 @@ what the product *claims* and what the code *wires*.
 ## ▶ Current status & next action (resume here)
 
 **Full remediation session, 2026-07-12** on branch `feat/gap-analysis-remediation` (off `main` @ `8e9658e`;
-NOT merged/pushed — review then merge). Offline suite **708 tests / 52 files, 700 passed / 8 skipped**
-(was 634/48, 627/7); ruff + mypy clean at every commit; the pinned demo + HG002 verdicts are byte-identical
+NOT merged/pushed — review then merge). Offline suite **722 tests / 54 files, 714 passed / 8 skipped**
+(was 708/52, 700/8 passed/skipped; before that 634/48, 627/7); ruff + mypy clean at every commit; the pinned demo + HG002 verdicts are byte-identical
 throughout. **Headline: the Nextflow verification pass this tracker used to flag as blocked now happened.**
 `openjdk` 17 was installed into the machine-local `hackathon` conda env (`nextflow` 26.04 + the bioconda
 toolchain now run on this machine); the REAL germline pipeline ran end-to-end on real GIAB HG002
@@ -55,18 +55,55 @@ toolchain now run on this machine); the REAL germline pipeline ran end-to-end on
    viewer) + corrected the "server-enforced binding least-privilege" over-claim to honest labeling. Full
    per-agent binding enforcement (needs server-side binding persistence + run→graph linkage) stays deferred —
    **unchanged status from before this session's later commits; still interim.**
+9. 🟡 **WS-02 (interim)** (`b8494f5`) — `contamination.freemix` gated: a real `ingest.nfcore._extract_verifybamid`
+   parser + an optional `runbook.QCThreshold` (gate 0.02 → WARN/HOLD, hard_fail 0.05 → CRITICAL/RERUN), scored
+   through the EXISTING generic QC loop (no bespoke `CONTAM-001` rule as the plan proposed). **Does NOT meet this
+   folder's own Definition of Done**: the plan's Test-First Contract marks a **real-data acceptance test REQUIRED**
+   for this exact gap ("the ingestion/science gap where 'fixture green ≠ real run works' hid") —
+   `test_verifybamid2_freemix_on_real_hg002` was never written; the landed test file
+   (`tests/test_ws02_contamination.py`) is offline stub + fixture only, by the commit's own admission
+   ("OFFLINE only — verifybamid2 is never installed/run"). Additionally `pipelines/optional_modules/verifybamid2.nf`
+   is **not wired into any runnable pipeline** (the germline reference is drift-locked to the compiler's own
+   output), so a live FREEMIX value isn't reachable without more work — see
+   [metric_registry.md](../../docs/data/metric_registry.md) Wiring status. PROV-001 reframe, demux-share/
+   undetermined gating, and the identity/contamination "NOT RUN" card readout from the plan are **not** landed.
+10. 🟡 **WS-04 (interim)** (`072d8db`) — `concordance.snp_f1` gated the same way (generic loop, optional
+    `QCThreshold`, gate 0.99 → WARN/HOLD, hard_fail 0.95 → CRITICAL/RERUN). **Same Definition-of-Done gap as
+    WS-02**: the plan marks real-data acceptance REQUIRED ("the core science/ingestion claim"); the landed
+    `tests/test_ws04_concordance.py` is offline stub + fixture only ("OFFLINE only — hap.py is never
+    installed/run"). `pipelines/optional_modules/happy.nf` is likewise not wired into a runnable pipeline.
+    SNP-recall/precision and INDEL metrics from the plan are not registered (F1 only).
+
+**Real, un-planned finding from the doc sweep that landed WS-02/WS-04 (2026-07-12):** the
+`CheckCoverage` "contamination category auto-flips to ran on the first finding" claim
+(`rules.py`'s own `_EXPECTED_CATEGORIES` comment, and `docs/data/{qc_metrics,schemas}.md`) does
+**not** actually hold now that WS-02 has landed — every `QCThreshold` finding (incl. `QC-FREEMIX`)
+is tagged `Category.QC`, never `Category.CONTAMINATION`, and `compute_check_coverage`'s
+`artifact_present[Category.CONTAMINATION]` stays hardcoded `False`. Verified directly (`uv run
+python` against `rules.evaluate_sample`/`compute_check_coverage` with a WARN-triggering FREEMIX
+value: `contamination` still reports `not_examined`). Corrected in `qc_metrics.md`/`schemas.md`;
+not yet fixed in code.
 
 **Next action (next session, same branch or a fresh one off it):**
-1. **WS-02** — real identity/provenance checks (FREEMIX/NGSCheckMate; needs `verifybamid2` on the toolchain
-   now that it exists on this machine — a much lower bar than before this session). Still **not started**.
-2. **WS-04** — GIAB concordance (hap.py/vcfeval vs the on-disk GIAB truth VCF). Still **not started**.
-3. **WS-07 remainder** — richer agent context, real semantic retrieval, a deliberate demo default (Design
+1. **WS-02/WS-04 real-data acceptance leg** — the REQUIRED real-GIAB test neither workstream landed:
+   run `verifybamid2` against the real HG002 panel BAM and `hap.py` against the real HG002 truth VCF,
+   env-gated skip-safe like the other real-path checks. Blocked on wiring
+   `pipelines/optional_modules/{verifybamid2,happy}.nf` into a runnable pipeline first (needs the
+   compiler to gain an input-gated-conditional concept for an optional add-on tool — currently absent).
+2. **`CheckCoverage` contamination/identity category-flip** — build what WS-01's original design
+   comment promised: either tag the contamination/identity `QCThreshold` findings with their real
+   `Category`, or add a bespoke `CONTAM-001`/`IDENT-001` rule (the WS-02 plan's original proposal),
+   so `compute_check_coverage` actually flips to "ran" when FREEMIX/NGSCheckMate fires.
+3. **WS-02 remainder** — PROV-001 independent-source reframe, demux-share/undetermined-reads gating,
+   NGSCheckMate identity, and the identity/contamination "NOT RUN" card readout (plan §rules/§readout)
+   are all still unbuilt.
+4. **WS-07 remainder** — richer agent context, real semantic retrieval, a deliberate demo default (Design
    items 1/2/4 above).
-4. **WS-08 completion** — server-side `AgentBinding` persistence + run→executed-graph linkage + per-agent
+5. **WS-08 completion** — server-side `AgentBinding` persistence + run→executed-graph linkage + per-agent
    grant intersection + one real triage consumer of `gather_node_observations`.
-5. **WS-09 completion** — actually gate a non-germline authored pipeline (dynamic parse off compiled `emit`s),
+6. **WS-09 completion** — actually gate a non-germline authored pipeline (dynamic parse off compiled `emit`s),
    not just reject one at submit; fire a scheduled run at its time (currently inert-by-design).
-6. **Unify the two ingestion paths** (WS-03/06) — wire `POST /api/runs` to `ingest_results_dir` (or a
+7. **Unify the two ingestion paths** (WS-03/06) — wire `POST /api/runs` to `ingest_results_dir` (or a
    `POST /api/runs/ingest` endpoint) so the proven-equivalent adapter becomes the ONE parser, not a proven
    parallel one.
 
@@ -92,7 +129,8 @@ Contract is green **incl. the real-GIAB leg** (see Definition of Done below).
 **Fastest path to "real gate, not scaffold":** WS-01·PR1 → WS-06·PR1 → WS-03 → WS-02 (FREEMIX) — fail-closed
 semantics + real ingestion + one genuine contamination check, landing on a shared contract. See the master doc.
 **Status (2026-07-12): the first three legs are DONE** (WS-01 full, WS-06 full, WS-03 core+proven); **WS-02
-(FREEMIX) is the one remaining leg of this specific path, still not started.**
+(FREEMIX) landed offline/fixture-proven the same day, but NOT the REQUIRED real-data leg** (see below) — the
+path to "real gate, not scaffold" is still one leg short of genuinely real.
 
 ## Workstreams
 
@@ -103,9 +141,9 @@ cross-cutting refactors sequence correctly (see the master ordering, filled in o
 | # | Workstream | Review § | Plan | Status |
 |---|---|---|---|---|
 | WS-01 | Fail-closed gate semantics (missing-QC→HOLD, "no findings"≠"all passed", expected-metric sets, "not examined" states) | §1 | `ws-01-fail-closed-gate.md` | ✅ **DONE** (`4d6acbf`, `118d8a5`, `98aca3d`, `14ea6fa`) — all four PRs landed |
-| WS-02 | Real identity/provenance checks (FREEMIX/NGSCheckMate; PROV-001 → independent-source consistency + honest copy; undetermined-reads) | §2 | `ws-02-identity-provenance.md` | ☐ planned, **not started** |
+| WS-02 | Real identity/provenance checks (FREEMIX/NGSCheckMate; PROV-001 → independent-source consistency + honest copy; undetermined-reads) | §2 | `ws-02-identity-provenance.md` | 🟡 **INTERIM** (`b8494f5`) — `contamination.freemix` gated + parser-wired (offline stub+fixture only); the plan's **REQUIRED real-data acceptance test is NOT landed** (Definition-of-Done gap, self-admitted in the commit); PROV-001/demux-gating/NGSCheckMate/NOT-RUN-readout are unbuilt |
 | WS-03 | Real ingestion adapter (MultiQC/fastp/mosdepth `results/` → `RunArtifacts`; live registry keys; real ingress; run-store root) | §3 | `ws-03-ingestion-adapter.md` | ✅ **DONE, core + proven** (`b231068`, `6c38ab3`) — real-path acceptance test green on genuine HG002 output; **not yet gate-called by any production path** (deferred: unify with the driver's own parser) |
-| WS-04 | Scientific validation (hap.py/vcfeval concordance vs the on-disk GIAB truth VCF; precision/recall as evidence) | §4 | `ws-04-giab-concordance.md` | ☐ planned, **not started** |
+| WS-04 | Scientific validation (hap.py/vcfeval concordance vs the on-disk GIAB truth VCF; precision/recall as evidence) | §4 | `ws-04-giab-concordance.md` | 🟡 **INTERIM** (`072d8db`) — `concordance.snp_f1` gated + parser-wired (offline stub+fixture only); the plan's **REQUIRED real-data acceptance test is NOT landed** (same Definition-of-Done gap); recall/precision/INDEL metrics not registered |
 | WS-05 | Config loop + multi-dimensional runbook (`RunbookSet(assay×sample_type×platform)`; typed override schema applied in `_active_runbook`; back the assay×tissue UI) | §5a/5c, §6a | `ws-05-config-and-runbook-dimensions.md` | ✅ **DONE (resolver half)** (`064bd0d`) — `RunbookSet` + `expected_metrics` production consumer verified end-to-end; the Settings config-apply loop + assay×tissue UI stay deferred |
 | WS-06 | Registry-driven extensibility + metric correctness (registry-driven ingestion; two-sided/target-band gate type for Ts/Tv & uniformity; store consolidation; dup-rate / mean_coverage / % reads bugs) | §6b/c/d, §9 | `ws-06-registry-extensibility-and-metric-bugs.md` | ✅ **DONE, all 6 gaps** (`7b3f5ad`, `f4444be`, `cb56eb6`, `2033849`, `ce483ca`) — Gap 3 (dup-rate) REFUTED, not fixed |
 | WS-07 | AI earning its place (agents get raw-artifact context or relabel as lookup; semantic retrieval; wire-or-delete the "Ask agent" chat; deliberate demo default) | §8, §5b | `ws-07-ai-earning-its-place.md` | 🟡 **Q1/Q2 landed** (`9ace6ea`, `27289bd`) — honest stub `next_steps` + a wired `ask` endpoint; Design items 1 (agent context), 2 (semantic retrieval), 4 (demo default) still design-only |
@@ -125,9 +163,9 @@ gate" is true but by design, its own value prop. See review §7 context note.
 | Priority | What | Workstream | Status |
 |---|---|---|---|
 | **P0** | Fail-closed: `missing-QC → HOLD` + honest "N checks ran / M not examined" prose | WS-01 | ✅ done |
-| **P0** | One real identity/contamination check (VerifyBamID2 FREEMIX) end-to-end + "not examined" UI | WS-02 | ☐ not started |
+| **P0** | One real identity/contamination check (VerifyBamID2 FREEMIX) end-to-end + "not examined" UI | WS-02 | 🟡 interim — gated + parser-wired, offline only; real-data leg (REQUIRED) not done; "not examined" UI not built (and, per this sweep, the `CheckCoverage` category flip does not actually fire even when a finding does) |
 | **P0/P1** | MultiQC/fastp/mosdepth ingest adapter — let a real run in | WS-03 | ✅ done (core; not yet production-called — see WS-03 status above) |
-| **P1** | GIAB concordance (hap.py/vcfeval) → precision/recall on the card | WS-04 | ☐ not started |
+| **P1** | GIAB concordance (hap.py/vcfeval) → precision/recall on the card | WS-04 | 🟡 interim — F1 gated + parser-wired, offline only; real-data leg (REQUIRED) not done; recall/precision not registered |
 | **P1** | Metric correctness (dup-rate scale, `mean_coverage`/`% reads` relabel) | WS-06 | ✅ done (dup-rate REFUTED as a non-bug; mean_coverage/% reads fixed) |
 | **P1/P2** | Close (or honestly label) the Settings→runbook loop | WS-05 | 🟡 labelled, not closed — `_active_runbook` still one run-level `Runbook`; `RunbookSet` resolution itself is done |
 | **P2** | Multi-dimensional `RunbookSet`; registry-driven metric adds; two-sided gate type | WS-05, WS-06 | ✅ done |
@@ -141,8 +179,8 @@ WS-05·step1, WS-01·PR1) and most of Wave 1/2 (WS-03, WS-06 remainder, WS-07 Q1
 landed serially in one session rather than across the fanned-out branches this board describes; the
 actual sequencing is recorded commit-by-commit above and in
 [journal 2026-07-12-gap-analysis-remediation-verification.md](../../docs/journal/2026-07-12-gap-analysis-remediation-verification.md).
-Kept below for the dependency reasoning (still accurate) — WS-02/WS-04 remain unstarted and could
-still use this parallel structure.
+Kept below for the dependency reasoning (still accurate) — WS-02/WS-04 landed interim (offline
+only, real-data leg still open) and that remaining leg could still use this parallel structure.
 
 Parallelism is bounded by **file-level contention**: nearly every workstream edits
 `rules.py`/`runbook.py`/`models.py`/`parsers.py`, so this runs in **waves**, not a flat 7-way fan-out.

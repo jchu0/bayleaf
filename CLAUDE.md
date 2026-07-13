@@ -176,9 +176,13 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
       frozen five + 8 registered) gates 5 **optional** thresholds (score a present value, never
       NA-flag an absent one) without penalizing a lean real run. `QCThreshold.kind` (WS-06 Gap 2,
       2026-07-12) adds a **`target_band`** shape (both-tails PASS/WARN/CRITICAL band, e.g. Ts/Tv) beside
-      the default `one_sided`; `variant.titv` is the first threshold to use it. Metric catalog = **11
-      gated / 9 ungated** of 20 registered `our_key`s (`data/metric_registry.md`; was 10/10 before the
-      Ts/Tv gate). **`runbook.RunbookSet`/`RunbookKey`** (WS-05, 2026-07-12): a per-`(assay,
+      the default `one_sided`; `variant.titv` is the first threshold to use it. Metric catalog = **13
+      gated / 8 ungated** of 21 registered `our_key`s (`data/metric_registry.md`; was 11/9 of 20 before
+      WS-02/WS-04, 2026-07-12, gated `contamination.freemix` (VerifyBamID2) + new key
+      `concordance.snp_f1` (hap.py) — real ingest-adapter parsers, but **gated + parser-wired, not
+      pipeline-produced**: `verifybamid2.nf`/`happy.nf` are standalone Nextflow modules
+      (`pipelines/optional_modules/`) not wired into the drift-locked `pipelines/germline/` reference,
+      see item 1e). **`runbook.RunbookSet`/`RunbookKey`** (WS-05, 2026-07-12): a per-`(assay,
       sample_type, platform)` runbook resolver (binary-weight precedence, fail-closed to the full
       `default` runbook, never `None`) — `rules.evaluate_run` widened to `Runbook | RunbookSet`;
       `evaluate_sample`/`aggregate_verdict` are UNCHANGED (ADR-0001 preserved). `GERMLINE_PANEL_RUNBOOK`
@@ -217,7 +221,19 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
       still drives `scripts/run_giab_pipeline.py`'s own bespoke parser into the frozen-five
       `qc_metrics.csv` → `QCMetrics`, a separate, unrelated-by-name `SampleMetrics` dataclass local to
       that script. A `POST /api/runs/ingest` endpoint to call `ingest_results_dir` from outside stays
-      **deferred** — the two ingestion paths are proven equivalent, not yet unified.
+      **deferred** — the two ingestion paths are proven equivalent, not yet unified. **WS-02/WS-04
+      (2026-07-12):** `_extract_verifybamid`/`_extract_happy` added to this same adapter, parsing a
+      present VerifyBamID2 `.selfSM` (FREEMIX) / hap.py `summary.csv` (SNP-F1 vs GIAB truth) into
+      `contamination.freemix`/`concordance.snp_f1` — real, tested parsers, each gated by an optional
+      (`required=False`) `runbook.QCThreshold` (item 1c). **Same honest gap as above, one layer
+      earlier:** `verifybamid2.nf`/`happy.nf` (real `script:` + `stub:`) live in a new
+      `pipelines/optional_modules/` dir, **not wired into any runnable pipeline** — the committed
+      `pipelines/germline/` reference is drift-locked byte-for-byte to the compiler's own output
+      (`tests/test_nextflow_compile.py::test_committed_reference_pipeline_matches_the_compiler`), and
+      the compiler has no input-gated-conditional concept for an optional add-on tool. So no pipeline
+      in this repo produces either input; a live number needs an operator to run the standalone
+      module by hand (verifybamid2 additionally needs an SVD/UD panel, hap.py needs the GIAB truth
+      VCF + confident BED — labelled inputs, never fabricated, ADR-0004).
 
 2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only event trail
    (`analysis_run.started` → per-sample findings/verdict → `completed`) into an `EventLedger`

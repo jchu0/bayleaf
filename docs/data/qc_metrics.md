@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-12 (MST) — gap-analysis WS-01 (`QC-MISSING`/`QC-EXPECTED-<key>` fail-closed rules, `CheckCoverage` honesty), WS-05 (`RunbookSet` per-sample resolution), WS-06 Gap 2 (Ts/Tv `target_band` gate) |
+| **Last updated** | 2026-07-12 (MST) — gap-analysis WS-01 (`QC-MISSING`/`QC-EXPECTED-<key>` fail-closed rules, `CheckCoverage` honesty), WS-05 (`RunbookSet` per-sample resolution), WS-06 Gap 2 (Ts/Tv `target_band` gate), WS-02/WS-04 (FREEMIX + SNP-F1 gated, parser-wired not pipeline-produced; corrected the `CheckCoverage` contamination-flip claim against a direct code check) |
 | **Audience** | bioinformatics / software |
-| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, D2), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) (no invented pathogenicity), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC review queue), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization + wiring status), [schemas.md](schemas.md) (§6 units contract, `VariantCall`, `SampleMetrics`/`RawObservation`), [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) (the workstream tracker), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md) |
+| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, D2), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) (no invented pathogenicity), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC review queue), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization + wiring status), [schemas.md](schemas.md) (§6 units contract, `VariantCall`, `SampleMetrics`/`RawObservation`), [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) (the workstream tracker), [audit/gap_analysis/ws-02-identity-provenance.md](../../audit/gap_analysis/ws-02-identity-provenance.md), [audit/gap_analysis/ws-04-giab-concordance.md](../../audit/gap_analysis/ws-04-giab-concordance.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md) |
 
 ## Overview
 
@@ -209,17 +209,27 @@ read from `RunArtifacts.variant_calls`. **Off by default**; one committed fixtur
    without a `variant.titv` value (the pinned demo + HG002, still) NA-flags nothing and every
    existing verdict stays byte-identical. Band `[target: 2.0–2.1, hard: 1.8–2.8]` — an
    **illustrative whole-genome heuristic, NOT a clinical threshold**, operator-configurable
-   (CLAUDE.md life-science guardrail 3). Metric catalog reads **11 gated / 9 ungated** of 20
-   registered `our_key`s (was 10/10) — see [metric_registry.md](metric_registry.md) Wiring status.
+   (CLAUDE.md life-science guardrail 3). Metric catalog reads **13 gated / 8 ungated** of 21
+   registered `our_key`s (was 11/9 of 20) — see [metric_registry.md](metric_registry.md) Wiring
+   status.
+6. **Contamination (FREEMIX, `contamination.freemix`) and SNP concordance
+   (`concordance.snp_f1`) — gated 2026-07-12 (gap-analysis WS-02/WS-04).** A seventh and eighth
+   optional threshold, both `required=False`. **Gated + parser-wired, NOT pipeline-produced**: a
+   real parser reads a present `.selfSM`/hap.py `summary.csv` (`ingest.nfcore._extract_verifybamid`/
+   `_extract_happy`), but no pipeline committed in this repo runs verifybamid2 or hap.py today —
+   both ship only as standalone Nextflow modules (`pipelines/optional_modules/`) outside the
+   drift-locked `pipelines/germline/` reference. See [metric_registry.md](metric_registry.md)
+   Wiring status for the full honesty note.
 
 **Ungated observations** (registered + wired, no threshold, never NA-flagged, never a finding):
 % PhiX aligned (`preflight.phix_aligned`), Genotype quality (`variant.gq`) — populate the
 **Gate 1** and **Gate 3** groups with real numbers for the first time (previously always an empty
-note for every run). **Ti/Tv (`variant.titv`) moved out of this list** on 2026-07-12 — it is now
-genuinely gated (item 5 above), not merely an ungated observation. **Still not computed by any
-parser** (registered in [metric_registry.md](metric_registry.md), no code path): zero-coverage
-targets, fold-enrichment, fold-80, NGSCheckMate identity, sex concordance, contamination
-(FREEMIX), allele balance — these rows above remain design-only.
+note for every run). **Ti/Tv (`variant.titv`), Contamination (`contamination.freemix`), and SNP
+concordance (`concordance.snp_f1`) moved out of this list** — they are now genuinely gated (items 5
+and 6 above), not merely ungated observations. **Still not computed by any parser at all**
+(registered in [metric_registry.md](metric_registry.md), no code path whatsoever): zero-coverage
+targets, fold-enrichment, fold-80, NGSCheckMate identity, sex concordance, allele balance — these
+rows above remain design-only.
 
 ## Runbook resolution — `RunbookSet` (WS-05, 2026-07-12)
 
@@ -285,9 +295,22 @@ whose QC was never examined at all:
 now accompanies every `DecisionCard` with a deterministic "N of M check categories ran; X not
 examined" count over a fixed category catalog (provenance/metadata/qc/contamination/identity/
 pipeline) — carried un-hashed, never a verdict — replacing the stub's old "all checks passed"
-prose and the RunDetail clean-card panel's matching claim. Contamination and identity read as
-honestly **not examined** until WS-02 wires FREEMIX/NGSCheckMate (their first finding auto-flips
-the category to "ran").
+prose and the RunDetail clean-card panel's matching claim. Contamination and identity still read
+as honestly **not examined**, even now that WS-02 wires FREEMIX (2026-07-12) — the flip did **not**
+land as originally planned. `compute_check_coverage`'s `artifact_present[Category.CONTAMINATION]`
+stays hardcoded `False` (`rules.py` `_EXPECTED_CATEGORIES` block), and the generic threshold loop
+that scores `contamination.freemix` (`_evaluate_metric`/`_evaluate_target_band`) tags **every**
+`QCThreshold` finding `category=Category.QC` — never `Category.CONTAMINATION` — so a `QC-FREEMIX`
+finding never lands in `found_categories` for that category either. **Verified directly**: a sample
+carrying only a WARN-triggering FREEMIX value (`0.0312`) produces a `QC-FREEMIX` finding but
+`compute_check_coverage` still returns `contamination` in `not_examined`
+(`uv run python` against `rules.evaluate_sample` + `rules.compute_check_coverage` — no fixture
+exercises this combination in `tests/`). The category-flip described in the original WS-01 design
+comment remains **unbuilt** — a real fix needs either a category-aware tag on the contamination/
+identity thresholds or a bespoke rule (the WS-02 design's original `CONTAM-001` proposal), neither
+of which WS-02 implemented (it reused the existing generic QC-scoring loop by design — see
+[metric_registry.md](metric_registry.md) Wiring status). NGSCheckMate identity remains unparsed
+entirely (no `.selfSM`-equivalent parser exists yet), so `identity` stays not-examined regardless.
 
 **Two data tracks stay honest about depth of coverage:** a **contrived** run (the synthetic
 generator, `mock_run_02/03`/`scale_30`) emits all 8 additional metrics (comfortably passing) for a
@@ -304,10 +327,14 @@ read as more than what runs:
    (`duplication.rate`); the reference germline pipeline dedups with `samtools markdup`, whose metrics
    file is not the gated source. The registry entry now names fastp as the source (Picard/MultiQC keys
    stay supported alternates via aliases).
-2. **The variant gate is narrow: depth + a Ts/Tv sanity band, not a full variant-quality gate.** Of
-   Gate 3, **Depth (DP)** (`variant.dp`, one-sided) and, as of 2026-07-12, **Ts/Tv** (`variant.titv`,
-   `target_band`) are thresholds. GQ (`variant.gq`) stays an ungated observation; allele-balance and
-   gnomAD AF are **not computed** (no parser).
+2. **The variant gate is narrow: depth + a Ts/Tv sanity band (+ an optional, GIAB-only concordance
+   floor), not a full variant-quality gate.** Of Gate 3, **Depth (DP)** (`variant.dp`, one-sided),
+   **Ts/Tv** (`variant.titv`, `target_band`, as of 2026-07-12), and, as of 2026-07-12 (WS-04),
+   **SNP-F1 concordance** (`concordance.snp_f1`, one-sided FLOOR — gated + parser-wired but not
+   pipeline-produced, see item 6 above) are thresholds. SNP-F1 is only ever populated for a sample
+   with a bound GIAB truth set (HG002-style benchmark runs); every other sample carries no value and
+   is never NA-flagged (`required=False`). GQ (`variant.gq`) stays an ungated observation;
+   allele-balance and gnomAD AF are **not computed** (no parser).
 3. **cluster_pf HOLD is structural and expected.** `cluster_pf` is `required=True` yet a reads-only
    fastq→BAM path structurally can't produce this run-level SAV/InterOp metric, so every reads-based run
    HOLDs on it — the honest "cluster_pf-missing" signal the pinned demo relies on (HG002 → HOLD), not a

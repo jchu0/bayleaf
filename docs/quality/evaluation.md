@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-12 (MST) — gap-analysis-remediation census refresh (634/48 → 708/52; WS-01/03/05/06/07/08/09/10) |
+| **Last updated** | 2026-07-12 (MST) — gap-analysis-remediation census refresh (634/48 → 708/52 → 722/54; WS-01/03/05/06/07/08/09/10, then WS-02/WS-04 + a caught pre-existing drift, `test_card_readout` 17→21, from the un-recounted `61936d1` WS-06 Gap 2 API-wiring commit) |
 | **Audience** | software / all |
 | **Related** | [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) (the workstream tracker this census reflects), [journal/2026-07-12-gap-analysis-remediation-verification.md](../journal/2026-07-12-gap-analysis-remediation-verification.md), [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006, EVAL-009), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress, per-variant table EVAL-013), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (custom-script processes, EVAL-015; sandboxed file browser, EVAL-016; compiler robustness, EVAL-017), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (authored-pipeline intake + processing gate, EVAL-018), [HISTORY.md](../HISTORY.md) (archived census milestones), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) (EVAL-009, EVAL-013), [journal/2026-07-11-fleet.md](../journal/2026-07-11-fleet.md) (EVAL-008 update, EVAL-014), [journal/2026-07-11-custom-script-io.md](../journal/2026-07-11-custom-script-io.md) (EVAL-015, EVAL-016), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (EVAL-014), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
 
@@ -19,12 +19,19 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The suite is **708 tests across 52 files** — re-derived 2026-07-12 (MST, gap-analysis-remediation
-sweep) via `uv run pytest --collect-only -q` (708 collected) + `git ls-files 'tests/*.py' | wc -l`
-(52); was 634/48. Four new files landed this session: `test_runbook_set.py` (WS-05), `test_ingest.py`
-(WS-03/06), `test_stores_consolidated.py` (WS-06 Gap 6), `test_stub_next_steps.py` (WS-07 Q1).
-Pass/skip depends on whether `nextflow` is on `PATH`: **700 pass / 8 skip** when `nextflow` is
-absent (this repo's default sandboxed dev/CI environment — verified here via `uv run pytest -q`).
+The suite is **722 tests across 54 files** — re-derived 2026-07-12 (MST) via
+`uv run pytest --collect-only -q` (722 collected) + `git ls-files 'tests/*.py' | wc -l` (54); was
+708/52 after the gap-analysis-remediation sweep, 634/48 before it. **Six** new files have landed
+since that sweep, in total: `test_runbook_set.py` (WS-05), `test_ingest.py` (WS-03/06),
+`test_stores_consolidated.py` (WS-06 Gap 6), `test_stub_next_steps.py` (WS-07 Q1),
+`test_ws02_contamination.py` (WS-02, VerifyBamID2 FREEMIX, 5 cases), `test_ws04_concordance.py`
+(WS-04, hap.py GIAB SNP-F1, 5 cases). This recount also caught a real, pre-existing drift the prior
+sweep missed: `test_card_readout.py` grew from 17 to 21 tests in `61936d1` ("card_readout: render
+target_band thresholds", WS-06 Gap 2 API wiring) — a commit that landed **after** the last doc
+sweep and was never counted until now. Pass/skip depends on whether `nextflow` is on `PATH`:
+verified here via `uv run pytest -q` with `nextflow` absent (this repo's default sandboxed dev/CI
+environment) — **714 pass / 8 skip** (722 collected minus the 8 machine-gated skips below; the
+WS-02/WS-04 additions are pure-offline stub+fixture tests, no new skip).
 The **8 skips** are machine-gated live-integration checks: **3 `nextflow`-gated** stub-run checks
 (`test_nextflow_compile.py::test_generated_germline_stub_runs`, EVAL-006;
 `test_e2e_pipeline.py::test_approved_germline_pipeline_stub_runs_live`, EVAL-007;
@@ -44,13 +51,16 @@ archived in [HISTORY.md](../HISTORY.md).
 By collected size:
 `test_gate` (49, was 30 — WS-01 QC-MISSING/expected-metrics/CheckCoverage + WS-06 target-band/metric-honesty
 guards), `test_api` (44), `test_notify` (36), `test_synthetic` (33), `test_fetch_giab` (32),
-`test_triage` (23, was 16 — WS-07 Q2 `ask`-endpoint cases), `test_review_queue` (20), `test_node_author`
+`test_triage` (23, was 16 — WS-07 Q2 `ask`-endpoint cases), `test_card_readout` (21, was 14 → 17
+(WS-07 Q1 `qc_reports` cases) → 21, `61936d1` — WS-06 Gap 2's API-side target_band rendering: in-band
+pass, out-of-target/out-of-hard tail flags, and an anti-drift guard the readout status mirrors
+`rules._evaluate_target_band`), `test_review_queue` (20), `test_node_author`
 (19, the advisory node-authoring agent, T-046), `test_intake_scheduling` (19, was 15 — WS-09
 submit-time parse-contract + input-parity + scheduling-honesty guards), `test_persistence` (17),
 `test_nextflow_robustness` (17, the compiler robustness-hardening / hostile-input suite — one case per
 verified review fix: proc-name collision, File-input source wiring, novel-kind params channel,
 fan-in / dup-emit / port-drift guards, injection-escaped strings), `test_metrics` (17),
-`test_card_readout` (17, was 14 — WS-07 Q1 `qc_reports` cases), `test_archivist` (17,
+`test_archivist` (17,
 the advisory archivist/librarian agent), `test_run_giab_preflight` (16, the
 four pre-flight guards in `scripts/run_giab_pipeline.py`, T-131), `test_pipeline_repair` (16, the
 advisory pipeline-repair agent), `test_job_store` (16), `test_nextflow_compile` (16, incl. the mosdepth-5-output
@@ -86,7 +96,12 @@ stub materializes its declared outputs + the real-path fastp check above), `test
 `test_share_store` (6, the pluggable jsonl/sqlite/postgres share-egress-audit sink,
 ADR-0016/ADR-0018 D3), `test_node_author_api` (6, the W2 read-only `GET /api/builder/node-proposal`
 endpoint), `test_library_store` (6), `test_share_egress` (5, the de-identified share/report egress
-endpoint, ADR-0018 D3), `test_persistence_postgres_live` (4), `test_run_giab_driver` (4, was 2 — the
+endpoint, ADR-0018 D3), `test_ws02_contamination` (5, **new** — WS-02: VerifyBamID2 FREEMIX
+contamination, offline stub + a real-format `.selfSM` fixture: parse, WARN/HOLD, CRITICAL/RERUN, a
+clean value observed-but-not-flagged, absent-selfSM-is-not-a-hole), `test_ws04_concordance` (5,
+**new** — WS-04: hap.py GIAB SNP-F1 concordance, offline stub + a real-format `summary.csv`
+fixture: SNP+PASS row parse, WARN/HOLD, CRITICAL/RERUN, a high F1 observed-but-not-flagged,
+absent-summary-is-not-a-hole), `test_persistence_postgres_live` (4), `test_run_giab_driver` (4, was 2 — the
 Slurm/local executor-profile auto-detection unit, incl. a new WS-10-adjacent case), `test_stores_consolidated`
 (3, **new** — WS-06 Gap 6: all 7 off-gate stores share the generic `JsonlStore`/`SqliteStore` base,
 byte-identical output), `test_run_variants` (3, the per-variant Report endpoint

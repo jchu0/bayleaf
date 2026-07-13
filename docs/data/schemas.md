@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-12 (MST) — job-store `held`/`scheduled` parked states (ADR-0021) |
+| **Last updated** | 2026-07-12 (MST) — job-store `held`/`scheduled` parked states (ADR-0021); corrected the `CheckCoverage` contamination-flip claim (WS-02 landed but the flip did not — verified against `rules.py`) |
 | **Audience** | bioinformatics / software |
 | **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family, incl. the job + library stores), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / route-to-human / `data.exported` share egress), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (job-store `held`/`scheduled`), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (`LibraryEntry`'s conformance gate), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) |
 
@@ -210,10 +210,13 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
     `rules.compute_check_coverage(artifacts, findings)` — a category counts as "ran" when its
     artifact is present OR it emitted a finding, so a clean finding-less QC gate still counts as
     examined. Deterministic, un-hashed contextual metadata like `metric_values[]` — never sets a
-    verdict; contamination/identity honestly read "not examined" until a WS-02 rule (FREEMIX/
-    NGSCheckMate) exists to flip them. Backs the honest "N ran / M not examined" card prose that
-    replaced the old "all checks passed" claim — see
-    [qc_metrics.md](qc_metrics.md#fail-closed-rules--qc-missing--qc-expected-key-ws-01-2026-07-12).)*
+    verdict; contamination/identity honestly read "not examined" — **still true even after WS-02
+    wired FREEMIX (2026-07-12)**: the generic `QCThreshold` loop tags every finding
+    `Category.QC`, never `Category.CONTAMINATION`, so a `QC-FREEMIX` finding does not flip the
+    category as this doc previously implied; verified directly against `rules.py` — see
+    [qc_metrics.md](qc_metrics.md#fail-closed-rules--qc-missing--qc-expected-key-ws-01-2026-07-12)
+    for the corrected note. Backs the honest "N ran / M not examined" card prose that replaced the
+    old "all checks passed" claim.)*
     · generated_by · model ·
     **content_hash** · created_at · supersedes_card_id?. *(`is_current` is a projection, not
     stored truth.)*

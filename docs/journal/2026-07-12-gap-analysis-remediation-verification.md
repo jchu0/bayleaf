@@ -4,7 +4,7 @@
 |---|---|
 | **Focus** | Doc-keeper SWEEP over the full `feat/gap-analysis-remediation` branch (`main..HEAD`, 20 commits): distil the session's workstream landings (WS-01/03/05/06/07/08/09/10) into the canonical docs per the [Doc-update map](../TABLE_OF_CONTENTS.md#doc-update-map), and record the headline verification milestone — the toolchain now runs on this machine and the full ingestion spine was proven end-to-end on real GIAB HG002 output. |
 | **Participants** | Claude (doc-keeper subagent) on top of a prior autonomous overnight build session (Claude Opus 4.8 + `adversarial-reviewer`/`test-writer` subagents); maintainer (James Hu) reviewing. |
-| **Outcome** | 10 canonical docs swept and corrected against code (2 real staleness bugs found and fixed: `metric_registry.md`/`qc_metrics.md`'s "10 gated/10 ungated" count and `nf-core-conventions.md`'s "pending real MultiQC parsing" claim); `docs/planning/tasks.md` gained 9 new task rows (T-144–T-152); `audit/gap_analysis/README.md`'s living tracker brought current; this journal captures the reasoning + decisions. |
+| **Outcome** | 10 canonical docs swept and corrected against code (2 real staleness bugs found and fixed: `metric_registry.md`/`qc_metrics.md`'s "10 gated/10 ungated" count and `nf-core-conventions.md`'s "pending real MultiQC parsing" claim); `docs/planning/tasks.md` gained 9 new task rows (T-144–T-152); `audit/gap_analysis/README.md`'s living tracker brought current; this journal captures the reasoning + decisions. **Addendum (same day):** WS-02/WS-04 landed (`b8494f5`, `072d8db`) — metric catalog 11/9 of 20 → 13/8 of 21, labelled "gated + parser-wired, not pipeline-produced"; caught and corrected a real `CheckCoverage` over-claim (the contamination category does not actually auto-flip to "ran") and a second pre-existing test-census drift (`test_card_readout` +4, `61936d1`); tracker corrected to 🟡 interim, not ✅ done, against this folder's own Definition of Done (real-data acceptance leg not landed). |
 
 ## Discussion
 
@@ -197,9 +197,85 @@ satisfied (it is itself a `docs/design/` artifact).
 1. **Unify the two ingestion paths** (WS-03/06's proven adapter vs. the production driver's own
    parser) — currently proven-equivalent, not unified. A `POST /api/runs/ingest` endpoint or wiring
    the driver to call `ingest_results_dir` directly is the natural next step.
-2. **WS-02 (FREEMIX/NGSCheckMate) and WS-04 (GIAB concordance)** remain entirely unstarted — now with
-   a lower bar than before this session, since the toolchain (`hackathon` conda env,
-   `verifybamid2`-installable) exists on this machine.
+2. ~~**WS-02 (FREEMIX/NGSCheckMate) and WS-04 (GIAB concordance)** remain entirely unstarted~~ —
+   **superseded same day, see the Addendum below**: both landed (offline/fixture-proven), but
+   neither reached the real-data leg their own plans required.
+
+## Addendum (same day, later session) — WS-02/WS-04 landed + a caught over-claim
+
+**Focus.** A focused SWEEP for two commits landed after this entry's original close-out: `b8494f5`
+(WS-02, `contamination.freemix`) and `072d8db` (WS-04, `concordance.snp_f1`). Docs-only, no code.
+
+**What landed, grounded against code (not commit prose alone):**
+
+1. Both metrics reuse the EXISTING generic `runbook.QCThreshold` / `rules._evaluate_metric` loop —
+   no bespoke rule, no dispatch change (confirmed: `contamination.freemix`/`concordance.snp_f1` are
+   ordinary entries in `runbook.py`'s `qc_thresholds` list, scored by the same code path as
+   `variant.dp`). Registered/gated/ungated counts: 20/11/9 → **21/13/8**, re-verified against
+   `tests/test_api.py::test_metric_catalog_lists_registered_metrics_and_gated_flag`
+   (`n_registered==21`, `n_gated==13`) and a direct count of `metric_registry.yaml` entries +
+   `runbook.py`'s `QCThreshold(...)` constructions.
+2. **The honesty bar for this sweep: "gated + parser-wired, NOT pipeline-produced."** Real parsers
+   (`ingest.nfcore._extract_verifybamid`/`_extract_happy`) exist and are tested (5 cases each,
+   `test_ws02_contamination.py`/`test_ws04_concordance.py`), but the tools that PRODUCE the inputs
+   (verifybamid2, hap.py) ship only as standalone Nextflow modules
+   (`pipelines/optional_modules/{verifybamid2,happy}.nf`, real `script:`+`stub:`) — **not wired
+   into any runnable pipeline.** `pipelines/germline/` is drift-locked byte-for-byte to the
+   card-graph compiler's own output (`tests/test_nextflow_compile.py::test_committed_reference_pipeline_matches_the_compiler`),
+   and the compiler has no input-gated-conditional concept for an optional add-on tool yet. This is
+   the same honesty pattern already recorded for the WS-03 ingest adapter itself ("gate-wired but
+   not gate-called") — one layer earlier in the pipeline.
+3. **A real, un-planned drift caught mid-sweep, not just re-reading commit prose.** `rules.py`'s own
+   `_EXPECTED_CATEGORIES` comment (and `docs/data/qc_metrics.md`/`schemas.md`, written during the
+   original WS-01 PR2 work) claimed "contamination/identity flip to 'ran' automatically once WS-02
+   wires FREEMIX (their first finding does it)." Verified directly with a constructed sample and a
+   WARN-triggering FREEMIX value (`uv run python` against `rules.evaluate_sample` +
+   `rules.compute_check_coverage`): the `contamination` category **still reports `not_examined`**.
+   Root cause, read directly in `rules.py`: `_evaluate_metric`/`_evaluate_target_band` (the generic
+   threshold loop ALL `QCThreshold`s share, including `contamination.freemix`) hardcode
+   `category=Category.QC` on every finding they emit — never `Category.CONTAMINATION` — and
+   `compute_check_coverage`'s `artifact_present[Category.CONTAMINATION]` stays hardcoded `False`
+   regardless of what's present. So a `QC-FREEMIX` finding never lands in `found_categories` for
+   that category. WS-02, as actually implemented (the existing generic loop, not the plan's
+   proposed bespoke `CONTAM-001` rule), never could have flipped this — the original design comment
+   was accurate about the PLAN, not about what shipped. Corrected in `qc_metrics.md` and
+   `schemas.md`; the code itself is untouched (docs-only sweep) and this is now a named, tracked gap.
+4. **Definition-of-Done cross-check against the workstreams' own plan docs.** Both
+   `ws-02-identity-provenance.md` and `ws-04-giab-concordance.md` mark a **real-data acceptance
+   test REQUIRED** for exactly this gap ("the ingestion/science gap where 'fixture green ≠ real run
+   works' hid" / "the core science/ingestion claim"). Neither commit's own message claims one —
+   both say "OFFLINE only — [tool] is never installed/run" outright. Per `audit/gap_analysis/README.md`'s
+   own Definition of Done ("a workstream flips to done only with... its real-path test green on
+   real GIAB — not a fixture"), WS-02/WS-04 do **not** qualify as ✅ done; corrected the tracker to
+   🟡 interim rather than let a flat "not started" → "done" transition over-claim past what
+   actually landed.
+5. **A test census re-derivation caught a second, unrelated pre-existing drift**: `uv run pytest
+   --collect-only -q` → 722 (was 708) + `git ls-files 'tests/*.py' | wc -l` → 54 (was 52). The delta
+   is +5 (`test_ws02_contamination.py`) +5 (`test_ws04_concordance.py`) +4 — that last +4 traced to
+   `test_card_readout.py` (17→21), from `61936d1` ("card_readout: render target_band thresholds,"
+   WS-06 Gap 2 API wiring) — a commit that landed **after** this entry's original doc sweep and was
+   never counted. Fixed in `quality/evaluation.md` alongside the WS-02/WS-04 delta. `uv run pytest
+   -q` confirms **714 passed / 8 skipped** (722 − 8 = 714, no new skip — both new test files are
+   pure offline stub+fixture).
+
+## Decisions (addendum)
+
+| Decision | Distilled to |
+|---|---|
+| WS-02/WS-04 land as **offline-only, generic-loop-scored** metrics rather than waiting for the real-data leg (verifybamid2/hap.py execution + pipeline wiring) — a deliberate incremental step, matching the plans' own phasing (parse/gate first, real-data acceptance as a separate, harder leg) | `audit/gap_analysis/README.md` (🟡 interim status, explicit Definition-of-Done gap named), [metric_registry.md](../data/metric_registry.md) (`‡` marker), `docs/planning/tasks.md` T-153/T-154. **Flagged for the maintainer**: wiring `pipelines/optional_modules/{verifybamid2,happy}.nf` into a runnable pipeline needs the compiler to gain an input-gated-conditional concept it doesn't have today — a real design decision, not a doc-only fix, if/when the real-data leg is prioritized. |
+| The `CheckCoverage` contamination/identity category-flip is a genuine, real gap (not a doc typo) — corrected the docs to state what the code does, rather than what the original design comment intended, and left the code as a named follow-up rather than silently patching it inside a docs-only sweep | `qc_metrics.md`, `schemas.md`, `audit/gap_analysis/README.md` next-action item 2. No new ADR — an implementation gap inside an already-decided design (WS-01's `CheckCoverage`), not a new architectural decision. |
+
+## Distilled into (addendum)
+
+- [CLAUDE.md](../../CLAUDE.md) — code map items 1c (counts) + 1g (WS-02/WS-04 honesty note).
+- [docs/data/metric_registry.md](../data/metric_registry.md) — 21/13/8 counts, `‡` marker, Wiring-status honesty paragraph.
+- [docs/data/qc_metrics.md](../data/qc_metrics.md) — new item 6, corrected `CheckCoverage` claim, widened variant-gate-scope item 2.
+- [docs/data/schemas.md](../data/schemas.md) — corrected `CheckCoverage` claim.
+- [docs/requirements/functional.md](../requirements/functional.md) — REQ-F-071 counts, new Notes item 11.
+- [docs/quality/evaluation.md](../quality/evaluation.md) — census 708/52 → 722/54, `test_card_readout` drift fix.
+- [docs/planning/tasks.md](../planning/tasks.md) — T-153, T-154.
+- [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) — WS-02/WS-04 🟡 interim status, Definition-of-Done gap named, next-action items.
+- This addendum.
 3. **WS-07's Design items 1/2/4** (richer agent context, semantic retrieval, a deliberate live-Claude
    demo default) stay design-only.
 4. **WS-08 full enforcement** (server-side `AgentBinding` persistence, run→executed-graph linkage,
