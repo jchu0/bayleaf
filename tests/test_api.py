@@ -123,9 +123,9 @@ def test_artifact_download_serves_file_and_blocks_traversal():
 
 
 def test_downstream_artifact_stage_seams():
-    """W3 post-variant lineage seams: a filtered/normalized VCF, a route-to-human routing record,
+    """W3 post-variant lineage seams: a filtered/normalized VCF, a flag-for-review routing record,
     and a share manifest each land on their own downstream stage, while the raw caller VCF stays on
-    'variant' and the route-to-human ARMING marker stays config (never a data artifact)."""
+    'variant' and the flag-for-review ARMING marker stays config (never a data artifact)."""
     from api.main import _artifact_stage_roles
 
     # A filtered/normalized VCF is the filter stage's output — matched BEFORE the generic .vcf rule.
@@ -133,11 +133,11 @@ def test_downstream_artifact_stage_seams():
     assert _artifact_stage_roles("HG002.norm.vcf") == [("filter", "output")]
     # ...but the raw caller output still lands on 'variant' (unchanged).
     assert _artifact_stage_roles("HG002.vcf.gz") == [("variant", "output")]
-    # Route-to-human routing record + de-identified share manifest → their own stages.
-    assert _artifact_stage_roles("route_to_human.json") == [("review", "output")]
+    # Flag-for-review routing record + de-identified share manifest → their own stages.
+    assert _artifact_stage_roles("flag_for_review.json") == [("review", "output")]
     assert _artifact_stage_roles("share_manifest.json") == [("share", "output")]
-    # The per-run route_to_human ARMING marker (config, no extension) is NOT a data artifact.
-    assert _artifact_stage_roles("route_to_human") == []
+    # The per-run flag_for_review ARMING marker (config, no extension) is NOT a data artifact.
+    assert _artifact_stage_roles("flag_for_review") == []
 
 
 # --- In-app feedback (W12): the one write endpoint, off the deterministic gate -------------

@@ -1,5 +1,7 @@
 # Journal — 2026-07-10 (MST) — Wave 6 doc sweep: route-to-human (VAR-RTH-001) + conservative de-id (D2/D3)
 
+> **Naming note (2026-07-13, MST):** this dated entry predates the rename **route-to-human → flag-for-review** (`VAR-RTH-001 → VAR-FFR-001`, `RouteToHumanPolicy → FlagForReviewPolicy`, `_check_route_to_human → _check_flag_for_review`, the `route_to_human` field/marker + `route_to_human.json` stage key → `flag_for_review*`, `tests/test_route_to_human.py → tests/test_flag_for_review.py`). The old names below are kept as accurate-at-the-time; current-state docs use the new names. See [2026-07-13-flag-for-review-rename-and-page-naming.md](2026-07-13-flag-for-review-rename-and-page-naming.md).
+
 | Field | Value |
 |---|---|
 | **Focus** | SWEEP the docs owed by two backend commits that implement ADR-0018's maintainer-decided D2 (route-to-human gate rule) and D3 (conservative Safe-Harbor-style de-id) — the first two build increments of the "Wave 6" variant-interpretation design (T-104). Pure doc-keeper work; no product code touched. |

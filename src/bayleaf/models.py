@@ -506,7 +506,7 @@ class VariantCall(BaseModel):
     `clinvar_significance` is the raw CLNSIG string, `clinvar_review_status` the review status
     (star rating), `clinvar_accession` + `clinvar_version` the citation. Every field is optional
     so a partial/garbled annotation is a signal, not a crash (CLAUDE.md data-handling 2). This
-    record feeds only the OFF-BY-DEFAULT route-to-human rule (VAR-RTH-001); it sets no verdict.
+    record feeds only the OFF-BY-DEFAULT flag-for-review rule (VAR-FFR-001); it sets no verdict.
     """
 
     sample_id: str
@@ -536,7 +536,7 @@ class RunArtifacts(BaseModel):
     # Structured Nextflow/nf-core execution trace (`trace.txt`) — READ, never run (EXEC-001).
     execution_trace: list[TraceRecord] = Field(default_factory=list)
     # Annotated candidate variants READ from an externally-produced annotated VCF/table
-    # (ADR-0018). Empty for every run today; feeds only the off-by-default route-to-human rule.
+    # (ADR-0018). Empty for every run today; feeds only the off-by-default flag-for-review rule.
     variant_calls: list[VariantCall] = Field(default_factory=list)
     # Run-level context parsed from the sample sheet's [Header] block (Illumina v2).
     # All optional: a sheet may omit any of them, and `run_date` stays the raw ISO

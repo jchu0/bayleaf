@@ -113,6 +113,14 @@ Canonical decision (boundary + D1/D2/D3) + current status:
 [adr/ADR-0018](adr/ADR-0018-variant-interpretation-advisory-evidence.md). Design detail:
 [design/variant-interpretation.md](design/variant-interpretation.md).
 
+> **Naming (2026-07-13, MST):** the D2 rule/policy/field named "route-to-human" throughout this
+> archived section was renamed **route-to-human → flag-for-review**: `VAR-RTH-001 → VAR-FFR-001`,
+> `RouteToHumanPolicy → FlagForReviewPolicy`, `_check_route_to_human → _check_flag_for_review`, the
+> `route_to_human` runbook field / arming-marker / `route_to_human.json` stage key → `flag_for_review*`,
+> `tests/test_route_to_human.py → tests/test_flag_for_review.py`. The dated entries below keep the
+> historical name (accurate as of their date); current-state docs use the new name. See
+> [journal/2026-07-13-flag-for-review-rename-and-page-naming.md](journal/2026-07-13-flag-for-review-rename-and-page-naming.md).
+
 ### 2026-07-11 — the build increments
 
 Verified by reading `api/main.py`, `api/share_store.py`, `tests/test_route_to_human.py`,

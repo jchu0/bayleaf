@@ -117,20 +117,20 @@ class QCThreshold(BaseModel):
         return self
 
 
-class RouteToHumanPolicy(BaseModel):
-    """OFF-BY-DEFAULT rule that routes a sample to mandatory human review when an annotated
+class FlagForReviewPolicy(BaseModel):
+    """OFF-BY-DEFAULT rule that flags a sample for mandatory human review when an annotated
     variant carries a clinically-significant ClinVar classification (ADR-0018 decision D2).
 
-    This is a review-ROUTING rule, NOT a clinical-significance gate. It authors no pathogenicity:
+    This is a review-FLAGGING rule, NOT a clinical-significance gate. It authors no pathogenicity:
     it reads a variant's *already-present, verbatim* ClinVar significance as EVIDENCE and escalates
     to human judgment — the most conservative action (never auto-proceed, never auto-classify). A
-    deterministic rule decides to ROUTE; a qualified human adjudicates the clinical meaning (rules
+    deterministic rule decides to FLAG; a qualified human adjudicates the clinical meaning (rules
     decide / humans adjudicate, ADR-0001). Empty ``significances`` = DISARMED (the default), so a
-    stock runbook never routes and the deterministic QC gate is byte-for-byte unchanged. Thresholds
+    stock runbook never flags and the deterministic QC gate is byte-for-byte unchanged. Thresholds
     here are illustrative/operator-configurable, NOT clinical thresholds (CLAUDE.md guardrail 3).
     """
 
-    # ClinVar CLNSIG values (matched case-/separator-insensitively) that route a sample to human
+    # ClinVar CLNSIG values (matched case-/separator-insensitively) that flag a sample for human
     # review. EMPTY by default → the rule is OFF. e.g. ("Pathogenic", "Likely_pathogenic").
     significances: tuple[str, ...] = ()
     # Optional review-status allow-list (star rating floor). Empty → any review status qualifies
@@ -317,10 +317,10 @@ class Runbook(BaseModel):
     # Execution-trace task statuses that count as an operational failure (EXEC-001). A task is
     # also a failure on a nonzero exit code, whatever its status. Illustrative/configurable.
     trace_failure_statuses: list[str] = Field(default_factory=lambda: ["FAILED", "ABORTED"])
-    # OFF-BY-DEFAULT route-to-human policy (ADR-0018 D2). Disarmed by default (no significances),
-    # so the stock runbook never routes and the deterministic QC gate is unchanged. An operator
+    # OFF-BY-DEFAULT flag-for-review policy (ADR-0018 D2). Disarmed by default (no significances),
+    # so the stock runbook never flags and the deterministic QC gate is unchanged. An operator
     # arms it to escalate ClinVar-significant candidates to mandatory human review (RBAC-gated).
-    route_to_human: RouteToHumanPolicy = Field(default_factory=RouteToHumanPolicy)
+    flag_for_review: FlagForReviewPolicy = Field(default_factory=FlagForReviewPolicy)
     # WS-01: the named pipeline profile this runbook scores (default = the lean base profile). Used
     # only for honest narration today; WS-05's `RunbookSet` will key profiles by this.
     pipeline_profile: str = "default"

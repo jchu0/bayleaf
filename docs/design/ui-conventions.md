@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active — the durable convention registry (so a rule is stated once, not per session) |
-| **Last updated** | 2026-07-13 (MST) — UIC-20 added (the `<Missing/>` honesty primitive) |
+| **Last updated** | 2026-07-13 (MST) — page-name simplification applied to UIC-8/-11/-15/-16 + the pagination/ACCESS_FLOOR references (Decision cards → **Decisions**, Submit samplesheet → **Samplesheet**, Agent triage → **Triage**, Pipeline builder → **Pipeline**, Sample accessioning → **Sample Metadata**; labels match `frontend/src/access.ts`). UIC-11 anchor changed → cross-link in `nonfunctional.md` updated. Prior: UIC-20 added (the `<Missing/>` honesty primitive) |
 | **Audience** | software / design / reviewers |
 | **Related** | [design/frontend/README.md](frontend/README.md) (tokens + per-screen spec), [design/builder-cards/README.md](builder-cards/README.md) (pipeline-card design), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [functional.md](../requirements/functional.md) (REQ-F-097), [nonfunctional.md](../requirements/nonfunctional.md) (REQ-NF-070, a11y), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [scale-aware memory], [explicit-edit+audit memory] |
 
@@ -127,7 +127,7 @@ closed; Admin role edits + threshold overrides already had it (T-092/T-051).
 Any list that can grow uses the shared `components/Pager.tsx` with a 25/50/100 per-page control
 (default 25). No infinite/unbounded rows (see scale-aware rule). Applies to: notifications/Inbox,
 Submit sample table, Accession, Review queue, Monitoring, Admin, Provenance event-trail/artifacts,
-Runs overview, Agent triage.
+Runs overview, Triage.
 **Shipped** — Inbox's notification list and Submit's sample table gained the real 25/50/100
 control this batch (the last two named consumers); Accession/Review-queue/Monitoring/Admin/
 Provenance already had it from earlier waves (T-114/T-116/T-117). **Correction (2026-07-11,
@@ -144,7 +144,7 @@ also gained a `<Pager>` the same session, closing [T-072](../planning/tasks.md)'
 ### UIC-6 — Every page is admin-assignable · ✅
 The page-access catalog ([access.ts](../../frontend/src/access.ts)) must include **every** operator
 page so an admin can grant/deny each one per user (G1). `admin` stays governed by `isAdmin` (never
-page-gated); the `ACCESS_FLOOR` (Runs + Decision cards) is un-removable. Page access is a **view
+page-gated); the `ACCESS_FLOOR` (Runs + Decisions) is un-removable. Page access is a **view
 gate, not authorization** — the API still checks wire role; keep that banner. **Shipped**:
 `access.ts`'s `PageId` catalog now covers every operator page (12, `admin` intentionally excluded).
 
@@ -163,7 +163,7 @@ formal AA+ audit).
 
 ## Screen-specific conventions
 
-### UIC-8 — Decision cards · ✅
+### UIC-8 — Decisions · ✅
 - The Claude-**generated** narration + "recommended next steps" must be **framed as one block under
   the metric tables** (currently free-floating). Visually group them (a bordered "AI narration
   (advisory)" panel) so evidence/tables read first, narration second (ADR-0001 separation).
@@ -192,12 +192,12 @@ formal AA+ audit).
   **reversible**, localStorage-persisted clear/restore (never a DB purge), with a "Cleared · N"
   section to restore.
 - **Escalations are role/access-based** — who can escalate / who an escalation routes to is gated by
-  role + page access (ties to UIC-6 + the route-to-human role gate).
+  role + page access (ties to UIC-6 + the flag-for-review role gate).
 - **Shipped**: `ReviewQueue.tsx` renders the run checkbox left of a group line enclosing the sample
   tickets (`setMany` auto-toggles children), a reversible localStorage clear/restore with a
   "Cleared · N" section, and escalation gated by role + page access.
 
-### UIC-11 — Submit samplesheet · ✅
+### UIC-11 — Samplesheet · ✅
 - Per-page control (25/50/100) on the sample table (UIC-5).
 - **`sample_metadata.csv` is NOT optional** — it is how samples are *identified* (study/clinical
   extension of the Illumina SampleSheet, which is a sequencing structure). Data-safety rules:
@@ -262,12 +262,12 @@ Standard QOL features, wired to the user/RBAC system:
   display id — a follow-up, not silently dropped.
 
 ### UIC-15 — Nav order (Operate group) · ✅
-Within Operate, keep Notification → Action → Steps, but the **step order is Intake gate → Decision
-cards** with **Runs at the BOTTOM** of the group (Runs is a list/index, not a step): e.g.
-Inbox · Review queue · Sample accessioning · Submit · Intake gate · Decision cards · Runs.
+Within Operate, keep Notification → Action → Steps, but the **step order is Intake → Decisions**
+with **Runs at the BOTTOM** of the group (Runs is a list/index, not a step): e.g.
+Inbox · Review queue · Sample Metadata · Samplesheet · Intake · Decisions · Runs.
 **Shipped**: `Sidebar.tsx`'s `useNav` reorders Operate so Runs sits last.
 
-### UIC-16 — Pipeline builder · ✅ — see [builder-cards/](builder-cards/)
+### UIC-16 — Pipeline · ✅ — see [builder-cards/](builder-cards/)
 Canvas + card conventions are documented in [docs/design/builder-cards/](builder-cards/): the dot
 grid spans the **entire** working canvas; the tools palette shows the **current** pipeline's tools
 with a `>` expander to all available; **larger** cards with typed half-circle ports on **all four

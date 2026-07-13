@@ -1,4 +1,4 @@
-"""Route-to-human (VAR-RTH-001) — the OFF-BY-DEFAULT gate rule that escalates a ClinVar-significant
+"""Flag-for-review (VAR-FFR-001) — the OFF-BY-DEFAULT gate rule that escalates a ClinVar-significant
 candidate to MANDATORY human review (ADR-0018 decision D2).
 
 The guardrail this suite pins: bayleaf authors NO pathogenicity. The rule is disarmed by
@@ -13,8 +13,8 @@ from pathlib import Path
 from bayleaf.engine import run_gate
 from bayleaf.models import RunArtifacts, Verdict
 from bayleaf.parsers import parse_variant_calls
-from bayleaf.rules import _check_route_to_human, evaluate_sample
-from bayleaf.runbook import DEFAULT_RUNBOOK, RouteToHumanPolicy, Runbook
+from bayleaf.rules import _check_flag_for_review, evaluate_sample
+from bayleaf.runbook import DEFAULT_RUNBOOK, FlagForReviewPolicy, Runbook
 
 # A contrived annotated-variant table: one clearly Pathogenic candidate (would route when armed),
 # one Benign (never routes). Verbatim ClinVar strings, incl. the underscore ClinVar actually uses.
@@ -26,10 +26,10 @@ _VARIANTS_CSV = (
 
 
 def _armed(*significances: str, review_statuses: tuple[str, ...] = ()) -> Runbook:
-    """DEFAULT_RUNBOOK with ONLY the route-to-human policy armed (qc thresholds untouched)."""
+    """DEFAULT_RUNBOOK with ONLY the flag-for-review policy armed (qc thresholds untouched)."""
     return DEFAULT_RUNBOOK.model_copy(
         update={
-            "route_to_human": RouteToHumanPolicy(
+            "flag_for_review": FlagForReviewPolicy(
                 significances=significances, review_statuses=review_statuses
             )
         }
@@ -61,18 +61,18 @@ def test_parse_variant_calls_is_tolerant(tmp_path: Path) -> None:
 
 
 # ── rule: OFF by default ─────────────────────────────────────────────────────────
-def test_route_to_human_is_off_by_default(tmp_path: Path) -> None:
+def test_flag_for_review_is_off_by_default(tmp_path: Path) -> None:
     calls = _write(tmp_path, _VARIANTS_CSV)
     # Stock (disarmed) runbook: even a Pathogenic candidate produces NO routing finding.
-    assert DEFAULT_RUNBOOK.route_to_human.armed is False
-    assert _check_route_to_human("HG002", calls, DEFAULT_RUNBOOK) is None
+    assert DEFAULT_RUNBOOK.flag_for_review.armed is False
+    assert _check_flag_for_review("HG002", calls, DEFAULT_RUNBOOK) is None
 
 
 # ── rule: armed ──────────────────────────────────────────────────────────────────
-def test_armed_pathogenic_routes_to_human(tmp_path: Path) -> None:
+def test_armed_pathogenic_flags_for_review(tmp_path: Path) -> None:
     calls = _write(tmp_path, _VARIANTS_CSV)
-    f = _check_route_to_human("HG002", calls, _armed("Pathogenic", "Likely_pathogenic"))
-    assert f is not None and f.rule_id == "VAR-RTH-001"
+    f = _check_flag_for_review("HG002", calls, _armed("Pathogenic", "Likely_pathogenic"))
+    assert f is not None and f.rule_id == "VAR-FFR-001"
     assert f.suggested_verdict is Verdict.ESCALATE  # route to a human — the conservative action
     assert f.gate.value == "variant"  # lands on the variant gate, not the QC gate
     # The finding QUOTES ClinVar verbatim and cites the accession — it authors no significance.
@@ -84,11 +84,11 @@ def test_armed_pathogenic_routes_to_human(tmp_path: Path) -> None:
     assert "makes no pathogenicity determination" in f.detail
 
 
-def test_armed_benign_does_not_route(tmp_path: Path) -> None:
+def test_armed_benign_does_not_flag(tmp_path: Path) -> None:
     # A run whose only candidate is Benign never routes, even with the policy armed.
     body = "sample_id,gene,clinvar_significance\nHG002,TTN,Benign\n"
     calls = parse_variant_calls_from(tmp_path, body)
-    assert _check_route_to_human("HG002", calls, _armed("Pathogenic", "Likely_pathogenic")) is None
+    assert _check_flag_for_review("HG002", calls, _armed("Pathogenic", "Likely_pathogenic")) is None
 
 
 def test_significance_match_is_separator_insensitive(tmp_path: Path) -> None:
@@ -97,12 +97,12 @@ def test_significance_match_is_separator_insensitive(tmp_path: Path) -> None:
     calls = parse_variant_calls_from(
         tmp_path, "sample_id,gene,clinvar_significance\nHG002,BRCA2,Likely_pathogenic\n"
     )
-    f = _check_route_to_human("HG002", calls, _armed("Likely pathogenic"))
+    f = _check_flag_for_review("HG002", calls, _armed("Likely pathogenic"))
     assert f is not None
     assert next(e for e in f.evidence if e.source_field == "CLNSIG").value == "Likely_pathogenic"
 
 
-def test_review_status_floor_gates_routing(tmp_path: Path) -> None:
+def test_review_status_floor_gates_flagging(tmp_path: Path) -> None:
     # With a review-status allow-list, a single-submitter Pathogenic call does NOT route unless its
     # status is on the list — a stricter arming (star-rating floor).
     body = (
@@ -111,9 +111,9 @@ def test_review_status_floor_gates_routing(tmp_path: Path) -> None:
     )
     calls = parse_variant_calls_from(tmp_path, body)
     strict = _armed("Pathogenic", review_statuses=("criteria_provided_multiple_submitters",))
-    assert _check_route_to_human("HG002", calls, strict) is None
+    assert _check_flag_for_review("HG002", calls, strict) is None
     lenient = _armed("Pathogenic", review_statuses=("criteria_provided_single_submitter",))
-    assert _check_route_to_human("HG002", calls, lenient) is not None
+    assert _check_flag_for_review("HG002", calls, lenient) is not None
 
 
 # ── end-to-end: the rule drives the card verdict (rules decide) ─────────────────
@@ -124,11 +124,11 @@ def test_end_to_end_armed_run_escalates_the_card(tmp_path: Path) -> None:
     card = next(c for c in cards if c.sample_id == "HG002")
     # A deterministic rule routed the sample; the card verdict is ESCALATE (rules decide, ADR-0001).
     assert card.verdict is Verdict.ESCALATE
-    assert any(f.rule_id == "VAR-RTH-001" for f in card.findings)
+    assert any(f.rule_id == "VAR-FFR-001" for f in card.findings)
     # The same run through a DISARMED runbook does not escalate on this basis.
     proceed_cards = run_gate(artifacts, runbook=DEFAULT_RUNBOOK)
     proceed = next(c for c in proceed_cards if c.sample_id == "HG002")
-    assert not any(f.rule_id == "VAR-RTH-001" for f in proceed.findings)
+    assert not any(f.rule_id == "VAR-FFR-001" for f in proceed.findings)
 
 
 def test_disarmed_run_matches_stock_evaluation(tmp_path: Path) -> None:
@@ -149,22 +149,22 @@ def parse_variant_calls_from(tmp_path: Path, body: str) -> list:
     return parse_variant_calls(p)
 
 
-# ── committed demo fixture: route-to-human fires end-to-end via the API's per-run arming ─────────
+# ── committed demo fixture: flag-for-review fires end-to-end via the API's per-run arming ─────────
 def test_clinvar_rth_fixture_escalates_via_per_run_arming() -> None:
-    """The committed contrived fixture + its `route_to_human` marker make VAR-RTH-001 fire against a
+    """The committed contrived fixture + its `flag_for_review` marker make VAR-FFR-001 fire on a
     real committed run (closing the "never fires end-to-end" gap), while every unmarked run stays
     disarmed — the arming is scoped per run by `api.main._active_runbook`."""
     from api.main import _active_runbook
     from bayleaf.engine import run_gate_from_dir
 
     rb = _active_runbook("RUN-2026-07-11-CLINVAR-RTH")
-    assert rb.route_to_human.armed  # the marker armed it for THIS run
+    assert rb.flag_for_review.armed  # the marker armed it for THIS run
     _, cards = run_gate_from_dir("data/RUN-2026-07-11-CLINVAR-RTH", runbook=rb)
     card = next(c for c in cards if c.sample_id == "HG002")
     assert card.verdict is Verdict.ESCALATE
-    rth = next(f for f in card.findings if f.rule_id == "VAR-RTH-001")
-    assert rth.gate.value == "variant"
+    ffr = next(f for f in card.findings if f.rule_id == "VAR-FFR-001")
+    assert ffr.gate.value == "variant"
     # Verbatim ClinVar quote, no bayleaf-authored pathogenicity.
-    assert any(e.source_field == "CLNSIG" and e.value == "Pathogenic" for e in rth.evidence)
-    # A stock committed run carries no marker → route-to-human stays OFF.
-    assert not _active_runbook("RUN-2026-07-04-GIAB-A").route_to_human.armed
+    assert any(e.source_field == "CLNSIG" and e.value == "Pathogenic" for e in ffr.evidence)
+    # A stock committed run carries no marker → flag-for-review stays OFF.
+    assert not _active_runbook("RUN-2026-07-04-GIAB-A").flag_for_review.armed

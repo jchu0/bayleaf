@@ -3,6 +3,15 @@
 A single, current package for implementing the bayleaf frontend in React. This supersedes
 all earlier handoffs — the prototype here reflects the latest design across every screen.
 
+> **Page-name simplification (2026-07-13, MST).** Nav + §5.x section headings updated to the
+> current labels in `frontend/src/access.ts::PAGE_CATALOG`: Sample accessioning → **Sample Metadata**,
+> Submit samplesheet → **Samplesheet**, Intake gate → **Intake**, Decision cards → **Decisions**,
+> Agent triage → **Triage**, Pipeline builder → **Pipeline**; plus a new **System Agents** page
+> (`/system-agents`, the org-wide Pipeline-repair/Archivist launchers split off Triage). Older
+> **inline** prose in the dated §5.x walkthroughs may still use the previous labels — treat the nav
+> list (§4) and `access.ts` as authoritative. Route-to-human was also renamed **flag-for-review**
+> repo-wide the same day (`VAR-FFR-001`); see [ADR-0018](../../adr/ADR-0018-variant-interpretation-advisory-evidence.md).
+
 ---
 
 ## 1. What bayleaf is
@@ -45,11 +54,12 @@ value isn't stated here, read it from `source/bayleaf.dc.html`.
   production auth (see §8 Invariants + [risks.md RISK-035](../../quality/risks.md)).
 - **Left nav (236px).** Three groups (correcting an earlier 2-group simplification in this doc —
   the code has always shipped three since T-064):
-  - **Operate (reordered 2026-07-10, T-110, "Wave 8," G4):** **Inbox** → **Review queue** →
-    Submit samplesheet → Runs → Intake gate → Decision cards — Notification (Inbox) → Action
+  - **Operate (reordered 2026-07-10, T-110, "Wave 8," G4; page names simplified 2026-07-13):**
+    **Inbox** → **Review queue** →
+    Samplesheet → Runs → Intake → Decisions — Notification (Inbox) → Action
     (Review queue) → Steps (the process flow), work/issue-tracking pages now sit above the
     process flow (was Submit → Runs → Intake → Decision cards → Review queue → Inbox).
-    **Sample accessioning now leads the Steps sub-sequence (2026-07-10, T-117, "Wave 9," G1):**
+    **Sample Metadata now leads the Steps sub-sequence (2026-07-10, T-117, "Wave 9," G1):**
     accession → submit → runs → intake → decide — the CRM subject-registration step is upstream
     of the wetlab samplesheet, preserving G4's Notification→Action→Steps order rather than
     sitting atop the whole group (see §5.12).
@@ -59,10 +69,10 @@ value isn't stated here, read it from `source/bayleaf.dc.html`.
     empty, and `App.tsx` wraps each gated route in `<RequirePage page=…>` →
     `components/PageAccessDenied.tsx`. **This gates VIEWS, not API enforcement** — `api/auth.py`'s
     `require_role` still authorizes every real write, unchanged. See §11 (Page access tab).
-  - **Analyze:** Provenance · Agent triage · **System agents** (added 2026-07-13, T-160/T-163,
-    commits `b4a06c0`/`a499691` — a run-independent `/agents` entry for the org-wide
+  - **Analyze:** Provenance · Triage · **System Agents** (added 2026-07-13, T-160/T-163,
+    commits `b4a06c0`/`a499691` — a run-independent `/system-agents` entry for the org-wide
     Pipeline-repair/Archivist launchers, reachable without a run in context; see §5.7) · Monitoring
-  - **Configure:** Pipeline builder · Settings
+  - **Configure:** Pipeline · Settings
   - **View selectors are `Tabs`, not `FacetChip` (2026-07-10, T-110, "Wave 8," G5).** A new
     canonical underline `components/Tabs.tsx` (`role="tablist"`) is the one "which view am I in"
     idiom, replacing the rounded-full `FacetChip` pills — which read as *highlighted values*, not
@@ -129,7 +139,7 @@ value isn't stated here, read it from `source/bayleaf.dc.html`.
 
 ## 5. Screens (current design)
 
-### 5.1 Submit samplesheet  (`view: 'submit'`)
+### 5.1 Samplesheet  (`view: 'submit'`)
 The pipeline's front door — registers a run + its samples **before processing**.
 - Two methods (segmented): **Upload samplesheet** (drop CSV / Illumina v2 sheet → parsed
   chip) and **Pull from BaseSpace**.
@@ -233,7 +243,7 @@ Scale-kit list surface:
   this screen's job is literally "browse every run," so an "All" view is not a redundant catch-all
   peer the way it was on a triage queue.
 
-### 5.3 Intake gate  (`view: 'intake'`)
+### 5.3 Intake  (`view: 'intake'`)
 Preflight sample-admission review. **Collapsible admission rows** (consistent bar lengths,
 room for status + action). Header carries a **Refresh** control + "Updated {time}".
 - **Shrunk yield bar + preflight metadata grid (Shipped 2026-07-10, "Wave 8," T-112, commit
@@ -245,7 +255,7 @@ room for status + action). Header carries a **Refresh** control + "Updated {time
   **Verdict**. Real fields only, no analyzed/downstream data (preflight-appropriate); a null
   field reads "not captured" (honest, never fabricated), and a pending field shows a skeleton.
 
-### 5.4 Decision cards  (`view: 'decision'`)
+### 5.4 Decisions  (`view: 'decision'`)
 Per-sample verdict cards for a run.
 - **First card open, rest collapsed**; **Expand all / Collapse all**; verdict view `Tabs`
   (2026-07-10, "Wave 8," T-110, G5; was verdict filter chips).
@@ -477,7 +487,7 @@ runs via the top switcher never leaves a stale "unknown run" message on screen.
   shows up without a manual reload) now forces the shared cache, fanning the fresh payload to every
   subscriber, not just this screen.
 
-### 5.7 Agent triage  (`view: 'agent'`)
+### 5.7 Triage  (`view: 'agent'`)
 Advisory triage assistant. **Chat composer**: multi-line text window, **Enter** sends,
 **Shift+Enter** newline, circular send, suggestion chips, and a **pop-out / minimize**
 toggle. Helper line reinforces "advisory · can't change the verdict."
@@ -588,7 +598,7 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
   new `hooks/useApiHealth.ts` module-level poller with subscribers now backs both — one poll, one
   shared state, same 20s cadence.
 
-### 5.9 Pipeline builder  (`view: 'builder'`)  — see §6 for the full model
+### 5.9 Pipeline  (`view: 'builder'`)  — see §6 for the full model
 Node-graph editor that **emits `run_layout.yaml`**. Defaults to **View**; **Edit** unlocks
 authoring.
 
@@ -711,7 +721,7 @@ notifications are DERIVED, client-side, from the already-off-gate review queue's
   badge, a calendar reminder lands as "Due today," bell-dropdown triage, no console errors. tsc +
   oxlint clean.
 
-### 5.12 Sample accessioning  (`/accession`) — Shipped 2026-07-10, T-117, commit `66b14e4`, "Wave 9," G1
+### 5.12 Sample Metadata  (`/accession`) — Shipped 2026-07-10, T-117, commit `66b14e4`, "Wave 9," G1 (renamed from "Sample accessioning" 2026-07-13)
 **Brand new**, not part of the original design pass above — added at the maintainer's request to
 give `sample_metadata.csv` (subject/sample accessioning, the CRM step) its own screen distinct
 from `SampleSheet.csv` (the wetlab samplesheet, §5.1). Sits **upstream** of Submit in the
@@ -748,7 +758,7 @@ Operate "Steps" order (§4): accession → submit → runs → intake → decide
 
 ---
 
-## 6. Pipeline builder — full model
+## 6. Pipeline — full model
 
 **Modes.** Defaults to **View** (read-only: palette tiles disabled, add guarded, "Author a
 tool node" replaced by a read-only note). **Edit** enables all authoring. **Exception (Shipped

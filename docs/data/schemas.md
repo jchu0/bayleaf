@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-13 (MST) — the `CheckCoverage` contamination-flip is now REAL (`b03d1fa`'s `rules._examined_metric_categories`); corrects the 2026-07-12 note below, which was accurate as of that day but is now superseded. Prior: 2026-07-12 (MST) — job-store `held`/`scheduled` parked states (ADR-0021); corrected the `CheckCoverage` contamination-flip claim (WS-02 landed but the flip did not — verified against `rules.py`) |
+| **Last updated** | 2026-07-13 (MST) — **route-to-human → flag-for-review** naming refresh (`runbook.FlagForReviewPolicy`, `Runbook.flag_for_review`, `VAR-FFR-001`); no contract-shape change. Also: the `CheckCoverage` contamination-flip is now REAL (`b03d1fa`'s `rules._examined_metric_categories`); corrects the 2026-07-12 note below, which was accurate as of that day but is now superseded. Prior: 2026-07-12 (MST) — job-store `held`/`scheduled` parked states (ADR-0021); corrected the `CheckCoverage` contamination-flip claim (WS-02 landed but the flip did not — verified against `rules.py`) |
 | **Audience** | bioinformatics / software |
-| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family, incl. the job + library stores), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / route-to-human / `data.exported` share egress), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (job-store `held`/`scheduled`), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (`LibraryEntry`'s conformance gate), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) |
+| **Related** | [metric_registry.md](metric_registry.md), [provenance.md](provenance.md), [nf-core-conventions.md](nf-core-conventions.md), [qc_metrics.md](qc_metrics.md), ADR-0002/0007/0008/0009/0010/0013, [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family, incl. the job + library stores), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (VariantCall / flag-for-review / `data.exported` share egress), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (job-store `held`/`scheduled`), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (`LibraryEntry`'s conformance gate), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) |
 
 ## Overview
 
@@ -80,7 +80,7 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > pathogenicity of its own (ADR-0004). `variant_calls` is folded into `RunArtifacts.sample_ids()`
 > (a sample present only via an annotated variant still gets evaluated). Empty for every
 > committed fixture except `data/RUN-2026-07-11-CLINVAR-RTH/` (a contrived, verbatim-cited
-> ClinVar spike); it feeds the off-by-default route-to-human rule below (no verdict by itself)
+> ClinVar spike); it feeds the off-by-default flag-for-review rule below (no verdict by itself)
 > **and, additively (2026-07-11, W3 continuation), a read-only wire projection:**
 > `GET /api/runs/{run_id}/variants` (`api/main.py`) re-parses the same `variants.csv` via the
 > SAME `parse_variant_calls` and returns the list verbatim — 404 for an unknown run, `[]` for a
@@ -88,12 +88,12 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > above exactly (`sample_id` required, the rest nullable); `RunReport.tsx`'s per-variant table
 > renders it. See [functional.md REQ-F-094](../requirements/functional.md).
 >
-> **Route-to-human policy (`runbook.RouteToHumanPolicy`, ADR-0018 D2).** A `Runbook.route_to_human`
+> **Flag for review policy (`runbook.FlagForReviewPolicy`, ADR-0018 D2).** A `Runbook.flag_for_review`
 > field, **OFF BY DEFAULT** (`significances: tuple[str, ...] = ()`  — an empty tuple is
 > *disarmed*, `.armed` is `False`). An operator arms it with the ClinVar `CLNSIG` values (and,
 > optionally, a `review_statuses` star-rating floor) that should route a sample to mandatory human
 > review. This is a config object on the runbook, **not** a persisted record — see
-> [qc_metrics.md](qc_metrics.md) for the rule it drives (**VAR-RTH-001**) and its verdict.
+> [qc_metrics.md](qc_metrics.md) for the rule it drives (**VAR-FFR-001**) and its verdict.
 >
 > **`QCMetrics` (T-082).** The frozen-CSV five (`q30` · `pct_reads_identified` ·
 > `mean_coverage` · `dup_rate` · `cluster_pf`, every run carries these) plus **8 additional
@@ -355,7 +355,7 @@ gitignored `share.events.jsonl` rather than the gate's own `EventLedger`)*.
 > **`frontend/src/types.ts` is a hand-maintained TypeScript mirror of this contract, not generated.**
 > It can drift behind the pydantic source of truth above — a 2026-07-11 sweep (T-132) found and
 > fixed five such drifts (`QCThreshold.our_key`/`.required`, `Runbook.trace_failure_statuses`/
-> `.route_to_human`, `DecisionCard.metric_values` wrongly marked optional, `IntakeStatus.status`
+> `.flag_for_review`, `DecisionCard.metric_values` wrongly marked optional, `IntakeStatus.status`
 > too narrowly typed, `TriageNote.addresses_signatures` missing) — none required a Python-side
 > change; every field already existed here. Treat a `types.ts` claim as provisional until checked
 > against this doc or the model source.

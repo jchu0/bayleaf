@@ -534,21 +534,21 @@ def _norm_sig(value: str) -> str:
     return "".join(ch for ch in value.lower() if ch.isalnum())
 
 
-def _check_route_to_human(
+def _check_flag_for_review(
     sid: str, variant_calls: list[VariantCall], runbook: Runbook
 ) -> Finding | None:
-    """VAR-RTH-001 — route a sample to MANDATORY human review when an annotated candidate carries
+    """VAR-FFR-001 — flag a sample for MANDATORY human review when an annotated candidate carries
     an armed ClinVar significance (ADR-0018 D2).
 
-    OFF BY DEFAULT: `runbook.route_to_human` is disarmed unless an operator configures
+    OFF BY DEFAULT: `runbook.flag_for_review` is disarmed unless an operator configures
     significances, so a stock run never fires this and the deterministic QC gate is unchanged.
-    When armed, this is a review-ROUTING rule, NOT a clinical-significance verdict: it quotes
-    ClinVar VERBATIM as cited evidence and suggests ESCALATE (route to a human) — it authors no
+    When armed, this is a review-FLAGGING rule, NOT a clinical-significance verdict: it quotes
+    ClinVar VERBATIM as cited evidence and suggests ESCALATE (flag for review) — it authors no
     pathogenicity of its own (ADR-0004). A qualified human adjudicates via the RBAC-gated review
-    queue (ADR-0017). The action space is only {route-to-human}; there is no Pathogenic/Benign
+    queue (ADR-0017). The action space is only {flag-for-review}; there is no Pathogenic/Benign
     determination and no probability.
     """
-    policy = runbook.route_to_human
+    policy = runbook.flag_for_review
     if not policy.armed:
         return None
     armed = {_norm_sig(s) for s in policy.significances}
@@ -573,15 +573,16 @@ def _check_route_to_human(
     hgvs_bit = f" ({hit.hgvs})" if hit.hgvs else ""
     citation = hit.clinvar_accession or "ClinVar"
     return Finding(
-        rule_id="VAR-RTH-001",
+        rule_id="VAR-FFR-001",
         sample_id=sid,
         category=Category.VARIANT,
         severity=Severity.CRITICAL,
-        title="Clinically significant variant — mandatory human review",
+        title="Clinically significant variant — flagged for review",
         detail=(
             f"An annotated candidate for {sid}{gene_bit}{hgvs_bit} is classified "
-            f'"{hit.clinvar_significance}" in ClinVar ({citation}). Per the runbook route-to-human '
-            f"policy this sample is ESCALATED to a qualified reviewer before release. bayleaf "
+            f'"{hit.clinvar_significance}" in ClinVar ({citation}). Per the runbook '
+            f"flag-for-review policy this sample is ESCALATED to a qualified reviewer before "
+            f"release. bayleaf "
             f"makes no pathogenicity determination of its own — the classification is quoted "
             f"verbatim from ClinVar and a human adjudicates."
         ),
@@ -602,7 +603,7 @@ def _check_route_to_human(
                 source="variants.csv",
                 locator=f"sample_id={sid}",
                 value=f"{hit.gene or '?'} {hit.hgvs or ''}".strip(),
-                expected="route-to-human policy armed",
+                expected="flag-for-review policy armed",
             ),
         ],
         suggested_verdict=Verdict.ESCALATE,
@@ -646,13 +647,13 @@ def evaluate_sample(sid: str, artifacts: RunArtifacts, runbook: Runbook) -> list
     if trace_finding:
         findings.append(trace_finding)
 
-    # Route-to-human (VAR-RTH-001) — OFF by default; fires only when the runbook arms it AND an
-    # annotated candidate carries a matching ClinVar significance. Rules decide to route; a human
+    # Flag-for-review (VAR-FFR-001) — OFF by default; fires only when the runbook arms it AND an
+    # annotated candidate carries a matching ClinVar significance. Rules decide to flag; a human
     # adjudicates (ADR-0018 D2). A stock run has an empty variant_calls list and a disarmed policy,
     # so this is a no-op and the existing demo scenario is byte-for-byte unchanged.
-    rth_finding = _check_route_to_human(sid, artifacts.variant_calls, runbook)
-    if rth_finding:
-        findings.append(rth_finding)
+    ffr_finding = _check_flag_for_review(sid, artifacts.variant_calls, runbook)
+    if ffr_finding:
+        findings.append(ffr_finding)
 
     return findings
 

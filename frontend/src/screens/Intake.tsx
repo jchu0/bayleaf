@@ -164,7 +164,7 @@ export function Intake() {
   return (
     <div className="pg-fade mx-auto max-w-[1080px]">
       <PageHeader
-        title="Intake gate"
+        title="Intake"
         actions={<IntakeHeaderActions updatedLabel={updatedLabel} spinning={spinning} onRefresh={refresh} />}
       />
 
@@ -293,7 +293,7 @@ function ParkedIntakeView({
   const skipped = intake.skipped_samples ?? []
   return (
     <div className="pg-fade mx-auto max-w-[1080px]">
-      <PageHeader title="Intake gate" />
+      <PageHeader title="Intake" />
       <div className="mt-[18px] overflow-hidden rounded-[14px] border border-line bg-card shadow-card">
         <div className="border-b border-line px-[18px] py-[14px]">
           <div className="text-[14.5px] font-semibold text-text">

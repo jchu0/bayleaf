@@ -3,7 +3,8 @@
 | Field | Value |
 |---|---|
 | **Status** | Accepted (maintainer sign-off 2026-07-10 MST; three open questions decided — see [Maintainer decisions](#maintainer-decisions-2026-07-10-sign-off)); D2 + D3 built end-to-end against a committed run, plus a narrower `RunReport` view and its per-variant evidence table — see [Realized (current status)](#realized-current-status) |
-| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST) |
+| **Date** | 2026-07-10 (MST) · updated 2026-07-11 (MST) · naming refreshed 2026-07-13 (MST) |
+| **Naming** | The rule/policy/field this ADR designs was renamed **route-to-human → flag-for-review** on 2026-07-13 (MST): rule id `VAR-RTH-001 → VAR-FFR-001`, `RouteToHumanPolicy → FlagForReviewPolicy`, `_check_route_to_human → _check_flag_for_review`, the `route_to_human` runbook field / dict key / arming-marker file and the `route_to_human.json` artifact-stage key → `flag_for_review*`, `tests/test_route_to_human.py → tests/test_flag_for_review.py`. This ADR uses the **current** names; the decision (D2) is unchanged. Dated journals/HISTORY keep the historical name with a rename note. See [journal/2026-07-13-flag-for-review-rename-and-page-naming.md](../journal/2026-07-13-flag-for-review-rename-and-page-naming.md). |
 | **Deciders** | maintainer (signed off 2026-07-10), design pass (4 parallel memos, 2026-07-10) |
 | **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0013](ADR-0013-gate-architecture-verdict-policy.md) (three-gate model), [ADR-0004](ADR-0004-vcf-first-giab-substrate.md) (GIAB benchmark / no invented pathogenicity), [ADR-0003](ADR-0003-deployment-agnostic-ports.md) (compose ≠ execute), [ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [ADR-0012](ADR-0012-agent-scoping-model-tiering.md) (advisory agent scoping), [ADR-0007](ADR-0007-ml-ready-structured-outputs.md) (self-contained records), [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported` event), [ADR-0016](ADR-0016-postgres-port.md) (pluggable-store family the share sink now matches), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [data/provenance.md](../data/provenance.md), [design/variant-interpretation.md](../design/variant-interpretation.md), [HISTORY.md § ADR-0018](../HISTORY.md#adr-0018--variant-interpretation-what-landed-against-a-committed-run) (dated build chronology), [journal 2026-07-11 d2-d3](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 share-store persistence](../journal/2026-07-11-share-store-persistence.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 w-deferrals](../journal/2026-07-11-w-deferrals.md) |
 
@@ -85,13 +86,13 @@ these **change** the "Proposed" recommendations; they are recorded here as the g
 **D1 — Report name (resolves Q1).** The report is **"QC Decision & Provenance Report"** (as
 recommended). "Interpretation report" reads clinical and is not used.
 
-**D2 — Route-to-human belongs ON the gate (resolves Q2; OVERRIDES the Proposed "off-gate for MVP"
-recommendation).** The maintainer chose to add a route-to-human action on the gate, framed explicitly
+**D2 — Flag for review belongs ON the gate (resolves Q2; OVERRIDES the Proposed "off-gate for MVP"
+recommendation).** The maintainer chose to add a flag-for-review action on the gate, framed explicitly
 as *"a role-based access gate for human review — the design is already built in."* This is the
 single highest clinical-sensitivity call, so its scope is drawn tightly to stay inside ADR-0001 and
 Decision 1 (the variant gate stays QC, never a clinical-significance gate):
 
-- **A rule decides to ROUTE; a human decides the outcome.** The gate action is *"human review
+- **A rule decides to FLAG; a human decides the outcome.** The gate action is *"human review
   required"* — the most conservative direction (never auto-proceed, never auto-classify). bayleaf
   still authors **no pathogenicity**: the routing rule reads a variant's *already-present, verbatim-
   cited* significance field (e.g. an annotated VCF's `CLNSIG` with its ClinVar review status) as
@@ -99,7 +100,7 @@ Decision 1 (the variant gate stays QC, never a clinical-significance gate):
   present — a human must review before release,"* quoting the source. The annotation never *sets* a
   verdict; a deterministic rule uses cited evidence to route, exactly as every other rule uses cited
   QC evidence. This is "rules decide, humans adjudicate" — not "annotation decides."
-- **Not a clinical-significance gate.** The action space is only `{route-to-human}` — there is no
+- **Not a clinical-significance gate.** The action space is only `{flag-for-review}` — there is no
   Pathogenic/Benign verdict, no probability, no actionability. It escalates *toward* human judgment;
   it never renders a clinical determination. Decision 1 holds: the variant **QC** gate (DP/GQ/AB) is
   untouched; this is a distinct, additive review-routing rule.
@@ -155,22 +156,22 @@ before any external share.
 
 ## Realized (current status)
 
-> Dated, commit-by-commit build chronology (D2 route-to-human, D3 share egress + persistence
+> Dated, commit-by-commit build chronology (D2 flag-for-review, D3 share egress + persistence
 > parity, the `RunReport` view, the per-variant table) lives in
 > [HISTORY.md § ADR-0018](../HISTORY.md#adr-0018--variant-interpretation-what-landed-against-a-committed-run).
 > This section is the current state + the honest limits. Verified against `api/main.py`,
-> `api/share_store.py`, `tests/test_route_to_human.py`, `tests/test_share_egress.py`,
+> `api/share_store.py`, `tests/test_flag_for_review.py`, `tests/test_share_egress.py`,
 > `tests/test_run_variants.py`.
 
 **Built end-to-end against a committed run** (2026-07-11):
 
-1. **D2 route-to-human fires (`VAR-RTH-001`).** `api/main._active_runbook(run_id)` arms
-   route-to-human **per run** from an optional `route_to_human` marker file in the run dir
+1. **D2 flag-for-review fires (`VAR-FFR-001`).** `api/main._active_runbook(run_id)` arms
+   flag-for-review **per run** from an optional `flag_for_review` marker file in the run dir
    (comma-separated ClinVar significances); absent/empty stays the stock disarmed `DEFAULT_RUNBOOK`.
    The fixture `data/RUN-2026-07-11-CLINVAR-RTH/` (`origin=contrived`: clean QC + a single
    verbatim-cited ClinVar **Pathogenic** BRCA1 spike HG002 does not carry + the arming marker) makes
    HG002 **ESCALATE** through the API. The core default and pinned demo stay disarmed/untouched.
-   bayleaf authors **no** pathogenicity — the rule quotes ClinVar and routes to a human (ADR-0001/0004).
+   bayleaf authors **no** pathogenicity — the rule quotes ClinVar and flags for review (ADR-0001/0004).
 2. **D3 Safe-Harbor-style share egress, narrower than the full Share window.**
    `POST /api/runs/{run_id}/share` (`require_role("approver")`) scrubs a run's decision rows via
    `api.safe_harbor.redact_record` → a `ShareBundle` + `ShareManifest` (`policy_id`, `n_rows`,
@@ -182,7 +183,7 @@ before any external share.
    scope selector, no location choice, no security-level tier (the scrub is the only policy); the
    share audit lands in the run's own Event trail, not (yet) the Admin Activity feed. **Multi-worker
    store locking is a documented seam, not built.**
-3. **A `RunReport` view** (`?view=report`, `RunReport.tsx`): verdict mix, a route-to-human hero
+3. **A `RunReport` view** (`?view=report`, `RunReport.tsx`): verdict mix, a flag-for-review hero
    quoting ClinVar VERBATIM, per-sample gate outcomes + cited evidence, a sign-off footer stating
    human sign-off is a labelled seam — built over already-wired `detail`, **not** the full
    `api/report.py`/`ReportStore`/sign-off lifecycle. A `GET /api/runs/{run_id}/variants` read-only
@@ -200,7 +201,7 @@ tier, and the ClinVar/gnomAD fetch scripts.
 **Resolved by the maintainer (2026-07-10)** — see [Maintainer decisions](#maintainer-decisions-2026-07-10-sign-off):
 
 1. ~~**Report framing/name**~~ → **DECIDED (D1):** "QC Decision & Provenance Report."
-2. ~~**Does route-to-human belong on the gate?**~~ → **DECIDED (D2):** yes, ON the gate, as a
+2. ~~**Does flag-for-review belong on the gate?**~~ → **DECIDED (D2):** yes, ON the gate, as a
    role-based human-review routing rule (rule routes, human adjudicates; authors no pathogenicity;
    off by default). Overrides the earlier "off-gate for MVP" recommendation.
 7. ~~**Dates/free-text de-id strictness**~~ → **DECIDED (D3):** most-conservative Safe-Harbor-style

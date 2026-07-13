@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-13 (MST) — the System-agents/Agent-triage IA split (taxonomy section) + the `ask` endpoint's `require_role` floor (QC-triage roster row) |
+| **Last updated** | 2026-07-13 (MST) — reconciled the taxonomy section to the shipped state: **System Agents is now its own page/`PageId`** (`/system-agents`, dedicated `SystemAgents.tsx`) — corrects the earlier "both routes share one `PageId: 'agent'`" claim, grounded in `App.tsx`/`access.ts`/`Sidebar.tsx`; page-name simplification "Agent triage" → **"Triage"**. Prior same-day: the System-agents/Agent-triage IA split + the `ask` endpoint's `require_role` floor (QC-triage roster row) |
 | **Audience** | all (contributors and Claude Code) |
 | **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) · [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the `require_role` primitive the `ask` floor uses) · [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the human-authoring surface roster agent #5's contract presupposes) · [ADR-0022](../adr/ADR-0022-agent-observation-binding.md) (the agent-attachment observation-binding model + taxonomy) · [architecture.md](architecture.md) · [agent-authoring-contract.md](agent-authoring-contract.md) (how an authoring agent is built + constrained) · [frontend/agent-triage-redesign-spec.md](frontend/agent-triage-redesign-spec.md) (the fuller IA/floating-window spec this session's split partially, more cheaply, realizes) · [planning/tasks.md](../planning/tasks.md) |
 
@@ -106,22 +106,26 @@ the same thing. The roster splits by *what an agent scopes over*:
    node-attachment. These stay in the **Builder palette**.
 2. **System agents** — act on **runs / recurring signatures / the whole organization**, not one
    node: **Pipeline-repair** (#2) and **Archivist** (#3). As of 2026-07-12 they **moved OUT of the
-   Builder palette to Agent-triage launchers** (`frontend/src/screens/AgentTriage.tsx`) — putting
+   Builder palette to Triage launchers** (`frontend/src/screens/AgentTriage.tsx`) — putting
    them on the canvas implied a node attachment they never had.
-   **IA split, 2026-07-13 (commits `b4a06c0`, `a499691`, `f230f7e`).** That single `AgentTriage.tsx`
-   component originally hosted the org-launcher tiles unconditionally, so a run-independent
-   `/agents` route (added to reach them without a run in context) rendered them alongside the
+   **IA split, 2026-07-13 (commits `b4a06c0`, `a499691`, `f230f7e`, then a follow-up).** That single
+   `AgentTriage.tsx` component originally hosted the org-launcher tiles unconditionally, so a
+   run-independent route (added to reach them without a run in context) rendered them alongside the
    SAME per-run `/runs/:id/agent` route — the maintainer's own report: "system agents and agent
-   triage look like duplicate pages." Fixed by splitting the component's content on
-   `isSystemView = !runId`: the launchers now render **only** on `/agents` ("System agents"); the
-   per-run route shows only the flagged-samples triage table + advisory composer. A route-aware
-   `'system-agents'` sentinel in `TopBar.tsx`'s `routePage()` (mirroring the existing `'admin'`
-   pattern) names the crumb correctly, since both routes still share one `PageId: 'agent'` — a
-   **lighter-weight implementation than the design spec** drafted the same week
-   ([agent-triage-redesign-spec.md](frontend/agent-triage-redesign-spec.md) `WS-1`, which called for
-   a dedicated `system-agents` `PageId`/nav item/promoted panel). The tradeoff, named not hidden: an
-   Admin page-access grant still cannot distinguish "can see Agent triage" from "can see System
-   agents" — both gate on the one shared `PageId`.
+   triage look like duplicate pages." The **shipped current state** (grounded in
+   `frontend/src/App.tsx`, `access.ts::PAGE_CATALOG`, `Sidebar.tsx`, `screens/SystemAgents.tsx`) is
+   the fuller split the design spec called for: **System Agents is now its own page** —
+   `/system-agents` → `RequirePage page="systemAgents"` → a dedicated `SystemAgents.tsx` screen, with
+   its **own `systemAgents` `PageId`** and nav item (`{ id: 'systemAgents', label: 'System Agents',
+   group: 'Analyze' }`); the per-run `/runs/:id/agent` route (`PageId: 'agent'`, label **"Triage"**)
+   shows only the flagged-samples triage table + advisory composer. The legacy `/agents` deep-link is
+   kept stable but now just renders the per-run Triage (empty without a run in context). **Because
+   System Agents has a distinct `PageId`, an Admin page-access grant can now gate "can see Triage"
+   independently of "can see System Agents"** — closing the shared-`PageId` limitation the earlier
+   lighter-weight implementation carried (see
+   [agent-triage-redesign-spec.md](frontend/agent-triage-redesign-spec.md) `WS-1`). **Naming
+   (2026-07-13):** "Agent triage" → **"Triage"** and the new **"System Agents"** page are part of the
+   repo-wide page-name simplification.
 3. **Off-gate corpus agents** — **Feedback-triage** (#4) is neither; it categorizes the in-app
    feedback corpus and has no canvas presence.
 

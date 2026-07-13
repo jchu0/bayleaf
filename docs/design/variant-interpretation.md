@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Proposed (design; **four components now built end-to-end against a committed run**, see §0) |
-| **Last updated** | 2026-07-11 (MST) |
+| **Last updated** | 2026-07-13 (MST) — naming refresh only: **route-to-human → flag-for-review** (rule id `VAR-RTH-001 → VAR-FFR-001`, `RouteToHumanPolicy → FlagForReviewPolicy`, `_check_route_to_human → _check_flag_for_review`, the `route_to_human` field/marker + `route_to_human.json` stage key → `flag_for_review*`); no design change. Prior: 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics / reviewers |
-| **Related** | [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (the decision + [Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11)), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported`), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [qc_metrics.md](../data/qc_metrics.md) (§Route-to-human policy), [schemas.md](../data/schemas.md) (`VariantCall`, `GET /api/runs/{id}/variants`), [provenance.md](../data/provenance.md), [architecture.md](architecture.md), [data-platform-and-archivist.md](data-platform-and-archivist.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) |
+| **Related** | [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (the decision + [Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11)), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) (`data.exported`), [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md), [qc_metrics.md](../data/qc_metrics.md) (§Flag for review policy), [schemas.md](../data/schemas.md) (`VariantCall`, `GET /api/runs/{id}/variants`), [provenance.md](../data/provenance.md), [architecture.md](architecture.md), [data-platform-and-archivist.md](data-platform-and-archivist.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) |
 
 ## 0. Build status update (2026-07-11, after the maintainer's D1/D2/D3 sign-off)
 
@@ -18,14 +18,14 @@ evidence table shipped over the already-wired data) — everything else below (t
 agent, the full Share window, the ClinVar/gnomAD fetch scripts, gnomAD AF surfacing,
 inheritance-fit, the review-ordering tier) remains design-only, not built:
 
-1. **Route-to-human (D2) — BUILT, fires end-to-end (2026-07-11).** `models.VariantCall` +
-   `parsers.parse_variant_calls` (reads `variants.csv`) + `runbook.RouteToHumanPolicy` +
-   `rules._check_route_to_human` (`VAR-RTH-001`) ship as described in §1/§2 below, **off by
-   default** (10 tests, `tests/test_route_to_human.py`). This is narrower than the full
+1. **Flag for review (D2) — BUILT, fires end-to-end (2026-07-11).** `models.VariantCall` +
+   `parsers.parse_variant_calls` (reads `variants.csv`) + `runbook.FlagForReviewPolicy` +
+   `rules._check_flag_for_review` (`VAR-FFR-001`) ship as described in §1/§2 below, **off by
+   default** (10 tests, `tests/test_flag_for_review.py`). This is narrower than the full
    `AnnotatedVariant`/`ClinVarEvidence`/`PriorityTier` model in §1 — only the ClinVar-significance
    routing slice landed, not gnomAD AF, inheritance-fit, or the review-ordering tier. **New
    (2026-07-11):** `api/main._active_runbook(run_id)` arms the policy **per run** from an optional
-   `route_to_human` marker file in the run dir; the committed, `origin=contrived` fixture
+   `flag_for_review` marker file in the run dir; the committed, `origin=contrived` fixture
    `data/RUN-2026-07-11-CLINVAR-RTH/` (a verbatim-cited ClinVar Pathogenic BRCA1 spike HG002 does
    not actually carry) now demonstrates the escalation live through the API — closing the
    "the rule has never fired end-to-end against a committed run" gap the 2026-07-10 sweep left
@@ -46,14 +46,14 @@ inheritance-fit, the review-ordering tier) remains design-only, not built:
 3. **A `RunReport` view — BUILT the same day (W3, commit `3d5a73d`), narrower than §1 item 3's
    `api/report.py` projection.** `RunDetail` gains a `?view=report` **Report** tab
    (`frontend/src/components/RunReport.tsx`): a per-run "QC Decision & Provenance Report" —
-   verdict mix, a route-to-human hero panel quoting ClinVar significance VERBATIM (no authored
+   verdict mix, a flag-for-review hero panel quoting ClinVar significance VERBATIM (no authored
    pathogenicity, ADR-0004/G3/G4), per-sample gate outcomes + cited evidence, and a sign-off
    footer stating human sign-off is a labelled seam, not a button. **What makes this "option A,"
    narrower than the design:** it is built entirely over `detail` (cards + events) already on the
    wire — no new `api/report.py` projection, no `ReportStore`, no draft→approve/sign-off write
    path, no persisted/immutable report artifact (a reload re-derives the same report from the
    same already-decided cards rather than reading back a signed snapshot). The same commit also
-   fixed a real honesty bug in the Lineage DAG: a fired route-to-human ESCALATE used to render the
+   fixed a real honesty bug in the Lineage DAG: a fired flag-for-review ESCALATE used to render the
    review node as "skipped" (no VCF artifact) even though the rules had already escalated the
    sample — a fired gate now wins over the no-artifact default. See
    [functional.md REQ-F-087/REQ-F-088](../requirements/functional.md),
@@ -62,17 +62,17 @@ inheritance-fit, the review-ordering tier) remains design-only, not built:
    `fec0f83`), closing the "no per-variant evidence table" gap item 3 above used to carry.** A
    new read-only `GET /api/runs/{run_id}/variants` (`api/main.py`) serves every `VariantCall` a
    run's `variants.csv` carries, parsed via the SAME `bayleaf.parsers.parse_variant_calls` the
-   gate's route-to-human rule already uses (404 unknown run, `[]` when no `variants.csv` — an
+   gate's flag-for-review rule already uses (404 unknown run, `[]` when no `variants.csv` — an
    honest empty state, not fabricated rows). `RunReport.tsx` renders it as a paginated table
    (Sample · Gene · HGVS · ClinVar significance quoted VERBATIM · review status · accession)
-   beneath the route-to-human hero, with its own disclaimer that bayleaf authors no
+   beneath the flag-for-review hero, with its own disclaimer that bayleaf authors no
    pathogenicity and sets no verdict here. **This is still narrower than §1 item 1's full
    `AnnotatedVariant`:** the table surfaces only the `VariantCall` fields already in the D2
    model (ClinVar classification/review-status/accession/version) — there is no gnomAD
    population-frequency column, no inheritance-fit, and no call-quality join; a variant present
-   in `variants.csv` but never armed against the route-to-human policy still shows here (the
+   in `variants.csv` but never armed against the flag-for-review policy still shows here (the
    table is unconditional on the rule firing, unlike the hero panel above, which shows only a
-   fired route-to-human hit). Live-verified: the committed `RUN-2026-07-11-CLINVAR-RTH` fixture's
+   fired flag-for-review hit). Live-verified: the committed `RUN-2026-07-11-CLINVAR-RTH` fixture's
    single BRCA1 `c.68_69del` row renders "Pathogenic" verbatim; `mock_run_01` (no `variants.csv`)
    renders the honest empty state. +3 tests (`tests/test_run_variants.py`). See
    [ADR-0018 Realized item 5](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11),
@@ -136,8 +136,8 @@ plus the order a human should review them — it decides nothing (ADR-0001).
 
 The downstream steps are **stages under the (unchanged) variant QC gate**, not new gates — so no annotation can move
 a verdict (ADR-0001/0013). Any interpretation *issue* that ever fires is a cited, immutable `Finding` routed through
-the existing verdict policy (a *route-to-human* ESCALATE), **never an AI-set verdict** — and that route-to-human
-rule is now **BUILT** as `VAR-RTH-001` (§0), an **off-by-default, operator-armed config seam** per the maintainer's
+the existing verdict policy (a *flag-for-review* ESCALATE), **never an AI-set verdict** — and that flag-for-review
+rule is now **BUILT** as `VAR-FFR-001` (§0), an **off-by-default, operator-armed config seam** per the maintainer's
 2026-07-10 sign-off (ADR-0018 D2 — the earlier "pending sign-off" framing here is resolved), and as of 2026-07-11
 **fires end-to-end** against the committed `data/RUN-2026-07-11-CLINVAR-RTH/` fixture via the per-run
 `api.main._active_runbook` arming seam (§0). The broader
@@ -201,7 +201,7 @@ this build" until an annotated VCF is present (P4) is also **still unbuilt**.
 5. Share window MVP: report/`/api/export` scope; local staged dir; the existing `deid.py` policy; scrub preview;
    confirm → audited `ShareEvent`.
 6. Ground plumbing on real GIAB HG002; the flagged-variant demo on a contrived spiked variant — **done for
-   route-to-human** (2026-07-11): `data/RUN-2026-07-11-CLINVAR-RTH/` is exactly this — a real HG002 run with a
+   flag-for-review** (2026-07-11): `data/RUN-2026-07-11-CLINVAR-RTH/` is exactly this — a real HG002 run with a
    contrived, clearly-labelled ClinVar spike, committed and test-pinned.
 
 **Deferred / labelled seams (documented, not built):** the interpretation **agent**;
@@ -209,9 +209,9 @@ trio/inheritance-aware context (de novo / comp-het / segregation — needs pedig
 (SpliceAI/REVEL/MANE/popmax); raw-artifact scrubbing + real external egress (S3 live / Box / GCS / signed link);
 PDF; a persisted ledger-anchored signed report; the full Share window's scope/location/security-level selection
 and its Admin-Activity-feed audit row; and **any emission of a final ACMG/pathogenicity classification**
-(explicitly out of scope — ADR-0018). **Built, 2026-07-10 (§0), no longer deferred:** the route-to-human config
-rule (`VAR-RTH-001`) and a conservative Safe-Harbor-style date-generalization + free-text-redaction module
-(`api/safe_harbor.py`). **Built end-to-end, 2026-07-11 (§0), no longer deferred:** route-to-human now fires
+(explicitly out of scope — ADR-0018). **Built, 2026-07-10 (§0), no longer deferred:** the flag-for-review config
+rule (`VAR-FFR-001`) and a conservative Safe-Harbor-style date-generalization + free-text-redaction module
+(`api/safe_harbor.py`). **Built end-to-end, 2026-07-11 (§0), no longer deferred:** flag-for-review now fires
 against a committed run (`data/RUN-2026-07-11-CLINVAR-RTH/` + the `_active_runbook` per-run arming seam), and
 `api/safe_harbor.py` is now wired — narrower than the full Share window above — to a single approver-gated
 `POST /api/runs/{id}/share` action, recorded as a `data.exported` provenance event and surfaced in the
@@ -221,9 +221,9 @@ Provenance screen.
 
 See [ADR-0018 §Open questions](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#open-questions)
 — three of the seven were resolved by the maintainer's 2026-07-10 sign-off (report name D1;
-route-to-human on the gate D2, **now built and firing end-to-end**, see §0; de-id conservatism D3,
+flag-for-review on the gate D2, **now built and firing end-to-end**, see §0; de-id conservatism D3,
 **the scrub module is built and now wired to a narrower egress than the full design**, see §0). The
-highest-sensitivity one, whether any ClinVar-driven *route-to-human* belongs on the gate, is
+highest-sensitivity one, whether any ClinVar-driven *flag-for-review* belongs on the gate, is
 **resolved (D2, yes — off by default, RBAC-gated)**, overriding this doc's earlier "off the gate
 for MVP" recommendation everywhere else it appears above. The remaining four (reference-data
 licensing, transcript/gnomAD-version convention, report grain, egress destinations + PDF/persist)

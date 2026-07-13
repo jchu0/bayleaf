@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-13 (MST) — the `POST .../ask` advisory endpoint named in the Advisory-agent-reads bullet, with its new `require_role` viewer+ floor |
+| **Last updated** | 2026-07-13 (MST) — page-name simplification + **13 screens** (new **System Agents** page; Sample Metadata/Samplesheet/Intake/Decisions/Triage/Pipeline, per `frontend/src/access.ts`); **route-to-human → flag-for-review** rename (`VAR-FFR-001`) in the Runs read-API bullet. Prior: the `POST .../ask` advisory endpoint named in the Advisory-agent-reads bullet, with its new `require_role` viewer+ floor |
 | **Audience** | software / bioinformatics / reviewers |
 | **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [design/ui-conventions.md](ui-conventions.md), [design/builder-cards/](builder-cards/), [design/node-authoring-agent.md](node-authoring-agent.md), [design/agent-authoring-contract.md](agent-authoring-contract.md), [design/variant-interpretation.md](variant-interpretation.md), [design/nextflow-codegen.md](nextflow-codegen.md), [HISTORY.md](../HISTORY.md) (the dated wave/batch build chronology relocated out of this doc) |
 
@@ -111,10 +111,11 @@ Every finding and verdict is labelled with the gate it came from:
       `--help`/README half of the importer.
 4. **Delivery layers (thin, over the core).** `app/` = Streamlit demo (the guaranteed-working
    offline fallback); `api/` = FastAPI read-API + off-gate writes (ADR-0010/0014/0016); `frontend/`
-   = React + Vite + Tailwind consuming the API. **12 operator screens** in a **three-group nav** —
-   **Operate** (accession → submit → runs → intake/preflight → decision cards → review queue →
-   inbox), **Analyze** (provenance → agent triage → monitoring), **Configure** (pipeline builder →
-   settings) — plus an **`isAdmin`-gated Admin** group (`/admin`, off the deterministic gate).
+   = React + Vite + Tailwind consuming the API. **13 operator screens** in a **three-group nav**
+   (page names simplified 2026-07-13 to match `frontend/src/access.ts::PAGE_CATALOG`) —
+   **Operate** (Sample Metadata → Samplesheet → Runs → Intake/preflight → Decisions → Review queue →
+   Inbox), **Analyze** (Provenance → Triage → System Agents → Monitoring), **Configure** (Pipeline →
+   Settings) — plus an **`isAdmin`-gated Admin** group (`/admin`, off the deterministic gate).
    Everything in this layer is **additive over an untouched core** — sorting, paging, aggregation,
    product writes, the draft→approve authoring lifecycle, and auth all live in `api/`, never
    `src/bayleaf/`. Two frontend-only governance capabilities (`isAdmin`, and a page-access
@@ -140,7 +141,7 @@ Every finding and verdict is labelled with the gate it came from:
      Wholly OFF the gate: gates who may *write* product state, never a verdict/finding/confidence.
    - **Runs read-API.** `GET /api/runs` (+ `/{id}`, `/{id}/cards/{sample}`, `/{id}/artifacts`,
      `/{id}/artifacts/{name}` traversal-hardened download, `/{id}/variants` read-only per-`VariantCall`
-     list via the same `parse_variant_calls` the route-to-human rule uses). Each `RunSummary` carries
+     list via the same `parse_variant_calls` the flag-for-review rule uses). Each `RunSummary` carries
      `platform` + `run_date` (from the SampleSheet `[Header]`) and an honest run-lifecycle `status`
      (`running`|`needs_review`|`released`, derived from provenance — a run-lifecycle label, NOT a
      per-sample verdict). `GET /api/runs` also has backward-compatible **Tier-0 list params** (bare

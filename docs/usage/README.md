@@ -25,9 +25,9 @@ no diagnostic or therapeutic claims.
 ## The operator workflow (the through-line)
 
 ```
-Accession ─▶ Submit ─▶ (pipeline runs) ─▶ Intake gate ─▶ Decision cards ─▶ Review queue
-   CRM        samplesheet                    preflight       per-sample        act on
- subjects    wetlab I/O                        QC             verdicts        escalations
+Sample Metadata ─▶ Samplesheet ─▶ (pipeline runs) ─▶ Intake ─▶ Decisions ─▶ Review queue
+      CRM            wetlab I/O                       preflight   per-sample     act on
+    subjects                                             QC        verdicts    escalations
                                                  └─▶ Provenance (lineage · event trail · artifacts)
                                                  └─▶ Monitoring (fleet trends · recurring issues)
                                                  └─▶ Inbox (personal triage: flag · schedule · notes)
@@ -41,15 +41,16 @@ Start each page's how-to in the [Operator guide](operator-guide.md).
 |---|---|---|
 | **Inbox** | Personal triage of escalations/reruns/holds — flag, prioritize, schedule, note (off the gate) | [guide](operator-guide.md#inbox) |
 | **Review queue** | Flagged samples become tickets — acknowledge, suppress, escalate, resolve | [guide](operator-guide.md#review-queue) |
-| **Sample accessioning** | Register subjects + clinical/study metadata (the CRM step) before the wetlab samplesheet | [guide](operator-guide.md#sample-accessioning) |
-| **Submit samplesheet** | Register a run + its samples (barcodes, study) before processing | [guide](operator-guide.md#submit-samplesheet) |
-| **Intake gate** | Preflight: run-level sequencing QC + which samples are admitted | [guide](operator-guide.md#intake-gate) |
-| **Decision cards** | The per-sample verdict + cited evidence + advisory narration | [guide](operator-guide.md#decision-cards) |
+| **Sample Metadata** | Register subjects + clinical/study metadata (the CRM step) before the wetlab samplesheet | [guide](operator-guide.md#sample-metadata) |
+| **Samplesheet** | Register a run + its samples (barcodes, study) before processing | [guide](operator-guide.md#samplesheet) |
+| **Intake** | Preflight: run-level sequencing QC + which samples are admitted | [guide](operator-guide.md#intake) |
+| **Decisions** | The per-sample verdict + cited evidence + advisory narration | [guide](operator-guide.md#decisions) |
 | **Runs** | The index of all runs and their status | [guide](operator-guide.md#runs) |
 | **Provenance** | Lineage DAG · the append-only event trail · the artifact index | [guide](operator-guide.md#provenance) |
-| **Agent triage** | The advisory QC-triage agent's read of a run (off the gate) | [guide](operator-guide.md#agent-triage) |
+| **Triage** | The advisory QC-triage agent's read of a run (off the gate) | [guide](operator-guide.md#triage) |
+| **System Agents** | The run-independent org-wide advisory agents (pipeline-repair, archivist), split off Triage | [guide](operator-guide.md#system-agents) |
 | **Monitoring** | Fleet-level verdict trends + recurring issue signatures | [guide](operator-guide.md#monitoring) |
-| **Pipeline builder** | Compose/inspect the analysis pipeline graph (compose ≠ execute) | [guide](operator-guide.md#pipeline-builder) |
+| **Pipeline** | Compose/inspect the analysis pipeline graph (compose ≠ execute) | [guide](operator-guide.md#pipeline) |
 | **Settings** | Profile, theme/density, notifications, agent & model tiering | [guide](operator-guide.md#settings) |
 | **Admin** | Governance: users & roles, page access, activity audit, system posture | [guide](operator-guide.md#admin) |
 
@@ -59,7 +60,7 @@ Start each page's how-to in the [Operator guide](operator-guide.md).
   by the API. **Admin** is a separate governance capability.
 - **Page access** is a client-side *view gate* an admin assigns per user (Admin → Page access): it
   decides which pages appear in the nav. It is **not** authorization — the API still checks the wire
-  role on every write. A floor of Runs + Decision cards is always visible.
+  role on every write. A floor of Runs + Decisions is always visible.
 - A single person can hold several roles/pages, so one platform serves accessioning, wetlab, review,
   and approval without switching tools.
 

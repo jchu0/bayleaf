@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft — stub sections (seeded 2026-07-10, Wave 10 sweep); fill in as each screen stabilizes |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-13 (MST) — page-name simplification: Sample accessioning → **Sample Metadata**, Submit samplesheet → **Samplesheet**, Intake gate → **Intake**, Decision cards → **Decisions**, Agent triage → **Triage**, Pipeline builder → **Pipeline**; new **System Agents** section (repair + archivist split off Triage). Labels match `frontend/src/access.ts::PAGE_CATALOG`. Prior: 2026-07-10 (MST) |
 | **Audience** | lab operators / reviewers / approvers / admins |
 | **Related** | [usage/README.md](README.md) (the page index this guide answers), [design/ui-conventions.md](../design/ui-conventions.md) (UIC-1: this is where page explanatory prose lives instead of the app chrome), [requirements/functional.md](../requirements/functional.md) |
 
@@ -25,24 +25,24 @@ holds). Per-operator, `localStorage`-persisted. TODO: step-by-step.
 Flagged samples become tickets here — acknowledge, escalate, resolve, suppress. Escalation is
 role/access-gated (UIC-10). TODO: step-by-step + the run/sample checkbox hierarchy (UIC-3).
 
-## Sample accessioning
+## Sample Metadata
 
 Register subjects + clinical/study metadata (the CRM step) **before** the wetlab samplesheet.
 Everything on this screen stays client-side (no PII/PHI transmitted) — see
 [REQ-NF-023](../requirements/nonfunctional.md). TODO: step-by-step.
 
-## Submit samplesheet
+## Samplesheet
 
 Register a run + its samples. `sample_metadata.csv` is **required** and its identity join against
 the samplesheet needs an explicit human "Approve join" before submit — sample-identity mixups are
 the highest-consequence error this screen guards against (UIC-11,
 [REQ-NF-025](../requirements/nonfunctional.md)). TODO: step-by-step.
 
-## Intake gate
+## Intake
 
 Preflight: run-level sequencing QC and which samples are admitted downstream. TODO: step-by-step.
 
-## Decision cards
+## Decisions
 
 The per-sample verdict, cited evidence, and advisory AI narration (framed as a distinct block
 under the evidence tables, never mixed with it — UIC-8, ADR-0001). TODO: step-by-step.
@@ -56,16 +56,22 @@ The index of all runs and their status. TODO: step-by-step.
 Lineage DAG, the append-only event trail, and the artifact index (with download + a full-digest
 reveal, UIC-9). TODO: step-by-step.
 
-## Agent triage
+## Triage
 
 The advisory QC-triage agent's read of a flagged card — off the gate, cited, heuristic (not a
 calibrated probability). TODO: step-by-step.
+
+## System Agents
+
+The run-independent, org-wide advisory agents — pipeline-repair and archivist — split off Triage
+(2026-07-13) onto their own `/system-agents` page: they act ACROSS runs/signatures/orgs, not on a
+single run's card. Off the gate, advisory only. TODO: step-by-step.
 
 ## Monitoring
 
 Fleet-level verdict trends and recurring issue signatures. TODO: step-by-step.
 
-## Pipeline builder
+## Pipeline
 
 Compose/inspect the analysis pipeline graph — compose ≠ execute, it never runs a tool. TODO:
 step-by-step; note the "Author a tool node" advisory-agent entry point once wired (see

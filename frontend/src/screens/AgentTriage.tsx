@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { Archive, ChevronRight, Wrench } from 'lucide-react'
 import { api } from '../api'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { PageHeader } from '../components/PageHeader'
@@ -8,7 +7,6 @@ import { Pager } from '../components/Pager'
 import { Truncate } from '../components/Truncate'
 import { AgentComposer } from '../components/AgentComposer'
 import { AgentSubjectCard } from '../components/AgentSubjectCard'
-import { ArchivistModal, PipelineRepairModal } from '../components/BuilderModals'
 import { GATE_DOT, GATE_LABEL, VERDICT_DOT, VERDICT_LABEL, governingGate } from '../verdict'
 import { useRun } from '../hooks/useRun'
 import type { TriageNote } from '../types'
@@ -17,23 +15,17 @@ const VERDICT_RANK: Record<string, number> = { escalate: 0, rerun: 1, hold: 2, p
 
 export function AgentTriage() {
   const { runId = '' } = useParams()
-  // Two distinct views share this component: the run-independent /agents route ("System agents" —
-  // the org-wide pipeline-repair/archivist launchers) vs /runs/:id/agent ("Agent triage" — this run's
-  // per-sample triage). Split the content so the two nav items aren't near-duplicate pages.
-  const isSystemView = !runId
+  // Per-run triage only: this run's flagged samples. The org-wide system agents (pipeline-repair,
+  // archivist) live on their own /system-agents screen, so this page is no longer a two-in-one.
   const [params] = useSearchParams()
   const { detail, error } = useRun(runId)
   const [picked, setPicked] = useState<string | null>(null)
   const [note, setNote] = useState<TriageNote | null>(null)
   const [noteState, setNoteState] = useState<'idle' | 'loading' | 'ready' | 'none'>('idle')
   const [page, setPage] = useState(1)
-  // System advisory agents (Phase 3): repair + archivist act on runs / recurring signatures / the
-  // organization — NOT on a single pipeline node — so they launch from here, not the Builder palette.
-  const [repairOpen, setRepairOpen] = useState(false)
-  const [archivistOpen, setArchivistOpen] = useState(false)
 
   // Reset the triage-specific UI when the run changes; detail/error now come from the shared useRun
-  // cache (the run-independent /agents route has no runId → the org agents render, triage prompts).
+  // cache (the legacy /agents deep-link has no runId → the empty "open a run" prompt renders).
   useEffect(() => {
     setPicked(null)
     setPage(1)
@@ -98,40 +90,15 @@ export function AgentTriage() {
   return (
     <div className="pg-fade mx-auto max-w-[1080px]">
       <PageHeader
-        title={isSystemView ? 'System agents' : 'Agent triage'}
-        subtitle={
-          isSystemView
-            ? 'Advisory agents that act across runs and the organization — never a single run, never a verdict.'
-            : 'The agent advises; the human decides.'
-        }
-        actions={!isSystemView && active ? <AgentStatus armed={hasLiveModel} label={sourceLabel} /> : undefined}
+        title="Triage"
+        subtitle="The agent advises; the human decides."
+        actions={active ? <AgentStatus armed={hasLiveModel} label={sourceLabel} /> : undefined}
       />
 
-      {/* System advisory agents — they act on runs / recurring signatures / the whole organization, not
-          on a single pipeline node, so they live on this page (moved out of the Builder palette, Phase 3).
-          Each opens a read-only, cited proposal; advisory + off-gate — neither sets a verdict (ADR-0001). */}
-      {isSystemView && (
-        <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
-          <AgentLauncher
-            icon={<Wrench size={16} strokeWidth={2} />}
-            title="Pipeline-repair"
-            sub="Cited fix proposals for recurring failure signatures"
-            onOpen={() => setRepairOpen(true)}
-          />
-          <AgentLauncher
-            icon={<Archive size={16} strokeWidth={2} />}
-            title="Archivist"
-            sub="Organizes released runs for cold storage"
-            onOpen={() => setArchivistOpen(true)}
-          />
-        </div>
-      )}
-
-      {/* Per-run triage section. It depends on a run in context; the system agents above do not, so
-          when there's no run (the /agents route) or the run fails to load we surface that HERE only —
-          the org-agent launchers stay reachable regardless (a 404'd run must not orphan them). */}
+      {/* Per-run triage section. It depends on a run in context; when there's no run (the legacy
+          /agents deep-link) or the run fails to load we surface that here. */}
       {!runId ? (
-        <Empty message="Open a run to triage its flagged samples. The system agents above run across runs — no run needed." />
+        <Empty message="Open a run to triage its flagged samples." />
       ) : error ? (
         <ErrorBox message={error} />
       ) : !detail ? (
@@ -230,9 +197,6 @@ export function AgentTriage() {
           )}
         </>
       )}
-
-      {repairOpen && <PipelineRepairModal onClose={() => setRepairOpen(false)} />}
-      {archivistOpen && <ArchivistModal onClose={() => setArchivistOpen(false)} />}
     </div>
   )
 }
@@ -250,29 +214,5 @@ function AgentStatus({ armed, label }: { armed: boolean; label: string }) {
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${armed ? 'bg-accent' : 'bg-card-3'}`} />
       {armed ? label : 'Live agent: not armed'}
     </span>
-  )
-}
-
-// A launcher card for a system advisory agent — opens its read-only proposal modal. Advisory + off-gate:
-// it never sets a verdict; the honest "advisory" label rides the card.
-function AgentLauncher({ icon, title, sub, onOpen }: { icon: React.ReactNode; title: string; sub: string; onOpen: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex items-center gap-3 rounded-[11px] border border-line bg-card px-3.5 py-3 text-left transition-colors hover:border-line-strong hover:bg-page"
-    >
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-weak text-accent-strong">{icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <span className="truncate text-[13px] font-semibold text-text">{title}</span>
-          <span className="shrink-0 rounded bg-card-2 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.3px] text-text-3">
-            advisory
-          </span>
-        </span>
-        <span className="mt-0.5 block truncate text-[11.5px] text-text-2">{sub}</span>
-      </span>
-      <ChevronRight size={16} className="shrink-0 text-text-3" />
-    </button>
   )
 }

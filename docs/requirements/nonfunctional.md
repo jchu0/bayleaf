@@ -136,7 +136,7 @@ links to [evaluation.md](../quality/evaluation.md).
    audit log (`SubmitAuditEntry`). **Scope**: this is a UI-level data-safety gate over client-parsed
    files; it does not yet extend server-side (`POST /api/runs` still carries no subject field,
    REQ-NF-023) and is not a cryptographic/formal identity-matching guarantee. *Trace:*
-   [functional.md REQ-F-083c](functional.md), [design/ui-conventions.md UIC-11](../design/ui-conventions.md#uic-11--submit-samplesheet),
+   [functional.md REQ-F-083c](functional.md), [design/ui-conventions.md UIC-11](../design/ui-conventions.md#uic-11--samplesheet),
    [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md).
 7. **REQ-NF-026 — Dev-shim auth is loudly labelled; de-id/redaction matching is case-insensitive;
    the untrusted-text boundary is bounded (2026-07-11, audit P3-11 / AS-03/AS-05/AS-07/AS-08).**

@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-13 (MST) — the `CheckCoverage` contamination/identity flip is now REAL (`b03d1fa`'s `rules._examined_metric_categories`: present = examined = ran, pass or fail — the "not-examined" claim below was corrected once already on 2026-07-12 when the flip *didn't* land as designed, and is corrected again now that it does); WS-02/WS-04's FREEMIX + SNP-F1 parsers are additionally proven on genuine, calibrated tool output (`478d579`, live-genomics pass) — still parser-wired, NOT pipeline-produced (unchanged). Prior: 2026-07-12 (MST) — gap-analysis WS-01 (`QC-MISSING`/`QC-EXPECTED-<key>` fail-closed rules, `CheckCoverage` honesty), WS-05 (`RunbookSet` per-sample resolution), WS-06 Gap 2 (Ts/Tv `target_band` gate), WS-02/WS-04 (FREEMIX + SNP-F1 gated, parser-wired not pipeline-produced; corrected the `CheckCoverage` contamination-flip claim against a direct code check) |
+| **Last updated** | 2026-07-13 (MST) — **route-to-human → flag-for-review** naming refresh (§ heading + rule id `VAR-FFR-001`, `runbook.FlagForReviewPolicy`, `Runbook.flag_for_review`, `rules._check_flag_for_review`); no policy change. Also: the `CheckCoverage` contamination/identity flip is now REAL (`b03d1fa`'s `rules._examined_metric_categories`: present = examined = ran, pass or fail — the "not-examined" claim below was corrected once already on 2026-07-12 when the flip *didn't* land as designed, and is corrected again now that it does); WS-02/WS-04's FREEMIX + SNP-F1 parsers are additionally proven on genuine, calibrated tool output (`478d579`, live-genomics pass) — still parser-wired, NOT pipeline-produced (unchanged). Prior: 2026-07-12 (MST) — gap-analysis WS-01 (`QC-MISSING`/`QC-EXPECTED-<key>` fail-closed rules, `CheckCoverage` honesty), WS-05 (`RunbookSet` per-sample resolution), WS-06 Gap 2 (Ts/Tv `target_band` gate), WS-02/WS-04 (FREEMIX + SNP-F1 gated, parser-wired not pipeline-produced; corrected the `CheckCoverage` contamination-flip claim against a direct code check) |
 | **Audience** | bioinformatics / software |
-| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, D2), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) (no invented pathogenicity), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC review queue), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization + wiring status), [schemas.md](schemas.md) (§6 units contract, `VariantCall`, `SampleMetrics`/`RawObservation`), [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) (the workstream tracker), [audit/gap_analysis/ws-02-identity-provenance.md](../../audit/gap_analysis/ws-02-identity-provenance.md), [audit/gap_analysis/ws-04-giab-concordance.md](../../audit/gap_analysis/ws-04-giab-concordance.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md) |
+| **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (flag-for-review, D2), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) (no invented pathogenicity), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC review queue), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization + wiring status), [schemas.md](schemas.md) (§6 units contract, `VariantCall`, `SampleMetrics`/`RawObservation`), [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) (the workstream tracker), [audit/gap_analysis/ws-02-identity-provenance.md](../../audit/gap_analysis/ws-02-identity-provenance.md), [audit/gap_analysis/ws-04-giab-concordance.md](../../audit/gap_analysis/ws-04-giab-concordance.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md) |
 
 ## Overview
 
@@ -73,7 +73,7 @@ edge cases.
 | Flagged variant: gnomAD AF + ClinVar | `INFO/AF`, `CLNSIG` | rare-disease AF cutoffs; ClinVar 5-tier | ESCALATE / HOLD |
 
 The ClinVar half of that last row now has a concrete, **off-by-default** implementation — the
-**route-to-human policy (VAR-RTH-001)** below. It routes to a human (ESCALATE) rather than gating
+**flag-for-review policy (VAR-FFR-001)** below. It flags for review (ESCALATE) rather than gating
 on AF; the gnomAD AF cutoff itself is still design-only (no code path reads `INFO/AF`).
 
 ## Verdict policy (ADR-0013)
@@ -107,15 +107,15 @@ execute — the gate never runs a process ([ADR-0001](../adr/ADR-0001-determinis
 `trace.txt` is an **optional** input: present only for runs that had a process failure
 (see [`data/README.md`](../../data/README.md)).
 
-## Route-to-human policy (VAR-RTH-001) — OFF BY DEFAULT (2026-07-10, ADR-0018 D2)
+## Flag for review policy (VAR-FFR-001) — OFF BY DEFAULT (2026-07-10, ADR-0018 D2)
 
 A **variant-gate** rule, distinct from the call-quality rows in Gate 3 above: it does not gate
-DP/GQ/allele-balance, it **routes a sample to mandatory human review** when an annotated candidate
+DP/GQ/allele-balance, it **flags a sample for mandatory human review** when an annotated candidate
 carries a clinically-significant ClinVar classification. Realizes the maintainer's decision that a
-route-to-human action belongs on the gate as a **role-based human-review routing rule** (ADR-0018
+flag-for-review action belongs on the gate as a **role-based human-review routing rule** (ADR-0018
 D2) — the highest clinical-sensitivity call in the system, so its scope is drawn tightly:
 
-1. **Disarmed by default.** `Runbook.route_to_human` (`runbook.RouteToHumanPolicy`) carries an
+1. **Disarmed by default.** `Runbook.flag_for_review` (`runbook.FlagForReviewPolicy`) carries an
    empty `significances` tuple — `.armed` is `False` — so the **stock runbook never routes** and
    the pinned demo scenario (and every other verdict) is byte-for-byte unchanged. An operator arms
    it by configuring the ClinVar `CLNSIG` values (e.g. `("Pathogenic", "Likely_pathogenic")`) that
@@ -123,15 +123,15 @@ D2) — the highest clinical-sensitivity call in the system, so its scope is dra
    single-submitter call does not route unless its review status is on the allow-list).
 2. **Rules decide to ROUTE; a human decides the outcome (ADR-0001).** When armed and a
    `VariantCall` for the sample matches (significance folded case-/separator-insensitively for
-   matching only — the cited value stays verbatim), `rules._check_route_to_human` emits a
+   matching only — the cited value stays verbatim), `rules._check_flag_for_review` emits a
    **CRITICAL** `Finding` — category `variant` (lands on the **variant** gate, `Gate.VARIANT`),
-   `rule_id="VAR-RTH-001"`, `suggested_verdict=ESCALATE` (route to a human — the most conservative
+   `rule_id="VAR-FFR-001"`, `suggested_verdict=ESCALATE` (flag for review — the most conservative
    action). It **quotes ClinVar verbatim** as cited `Evidence` (`source_field="CLNSIG"`, the
    accession + release version as the citation, the review status as the threshold field) — it
    authors **no pathogenicity determination of its own** (ADR-0004). A qualified human adjudicates
    via the existing RBAC-gated review queue ([ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md));
    no new access pattern.
-3. **Not a clinical-significance gate.** The action space is only `{route-to-human}` — there is no
+3. **Not a clinical-significance gate.** The action space is only `{flag-for-review}` — there is no
    Pathogenic/Benign verdict and no probability. It escalates *toward* human judgment; the variant
    **QC** gate (DP/GQ/AB, Gate 3 table above) is untouched — this is a distinct, additive
    review-routing rule on the same gate.
@@ -141,14 +141,14 @@ D2) — the highest clinical-sensitivity call in the system, so its scope is dra
    `variants.csv` is unaffected (belt-and-suspenders: `evaluate_sample` on a run with variant calls
    but a disarmed policy yields the exact finding set it would without any variant data).
 
-**Status.** Built and unit/end-to-end tested (`tests/test_route_to_human.py`, 10 cases). **Off by
+**Status.** Built and unit/end-to-end tested (`tests/test_flag_for_review.py`, 10 cases). **Off by
 default for every run except one deliberately-armed demo fixture (2026-07-11):**
-`data/RUN-2026-07-11-CLINVAR-RTH/` (`origin=contrived`) carries a `route_to_human` marker + a
+`data/RUN-2026-07-11-CLINVAR-RTH/` (`origin=contrived`) carries a `flag_for_review` marker + a
 `variants.csv` spiking a verbatim-cited ClinVar Pathogenic BRCA1 candidate HG002 does not actually
-carry, and is the one committed run that ESCALATEs via `VAR-RTH-001` when evaluated through the API
+carry, and is the one committed run that ESCALATEs via `VAR-FFR-001` when evaluated through the API
 (`api.main._active_runbook` arms the policy **per run**, see [ADR-0018 Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11)).
 Every other committed run (incl. the pinned demo scenario) still carries no marker and stays
-disarmed. See [schemas.md](schemas.md) for the `VariantCall`/`RouteToHumanPolicy` field contracts.
+disarmed. See [schemas.md](schemas.md) for the `VariantCall`/`FlagForReviewPolicy` field contracts.
 
 ## CNV & mosaicism
 
@@ -195,7 +195,7 @@ skipped, never NA-flagged — so a lean real run stays clean while a rich contri
 3. **On-target rate** (`qc.on_target`) — `required=False`.
 4. **Depth (DP)** (`variant.dp`) — `required=False`, the first **Gate 3** threshold implemented.
 
-**2026-07-10 addition (ADR-0018 D2):** the **route-to-human policy (VAR-RTH-001)**, above, is a
+**2026-07-10 addition (ADR-0018 D2):** the **flag-for-review policy (VAR-FFR-001)**, above, is a
 fifth Gate-3 rule — not a `QCThreshold`/metric-registry gate like 1–4, but a policy-driven `Finding`
 read from `RunArtifacts.variant_calls`. **Off by default**; one committed fixture arms it
 (`data/RUN-2026-07-11-CLINVAR-RTH/`, 2026-07-11 — see the Status note above).
