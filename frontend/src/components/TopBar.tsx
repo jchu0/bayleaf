@@ -24,7 +24,7 @@ const PER_RUN_PAGES: ReadonlySet<PageId> = new Set(['cards', 'intake', 'provenan
 // the bare decision-cards route.
 function routePage(pathname: string): PageId | 'admin' | null {
   if (pathname === '/') return 'runs'
-  // The run-independent System Agents page has its own PageId now; match it before the generic
+  // The run-independent System agents page has its own PageId now; match it before the generic
   // /agent branch below so the crumb comes from the shared catalog like every other page.
   if (pathname === '/system-agents') return 'systemAgents'
   if (pathname.startsWith('/accession')) return 'accession'

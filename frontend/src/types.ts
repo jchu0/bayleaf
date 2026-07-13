@@ -787,6 +787,66 @@ export type NodeProposal = {
   mode: 'stub' | 'claude'
 }
 
+// Starter scaffolds for onboarding the proposed tool (GET /api/builder/node-proposal/scaffolds).
+// Filled DRAFT artifacts (ProcessSpec + Nextflow process, and a metric entry when the tool emits
+// QC) with the runnable command left a TODO — the agent lays out the skeleton, a human authors the
+// compute (compose ≠ execute). Empty scaffolds when the request matched no tool-card.
+export type NodeScaffolds = {
+  request: string
+  matched: boolean
+  tool: string | null
+  scaffolds: Record<string, string>
+}
+
+// An accepted tool-card LIBRARY ENTRY (POST /api/builder/node-proposal/accept → GET
+// /api/builder/library). A NodeProposal accepted as a draft: METADATA only (ports/version/locators
+// via the embedded proposal), never a runnable script:/stub: body — a human authors the ProcessSpec
+// before anything compiles (compose ≠ execute). advisory-safe: no verdict/confidence anywhere.
+export type LibraryStatus = 'draft' | 'approved' | 'retired'
+export type LibraryEntry = {
+  id: string
+  tool: string
+  version?: string | null
+  status: LibraryStatus
+  submitted_by: string
+  created_at: string
+  updated_at: string
+  proposal: NodeProposal
+}
+
+// System-agents chat (design/system-agents-chat.md). A run-independent conversation with a system
+// agent (pipeline-repair / archivist). Advisory only — no verdict/confidence field. History is
+// structured for ML; archive/delete are view-scoped soft-deletes (status flips, record retained).
+export type ChatCitation = {
+  kind: 'knowledge' | 'run' | 'signature'
+  ref: string
+  title: string | null
+  score: number | null
+}
+export type ChatMessage = {
+  id: string
+  role: 'user' | 'agent'
+  content: string
+  ts: string
+  citations: ChatCitation[]
+  generated_by: string | null
+  model: string | null
+}
+export type ChatSession = {
+  session_id: string
+  created_at: string
+  updated_at: string
+  actor_id: string
+  agent_id: string
+  title: string
+  context_refs: Record<string, unknown>
+  status: 'active' | 'archived' | 'deleted'
+  messages: ChatMessage[]
+}
+export type ChatSendBody = { message: string; session_id?: string; context_refs?: Record<string, unknown> }
+export type ChatSendResponse = { session: ChatSession; reply: ChatMessage }
+export type SystemAgentInfo = { id: string; label: string }
+
 // Sandboxed server-side file browser (GET /api/files?root=&path=). Powers the Builder's "Browse…"
 // data pickers over server-resident inputs (FASTQ folders, reference, panel) — the GB-scale files
 // live on the compute host, so the browse is SERVER-SIDE and returns metadata only, never content.

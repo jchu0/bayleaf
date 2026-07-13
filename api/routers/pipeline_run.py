@@ -31,6 +31,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.agent_binding_store import get_agent_binding_store, normalize_bindings
 from api.auth import Actor, require_role
 from api.authored_pipeline import check_parse_contract, compile_record, resolve_approved
 from api.job_store import (
@@ -309,6 +310,16 @@ def run_pipeline(
             )
     if conflict:
         raise HTTPException(status_code=409, detail=f"run '{run_id}' already exists")
+
+    # Scope-by-wiring (ADR-0024): snapshot THIS run's executed-graph agent bindings so the
+    # node-observation read path can enforce that an agent only reads nodes it is wired to. The
+    # bindings ride in the approved graph's opaque envelope (graph.agent_bindings); the compiler
+    # never dereferenced them (ADR-0022) — here they become the run's server-side access record.
+    get_agent_binding_store().record(
+        run_id,
+        normalize_bindings((record.get("graph") or {}).get("agent_bindings")),
+        captured_at=now,
+    )
 
     threading.Thread(
         target=_execute,

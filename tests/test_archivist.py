@@ -147,6 +147,18 @@ def test_empty_input_yields_an_empty_digest():
     assert "no runs" in digest.summary.lower()
 
 
+def test_digest_over_a_clean_run_with_no_recurring_signatures():
+    """Regression: a released, all-PROCEED run has runs present but NO recurring signatures.
+    The run-scope summary must guard `signatures[0]` (it was evaluated eagerly and 500'd the
+    /archive-digest endpoint for any clean run). Uses a real all-clean GIAB run dir."""
+    clean = build_run_input_from_dir(DATA / "RUN-2026-06-05-GIAB-A")
+    assert sum(len(c.findings) for c in clean.cards) == 0  # precondition: nothing recurring
+    digest = archive_digest([clean])  # must not raise
+    assert digest.recurring_signatures == []
+    assert digest.summary and digest.proposed_action  # built, not crashed
+    assert "Top recurring signature" not in digest.summary
+
+
 def test_default_agent_is_the_stub(monkeypatch):
     monkeypatch.delenv("BAYLEAF_ARCHIVIST_AGENT", raising=False)
     assert isinstance(get_archivist_agent(), StubArchivist)

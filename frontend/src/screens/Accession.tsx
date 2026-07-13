@@ -143,7 +143,7 @@ export function Accession() {
     <div className="mx-auto max-w-[1080px]">
       {/* UIC-1: the left-nav names this page — no eyebrow/subtitle prose. The PII seam banner below
           is an explicit safety/limitation warning and stays. */}
-      <PageHeader title="Sample Metadata" />
+      <PageHeader title="Sample metadata" />
 
       {/* PII seam banner — prominent, honest: nothing here leaves the browser. */}
       <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-hold-bd bg-hold-bg px-4 py-3 text-[12.5px] leading-relaxed text-hold-fg">

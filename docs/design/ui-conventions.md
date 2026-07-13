@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active — the durable convention registry (so a rule is stated once, not per session) |
-| **Last updated** | 2026-07-13 (MST) — page-name simplification applied to UIC-8/-11/-15/-16 + the pagination/ACCESS_FLOOR references (Decision cards → **Decisions**, Submit samplesheet → **Samplesheet**, Agent triage → **Triage**, Pipeline builder → **Pipeline**, Sample accessioning → **Sample Metadata**; labels match `frontend/src/access.ts`). UIC-11 anchor changed → cross-link in `nonfunctional.md` updated. Prior: UIC-20 added (the `<Missing/>` honesty primitive) |
+| **Last updated** | 2026-07-13 (MST) — **UIC-21 added**: nav/page labels are sentence case (Sample Metadata → **Sample metadata**, System Agents → **System agents**, ref "Review queue"). Prior same-day: page-name simplification applied to UIC-8/-11/-15/-16 + the pagination/ACCESS_FLOOR references (Decision cards → **Decisions**, Submit samplesheet → **Samplesheet**, Agent triage → **Triage**, Pipeline builder → **Pipeline**, Sample accessioning → **Sample metadata**; labels match `frontend/src/access.ts`); UIC-20 (the `<Missing/>` honesty primitive) |
 | **Audience** | software / design / reviewers |
 | **Related** | [design/frontend/README.md](frontend/README.md) (tokens + per-screen spec), [design/builder-cards/README.md](builder-cards/README.md) (pipeline-card design), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [functional.md](../requirements/functional.md) (REQ-F-097), [nonfunctional.md](../requirements/nonfunctional.md) (REQ-NF-070, a11y), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [scale-aware memory], [explicit-edit+audit memory] |
 
@@ -388,6 +388,15 @@ everywhere an ad-hoc `—`/empty-cell still exists** (e.g. `screens/Provenance.t
 [journal 2026-07-13-audit-fixes-ia.md](../journal/2026-07-13-audit-fixes-ia.md)) — a rollout, not a
 one-shot migration; extend to a new absent-scalar site as it's found rather than treating this as
 "done everywhere."
+
+### UIC-21 — Nav/page labels are **sentence case** (capitalize the first word only) · ✅
+Every nav label, `PageHeader` title, and page name is **sentence case**: capitalize the first word,
+lowercase the rest (proper nouns excepted). The reference is **"Review queue"** — not "Review Queue".
+Applies app-wide: e.g. **"Sample metadata"** (not "Sample Metadata"), **"System agents"** (not
+"System Agents"), **"Admin panel"**. Single-word labels (Inbox, Runs, Intake, Decisions, Provenance,
+Triage, Monitoring, Pipeline, Settings, Samplesheet) are unaffected. Source of truth stays
+`frontend/src/access.ts::PAGE_CATALOG`; keep `Sidebar.tsx` + each screen's `PageHeader` in step.
+**Shipped 2026-07-13** (Sample Metadata → Sample metadata, System Agents → System agents).
 
 ---
 

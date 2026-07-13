@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { ErrorBox, Loading } from '../components/States'
 import { PageHeader } from '../components/PageHeader'
-import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl'
 import { SettingsNotifications } from '../components/SettingsNotifications'
 import { SettingsModelTier } from '../components/SettingsModelTier'
 import { SettingsAssayTable } from '../components/SettingsAssayTable'
@@ -12,18 +11,11 @@ import type { MetricCatalog, RunbookPolicy } from '../types'
 // 17px/18px padding, no shadow).
 const CARD = 'rounded-[13px] border border-line bg-card px-[18px] py-[17px]'
 
-type Profile = 'lean' | 'granular'
-const PROFILE_OPTIONS: SegmentOption<Profile>[] = [
-  { value: 'lean', label: 'Lean' },
-  { value: 'granular', label: 'Granular' },
-]
-
 export function Settings() {
   // Consume the disclaimer-bearing /api/runbook (F12), not the raw /api/config core runbook.
   const [runbook, setRunbook] = useState<RunbookPolicy | null>(null)
   const [catalog, setCatalog] = useState<MetricCatalog | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [profile, setProfile] = useState<Profile>('granular')
 
   useEffect(() => {
     api.runbook().then(setRunbook).catch((e) => setError(String(e)))
@@ -36,8 +28,6 @@ export function Settings() {
   if (error) return <ErrorBox message={error} />
   if (!runbook) return <Loading label="Loading runbook…" />
 
-  const granular = profile === 'granular'
-
   return (
     <div className="mx-auto max-w-[1080px]">
       {/* UIC-1: no page eyebrow/subtitle — the left-nav already names the page. Explicit
@@ -45,19 +35,11 @@ export function Settings() {
       <PageHeader title="Settings" />
 
       <div className="space-y-[14px]">
-        {/* Operator profile */}
-        <section className={CARD}>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="text-[14.5px] font-semibold text-text">Operator profile</div>
-              <p className="mt-[3px] text-[12.5px] text-text-2">
-                How much QC and metadata detail each card surfaces by default.
-              </p>
-            </div>
-            <SegmentedControl options={PROFILE_OPTIONS} value={profile} onChange={setProfile} label="Operator profile detail" />
-          </div>
-        </section>
-
+        {/* The view-only "Operator profile" (lean/granular) bar was removed (ADR-0024 §6): it was a
+            non-persisted local toggle that only gated the Metric-catalog section below, duplicating
+            the persisted display prefs. Card layout lives in the user prefs (Density); agent scope
+            now comes from graph wiring (ADR-0024), not a Settings control. The lean/granular config
+            PROFILE stays an ADR-0005 backend concept, not this ad-hoc UI toggle. */}
         <SettingsNotifications />
 
         <SettingsModelTier />
@@ -67,9 +49,10 @@ export function Settings() {
           disclaimer={runbook.disclaimer}
         />
 
-        {/* Metric catalog — granular-only app extra (F9): the registered vocabulary + which
-            entries the live runbook gates on. Versioned config metadata, never a clinical panel. */}
-        {granular && catalog && (
+        {/* Metric catalog (F9): the registered vocabulary + which entries the live runbook gates on.
+            Versioned config metadata, never a clinical panel. Always shown now that the lean/granular
+            Settings toggle is gone (ADR-0024 §6) — it degrades to nothing if the registry is absent. */}
+        {catalog && (
           <section className={CARD}>
             <div className="text-[14.5px] font-semibold text-text">Metric catalog</div>
             <p className="mt-[3px] text-[12.5px] text-text-2">

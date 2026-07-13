@@ -257,6 +257,47 @@ def test_claude_ask_falls_back_to_stub_on_error(cards, monkeypatch):
     assert reply.generated_by == "stub"  # error degrades to the grounded stub, not a crash
 
 
+class _RecordingClient(_FakeClient):
+    """Records the kwargs create() was called with, so a test can assert the token budget."""
+
+    def __init__(self, response=None):
+        super().__init__(response=response)
+        self.create_kwargs: dict = {}
+
+    def create(self, **kwargs):
+        self.create_kwargs = kwargs
+        return self._response
+
+
+def test_claude_ask_requests_a_larger_budget_than_the_two_field_triage_note(cards, monkeypatch):
+    """Regression (root cause): the free-text `ask` answer must request a bigger token budget
+    than `triage_card`'s two short fields. At the old shared 1024 a grounded answer to a
+    flagged-card question truncated mid-string, yielding invalid JSON that silently degraded
+    to the stub on exactly the cards where a written answer matters most."""
+    from bayleaf.triage.agent import _ASK_MAX_TOKENS
+
+    client = _RecordingClient(_FakeResponse('{"answer": "MODEL answer"}'))
+    agent = _claude_agent(monkeypatch, client)
+    agent.ask(cards["S4"], "cause?")
+    assert client.create_kwargs["max_tokens"] == _ASK_MAX_TOKENS
+    assert agent.max_tokens < _ASK_MAX_TOKENS  # bigger than the two-field triage_card budget
+
+
+def test_claude_ask_falls_back_to_stub_on_truncation(cards, monkeypatch):
+    """A max_tokens-truncated response leaves unterminated JSON; degrade to the grounded stub
+    cleanly (via the explicit stop_reason guard) rather than reading as an opaque parse error."""
+    truncated = _FakeResponse('{"answer": "half-written ans', stop_reason="max_tokens")
+    reply = _claude_agent(monkeypatch, _RecordingClient(truncated)).ask(cards["S4"], "cause?")
+    assert reply.generated_by == "stub" and reply.answer  # degraded, not crashed
+
+
+def test_claude_triage_falls_back_to_stub_on_truncation(cards, monkeypatch):
+    """Same truncation guard on the auto-triage note path."""
+    truncated = _FakeResponse('{"likely_cause": "half', stop_reason="max_tokens")
+    note = _claude_agent(monkeypatch, _RecordingClient(truncated)).triage_card(cards["S4"])
+    assert note is not None and note.generated_by == "stub"
+
+
 # --- API endpoint -----------------------------------------------------------
 
 client = TestClient(app)

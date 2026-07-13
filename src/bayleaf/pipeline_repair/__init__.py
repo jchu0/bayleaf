@@ -31,6 +31,7 @@ from .retrieval import (
     RetrievalHit,
     Retriever,
     load_remediation_corpus,
+    load_system_corpus,
 )
 
 __all__ = [
@@ -49,6 +50,7 @@ __all__ = [
     "assemble_recurring_signatures",
     "get_repair_agent",
     "load_remediation_corpus",
+    "load_system_corpus",
     "propose_repair",
     "recurring_signature",
 ]

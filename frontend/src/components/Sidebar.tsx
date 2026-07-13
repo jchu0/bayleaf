@@ -63,7 +63,7 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
         // Action: issues waiting on a human.
         { label: 'Review queue', to: '/queue', icon: Inbox, active: pathname.startsWith('/queue'), page: 'queue' },
         // Steps: the process flow, beginning at subject accessioning (the CRM step).
-        { label: 'Sample Metadata', to: '/accession', icon: ClipboardList, active: pathname.startsWith('/accession'), page: 'accession' },
+        { label: 'Sample metadata', to: '/accession', icon: ClipboardList, active: pathname.startsWith('/accession'), page: 'accession' },
         { label: 'Samplesheet', to: '/submit', icon: FileUp, active: pathname.startsWith('/submit'), page: 'submit' },
         {
           label: 'Intake',
@@ -105,7 +105,7 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
         },
         // The org-wide system agents (pipeline-repair, archivist) act across runs — a run-independent
         // entry so they're reachable without (and survive the 404 of) a specific run.
-        { label: 'System Agents', to: '/system-agents', icon: Sparkles, active: pathname === '/system-agents', page: 'systemAgents' },
+        { label: 'System agents', to: '/system-agents', icon: Sparkles, active: pathname === '/system-agents', page: 'systemAgents' },
         { label: 'Monitoring', to: '/monitoring', icon: Activity, active: pathname.startsWith('/monitoring'), page: 'monitoring' },
       ],
     },

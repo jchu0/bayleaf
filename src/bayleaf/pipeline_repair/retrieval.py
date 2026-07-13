@@ -23,6 +23,8 @@ from .models import RemediationEntry
 # The JSONL ships as package data next to this module (see pyproject package-data).
 _KNOWLEDGE_PACKAGE = "bayleaf.pipeline_repair"
 _KNOWLEDGE_RESOURCE = ("knowledge", "pipeline_repair.jsonl")
+# The curated bayleaf-system docs corpus (P3 §2) — system context, not remediation templates.
+_SYSTEM_RESOURCE = ("knowledge", "bayleaf_system.jsonl")
 
 # A tiny stopword set — just enough to stop generic glue words from inflating overlap.
 # Kept local (no nltk dependency) since the corpus and queries are short and technical.
@@ -114,6 +116,59 @@ def load_remediation_corpus() -> tuple[RemediationEntry, ...]:
             continue
         entries.append(RemediationEntry.model_validate_json(stripped))
     return tuple(entries)
+
+
+def _read_jsonl_corpus(resource_parts: tuple[str, ...]) -> list[RemediationEntry]:
+    """Parse a curated knowledge JSONL resource into entries (tolerant: blank/`#` lines skipped)."""
+    resource = files(_KNOWLEDGE_PACKAGE)
+    for part in resource_parts:
+        resource = resource.joinpath(part)
+    entries: list[RemediationEntry] = []
+    for line in resource.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        entries.append(RemediationEntry.model_validate_json(stripped))
+    return entries
+
+
+def _tool_doc_entries() -> list[RemediationEntry]:
+    """Derive one KnowledgeRecord per CATALOGUED tool from the real process catalog (zero-drift:
+    the tool set + its bioconda spec + output kinds come straight from `PROCESS_CATALOG`, never a
+    hand-copied list). Gives the repair agent grounding on which tools exist and what they emit."""
+    from bayleaf.nextflow.catalog import PROCESS_CATALOG
+
+    entries: list[RemediationEntry] = []
+    for spec in PROCESS_CATALOG.values():
+        kinds = sorted({p.kind for p in spec.outputs})
+        entries.append(
+            RemediationEntry(
+                id=f"tool_{spec.process.lower()}",
+                kind="tool_doc",
+                category="tool",
+                title=f"{spec.tool} — {spec.label or spec.process}",
+                keywords=[*_tokenize(spec.tool), *kinds],
+                summary=(
+                    f"{spec.tool}: bioconda `{spec.conda}`; "
+                    f"outputs {', '.join(kinds) or '(none catalogued)'}."
+                ),
+                rationale=(
+                    "Catalogued tool the compiler renders as a Nextflow process; the core never "
+                    "runs it (compose ≠ execute, ADR-0003)."
+                ),
+                source="bayleaf.nextflow.catalog:PROCESS_CATALOG",
+                tags=["tool", *kinds],
+            )
+        )
+    return entries
+
+
+@lru_cache(maxsize=1)
+def load_system_corpus() -> tuple[RemediationEntry, ...]:
+    """The pipeline-repair DOCS corpus (P3 §2): curated bayleaf-system entries (from the JSONL) plus
+    a derived tool-doc entry per catalogued tool. System context so the agent understands the
+    systems involved + their limits — distinct from the remediation-template corpus."""
+    return (*_read_jsonl_corpus(_SYSTEM_RESOURCE), *_tool_doc_entries())
 
 
 class RemediationRetriever:
