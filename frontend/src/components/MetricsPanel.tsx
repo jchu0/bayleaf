@@ -1,5 +1,6 @@
 import type { Gate, ReadoutStatus, RunbookPolicy, RunbookThreshold } from '../types'
 import { GATE_DOT } from '../verdict'
+import { Missing } from './Missing'
 
 // The Decision-card HERO: the QC readout by gate, populated from the API's `qc-readout`
 // projection (card metric_values ⋈ runbook thresholds → Metric·Observed·Threshold·Status).
@@ -115,6 +116,15 @@ function StatusChip({ status }: { status: ReadoutRowStatus }) {
   )
 }
 
+// Render a row's Observed cell honestly. A `not_measured` row (the gate ran but produced no
+// observation) routes its absence through the shared Missing primitive — de-emphasized + tooltip'd,
+// NEVER the bold mono value tone and never a bare 0 (absent ≠ 0). A real observation renders in the
+// value tone as before. Keeps the value-cell honesty rule in one place across all three variants.
+function Observed({ row }: { row: ReadoutRow }) {
+  if (row.status === 'not_measured') return <Missing variant="not-measured" display="dash" />
+  return <>{row.observed_display}</>
+}
+
 // The per-gate rollup pill. "N flagged" (amber) when any row is fail/borderline; a neutral "not
 // measured" (grey) when the group has rows but none were observed — so a nothing-measured gate can
 // never read as a green "all clear"; otherwise "all clear". Reads `flagged_count` for the amber
@@ -199,7 +209,7 @@ export function QCReadout({ gates, variant }: { gates: ReadoutGroup[]; variant: 
                         <div className="min-w-0 text-[12px] text-text">{m.label}</div>
                       </div>
                       <div className="px-2 py-2 font-mono text-[12px] font-semibold text-text">
-                        {m.observed_display}
+                        <Observed row={m} />
                       </div>
                       <div className="px-2 py-2 font-mono text-[11px] text-text-3">
                         {m.threshold_display ?? '—'}
@@ -238,7 +248,7 @@ export function QCReadout({ gates, variant }: { gates: ReadoutGroup[]; variant: 
                 >
                   <span className="text-[11.5px] text-text-2">{m.label}</span>
                   <span className="font-mono text-[12.5px] font-semibold text-text">
-                    {m.observed_display}
+                    <Observed row={m} />
                   </span>
                   <StatusChip status={m.status} />
                 </div>
@@ -262,7 +272,9 @@ export function QCReadout({ gates, variant }: { gates: ReadoutGroup[]; variant: 
           {g.rows.map((m) => (
             <span key={m.metric} className="inline-flex items-center gap-[5px] text-[11px] text-text-2">
               <span className="text-text-3">{m.label}</span>
-              <span className="font-mono font-semibold text-text">{m.observed_display}</span>
+              <span className="font-mono font-semibold text-text">
+                <Observed row={m} />
+              </span>
               <StatusChip status={m.status} />
             </span>
           ))}
