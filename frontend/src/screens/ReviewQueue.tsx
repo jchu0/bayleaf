@@ -27,6 +27,7 @@ import { useConfirm, type ConfirmOpts } from '../components/ConfirmDialog'
 import { useRole } from '../context/RoleContext'
 import { useAccess } from '../context/AccessContext'
 import { useRangeSelect } from '../hooks/useRangeSelect'
+import { bumpTickets } from '../ticketsBus'
 import type {
   AgentProposal,
   DecisionCard,
@@ -417,6 +418,11 @@ export function ReviewQueue() {
       }
       const updated = await api.ticketAction(id, action)
       patch(key, { status: updated.status }) // reconcile from the authoritative response
+      // UX-DUP (Review + Inbox #1): announce the backend status change so the always-mounted Inbox
+      // context re-reads the ticket feed — a queue resolve/escalate now reflects in the bell + inbox
+      // instead of drifting until a manual refresh. Only fires on a SUCCESSFUL write (a throw skips to
+      // the rollback in .catch); pure invalidation, so the optimistic overlay/selection are untouched.
+      bumpTickets()
     }
     const next = (pendingRef.current[key] ?? Promise.resolve()).then(run).catch((e) => {
       // Roll back the optimistic transition (mirrors PipelineBuilder's reconcile-on-catch) so a
@@ -469,6 +475,8 @@ export function ReviewQueue() {
       }
       const updated = await api.assignTicket(id, assignee)
       patch(key, { assignee: updated.assignee }) // reconcile from the authoritative response
+      // Announce the backend assignee change so the Inbox's effective-owner read re-syncs (#1).
+      bumpTickets()
       toast(
         assignee ? `Assigned ${t.card.sample_id} to ${assignee}` : `Unassigned ${t.card.sample_id}`,
         'success',

@@ -1,7 +1,8 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { DEMO_ACCOUNTS } from '../auth'
 import { dueStatus } from '../inbox'
+import { onTicketsChanged } from '../ticketsBus'
 import type { Ticket } from '../types'
 import { useRole } from './RoleContext'
 
@@ -204,29 +205,46 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     }
   }, [comments, actorId])
 
+  // A monotonic token so overlapping refreshes apply in ISSUE order, not COMPLETION order. The bus
+  // (below) and resolveTicket's own await can fire refresh() concurrently; without this, a staler
+  // fetch resolving last would clobber `tickets` with old data and re-open the very drift this closes
+  // until the next bump/mount. Each call captures its token before awaiting and only commits if it's
+  // still the latest — the most-recently-issued refresh (which read the freshest backend) wins.
+  const refreshSeq = useRef(0)
+
   // Pull the actionable tickets (open + in review) — these ARE the notifications. Resolved tickets
   // drop off the feed. A failed fetch degrades to an empty derived feed; self items still work.
   const refresh = useCallback(async () => {
+    const seq = ++refreshSeq.current
     setError(null)
     try {
       const [open, inReview] = await Promise.all([
         api.listTickets({ status: 'open' }),
         api.listTickets({ status: 'in_review' }),
       ])
+      if (seq !== refreshSeq.current) return // a newer refresh superseded this one — drop the stale result
       // Store the full Ticket objects (not a narrowed projection) so downstream reads like
       // t.assignee (the effective-owner logic below) keep every field the Ticket carries.
       setTickets([...open, ...inReview])
     } catch (e) {
+      if (seq !== refreshSeq.current) return
       setError(String(e))
       setTickets([])
     } finally {
-      setLoading(false)
+      if (seq === refreshSeq.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  // UX-DUP (Review + Inbox #1): re-read the ticket feed whenever another surface — the Review queue —
+  // writes a status change to the backend, so a queue-side resolve/escalate/assign stops leaving this
+  // ALWAYS-MOUNTED context (and the bell + inbox screen that read it) stale until a manual refresh.
+  // Pure invalidation: the backend is the one source of truth; we just re-fetch it. `refresh` is
+  // stable (useCallback []), so this subscribes once; the returned fn unsubscribes on unmount.
+  useEffect(() => onTicketsChanged(() => void refresh()), [refresh])
 
   // Merge base (ticket or self) with its overlay into a render-ready item. Derived defaults:
   // unread, unflagged, priority from the ticket, in the inbox column. Self items start read
