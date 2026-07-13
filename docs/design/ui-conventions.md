@@ -23,7 +23,7 @@ in-browser across every touched screen.
 
 **UIC-16 closed (2026-07-11, commit `12a9913`).** The deferred larger-card + four-side-typed-port
 rework shipped: `frontend/src/components/BuilderShared.tsx` gained one geometry source of truth
-(`portSide()`/`layoutPorts()`/`cardHeight()`, `NODE_W = 232`) that both `BuilderCanvas.tsx`'s
+(`portSide()`/`layoutPorts()`/`cardHeight()`, `NODE_W = 320`) that both `BuilderCanvas.tsx`'s
 render and its wire-endpoint math call, so a wire can never detach from its port. Only item 4 of
 [builder-cards/README.md §5](builder-cards/README.md#5-open--todo--spec-vs-shipped-updated-2026-07-11)
 (registering a handful of still-unregistered reserved kinds) remains open — see that doc for the
@@ -146,7 +146,7 @@ The page-access catalog ([access.ts](../../frontend/src/access.ts)) must include
 page so an admin can grant/deny each one per user (G1). `admin` stays governed by `isAdmin` (never
 page-gated); the `ACCESS_FLOOR` (Runs + Decisions) is un-removable. Page access is a **view
 gate, not authorization** — the API still checks wire role; keep that banner. **Shipped**:
-`access.ts`'s `PageId` catalog now covers every operator page (12, `admin` intentionally excluded).
+`access.ts`'s `PageId` catalog now covers every operator page (13, `admin` intentionally excluded).
 
 ### UIC-7 — Themes: multiple light + dark complements · ✅
 Beyond a single light/dark, offer **3 light + 3 dark** theme complements (a palette picker in user
@@ -274,7 +274,7 @@ with a `>` expander to all available; **larger** cards with typed half-circle po
 sides**; edges are typed data-flow between ports; per-tool port maps grounded in each tool's real
 I/O; Databricks-inspired aesthetic. **Shipped**: the alignment dot grid spans the full canvas at
 every zoom level; the palette shows the current pipeline's tools with a "≫ ALL" expander; and
-(2026-07-11, commit `12a9913`) cards grew to `NODE_W = 232` with typed half-circle ports on all
+(2026-07-11, commit `12a9913`) cards grew to `NODE_W = 320` with typed half-circle ports on all
 four sides, driven by one geometry source of truth (`BuilderShared.portSide()`/`layoutPorts()`)
 shared by render and wire math. **Reserved-port sweep closed (2026-07-12, commit `1621e3f`):**
 every *shown* Builder port now maps to a REAL Nextflow channel or was removed — no superficial

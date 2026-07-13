@@ -63,7 +63,6 @@ doc owns one question.
 | `docs/data/licensing.md` | per-tool licenses in the stack, for transparency |
 | `docs/quality/evaluation.md` | what "good" means, how outputs are checked, failure modes |
 | `docs/quality/risks.md` | technical / product / data / demo risks and mitigations |
-| `docs/demo/demo_plan.md` | the demo flow, expected I/O, and the fallback path |
 
 ## Style
 

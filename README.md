@@ -129,7 +129,11 @@ core (ADR-0002), AI off by default (ADR-0006), and Nextflow for compute portabil
 - [docs/TABLE_OF_CONTENTS.md](docs/TABLE_OF_CONTENTS.md) — the map of every doc
 - [docs/design/architecture.md](docs/design/architecture.md) — system shape & invariants
 - [docs/adr/](docs/adr/) — one architectural decision per file (the *why*)
-- [docs/demo/demo_plan.md](docs/demo/demo_plan.md) — the walkthrough
+
+Those three are the front door. Going deeper is optional: [docs/journal/](docs/journal/) (dated
+session logs) and [audit/](audit/) (point-in-time release-hardening reviews and gap analyses) are an
+**engineering archive** — evidence of how bayleaf was designed and hardened, kept for the curious,
+not required reading.
 
 ---
 

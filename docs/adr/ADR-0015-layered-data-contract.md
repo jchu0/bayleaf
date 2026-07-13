@@ -40,8 +40,8 @@ Adopt one typed record-layer contract with the shapes and invariants below. Each
 with the *why*, because the reasoning is the point.
 
 1. **One framework-agnostic contract.** Every shape is pydantic v2 in `models.py` (plus the
-   event shapes in `provenance.py`), with no Streamlit/FastAPI imports. *Why:* the same
-   records back the Streamlit MVP, the FastAPI read-API, the DB projection, and the JSONL
+   event shapes in `provenance.py`), with no FastAPI/React imports. *Why:* the same
+   records back the FastAPI read-API, the React UI, the DB projection, and the JSONL
    ledger — the contract is the seam, so a delivery layer is swappable
    ([ADR-0003](ADR-0003-deployment-agnostic-ports.md)) and the pydantic model is the single
    source of truth (schemas.md).

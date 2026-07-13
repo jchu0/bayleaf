@@ -280,8 +280,7 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    Monitoring's Median-review KPI (no backend field — its signature-level `first_seen`/
    `last_seen`/`trend`/`affected_run_ids` fields ARE shipped, REQ-F-047). (Provenance artifact
    links, once a similar honest gap, are now real — `RunArtifact.url` is populated, REQ-F-070.)
-   *Trace:* [demo_plan.md](../demo/demo_plan.md),
-   [architecture.md](../design/architecture.md),
+   *Trace:* [architecture.md](../design/architecture.md),
    [tasks T-022/T-022b/T-037/T-044/T-062/T-108/T-110](../planning/tasks.md),
    [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md),
    [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md).
@@ -297,9 +296,9 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    (`python -m api.feedback_agent`, stub/claude) categorizes the corpus structurally out-of-band.
    *Trace:* [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md),
    [ADR-0016](../adr/ADR-0016-postgres-port.md), [tasks T-042/T-043](../planning/tasks.md).
-5. **REQ-F-043 — Offline fallback view.** A Streamlit app renders the same core
-   offline, in one process, as the guaranteed-working demo fallback. *Trace:*
-   [demo_plan.md](../demo/demo_plan.md), ADR-0014.
+5. **REQ-F-043 — Offline-first full stack.** The React + FastAPI stack renders the same
+   core fully offline (stub-first agents, $0) as the guaranteed-working demo — no API key or
+   network required. *Trace:* ADR-0014.
 6. **REQ-F-045 — Pipeline Builder (compose ≠ execute).** An editable node-graph screen
    (the superset of the Provenance canvas) lets an operator configure the germline pipeline
    and **emit `run_layout.yaml`** across profiles. It **composes, never executes** (the
@@ -338,20 +337,16 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    (`frontend/src/components/RunSelector.tsx`, T-070 — an 8-row-capped combobox sharing the
    top-bar switcher idiom, real `RUN_STATUS_META` status dot per F17, self-fetching `api.runs()`
    lazily with an honest "Couldn't load runs" on failure). The "Pipeline-repair" / "Archivist"
-   modals — previously **static UI previews** labelled `phase-2` in-app — now call the live
-   advisory-agent endpoints (T-069, REQ-F-041): `PipelineRepairModal` → `GET /api/monitoring`
-   (a recurring-signature picker) + `GET /api/monitoring/signatures/{sig}/repair` → the real
-   `RepairProposal`, each corpus citation labelled with a **"heuristic" score, never
-   "confidence"** ("Send to review queue" navigates to `/queue`, never fabricates a ticket);
-   `ArchivistModal` → `GET /api/archive/index` → the real cross-run `ArchiveDigest` ("Queue
-   archive" stays inert — no write endpoint exists). The `RunHandoffModal` now shows the real
+   Builder modals are now **dead code**: as of 2026-07-13 both agents moved OUT of the Builder
+   to the System Agents chat page (REQ-F-101/REQ-F-042), which is now the live advisory-agent
+   surface for them — they no longer surface as Builder modals. The `RunHandoffModal` now shows the real
    composed `run_layout.yaml`, and a new toolbar **"Open"** action lists `GET /api/pipelines` and
    hydrates the canvas from a chosen saved graph (closing the earlier "saved-profiles has no
    backend seam" gap) — approved graphs open read-only, re-saving mints a new draft, and a
    foreign/topology-less envelope loads empty with a labelled toast rather than fabricated nodes.
-   **Only the "Author a tool node" modal remains a static `phase-2` preview** — see
-   [tasks T-046](../planning/tasks.md), a proposed-not-built design note, unaffected by this
-   batch. **Editable template fix (2026-07-09, commit `01ba673`,
+   **The "Author a tool node" modal is now wired to `GET /api/builder/node-proposal`**
+   (consistent with REQ-F-089; `frontend/src/screens/PipelineBuilder.tsx` imports + renders
+   `AuthorToolNodeModal`), no longer a static `phase-2` preview. **Editable template fix (2026-07-09, commit `01ba673`,
    [tasks T-075](../planning/tasks.md)):** "New → From template" previously re-showed the
    read-only seeded DAG, so the demo's own pipeline couldn't be modified in Edit;
    `germlineTemplate()` now instantiates the same fastp→…→MultiQC chain as real, editable
@@ -464,8 +459,7 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    §Swappable seams, [agents.md](../design/agents.md).
 2. **REQ-F-051 — Deterministic fallback on failure.** If an AI call is disabled,
    errors, or is refused by a safety classifier, the system degrades to the stub;
-   the deterministic verdict and findings still stand. *Trace:* ADR-0006,
-   [demo_plan.md](../demo/demo_plan.md) §Fallbacks.
+   the deterministic verdict and findings still stand. *Trace:* ADR-0006.
 
 ## Authoring lifecycle, RBAC & operator surfaces (ADR-0010/0014/0016/0017)
 
@@ -1001,7 +995,7 @@ had reserved or listed as *not-yet-built*.
     over the wire roles exactly like the existing `isAdmin` capability, and — the maintainer's
     explicit distinction — **NOT authorization**: `api/auth.py`'s `require_role` is verified
     unchanged in the diff and remains the sole server-side write check. `access.ts` — a closed
-    12-page `PageId` catalog (`admin` intentionally excluded so an admin can never be page-gated
+    13-page `PageId` catalog (`admin` intentionally excluded so an admin can never be page-gated
     out of governance), 6 read-only `ACCESS_PROFILES` (accessioning/wetlab/analysis/review/
     approval/governance), a per-user `UserGrant{profiles, overrides}`, and an `ACCESS_FLOOR` (Runs
     + Decision cards) re-asserted LAST in `effectivePages()` so no deny override can strand a user

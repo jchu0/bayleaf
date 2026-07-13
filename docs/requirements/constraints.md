@@ -25,9 +25,10 @@ traced to its source.
    core. Heavyweight process docs are skipped during the sprint. *Trace:*
    [DOCUMENTATION_HABITS.md](../DOCUMENTATION_HABITS.md) §Delivery posture,
    [scope-and-wishlist.md](scope-and-wishlist.md).
-3. **REQ-C-003 — Guaranteed-working fallback.** Because demo time is fixed and
-   unforgiving, an offline Streamlit path over the same core is maintained as the
-   always-green fallback. *Trace:* [demo_plan.md](../demo/demo_plan.md), ADR-0014.
+3. **REQ-C-003 — Guaranteed-working offline demo.** Because demo time is fixed and
+   unforgiving, the full React + FastAPI stack runs offline (stub-first agents, $0) over the
+   same core as the always-green demo path — no separate fallback app is maintained. *Trace:*
+   ADR-0014.
 
 ## Budget
 

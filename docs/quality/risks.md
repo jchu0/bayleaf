@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | all |
-| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-confirm-dialog-audit-gate.md](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal/2026-07-10-frontend-wave9.md](../journal/2026-07-10-frontend-wave9.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) |
+| **Related** | [evaluation.md](evaluation.md), [requirements/constraints.md](../requirements/constraints.md), [data/strategy.md](../data/strategy.md), [data/schemas.md](../data/schemas.md), [data/metric_registry.md](../data/metric_registry.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-confirm-dialog-audit-gate.md](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal/2026-07-10-frontend-wave9.md](../journal/2026-07-10-frontend-wave9.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) |
 
 ## Overview
 
@@ -178,7 +178,7 @@ citations and addressed findings stay deterministic even on the claude path (EVA
 of judges.
 
 **Mitigation.** Any error/refusal degrades to the stub — same structure, templated prose,
-$0 ([demo_plan.md](../demo/demo_plan.md) §Fallbacks, EVAL-021). The default demo never
+$0 (EVAL-021). The default demo never
 calls the API.
 
 **Owner / revisit trigger.** Rehearsal; API status on demo day.
@@ -196,9 +196,11 @@ calls the API.
 **Risk.** Node/Vite/port issues (we already hit an :8000 Docker clash → moved to :8010)
 break the React UI during setup.
 
-**Mitigation.** Layered fallback: React/API → offline **Streamlit** over the same core
-(one process, always green) → recorded walkthrough/screenshots
-([demo_plan.md](../demo/demo_plan.md) §Fallbacks; [nonfunctional.md](../requirements/nonfunctional.md)
+**Mitigation.** The dev port is now **pinned** (`strictPort` on :5173, `frontend/vite.config.ts`) so
+a port clash fails loudly at startup instead of silently drifting to :5174 — off the port the app's
+CORS allowlist and `/metrics` swap assume. The full stack runs **offline** (stub-first, $0, no live
+service to fail mid-demo). If the React UI still won't come up → recorded walkthrough/screenshots
+([nonfunctional.md](../requirements/nonfunctional.md)
 REQ-NF-042).
 
 **Owner / revisit trigger.** Dry run on the actual demo machine.
@@ -241,8 +243,7 @@ nothing ($0, offline). A live post is armed **only** by explicit `BAYLEAF_SLACK_
 `.env.example` documents them). The actionable-only policy means no all-clear spam; any missing
 cred, missing Slack SDK, or Slack error degrades to the stub. EVAL-041 pins that it never sends
 unless armed, and `notification.emitted` records the result and **no secret**
-([evaluation.md](evaluation.md) EVAL-040/041; [demo_plan.md](../demo/demo_plan.md) §"wow"
-moment 3). Demo content is synthetic/contrived, not PHI.
+([evaluation.md](evaluation.md) EVAL-040/041). Demo content is synthetic/contrived, not PHI.
 
 **Owner / revisit trigger.** Any session that sets `BAYLEAF_SLACK_LIVE`; demo rehearsal
 against the live workspace; any move toward real (PHI-bearing) data.

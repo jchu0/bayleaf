@@ -3,7 +3,7 @@
 # Stands up Prometheus + Grafana that scrape the locally-running bayleaf
 # read-API (`uv run uvicorn api.main:app --port 8010`) over its /metrics seam.
 #
-# DEMO SIZZLE ONLY — this is NOT on the offline Streamlit/API demo path and is not
+# DEMO SIZZLE ONLY — this is NOT on the offline API/UI demo path and is not
 # required to run bayleaf. Anonymous Grafana admin + a default password are for a
 # throwaway localhost demo; do not expose these ports publicly.
 #

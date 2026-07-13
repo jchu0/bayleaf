@@ -184,7 +184,7 @@ idea through the [`agents.md:66` intake checklist a–g](agents.md) first, then 
 | **Versioned four ways** | a proposal pins **tool version + corpus + schema + platform** | `version` + `corpus_version` + `schema_version` + `platform_version` ([`models.py:207,233-239`](../../src/bayleaf/node_author/models.py)); `platform_version` sourced from `pyproject.toml` via [`identifiers.PLATFORM_VERSION:47`](../../src/bayleaf/identifiers.py) |
 | **Reserved-vs-known = governed change** | widening the vocabulary is a human, reviewed registry change | reserved ports are surfaced-not-wired; no agent path mutates `ARTIFACT_KINDS` |
 | **Off by default ($0)** | stub-default + degrade-to-stub | [`agent.py:321,300,316`](../../src/bayleaf/node_author/agent.py) |
-| **Human review + approval** | inert until a human accepts *and* authors the `ProcessSpec` | `POST /api/builder/node-proposal/accept` requires `reviewer`/`approver` RBAC + re-derives + conformance-checks server-side (T-135, [`api/routers/node_author.py`](../../api/routers/node_author.py)) — but the **UI's own confirm-gated accept button doesn't exist yet** (deferred slice; see below), so today's "human review" is enforced by the endpoint's RBAC, not yet by an in-app confirmation step |
+| **Human review + approval** | inert until a human accepts *and* authors the `ProcessSpec` | `POST /api/builder/node-proposal/accept` requires `reviewer`/`approver` RBAC + re-derives + conformance-checks server-side (T-135, [`api/routers/node_author.py`](../../api/routers/node_author.py)); the **UI's own confirm-gated accept button is now built** (2026-07-13, [`BuilderModals.tsx`](../../frontend/src/components/BuilderModals.tsx) → `api.acceptNodeProposal`, viewer→403), so "human review" is enforced by both an in-app confirmation step and the endpoint's RBAC |
 
 ---
 
@@ -253,9 +253,11 @@ second hand-maintained constant.
    one node-authoring candidate on demand, not every advisory agent's output on every CI run.
 
 **Still deferred, labelled (not silently dropped):**
-1. **The Builder's own "Accept to library" UI action.** Both new endpoints (accept, list) have no
-   frontend caller yet — `grep -rn "node-proposal/accept\|builder/library" frontend/src` returns
-   nothing. The modal's primary action stays "Copy proposal."
+1. ~~The Builder's own "Accept to library" UI action.~~ **BUILT (2026-07-13).**
+   [`BuilderModals.tsx`](../../frontend/src/components/BuilderModals.tsx) calls
+   `api.acceptNodeProposal` (`POST /api/builder/node-proposal/accept`), confirm-gated +
+   reviewer/approver-gated (viewer→403); it persists a metadata-only draft `LibraryEntry` and does
+   **not** add a canvas node.
 2. **The `draft→approved` library-entry transition** — the store already carries `status`, so no
    migration is needed when this lands; it should ride the same confirm-gated, audited RBAC pattern
    `pipelines_lifecycle` uses, per item 1 above's honest correction.

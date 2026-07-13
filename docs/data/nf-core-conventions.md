@@ -138,7 +138,7 @@ fa_icon/help_text/hidden/errorMessage`. The one schema drives CLI validation, th
 launcher **form**, and `--help`.
 
 - **ADOPT:** model `RunbookProfile` on this shape — grouped, typed, self-documenting
-  thresholds → **auto-generated config forms** (Streamlit now, React later). Persist the
+  thresholds → **auto-generated config forms** (React). Persist the
   resolved profile like `params_<ts>.json`; every `DecisionCard` cites its exact version.
 - **DIVERGE:** JSON-Schema `minimum`/`maximum` is a hard boolean; the gate needs the
   **three-way HOLD/RERUN/PROCEED** (`gate`/`hard_fail`/`borderline_band`/`higher_is_better`).

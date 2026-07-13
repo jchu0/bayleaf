@@ -55,9 +55,9 @@ metrics:
 | `qc.duplication` | qc | duplication | fraction | lower_is_better | fastp *(as-built; Picard/MultiQC alt via aliases)* | fastp.json `duplication.rate` |
 | `qc.pct_mapped` | qc | alignment | fraction | higher_is_better | samtools | flagstat mapped |
 | `qc.on_target` | qc | enrichment | fraction | higher_is_better | picard_collecthsmetrics | `PCT_SELECTED_BASES` |
-| `qc.mean_target_coverage` | qc | coverage | x | higher_is_better | picard_collecthsmetrics | `MEAN_TARGET_COVERAGE` |
-| `qc.breadth_20x` | qc | coverage | fraction | higher_is_better | picard_collecthsmetrics / mosdepth | `PCT_TARGET_BASES_20X` / `20_x_pc` |
-| `qc.breadth_30x` | qc | coverage | fraction | higher_is_better | picard_collecthsmetrics | `PCT_TARGET_BASES_30X` |
+| `qc.mean_target_coverage` | qc | coverage | x | higher_is_better | mosdepth | mosdepth.summary.txt `total_region.mean` |
+| `qc.breadth_20x` | qc | coverage | fraction | higher_is_better | mosdepth | mosdepth.thresholds.bed.gz `ge_20x_bases/region_bases` |
+| `qc.breadth_30x` | qc | coverage | fraction | higher_is_better | mosdepth | mosdepth.thresholds.bed.gz `ge_30x_bases/region_bases` |
 | `qc.zero_cov_targets` † | qc | coverage | fraction | lower_is_better | picard_collecthsmetrics | `ZERO_CVG_TARGETS_PCT` |
 | `qc.fold_enrichment` † | qc | enrichment | ratio | target_band | picard_collecthsmetrics | `FOLD_ENRICHMENT` |
 | `qc.fold_80` † | qc | uniformity | ratio | lower_is_better | picard_collecthsmetrics | `FOLD_80_BASE_PENALTY` |
