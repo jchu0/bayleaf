@@ -32,6 +32,12 @@ QC_TRIAGE_AGENT = "qc_triage"
 # because triage is frequent, lower-stakes, and grounded by retrieval + findings.
 _DEFAULT_TRIAGE_MODEL = "claude-sonnet-5"
 
+# The free-text `ask` answer needs a larger budget than `triage_card`'s two short
+# fields: a grounded answer to an operator question on a flagged card runs long, and
+# the default 1024 truncated it mid-string — the resulting invalid JSON was then
+# silently swallowed to the stub on exactly the cards where a written answer matters.
+_ASK_MAX_TOKENS = 2048
+
 
 def _finding_query(findings: list[Finding]) -> str:
     """Flatten the findings into a free-text query for the retriever."""
@@ -305,8 +311,9 @@ class ClaudeTriageAgent:
                 output_config={"format": {"type": "json_schema", "schema": _ADVICE_SCHEMA}},
             )
             # Guard the refusal path before reading content (life-sciences work can
-            # trip safety classifiers; fall back rather than break the demo).
-            if response.stop_reason == "refusal":
+            # trip safety classifiers; fall back rather than break the demo). A
+            # max_tokens truncation likewise leaves unterminated JSON — degrade cleanly.
+            if response.stop_reason in ("refusal", "max_tokens"):
                 return self._fallback.triage_card(card)
 
             text = next((b.text for b in response.content if b.type == "text"), None)
@@ -357,12 +364,15 @@ class ClaudeTriageAgent:
             client = self._get_client()
             response = client.messages.create(
                 model=self.model,
-                max_tokens=self.max_tokens,
+                max_tokens=_ASK_MAX_TOKENS,
                 system=_ASK_SYSTEM,
                 messages=[{"role": "user", "content": user_content}],
                 output_config={"format": {"type": "json_schema", "schema": _ANSWER_SCHEMA}},
             )
-            if response.stop_reason == "refusal":
+            # A refusal or a truncated (max_tokens) response yields no usable JSON; degrade
+            # to the grounded stub cleanly rather than letting a half-written answer trip
+            # json.loads and read as an opaque API error.
+            if response.stop_reason in ("refusal", "max_tokens"):
                 return self._fallback.ask(card, question)
             text = next((b.text for b in response.content if b.type == "text"), None)
             if not text:
