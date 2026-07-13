@@ -16,6 +16,7 @@ import {
   Settings,
   Shield,
   SlidersVertical,
+  Sparkles,
   Star,
   UserCog,
   Waypoints,
@@ -98,9 +99,13 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
           label: 'Agent triage',
           to: run ? `/runs/${run}/agent` : '/',
           icon: Star,
-          active: pathname.includes('/agent'),
+          // Per-run triage only — exclude the run-independent /agents home (which also contains '/agent').
+          active: pathname.includes('/agent') && pathname !== '/agents',
           page: 'agent',
         },
+        // The org-wide system agents (pipeline-repair, archivist) act across runs — a run-independent
+        // entry so they're reachable without (and survive the 404 of) a specific run.
+        { label: 'System agents', to: '/agents', icon: Sparkles, active: pathname === '/agents', page: 'agent' },
         { label: 'Monitoring', to: '/monitoring', icon: Activity, active: pathname.startsWith('/monitoring'), page: 'monitoring' },
       ],
     },
