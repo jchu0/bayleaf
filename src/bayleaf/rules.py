@@ -224,6 +224,36 @@ def _to_display_unit(
 
 def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -> Finding | None:
     if mv is None:
+        # WAIVED by run policy: the operator DECLARED this metric's upstream data absent for the run
+        # (e.g. a FASTQ-start run with no sequencer/SAV feed). Emit a VISIBLE, auditable INFO note —
+        # NOT the required-metric NA HOLD, and NOT a silent drop. The QC class was not examined, by
+        # declared policy; that is not a gate pass. INFO + suggested PROCEED, so it never gates
+        # (aggregate_verdict takes the most severe suggested verdict). Waiver beats required: a
+        # declared-absent required metric (cluster_pf) notes instead of holding (ADR-0001 — rules
+        # decide; the operator supplied a policy input, the runbook, not a verdict override).
+        if threshold.waived:
+            return Finding(
+                rule_id=f"QC-{threshold.metric.upper()}-WAIVED",
+                sample_id=sid,
+                category=Category.QC,
+                severity=Severity.INFO,
+                title=f"{threshold.label} not examined — declared absent",
+                detail=(
+                    f"No {threshold.label} for {sid}: upstream data for this metric class was "
+                    "DECLARED ABSENT for this run (e.g. a FASTQ-start run with no sequencer/SAV "
+                    "feed). This QC was not examined, by run policy — it is not a gate pass."
+                ),
+                evidence=[
+                    Evidence(
+                        source="run policy",
+                        locator=f"waived:{threshold.our_key}",
+                        value="declared absent",
+                        source_kind=SourceKind.METRIC,
+                        source_field=threshold.metric,
+                    )
+                ],
+                suggested_verdict=Verdict.PROCEED,
+            )
         # Optional threshold + no observation → nothing to say (only a present-but-failing value
         # gates an optional metric). Keeps a lean run from being NA-flagged on richer checks.
         if not threshold.required:

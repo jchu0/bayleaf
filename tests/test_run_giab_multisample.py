@@ -250,3 +250,78 @@ def test_demux_pct_reads_is_per_sample_share(tmp_path: Path) -> None:
     rows = _rows((run_dir / "demux_stats.csv").read_text())[1:]
     pct = {r.split(",")[0]: r.split(",")[3] for r in rows}
     assert pct == {"A": "75.0", "B": "25.0"}
+
+
+# ------------------------------------------------------------------ 7. multi-sample LAUNCH side
+# The parse side (tests 1-6) was N-capable all along; these pin the newly-wired LAUNCH side — the
+# driver now writes a real N-row Nextflow samplesheet from a multi-sample RunConfig (the piece that
+# was env-gated because no non-HG002 reads were on disk). No Nextflow: subprocess.run is mocked, so
+# this asserts only the sheet the driver hands off, not a real run.
+
+
+def test_multisample_runconfig_writes_an_n_row_samplesheet(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import types
+
+    import scripts.run_giab_pipeline as drv
+
+    captured: dict[str, str] = {}
+
+    def _fake_run(cmd, **kw):  # type: ignore[no-untyped-def]
+        # The driver writes samplesheet.csv into the per-run scratch BEFORE launching Nextflow.
+        captured["sheet"] = (drv._NF_RUNS / "RUN-TRIO" / "samplesheet.csv").read_text()
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(drv.subprocess, "run", _fake_run)
+    monkeypatch.setattr(drv.shutil, "which", lambda x: "/usr/bin/true" if x == "nextflow" else None)
+
+    rows = tuple(
+        (s, tmp_path / f"{s}.R1.fq.gz", tmp_path / f"{s}.R2.fq.gz")
+        for s in ("HG002", "HG003", "HG004")
+    )
+    cfg = RunConfig(
+        run_id="RUN-TRIO", run_dir=tmp_path / "d", platform="P", run_date="2026-07-13",
+        submitted_by="t", samples=rows,
+    )  # fmt: skip
+    # run_nextflow SystemExits at the missing results dir (no real run) — after writing the sheet.
+    with pytest.raises(SystemExit):
+        drv.run_nextflow(cfg)
+
+    sheet = _rows(captured["sheet"])
+    assert sheet[0] == "sample,fastq_1,fastq_2"
+    assert [ln.split(",")[0] for ln in sheet[1:]] == [
+        "HG002",
+        "HG003",
+        "HG004",
+    ]  # one row per sample
+
+
+def test_registry_ids_are_the_ashkenazim_trio() -> None:
+    # The single source of truth intake imports — widening/narrowing it must be a deliberate edit.
+    import scripts.run_giab_pipeline as drv
+
+    assert frozenset({"HG002", "HG003", "HG004"}) == drv.GIAB_SAMPLE_IDS
+    assert set(drv._GIAB_SAMPLE_READS) == set(drv.GIAB_SAMPLE_IDS)  # reads map covers every id
+
+
+def test_single_sample_runconfig_still_writes_one_row(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # Absent a multi-sample set, the sheet is the single (sample, read1, read2) — the byte-identical
+    # Builder-run / pre-multi path is preserved.
+    import types
+
+    import scripts.run_giab_pipeline as drv
+
+    captured: dict[str, str] = {}
+    monkeypatch.setattr(
+        drv.subprocess, "run",
+        lambda cmd, **kw: captured.update(  # type: ignore[no-untyped-def]
+            sheet=(drv._NF_RUNS / "RUN-ONE" / "samplesheet.csv").read_text()
+        ) or types.SimpleNamespace(returncode=0),
+    )  # fmt: skip
+    monkeypatch.setattr(drv.shutil, "which", lambda x: "/usr/bin/true" if x == "nextflow" else None)
+    cfg = RunConfig(
+        run_id="RUN-ONE", run_dir=tmp_path / "d", platform="P", run_date="2026-07-13",
+        submitted_by="t", sample="HG002", read1=tmp_path / "a.fq.gz", read2=tmp_path / "b.fq.gz",
+    )  # fmt: skip
+    with pytest.raises(SystemExit):
+        drv.run_nextflow(cfg)
+    assert len(_rows(captured["sheet"])) == 2  # header + exactly one sample row

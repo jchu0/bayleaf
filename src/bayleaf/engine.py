@@ -76,6 +76,12 @@ def run_gate(
     verdict (ADR-0001).
     """
     runbook = runbook or DEFAULT_RUNBOOK
+    # Per-run POLICY: apply the operator's declared-absent upstream classes (e.g. a FASTQ-start run
+    # with no sequencer/SAV feed) to the runbook, so those thresholds emit an INFO "declared absent"
+    # note instead of the required-metric NA HOLD. A policy INPUT mapped onto the runbook, evaluated
+    # by the SAME deterministic rules — never a verdict override (ADR-0001). Empty set → unchanged.
+    if artifacts.waived_metric_sources:
+        runbook = runbook.waive_source_classes(artifacts.waived_metric_sources)
     synthesizer = synthesizer or get_synthesizer()
     ledger = ledger if ledger is not None else EventLedger()
 

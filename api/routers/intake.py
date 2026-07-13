@@ -10,9 +10,10 @@ external driver, which orchestrates the toolchain through Nextflow. The driver n
 a JRE + the bioconda tools on PATH; inject the env bin via ``BAYLEAF_BIOCONDA_BIN`` (a plain
 ``uv run uvicorn`` without it fails every submit).
 
-Demo scope: only ``HG002`` has real panel reads on disk, so the endpoint processes exactly the
-samples in a server-side fixture registry and reports the rest as honestly *skipped* (registered,
-not processed) — never fabricating a run for a sample with no reads.
+Demo scope: the samples with real panel reads on disk are the Ashkenazim trio (``HG002`` + ``HG003``
++ ``HG004`` — the driver's ``GIAB_SAMPLE_IDS`` registry), so the endpoint processes exactly those
+(a real multi-sample flowcell) and reports the rest as honestly *skipped* (registered, not
+processed) — never fabricating a run for a sample with no reads.
 
 Job state is DURABLE (``api/job_store.py``): a job survives a backend restart, so a poll after a
 restart recovers honestly (``complete`` if the run dir is on disk, else ``lost``) instead of hanging
@@ -33,6 +34,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
+from scripts.run_giab_pipeline import GIAB_SAMPLE_IDS
 
 from api.auth import Actor, require_role
 from api.authored_pipeline import (
@@ -58,9 +60,11 @@ _REPO = Path(__file__).resolve().parent.parent.parent
 _DATA = _REPO / "data"
 _NF_RUNS = _REPO / ".nf-runs"
 _SCRIPT = _REPO / "scripts" / "run_giab_pipeline.py"
-# The only sample with real panel reads on disk (see run_giab_pipeline.py). A real multi-sample
-# run would need the other GIAB reads fetched + a multi-sample pipeline — out of scope.
-_FIXTURE_SAMPLES = {"HG002"}
+# The GIAB samples with real panel reads on disk that intake can actually process — the single
+# source of truth is the driver's on-disk registry (``GIAB_SAMPLE_IDS`` = HG002 + HG003 + HG004, the
+# Ashkenazim trio). A submitted sample outside this set is honestly reported as *skipped*
+# (registered, not processed). Fetch a sample's panel reads (scripts/fetch_panel_fastq.sh) to widen.
+_FIXTURE_SAMPLES = set(GIAB_SAMPLE_IDS)
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 # The external input KINDS intake can actually supply: it always hands the driver the fixed HG002
@@ -107,6 +111,11 @@ class SubmitRunIn(BaseModel):
     assay: str = ""
     platform: str = "NovaSeq X"
     samples: list[SampleIn]
+    # Upstream declaration (the operator's scheduling-time choice). ``sequencer`` (default): full
+    # run, Illumina/SAV metrics expected (a missing cluster-PF HOLDs). ``fastq_only``: analysis
+    # starts from FASTQ with no instrument feed → the SAV metric class is DECLARED ABSENT, so the
+    # gate NOTES it ("declared absent") instead of HOLDing. A policy input, not a verdict override.
+    upstream: Literal["sequencer", "fastq_only"] = "sequencer"
     # Optional authored-pipeline name + pinned approved version (else latest approved).
     pipeline: str | None = None
     pipeline_version: int | None = None
@@ -226,11 +235,18 @@ def _run_pipeline(run_id: str) -> None:
     run_date = str(rec.get("run_date") or date.today().isoformat())
     submitted_by = str(rec.get("submitted_by") or "")
     pipeline_path = rec.get("pipeline_path")
+    processed = [str(s) for s in rec.get("processed", []) if s]
+    upstream = str(rec.get("upstream") or "sequencer")
     _mark(run_id, "running")
     cmd = [
         sys.executable, str(_SCRIPT), "--run-id", run_id, "--platform", platform,
-        "--run-date", run_date, "--submitted-by", submitted_by,
+        "--run-date", run_date, "--submitted-by", submitted_by, "--upstream", upstream,
     ]  # fmt: skip
+    # Hand the driver the exact processed set → it writes an N-row samplesheet (a real multi-sample
+    # flowcell) and fans out per sample. A single processed sample is byte-identical to the old
+    # single-sample run. Empty (never in normal flow — submit rejects no-processable) → default.
+    if processed:
+        cmd += ["--samples", ",".join(processed)]
     # Present → run the operator's approved authored pipeline; absent → the driver's committed
     # germline-panel reference default (backward-compatible). compose ≠ execute holds at the core.
     if pipeline_path:
@@ -348,6 +364,7 @@ def submit_run(
         "platform": body.platform,
         "run_date": date.today().isoformat(),
         "submitted_by": actor.id,
+        "upstream": body.upstream,
         "pipeline": body.pipeline,
         "pipeline_path": pipeline_path,
         "mode": body.mode,
