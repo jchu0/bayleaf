@@ -40,10 +40,7 @@ import type {
   TicketStatus,
   Verdict,
 } from '../types'
-import { GATE_DOT, GATE_LABEL, VERDICT_BADGE, VERDICT_DOT, VERDICT_LABEL } from '../verdict'
-
-// Most-urgent first, matching the gate's ordering.
-const VERDICT_ORDER: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
+import { GATE_DOT, GATE_LABEL, VERDICT_BADGE, VERDICT_DOT, VERDICT_LABEL, VERDICT_ORDER } from '../verdict'
 
 // Priority is derived from the verdict, not stored — escalations/reruns block a run, holds
 // are judgment calls. `bars` = filled count in the ascending signal glyph.

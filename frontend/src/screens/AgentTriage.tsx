@@ -9,7 +9,7 @@ import { Truncate } from '../components/Truncate'
 import { AgentComposer } from '../components/AgentComposer'
 import { AgentSubjectCard } from '../components/AgentSubjectCard'
 import { ArchivistModal, PipelineRepairModal } from '../components/BuilderModals'
-import { GATE_DOT, GATE_LABEL, VERDICT_DOT, VERDICT_LABEL } from '../verdict'
+import { GATE_DOT, GATE_LABEL, VERDICT_DOT, VERDICT_LABEL, governingGate } from '../verdict'
 import type { RunDetail, TriageNote } from '../types'
 
 const VERDICT_RANK: Record<string, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
@@ -165,7 +165,7 @@ export function AgentTriage() {
                 // The gate that drove this card's verdict (else the leading finding's gate) — the
                 // same governing-gate derivation CardHead uses. Rules decide the verdict; this only
                 // labels where it originated.
-                const gate = c.gate_results.find((g) => g.verdict === c.verdict)?.gate ?? c.findings[0]?.gate ?? null
+                const gate = governingGate(c)
                 return (
                   <button
                     key={c.sample_id}

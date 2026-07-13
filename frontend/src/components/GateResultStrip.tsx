@@ -1,14 +1,7 @@
 import type { Gate, GateResult, Verdict } from '../types'
-import { GATE_DOT, VERDICT_BADGE, VERDICT_LABEL } from '../verdict'
+import { GATE_DOT, GATE_TAG, VERDICT_BADGE, VERDICT_LABEL } from '../verdict'
 
 const GATES: Gate[] = ['preflight', 'qc', 'variant']
-
-// The design's gate tags (distinct from GATE_LABEL: qc/variant read as "… gate" here).
-const GATE_TAG: Record<Gate, string> = {
-  preflight: 'Preflight',
-  qc: 'QC gate',
-  variant: 'Variant gate',
-}
 
 // The full-bleed gate-results strip that opens every decision card's body (dc 678): per-gate
 // verdict chip + rationale across the three checkpoints. A gate with no result reads "Not run"

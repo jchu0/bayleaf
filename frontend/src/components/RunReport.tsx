@@ -11,6 +11,7 @@ import { Pager, type PerPage } from './Pager'
 import { Truncate } from './Truncate'
 import { Missing, formatScalar } from './Missing'
 import { fmtTime, readGateProvenance, readNum, readStr } from '../provenance'
+import { VERDICT_ORDER } from '../verdict'
 
 // The per-run "QC Decision & Provenance Report" (ADR-0018 §1.8 / D1, W3). A READ/SUMMARY surface
 // only — it renders what the run ALREADY produced and terminates the E2E in one signed-off-shaped
@@ -23,7 +24,6 @@ import { fmtTime, readGateProvenance, readNum, readStr } from '../provenance'
 // reads GET /api/runs/{id}/variants — every ClinVar significance quoted VERBATIM, no interpretation
 // agent, no verdict authored here.
 
-const ORDER: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
 
 // A route-to-human finding carries the ClinVar significance verbatim in a CLNSIG evidence row.
 function clnsigOf(f: Finding): Evidence | null {
@@ -66,7 +66,10 @@ export function RunReport({ detail }: { detail: RunDetail }) {
   }, [detail.run_id])
 
   const cards = useMemo(
-    () => [...detail.cards].sort((a, b) => ORDER[a.verdict] - ORDER[b.verdict] || a.sample_id.localeCompare(b.sample_id)),
+    () =>
+      [...detail.cards].sort(
+        (a, b) => VERDICT_ORDER[a.verdict] - VERDICT_ORDER[b.verdict] || a.sample_id.localeCompare(b.sample_id),
+      ),
     [detail],
   )
 

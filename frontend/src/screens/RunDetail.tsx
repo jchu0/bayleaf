@@ -28,7 +28,7 @@ import type {
   RunDetail as RunDetailData,
   Verdict,
 } from '../types'
-import { GATE_DOT } from '../verdict'
+import { GATE_DOT, GATE_TAG, VERDICT_ORDER, governingGate } from '../verdict'
 import { usePrefs } from '../context/PrefsContext'
 import { useAccess } from '../context/AccessContext'
 
@@ -40,10 +40,7 @@ type RunView = 'cards' | 'report'
 // renders rule-derived content — a missing hero is a signal, not a crash).
 type ReadoutState = Record<string, CardReadout | 'error'>
 
-const ORDER: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
 const FILTERS: CardFilter[] = ['all', 'attention', 'escalate', 'rerun', 'hold', 'proceed']
-// The design's origin tags — where a card's verdict originated (qc/variant read as "… gate").
-const GATE_TAG: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', variant: 'Variant gate' }
 // Pipeline order for the QC-readout gate groups, so an injected placeholder group sorts into place.
 // Pipeline order for building the full three-gate readout skeleton (hero shows all three).
 const GATE_SEQUENCE: Gate[] = ['preflight', 'qc', 'variant']
@@ -246,7 +243,7 @@ export function RunDetail() {
 
     const counts = detail.summary.counts
     const cards = [...detail.cards].sort(
-      (a, b) => ORDER[a.verdict] - ORDER[b.verdict] || a.sample_id.localeCompare(b.sample_id),
+      (a, b) => VERDICT_ORDER[a.verdict] - VERDICT_ORDER[b.verdict] || a.sample_id.localeCompare(b.sample_id),
     )
     const filtered = cards.filter((c) =>
       filter === 'all' ? true : filter === 'attention' ? c.verdict !== 'proceed' : c.verdict === filter,
@@ -387,7 +384,7 @@ export function RunDetail() {
 function originInfo(card: DecisionCard): { verb: string; tag: string; dot: string } {
   if (card.verdict === 'proceed') return { verb: 'Cleared at', tag: 'All gates', dot: 'bg-proceed' }
   const verb = card.verdict === 'rerun' ? 'Failed at' : 'Flagged at'
-  const gate = card.gate_results.find((g) => g.verdict === card.verdict)?.gate ?? card.findings[0]?.gate ?? null
+  const gate = governingGate(card)
   if (!gate) return { verb, tag: 'Operational', dot: 'bg-warn' }
   return { verb, tag: GATE_TAG[gate], dot: GATE_DOT[gate] }
 }
@@ -612,7 +609,7 @@ function CardBody({
   const agentTo = `/runs/${runId}/agent?sample=${encodeURIComponent(card.sample_id)}`
 
   // Feedback keys — the exact call the operator reacts to (verdict + gate + rule ids + hash).
-  const fbGate = card.gate_results.find((g) => g.verdict === card.verdict)?.gate ?? card.findings[0]?.gate ?? null
+  const fbGate = governingGate(card)
   const fbRuleIds = [...new Set(card.findings.map((f) => f.rule_id))]
 
   // Cancel CollapsibleRow's body padding so the gate strip + rail run edge-to-edge (each inner

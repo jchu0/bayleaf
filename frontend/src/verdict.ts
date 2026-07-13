@@ -1,4 +1,4 @@
-import type { Gate, RunStatus, Severity, Verdict } from './types'
+import type { DecisionCard, Gate, RunStatus, Severity, Verdict } from './types'
 
 // Real run-status → pill dot + display label. Driven off RunSummary.status, NEVER inferred from
 // n_attention (F17): a `running` run with 0 flagged samples is "Sequencing", not "Released".
@@ -66,6 +66,34 @@ export const GATE_LABEL: Record<Gate, string> = {
   preflight: 'Preflight',
   qc: 'QC',
   variant: 'Variant',
+}
+
+// Longer gate tag used where a bare "QC" would be ambiguous (a card's governing-gate line, the
+// lineage stage pill, the gate-result strip). ONE definition — was copy-pasted verbatim across
+// RunDetail, Lineage, and GateResultStrip (UX-DUP: GATE_TAG ×3).
+export const GATE_TAG: Record<Gate, string> = {
+  preflight: 'Preflight',
+  qc: 'QC gate',
+  variant: 'Variant gate',
+}
+
+// Verdict severity order, most-urgent first, for sorting cards/tickets. ONE definition — was
+// copy-pasted (as ORDER / VERDICT_ORDER / VERDICT_RANK) across RunDetail, RunReport, ReviewQueue,
+// and Lineage (UX-DUP: verdict ORDER ×4). Same numbers everywhere so two views can never sort the
+// same cards differently.
+export const VERDICT_ORDER: Record<Verdict, number> = {
+  escalate: 0,
+  rerun: 1,
+  hold: 2,
+  proceed: 3,
+}
+
+// The gate that GOVERNS a card's verdict: the gate whose own verdict equals the card's overall
+// verdict, else the first finding's gate, else null. ONE definition — the exact expression was
+// copy-pasted across RunDetail (×2) and AgentTriage (UX-DUP: governingGate ×3), so a change to gate
+// attribution now lands once instead of risking three screens showing a sample under different gates.
+export function governingGate(card: Pick<DecisionCard, 'gate_results' | 'findings' | 'verdict'>): Gate | null {
+  return card.gate_results.find((g) => g.verdict === card.verdict)?.gate ?? card.findings[0]?.gate ?? null
 }
 
 // Gate accent dots (preflight/qc blue, variant teal) per the handoff.

@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDownToLine, ArrowUpFromLine, ChevronRight, ExternalLink } from 'lucide-react'
 import type { Gate, PipelineStage, RunArtifact, RunDetail, Verdict } from '../../types'
-import { GATE_DOT, VERDICT_LABEL } from '../../verdict'
+import { GATE_DOT, GATE_TAG, VERDICT_LABEL, VERDICT_ORDER as VERDICT_RANK } from '../../verdict'
 import { artifactNameTitle, fmtSize } from '../../provenance'
 import { Fingerprint } from './Fingerprint'
 
@@ -48,7 +48,6 @@ const CONDITIONAL_STAGES = new Set<PipelineStage>(['align', 'variant', 'filter',
 
 type Status = 'ok' | 'warn' | 'blocked' | 'skipped' | 'partial'
 type Stage = StageDef
-const VERDICT_RANK: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
 
 // Nodes color by STAGE STATUS ONLY (§5.6). The number badge is the primary signal: a solid
 // status fill; the detail badge/pill use the tinted treatment (bg + solid border + solid text).
@@ -95,9 +94,6 @@ const STATUS_STYLE: Record<
     label: 'Decided on partial lineage',
   },
 }
-
-// Gate pill tags per the handoff (note the asymmetry — preflight has no "gate" suffix).
-const GATE_TAG: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', variant: 'Variant gate' }
 
 export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; artifacts: RunArtifact[] }) {
   const [selected, setSelected] = useState<PipelineStage | null>(null)
