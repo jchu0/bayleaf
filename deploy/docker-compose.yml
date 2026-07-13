@@ -1,0 +1,37 @@
+# The bayleaf app container: the FastAPI read-API + the built React SPA, served same-origin on
+# :8010 from a single image (deploy/Dockerfile.api). Offline + stub-first by default — no API key,
+# no external services; the default SQLite/JSONL sinks work with nothing else running.
+#
+#   docker compose -f deploy/docker-compose.yml up --build
+#   open http://localhost:8010
+#
+# This is a NEW, standalone app compose — it does not touch deploy/postgres/ or deploy/telemetry/.
+# To exercise the Postgres persistence port instead of SQLite, bring that stack up separately
+# (deploy/postgres/docker-compose.yml) and set BAYLEAF_REPOSITORY=postgres + DATABASE_URL in the
+# environment below; the default path here needs none of it.
+
+name: bayleaf-app
+
+services:
+  app:
+    build:
+      # Context is the repo root (one level up) so the Dockerfile can COPY src/, api/, frontend/.
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: bayleaf-app
+    ports:
+      - "8010:8010"
+    environment:
+      # Run-store root inside the container — points at the mounted data volume below, so run
+      # discovery reads the bind-mounted runs (bayleaf.settings.run_store_root / api reads it).
+      BAYLEAF_DATA_ROOT: /data
+      # Browser origins allowed to call the API. The SPA is served SAME-ORIGIN from :8010 (no CORS
+      # needed for that), so this default just covers a same-host cross-origin caller; override in
+      # your shell/.env for a real deployment's frontend origin(s), comma-separated.
+      BAYLEAF_CORS_ORIGINS: ${BAYLEAF_CORS_ORIGINS:-http://localhost:8010}
+    volumes:
+      # Bind-mount the repo's committed run data so the demo runs (data/mock_run_01, ...) appear
+      # without baking large/gitignored data into the image. Swap for a named volume or a real
+      # results/ path in production; the container reads it via BAYLEAF_DATA_ROOT above.
+      - ../data:/data
+    restart: unless-stopped

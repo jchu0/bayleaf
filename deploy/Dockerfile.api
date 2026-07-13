@@ -1,0 +1,62 @@
+# Multi-stage image for the bayleaf read-API + built React frontend, served same-origin from ONE
+# container (api.main:app on :8010; the compiled SPA mounted at "/"). Offline + stub-first by
+# default (agents OFF, SQLite/JSONL sinks) — this is the demo stack, not the Nextflow execution
+# driver (that needs a bioconda toolchain and is out of scope here; compose != execute).
+#
+# Build (context = repo root):
+#   docker build -f deploy/Dockerfile.api -t bayleaf-api .
+# Run:
+#   docker run --rm -p 8010:8010 -v "$PWD/data:/data" -e BAYLEAF_DATA_ROOT=/data bayleaf-api
+# or via deploy/docker-compose.yml.
+
+# ---- Stage 1: build the Vite SPA -> frontend/dist -------------------------------------------
+FROM node:22-bookworm-slim AS frontend
+WORKDIR /build/frontend
+
+# Manifests first so `npm ci` caches on an unchanged lockfile (reproducible: ci honors the lock).
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+# Then the source + build. `npm run build` = `tsc -b && vite build` -> ./dist.
+COPY frontend/ ./
+RUN npm run build
+
+# ---- Stage 2: Python runtime (read-API + the built SPA) -------------------------------------
+FROM python:3.14-slim-bookworm AS runtime
+
+# uv is the single dependency source (pyproject.toml + uv.lock). Copy a PINNED uv binary from its
+# official image rather than pip-installing it — deterministic and fast (no resolver run for uv).
+COPY --from=ghcr.io/astral-sh/uv:0.8.8 /uv /uvx /bin/
+
+# uv env: install into a project venv at /app/.venv, use the base image's Python (never download a
+# toolchain), copy-link (containers have no reflink), and precompile for faster cold start.
+ENV UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_PYTHON_DOWNLOADS=0 \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Dependency layer: resolve strictly from the committed lock (`--frozen` = no network re-resolve),
+# no dev toolchain, and only the `api` extra (fastapi + uvicorn). The heavier extras
+# (claude/slack/parquet/s3/postgres) are off-by-default seams; add e.g. `--extra parquet` here to
+# enable one. src/ is copied first because uv installs the `bayleaf` project itself (from src/).
+COPY pyproject.toml uv.lock README.md ./
+COPY src/ ./src/
+RUN uv sync --frozen --no-dev --extra api
+
+# App code + the built SPA. api/ is the top-level app package (not part of the wheel); uvicorn's
+# default --app-dir "." puts /app on sys.path so `api.main` imports. scripts/ ships too: the API
+# imports GIAB_SAMPLE_IDS / REQUIRED_OUTPUT_KINDS from scripts.run_giab_pipeline at module load, so
+# it must be importable for the app to boot (it does NOT execute Nextflow here). frontend/dist lands
+# where api/main.py's guarded StaticFiles mount looks for it (../frontend/dist), so "/" serves the UI.
+COPY api/ ./api/
+COPY scripts/ ./scripts/
+COPY --from=frontend /build/frontend/dist ./frontend/dist/
+
+EXPOSE 8010
+
+# Run the read-API; the SPA is served same-origin at "/" by the mount in api/main.py.
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8010"]
