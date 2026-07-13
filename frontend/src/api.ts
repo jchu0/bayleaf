@@ -21,6 +21,7 @@ import type {
   FeedbackIn,
   FileListing,
   IntakeStatus,
+  LibraryEntry,
   MetricCatalog,
   MonitoringMetrics,
   MonitoringWindow,
@@ -318,6 +319,12 @@ export const api = {
   // human — it never auto-adds a card or authors a runnable command.
   nodeProposal: (request: string) =>
     get<NodeProposal>(`/api/builder/node-proposal?${new URLSearchParams({ request }).toString()}`),
+  // Accept an advisory proposal into the tool-card library as a draft (reviewer/approver). The
+  // server RE-DERIVES the proposal from the request (never trusts a client proposal) + runs the
+  // conformance guard; the stored entry is metadata only — a human still authors the ProcessSpec.
+  acceptNodeProposal: (request: string) =>
+    write<LibraryEntry>('/api/builder/node-proposal/accept', 'POST', { request }),
+  builderLibrary: () => get<LibraryEntry[]>('/api/builder/library'),
 
   // ── System-agents chat (design/system-agents-chat.md) ──
   // Advisory chat with a system agent; history is structured + retained (archive/delete are

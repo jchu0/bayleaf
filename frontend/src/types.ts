@@ -787,6 +787,22 @@ export type NodeProposal = {
   mode: 'stub' | 'claude'
 }
 
+// An accepted tool-card LIBRARY ENTRY (POST /api/builder/node-proposal/accept → GET
+// /api/builder/library). A NodeProposal accepted as a draft: METADATA only (ports/version/locators
+// via the embedded proposal), never a runnable script:/stub: body — a human authors the ProcessSpec
+// before anything compiles (compose ≠ execute). advisory-safe: no verdict/confidence anywhere.
+export type LibraryStatus = 'draft' | 'approved' | 'retired'
+export type LibraryEntry = {
+  id: string
+  tool: string
+  version?: string | null
+  status: LibraryStatus
+  submitted_by: string
+  created_at: string
+  updated_at: string
+  proposal: NodeProposal
+}
+
 // System-agents chat (design/system-agents-chat.md). A run-independent conversation with a system
 // agent (pipeline-repair / archivist). Advisory only — no verdict/confidence field. History is
 // structured for ML; archive/delete are view-scoped soft-deletes (status flips, record retained).

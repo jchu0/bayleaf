@@ -33,6 +33,8 @@ import {
 } from './BuilderShared'
 import { FALLBACK_SUMMARY } from './ReviewRepairCard'
 import { useToast } from './Toast'
+import { useConfirm } from './ConfirmDialog'
+import { useRole } from '../context/RoleContext'
 import type {
   AgentProposal,
   ArchiveDigest,
@@ -98,11 +100,15 @@ const NODE_SEED_REQUEST = 'add a tool that trims adapters and does read QC'
 
 export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
   const { toast } = useToast()
+  const confirm = useConfirm()
+  const { isReviewer } = useRole() // reviewer/approver may accept into the library; server re-checks
   const [draft, setDraft] = useState(NODE_SEED_REQUEST) // the text box (editable)
   const [request, setRequest] = useState(NODE_SEED_REQUEST) // the submitted request we fetch for
   const [proposal, setProposal] = useState<NodeProposal | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false) // true → honest "agent unavailable"
+  const [accepting, setAccepting] = useState(false)
+  const [accepted, setAccepted] = useState<string | null>(null) // library entry id once accepted
 
   // Fetch the advisory proposal whenever the SUBMITTED request changes (Propose / Enter). On any
   // failure we show an honest "agent unavailable" — the gate, the runs, and the canvas are unaffected.
@@ -111,6 +117,7 @@ export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
     setLoading(true)
     setError(false)
     setProposal(null)
+    setAccepted(null) // a fresh request is not yet accepted
     api
       .nodeProposal(request)
       .then((p) => {
@@ -135,7 +142,29 @@ export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
   const copyProposal = () => {
     if (!proposal) return
     navigator.clipboard?.writeText(JSON.stringify(proposal, null, 2)).catch(() => {})
-    toast('Copied the proposal JSON. Adding it to the palette is a confirm-gated next slice — the agent never auto-adds.', 'info')
+    toast('Copied the proposal JSON.', 'info')
+  }
+  // Accept the proposal into the tool-card library as a DRAFT (reviewer/approver). The server
+  // re-derives the proposal from the request (never trusts client metadata) + runs the conformance
+  // guard, then persists a metadata-only draft — a human still authors the runnable ProcessSpec.
+  const acceptToLibrary = async () => {
+    if (!proposal?.matched || accepting) return
+    const ok = await confirm({
+      title: `Accept ${proposal.tool} into the tool-card library?`,
+      body: 'Saves this proposal as a DRAFT library entry (metadata only — typed ports, pinned version, citations). It never adds a node to the canvas, wires an edge, or authors a runnable command; a human still writes the ProcessSpec before it can compile. Recorded in the audit log.',
+      confirmLabel: 'Accept as draft',
+    })
+    if (!ok) return
+    setAccepting(true)
+    try {
+      const entry = await api.acceptNodeProposal(request)
+      setAccepted(entry.id)
+      toast(`Accepted ${entry.tool} as a draft library entry (${entry.status}).`, 'success')
+    } catch (e) {
+      toast(`Accept failed — ${(e as Error).message}`, 'error')
+    } finally {
+      setAccepting(false)
+    }
   }
 
   const liveChip = 'inline-flex items-center gap-1 rounded-md border border-proceed-bd bg-proceed-bg px-2 py-0.5 font-mono text-[10.5px] text-proceed-fg'
@@ -190,7 +219,7 @@ export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
           </button>
         </form>
         <div className="mt-1.5 text-[10px] text-text-3">
-          Retrieves a match from an 11-card curated corpus (this pipeline's tools + reference nodes). Stub-first ($0); flip to Claude to rephrase the prose only.
+          Retrieves a match from a curated tool-card corpus (this pipeline's tools + reference nodes). Stub-first ($0); flip to Claude to rephrase the prose only.
         </div>
 
         <div className="mt-3.5">
@@ -295,7 +324,7 @@ export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
 
       <div className="flex items-center gap-2.5 border-t border-line px-4 py-3">
         <span className="flex-1 text-[10.5px] leading-snug text-text-3">
-          Advisory · stub-first ($0). The agent proposes a card — it never draws an edge, places a node on the gate, or auto-adds.
+          Advisory · stub-first ($0). Accepting saves a metadata-only DRAFT — it never draws an edge, places a node on the gate, or authors a runnable command.
         </span>
         <button onClick={onClose} className="rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] text-text-2 hover:border-line-strong">
           Discard
@@ -303,10 +332,24 @@ export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
         <button
           onClick={copyProposal}
           disabled={!proposal || !proposal.matched}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow-card hover:opacity-90 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-text-2 hover:border-line-strong disabled:opacity-50"
         >
-          <Copy size={14} /> Copy proposal
+          <Copy size={14} /> Copy
         </button>
+        {accepted ? (
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-proceed-bd bg-proceed-bg px-3.5 py-1.5 text-[12.5px] font-semibold text-proceed-fg">
+            <Check size={14} /> Accepted as draft
+          </span>
+        ) : (
+          <button
+            onClick={acceptToLibrary}
+            disabled={!proposal || !proposal.matched || accepting || !isReviewer}
+            title={isReviewer ? undefined : 'Accepting into the library requires the reviewer or approver role'}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow-card hover:opacity-90 disabled:opacity-50"
+          >
+            {accepting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Accept to library
+          </button>
+        )}
       </div>
     </ModalShell>
   )
