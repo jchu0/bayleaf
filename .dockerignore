@@ -1,0 +1,84 @@
+# Build-context excludes for deploy/Dockerfile.api (context = repo root).
+#
+# Keep the context small + deterministic: the image only needs pyproject.toml, uv.lock, README.md,
+# src/, api/, and the frontend/ SOURCE. Everything below is recreated in-image (`uv sync`,
+# `npm ci`, `vite build`), mounted at runtime (BAYLEAF_DATA_ROOT), or irrelevant to the image.
+# NOTE: do NOT blanket-exclude *.jsonl — the shipped agent knowledge corpora live at
+# src/bayleaf/**/knowledge/*.jsonl; the local off-gate SINKS are root-anchored (leading `/`) below.
+
+# Python virtualenvs + build/install artifacts (recreated by `uv sync`)
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+build/
+dist/
+__pycache__/
+*.py[cod]
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Node (recreated by `npm ci`; the built dist is produced by Dockerfile stage 1)
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.next/
+
+# Run data — large / gitignored, and mounted at runtime via BAYLEAF_DATA_ROOT (never baked in)
+data/
+
+# Local off-gate sinks — root-level product state (ids, telemetry); never belong in an image.
+# Root-anchored so they can't match the src/**/knowledge/*.jsonl corpora the wheel must ship.
+/run.events.jsonl
+/feedback.events.jsonl
+/pipeline_graphs.jsonl
+/review_tickets.jsonl*
+/settings_overrides.jsonl*
+/chat_sessions.jsonl*
+/agent_bindings.jsonl
+/agent_output_cache.jsonl
+/library_entries.jsonl
+/share.events.jsonl
+*.sqlite
+
+# Nextflow execution artifacts (compose != execute — this image serves the read-API + UI)
+.nf-runs/
+.nextflow/
+.nextflow.log*
+work/
+
+# VCS + CI + agent scratch
+.git/
+.gitignore
+.github/
+.claude/
+
+# Not needed to build or run the read-API image (docs/tests/audit/other composes/execution driver).
+# NOTE: scripts/ is deliberately NOT excluded — api/authored_pipeline.py + api/routers/intake.py
+# import GIAB_SAMPLE_IDS / REQUIRED_OUTPUT_KINDS from scripts.run_giab_pipeline at MODULE load, so
+# the API can't boot without it (the Dockerfile copies scripts/ into the image). pipelines/ IS
+# excluded: it's only path-referenced lazily at Nextflow-execution time, which this image doesn't do.
+docs/
+tests/
+audit/
+deploy/
+pipelines/
+
+# Secrets / env (never copy into the build context)
+.env
+.env.*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/
+*.swp

@@ -21,6 +21,7 @@ import csv
 import hashlib
 import io
 import json
+import os
 import uuid
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
@@ -32,6 +33,7 @@ from typing import Any, Literal
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from bayleaf import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate
@@ -47,6 +49,7 @@ from bayleaf.pipeline_repair import (
 from bayleaf.pipeline_repair.models import PIPELINE_REPAIR_CORPUS_VERSION
 from bayleaf.provenance import EntityRef, EventType, ProvenanceEvent
 from bayleaf.runbook import FlagForReviewPolicy, Runbook
+from bayleaf.settings import run_store_root
 from bayleaf.triage import AgentReply, TriageNote, ask_agent
 
 from .agent_output_cache import cache_through
@@ -80,16 +83,39 @@ from .safe_harbor import HIPAA_SAFE_HARBOR_CLASSES, SAFE_HARBOR_POLICY_ID, redac
 from .share_store import get_share_store
 from .triage_cache import get_or_create_triage
 
-DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
+# Run-store root: resolved from BAYLEAF_DATA_ROOT (else the repo's committed data/) via the ONE
+# shared resolver the core + card-readout already use (bayleaf.settings / api/card_readout), so a
+# container can repoint run discovery without a parallel env knob. Unset -> the same repo data/ this
+# used to hardcode, so dev/tests are byte-identical; a container sets the env before this imports.
+DATA_ROOT = run_store_root()
 
 app = FastAPI(title="bayleaf API", version="0.1.0")
 
+# The React dev server (Vite) runs on 5173; these are the default allowlist when the env is unset.
+_DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def _cors_origins() -> list[str]:
+    """The browser origins allowed to call the API — from BAYLEAF_CORS_ORIGINS (comma-separated).
+
+    Unset (dev/tests) -> the two pinned Vite dev hosts, so nothing changes offline. A container
+    deployment sets the env to its real frontend origin(s); an empty/blank entry is dropped so a
+    trailing comma can't smuggle in an allow-all. This only widens the ORIGIN list — the verbs stay
+    GET/POST (never widened here), the production tightening knob the original allowlist reserved.
+    """
+    raw = os.environ.get("BAYLEAF_CORS_ORIGINS", "").strip()
+    if not raw:
+        return list(_DEFAULT_CORS_ORIGINS)
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
 # The React dev server (Vite) runs on 5173; allow it in dev. GET for the read-API + exactly
-# one write verb (POST) for the off-gate feedback telemetry — no PUT/DELETE/PATCH. Origins
-# stay pinned to the two dev hosts (not "*"); tightening them is the production-seam knob.
+# one write verb (POST) for the off-gate feedback telemetry — no PUT/DELETE/PATCH. Origins default
+# to the two dev hosts (not "*") and are overridable via BAYLEAF_CORS_ORIGINS for a real deployment;
+# tightening/retargeting them is the production-seam knob, and the verbs stay GET/POST.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_cors_origins(),
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
     # The run-list keeps its JSON body a plain list (backward-compat) and carries pagination
@@ -1701,3 +1727,17 @@ def metrics() -> PlainTextResponse:
     Emits the Prometheus canonical content type `text/plain; version=0.0.4`.
     """
     return PlainTextResponse(_render_prometheus(), media_type="text/plain; version=0.0.4")
+
+
+# --- Built-frontend static mount (container-only; a no-op in dev/tests) -----------------------
+# Serve the compiled Vite SPA (frontend/dist) at "/" so ONE container image serves both the API
+# and the UI same-origin. GUARDED: only mounts when the build output actually exists — present in
+# the container image (stage 1 of deploy/Dockerfile.api copies it here), ABSENT in dev/tests where
+# the frontend is served by the Vite dev server, so nothing about the offline API changes.
+# Registered LAST, after every @app route + included router, so Starlette matches the more-specific
+# /api and /metrics routes first — a catch-all "/" mount can never shadow them (verified: /api/*,
+# /metrics, /docs, /openapi.json are all registered above this point). html=True serves index.html
+# for "/" and lets the SPA client-router own unknown non-/api paths (deep-link refresh).
+_FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=_FRONTEND_DIST, html=True), name="frontend")
