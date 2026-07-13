@@ -10,6 +10,9 @@ import type {
   AgentProposal,
   ArchiveDigest,
   CardReadout,
+  ChatSendBody,
+  ChatSendResponse,
+  ChatSession,
   CompiledNextflow,
   DecisionCard,
   DiffResult,
@@ -41,6 +44,7 @@ import type {
   ShareBundle,
   SubmitRunAck,
   SubmitRunIn,
+  SystemAgentInfo,
   ThresholdOverride,
   ThresholdOverrideAck,
   ThresholdOverrideIn,
@@ -314,6 +318,19 @@ export const api = {
   // human — it never auto-adds a card or authors a runnable command.
   nodeProposal: (request: string) =>
     get<NodeProposal>(`/api/builder/node-proposal?${new URLSearchParams({ request }).toString()}`),
+
+  // ── System-agents chat (design/system-agents-chat.md) ──
+  // Advisory chat with a system agent; history is structured + retained (archive/delete are
+  // view-scoped soft-deletes). Off-gate — a chat never re-enters the deterministic gate.
+  systemAgents: () => get<SystemAgentInfo[]>('/api/agents'),
+  chatSend: (agent: string, body: ChatSendBody) =>
+    write<ChatSendResponse>(`/api/agents/${enc(agent)}/chat`, 'POST', body),
+  chatList: (includeArchived = false) =>
+    get<ChatSession[]>(`/api/agents/chats${includeArchived ? '?include_archived=true' : ''}`),
+  chatGet: (id: string) => get<ChatSession>(`/api/agents/chats/${enc(id)}`),
+  chatArchive: (id: string) => write<ChatSession>(`/api/agents/chats/${enc(id)}/archive`, 'POST'),
+  chatRestore: (id: string) => write<ChatSession>(`/api/agents/chats/${enc(id)}/restore`, 'POST'),
+  chatDelete: (id: string) => write<ChatSession>(`/api/agents/chats/${enc(id)}`, 'DELETE'),
 
   // ── sandboxed server-side file browser (off-gate, read-only) ──
   // Lists one level under an allowlisted root (default 'data') for the Builder's "Browse…" data
