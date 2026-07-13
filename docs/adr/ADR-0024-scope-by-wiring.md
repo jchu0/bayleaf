@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed |
+| **Status** | Accepted — enforcement shipped (P2, 2026-07-13): `api/agent_binding_store.py` (run→bindings), capture at Builder-Run launch, `agent`-scoped enforcement on `GET .../observations`, Settings profile-bar removed. **Deferred:** intake-authored-run capture (only Builder-Run captures today) + the agent-consumption path that passes `agent` automatically. |
 | **Date** | 2026-07-13 (MST) |
 | **Deciders** | maintainer (James), Claude |
 | **Related** | [ADR-0022](ADR-0022-agent-observation-binding.md) (observation binding — this advances it), [ADR-0023](ADR-0023-agent-taxonomy-and-action-boundary.md), [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0020](ADR-0020-operator-authored-custom-processes.md) (sandboxed `GET /api/files`), [ADR-0005](ADR-0005-config-layer-and-profiles.md) (profiles), [design/agents.md](../design/agents.md) |
