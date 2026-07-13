@@ -23,6 +23,7 @@ from bayleaf.nextflow import (
     NfNode,
     compile_graph,
     germline_graph,
+    required_inputs,
 )
 
 _REPO = Path(__file__).resolve().parent.parent
@@ -33,9 +34,11 @@ _REFERENCE = _REPO / "pipelines" / "germline"
 def test_germline_bundle_has_the_expected_files() -> None:
     files = compile_graph(germline_graph()).files
     assert "main.nf" in files and "nextflow.config" in files and "README.md" in files
-    # one module per distinct tool (7 in the germline chain)
+    # one module per distinct tool (8 in the germline chain: the 7 core tools + the dormant
+    # verifybamid2 contamination stage added in T-071a).
     modules = [k for k in files if k.startswith("modules/")]
-    assert len(modules) == 7
+    assert len(modules) == 8
+    assert "modules/verifybamid2.nf" in files
 
 
 def test_germline_channel_wiring_matches_the_typed_ports() -> None:
@@ -134,6 +137,77 @@ def test_full_port_graph_wires_the_new_qc_streams() -> None:
     main = files["main.nf"]
     assert "SAMTOOLS_MARKDUP.out.samtools_stats.map { it[1] }.collect()" in main
     assert "MOSDEPTH.out.mosdepth_thresholds.map { it[1] }.collect()" in main
+
+
+# ── T-071a: optional external input (verifybamid2 contamination, dormant by default) ─
+def test_germline_includes_a_dormant_verifybamid2_contamination_stage() -> None:
+    """T-071a: the germline chain now carries verifybamid2 (contamination / FREEMIX). It is wired
+    from the dedup BAM + the shared reference + an OPTIONAL svd_panel input, and its `.selfSM`
+    output is what the ingest adapter parses into `contamination.freemix`. The stage exists but is
+    DORMANT unless an operator arms `params.verifybamid_svd` (see the optional-channel test)."""
+    files = compile_graph(germline_graph()).files
+    module = files["modules/verifybamid2.nf"]
+    assert "process VERIFYBAMID2" in module
+    # the GENUINE verifyBamID2 command + stub reused from the standalone module (not fabricated)
+    assert "verifyBamID2 \\" in module and "--SVDPrefix ${svd_prefix}" in module
+    assert 'path("*.selfSM"), emit: selfsm' in module
+    assert "stub:" in module and "${meta.id}.verifybamid2.selfSM" in module
+    # the svd_panel port is a SHARED, meta-free value channel (not a per-sample `[meta, …]` tuple)
+    assert "path svd_prefix" in module
+    # wired in main.nf from the dedup BAM + reference + the optional svd channel
+    main = files["main.nf"]
+    assert "VERIFYBAMID2(SAMTOOLS_MARKDUP.out.bam, ch_reference, ch_verifybamid_svd)" in main
+    assert "include { VERIFYBAMID2 } from './modules/verifybamid2.nf'" in main
+
+
+def test_optional_input_compiles_to_a_param_gated_channel_and_stays_off_required_inputs() -> None:
+    """The optional-input mechanism (T-071a): an OPTIONAL external input compiles to a param-gated
+    channel that is EMPTY when the param is unset — `params.x ? Channel.fromPath(params.x) :
+    Channel.empty()` — so its process runs ZERO tasks (dormant) with no operator input. The optional
+    kind is deliberately kept OUT of `required_inputs` (a runner must not demand it) and labelled in
+    the emitted config."""
+    files = compile_graph(germline_graph()).files
+    main, cfg = files["main.nf"], files["nextflow.config"]
+    # the exact param-gated source channel: armed → a file channel, unset → an EMPTY channel
+    assert (
+        "ch_verifybamid_svd = params.verifybamid_svd ? "
+        "Channel.fromPath(params.verifybamid_svd) : Channel.empty()"
+    ) in main
+    # the optional param is a labelled operator input in the config, defaulted null (dormant)
+    assert "verifybamid_svd = null" in cfg
+    assert "dormant" in cfg  # the labelling comment is present
+    # the demo default supplies NO svd, so the optional kind must NOT be a required input
+    reqs = required_inputs(germline_graph())
+    assert reqs == {"fastq", "reference_fasta", "panel_bed"}
+    assert "svd_panel" not in reqs
+    assert "verifybamid_svd" not in reqs
+
+
+def test_optional_input_is_dormant_on_a_minimal_graph() -> None:
+    """A minimal two-node graph exercising the optional input in isolation: markdup → verifybamid2.
+    The optional svd input compiles to the empty-unless-armed channel, and svd stays off
+    `required_inputs` (only the BAM's own external kinds are required)."""
+    g = NfGraph(
+        name="contam-only",
+        nodes=[
+            NfNode("n_markdup", "samtools markdup", ins=["bam"], outs=["bam"]),
+            NfNode(
+                "n_vbid",
+                "verifybamid2",
+                ins=["bam", "reference_fasta", "svd_panel"],
+                outs=["selfsm"],
+            ),
+        ],
+        edges=[NfEdge("n_markdup", 0, "n_vbid", 0)],
+    )
+    main = compile_graph(g).main_nf
+    assert (
+        "ch_verifybamid_svd = params.verifybamid_svd ? "
+        "Channel.fromPath(params.verifybamid_svd) : Channel.empty()"
+    ) in main
+    assert "VERIFYBAMID2(SAMTOOLS_MARKDUP.out.bam, ch_reference, ch_verifybamid_svd)" in main
+    # bam is fed internally; only the reference is an external required input — svd is optional.
+    assert required_inputs(g) == {"bam", "reference_fasta"}
 
 
 def test_five_output_mosdepth_node_compiles_and_emits_all_channels() -> None:

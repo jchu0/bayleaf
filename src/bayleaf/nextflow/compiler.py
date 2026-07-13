@@ -19,7 +19,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .catalog import INDEXED_REFERENCE_PARAMS, REFERENCE_PARAM, ProcessSpec, catalog_entry
+from .catalog import (
+    INDEXED_REFERENCE_PARAMS,
+    OPTIONAL_INPUT_PARAMS,
+    REFERENCE_PARAM,
+    ProcessSpec,
+    catalog_entry,
+)
 
 
 class CompileError(ValueError):
@@ -132,7 +138,10 @@ def required_inputs(graph: NfGraph) -> set[str]:
     """The artifact-kinds a compiled pipeline needs as EXTERNAL inputs — every tool input port that
     is unwired or fed by a reference source node (i.e. becomes a ``params`` channel, not an upstream
     process output). A runner uses this to require exactly the operator inputs the graph consumes
-    (e.g. ``{"fastq", "reference_fasta", "panel_bed"}`` for the germline chain)."""
+    (e.g. ``{"fastq", "reference_fasta", "panel_bed"}`` for the germline chain). An OPTIONAL
+    external input (``OPTIONAL_INPUT_PARAMS``, e.g. verifybamid2's ``svd_panel``) is deliberately
+    EXCLUDED: it is operator-supplied but not required — an unset param feeds its process an empty
+    channel and it runs zero tasks, so a runner must not demand a panel the default never sets."""
     nodes = {n.id: n for n in graph.nodes}
     incoming = {(e.to_node, e.to_idx): (e.from_node, e.from_idx) for e in graph.edges}
     kinds: set[str] = set()
@@ -142,6 +151,8 @@ def required_inputs(graph: NfGraph) -> set[str]:
         for i, kind in enumerate(n.ins):
             src = incoming.get((n.id, i))
             if src is None or nodes[src[0]].is_source():
+                if kind in OPTIONAL_INPUT_PARAMS:
+                    continue  # optional external input — operator-supplied, never required
                 kinds.add(kind)
     return kinds
 
@@ -292,9 +303,11 @@ def compile_graph(graph: NfGraph) -> NextflowBundle:
     # external source when it is UNWIRED (draws its own declared kind) or fed by a SOURCE node (uses
     # that source's emitted kind); a non-source upstream edge is an internal channel, skipped. The
     # source kind is classified the same way in both cases: fastq → the reads channel, a reference
-    # kind → its params channel, anything else → a `params.<kind>` file channel.
+    # kind → its params channel, an OPTIONAL kind → its param-gated (empty-unless-armed) channel,
+    # anything else → a `params.<kind>` file channel.
     needs_reads = False
     ref_params: set[str] = set()
+    optional_params: set[str] = set()
     extra_params: set[str] = set()
     for n in tool_nodes:
         for i, kind in enumerate(n.ins):
@@ -309,6 +322,11 @@ def compile_graph(graph: NfGraph) -> NextflowBundle:
                 needs_reads = True
             elif source_kind in REFERENCE_PARAM:
                 ref_params.add(REFERENCE_PARAM[source_kind])
+            elif source_kind in OPTIONAL_INPUT_PARAMS:
+                # An OPTIONAL external input: a param-gated channel that is EMPTY when unset, so the
+                # consuming process stays dormant. Kept out of ref/extra (both required) and out of
+                # required_inputs — see OPTIONAL_INPUT_PARAMS / _source_channel.
+                optional_params.add(OPTIONAL_INPUT_PARAMS[source_kind])
             else:
                 extra_params.add(source_kind)
 
@@ -319,13 +337,21 @@ def compile_graph(graph: NfGraph) -> NextflowBundle:
         files[_module_file(proc)] = _render_module(tool, nodes)
 
     files["main.nf"] = _render_main(
-        graph, order, call_name, incoming, nodes, needs_reads, ref_params, extra_params
+        graph,
+        order,
+        call_name,
+        incoming,
+        nodes,
+        needs_reads,
+        ref_params,
+        extra_params,
+        optional_params,
     )
     # The name lands in a Groovy single-quoted manifest string — escape it (a NO-OP for a clean
     # name, so the germline config stays byte-identical). The zip filename / bundle name keep the
     # raw value; the API layer sanitizes that separately.
     files["nextflow.config"] = _render_config(
-        _groovy_escape(graph.name), ref_params, needs_reads, extra_params
+        _groovy_escape(graph.name), ref_params, needs_reads, extra_params, optional_params
     )
     files["README.md"] = _render_readme(graph.name, order, call_name)
     return NextflowBundle(name=graph.name, files=files)
@@ -358,6 +384,16 @@ def _topo_order(
 
 
 # ── renderers ─────────────────────────────────────────────────────────────────────────────────
+def _is_shared_value_input(kind: str) -> bool:
+    """True for an input port fed by a SHARED, meta-free channel broadcast to every sample (rather
+    than a per-sample ``[meta, files]`` stream): a reference (``reference_fasta`` / ``panel_bed``),
+    OR an OPTIONAL operator input (its param-gated channel is shared, and EMPTY ⇒ the process is
+    dormant). Such ports keep their bare decl; per-sample ports get the ``tuple val(meta), …``
+    wrapper. A NO-OP for every existing catalogued tool (none has an optional input), so their
+    modules stay byte-identical."""
+    return kind in REFERENCE_PARAM or kind in OPTIONAL_INPUT_PARAMS
+
+
 def _render_module(tool: str, nodes: dict[str, NfNode]) -> str:
     # An operator-authored custom node for this tool WINS over the catalog: its verbatim body is
     # rendered and the catalog is never consulted for it (a HUMAN authored this command, ADR-0020).
@@ -455,7 +491,7 @@ def _render_catalogued(spec: ProcessSpec) -> str:
         # by sample. Reference/value inputs (reference_fasta / panel_bed) stay meta-free — they are
         # shared value channels broadcast to each sample.
         in_decls = [
-            p.decl if p.kind in REFERENCE_PARAM else _with_meta(p.decl) for p in spec.inputs
+            p.decl if _is_shared_value_input(p.kind) else _with_meta(p.decl) for p in spec.inputs
         ]
         out_decls = [f"{_with_meta(p.decl)}, emit: {p.channel}" for p in spec.outputs]
         tag = '    tag "${meta.id}"\n'
@@ -531,6 +567,7 @@ def _render_main(
     needs_reads: bool,
     ref_params: set[str],
     extra_params: set[str],
+    optional_params: set[str],
 ) -> str:
     includes = []
     for tool in dict.fromkeys(n.tool for n in order):
@@ -561,6 +598,13 @@ def _render_main(
             src_lines.append(f"    ch_{param} = Channel.value([file(params.{param}), {idx}])")
         else:
             src_lines.append(f"    ch_{param} = Channel.value(file(params.{param}))")
+    for param in sorted(optional_params):
+        # OPTIONAL operator input (T-071a): armed → a real file channel; UNSET → an EMPTY channel,
+        # so every process consuming it runs ZERO tasks and stays DORMANT (the offline demo supplies
+        # none, so verifybamid2 never runs there). Standard DSL2 semantics — dormant, not an error.
+        src_lines.append(
+            f"    ch_{param} = params.{param} ? Channel.fromPath(params.{param}) : Channel.empty()"
+        )
     for kind in sorted(extra_params):
         src_lines.append(f"    ch_{kind} = Channel.fromPath(params.{kind})")
 
@@ -585,12 +629,15 @@ def _render_main(
 def _source_channel(kind: str, aggregator: bool = False) -> str:
     """The external-input channel expression for a pipeline SOURCE emitting ``kind`` — an unwired
     input port OR an input fed by a no-input source node. ``fastq`` → the per-sample reads channel;
-    a reference kind → its shared ``params`` value channel; anything else → a ``params.<kind>`` file
-    channel. An aggregator pools the per-sample reads across samples."""
+    a reference kind → its shared ``params`` value channel; an OPTIONAL kind → its param-gated
+    (possibly empty) channel; anything else → a ``params.<kind>`` file channel. An aggregator pools
+    the per-sample reads across samples."""
     if kind == "fastq":
         return "ch_reads.map { it[1] }.collect()" if aggregator else "ch_reads"
     if kind in REFERENCE_PARAM:
         return f"ch_{REFERENCE_PARAM[kind]}"
+    if kind in OPTIONAL_INPUT_PARAMS:
+        return f"ch_{OPTIONAL_INPUT_PARAMS[kind]}"
     return f"ch_{kind}"
 
 
@@ -620,13 +667,25 @@ def _input_channel(
 
 
 def _render_config(
-    name: str, ref_params: set[str], needs_reads: bool, extra_params: set[str]
+    name: str,
+    ref_params: set[str],
+    needs_reads: bool,
+    extra_params: set[str],
+    optional_params: set[str],
 ) -> str:
     params = []
     if needs_reads:
         params.append("    input      = null")  # samplesheet: sample,fastq_1,fastq_2 (W4 fan-out)
     for p in sorted(ref_params):
         params.append(f"    {p:<10} = null")
+    for p in sorted(optional_params):
+        # Labelled operator-supplied OPTIONAL input (T-071a): left null by default so its process
+        # stays dormant (empty channel, zero tasks). A `//` line comment keeps that explicit in the
+        # emitted config; ASCII only, so no encoding surprises for a downstream parser.
+        params.append(
+            f"    {p:<10} = null  // optional operator input; unset -> its process runs zero "
+            "tasks (dormant, T-071a)"
+        )
     for p in sorted(extra_params):
         params.append(f"    {p:<10} = null")
     params.append("    outdir     = 'results'")
