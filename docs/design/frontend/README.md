@@ -59,7 +59,9 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
     empty, and `App.tsx` wraps each gated route in `<RequirePage page=…>` →
     `components/PageAccessDenied.tsx`. **This gates VIEWS, not API enforcement** — `api/auth.py`'s
     `require_role` still authorizes every real write, unchanged. See §11 (Page access tab).
-  - **Analyze:** Provenance · Agent triage · Monitoring
+  - **Analyze:** Provenance · Agent triage · **System agents** (added 2026-07-13, T-160/T-163,
+    commits `b4a06c0`/`a499691` — a run-independent `/agents` entry for the org-wide
+    Pipeline-repair/Archivist launchers, reachable without a run in context; see §5.7) · Monitoring
   - **Configure:** Pipeline builder · Settings
   - **View selectors are `Tabs`, not `FacetChip` (2026-07-10, T-110, "Wave 8," G5).** A new
     canonical underline `components/Tabs.tsx` (`role="tablist"`) is the one "which view am I in"
@@ -87,6 +89,14 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
   (`needs_review`/`running`/`released`) via a shared `RUN_STATUS_META`, never inferred from
   attention count — a running run with 0 flagged samples reads "Sequencing," not a green
   "all clear." A new `NotificationBell` (§5.11) sits beside it, replacing the old dead bell icon.
+  **Consolidated onto the shared component (Shipped 2026-07-13, T-161, commit `084c730`).** The
+  bespoke switcher described above is deleted; the top bar now reuses the same `<RunSelector>`
+  (T-070) the Builder's "Open a saved pipeline" picker already used — identical idiom (capped
+  rows, id/platform search, the real status dot, an `onViewAll` footer), one fewer bespoke
+  implementation. The same commit fixes the **crumb**: it used to fall through to a hardcoded
+  "Runs" default for any un-special-cased route (`/accession`, `/inbox`, `/admin` all read
+  "Runs"); `TopBar.tsx`'s `routePage()` now resolves the pathname to a `PageId` and the crumb
+  reads `pageLabel(page)` off the SAME `PAGE_CATALOG` the nav uses — one owner for a page's name.
 - **Content:** light surface — **Shipped 2026-07-10 (T-098, commit `5763be1`)**: softened from
   a cool near-white to a warm japandi sand/greige (`--color-page` `#f5f7f9`→`#f2efe7`,
   `--color-card` `#fff`→`#faf9f4`, insets/lines/text warmed to match, contrast kept AA+);
@@ -254,6 +264,25 @@ Per-sample verdict cards for a run.
   dependency). The card's redundant 3px verdict-colored left spine is **dropped** (T-088, commit
   `24940e1`) — the verdict is already carried by badges/pills; the colored rail is now reserved
   for Pipeline-Builder tool cards (§6), which keep their own spine.
+  **Corrected — this was incomplete, not just imprecise (Shipped 2026-07-13, T-157, commit
+  `de14fa3`).** The description above ("a 'Not run' chip stays grey" for a hard-blocked-upstream
+  gate) omitted the case that mattered most: `GateResultStrip.tsx`'s `blocked` flag was
+  `cardVerdict === 'escalate' || cardVerdict === 'rerun'`, which **excludes HOLD** — so a HELD
+  card's not-run downstream gate rendered the SAME green "Cleared with margin" chip as a genuinely
+  clean gate, painting a held sample as if every gate had passed. `blocked` is now
+  `cardVerdict !== 'proceed'` plus a per-gate `unclearGates`/`blockingGate` lookup mirroring
+  `api/card_readout.py`'s own `_blocking_gate` derivation, so this strip and the QC-readout hero
+  can no longer disagree on the same card. `DecisionContextRail`'s Subject field and
+  `MetricsPanel`'s `not_measured` Observed cells now route absence through the shared `<Missing/>`
+  primitive (UIC-20) instead of a raw dash/empty cell.
+- **Released runs stay inspectable (Shipped 2026-07-13, T-158, commit `8734cd8`).** A released run
+  used to hard dead-end at `<DecisionReleased>` with no way to see what happened. `RunDetail.tsx`
+  now offers a "View cards anyway" latch that reveals the per-sample cards on demand (the QC-readout
+  fetch fans out only once the operator opts in, never eagerly) plus a `canSee('provenance')`-gated
+  "Open provenance" link. Every inline cross-link on this screen — the review-queue attention
+  banner and `CardBody`'s "View lineage"/"Ask agent to triage" rail buttons — is now gated on the
+  same `useAccess().canSee(page)` the nav uses, so a restricted actor is never sent from an inline
+  link into a `RequirePage`-gated access-denied dead-end the nav had otherwise hidden.
 
 ### 5.5 Review queue  (`view: 'queue'`)
 Cross-run triage. **Reviewer/approver RBAC**, **first-open + Expand/Collapse all**,
@@ -278,6 +307,16 @@ resolve).
   `ticketAction`/`toggleSuppress` path it always did, so it lands in the Admin Activity audit
   feed exactly as before. The same `ConfirmDialog` primitive is reused by Admin's Act-as (§11)
   and is intended for the Settings/variant authoring surfaces ahead.
+  **Corrected — the Suppress copy above was a fabricated capability, not a preview of a future
+  one (Shipped 2026-07-13, T-162, commit `c583581`).** `api/routers/review_queue.py` has never
+  implemented cross-run suppression-muting ([ADR-0008](../../adr/ADR-0008-issue-taxonomy-suppression-escalation.md)
+  labels that lifecycle deferred), so the quoted confirm text above promised a capability that
+  does not exist. Retracted to: *"Resolves this `<rule>` ticket and marks the issue class handled
+  here. It does not mute future occurrences on other runs (cross-run suppression is not built)."*
+  A rejected write (403/409) also now **rolls back** the optimistic UI change (snapshot-before-patch
+  in `syncAction`, mirroring the Pipeline Builder's own reconcile-on-catch) instead of stranding a
+  ticket showing a status the server never accepted. See
+  [journal 2026-07-13-audit-fixes-ia.md](../../journal/2026-07-13-audit-fixes-ia.md).
 - **Resolve button now neutral (Shipped 2026-07-10, "Wave 7," T-107, commit `478129d`, "RQ1").**
   The per-ticket and batch "Resolve" buttons were styled with the `proceed-*` (green) token set,
   which read as "already resolved" rather than an action you could still take. Both are now a
@@ -313,6 +352,17 @@ append-only ledger) already shipped to the client and the pre-rewrite screen sim
      when the chain actually overflows, a scrollbar-style thumb whose position/width mirror the
      horizontal scroll. Measured from real element geometry (`ResizeObserver` + `onScroll`,
      `data-stage-n` per card), never a verdict/confidence signal — pure chrome, ADR-0001 untouched.
+   - **Corrected — no longer 9 stages (Shipped 2026-07-13, T-156, commit `34f5380`).** The "9-stage"
+     framing above is now stale. The decision gate is pulled OUT of the numbered process chain
+     (it was "step 8 of 9") into its own **terminal, full-width aggregate-verdict banner** — it
+     aggregates every stage above it, so a numbered node misread it as "one more step." The chain
+     itself is now **8** numbered process nodes; the gate banner and the terminal Share node render
+     below/after it. This same commit also makes intake/demux/qc/gate **fail-closed**: each now
+     requires POSITIVE evidence it ran (an artifact, a gate checkpoint result, or the run's own
+     cards/`started` event) rather than inferring "ran" from the absence of a bad verdict, and the
+     terminal Share node can no longer read a clean green "Completed" while an upstream stage is
+     still gray (a downstream node must never look more-complete than its own lineage). See
+     [journal 2026-07-13-audit-fixes-ia.md](../../journal/2026-07-13-audit-fixes-ia.md).
 2. **Event trail** (new centerpiece, `components/provenance/EventTrail.tsx`) — a filterable
    (type / sample / actor + free-text search + oldest/newest order), paginated timeline of the
    REAL events emitted by `run_gate`. Expanding a row is the trace-back: `finding.emitted` → its
@@ -372,6 +422,27 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
   only the two **node-scoped** authoring/observation agents (QC-triage, node-attachable; and
   Node-authoring). Each launcher opens a read-only, cited proposal; advisory + off-gate, neither
   sets a verdict (ADR-0001). See §6 "Advisory agents."
+- **Run-independent home + the ask-composer wiring (Shipped 2026-07-13, T-160, commit
+  `b4a06c0`).** The launchers above needed a run in context to reach (`/runs/:id/agent`) — a
+  run-independent `<Route path="/agents">` (same `AgentTriage.tsx` component) plus a "System
+  agents" nav entry (§4) make them reachable without, and surviving the 404 of, a specific run.
+  `AgentComposer.tsx` is wired to the REAL `POST .../ask` endpoint (WS-07 Q2) — no hardcoded
+  reply string; the offline stub renders a genuine retrieval-grounded answer. The now-dead
+  `AgentSourceToggle.tsx` is deleted in favor of a passive "Live agent: not armed" status (arming
+  is env-side, `PIPEGUARD_TRIAGE_AGENT=claude` — the UI can only report it).
+- **IA-duplication fix (Shipped 2026-07-13, T-163, commits `a499691`, `f230f7e`).** The
+  run-independent route above rendered through the SAME component the per-run route uses, so the
+  two launcher tiles showed on **both** — the maintainer's own report: "system agents and agent
+  triage look like duplicate pages." `AgentTriage.tsx` now splits its content on
+  `isSystemView = !runId`: the launchers render **only** on `/agents` ("System agents," a new
+  title + subtitle); the per-run route shows only its flagged-samples table + composer (with a
+  "no run in context" empty state under it, and no launchers). Since both routes still share one
+  `PageId: 'agent'`, `TopBar.tsx` gains a route-aware `'system-agents'` crumb sentinel (mirroring
+  the existing `'admin'` pattern) so the two pages' titles don't collide. This is a lighter-weight
+  landing of [agent-triage-redesign-spec.md](agent-triage-redesign-spec.md)'s Slice 1 — see that
+  doc's own corrected Status field for the gap (no dedicated `system-agents` `PageId`, so Admin
+  page-access still can't grant the two views separately) and
+  [journal 2026-07-13-audit-fixes-ia.md](../../journal/2026-07-13-audit-fixes-ia.md).
 
 ### 5.8 Monitoring  (`view: 'monitoring'`)
 - **Recurring issue signatures**: **searchable**, **collapsible rows** on a fixed 5-column
@@ -794,6 +865,17 @@ content inside the read-only Decision-boundary view).
   rail and stays collapsed across card selections** until the user explicitly reopens it — selecting
   another card while hidden must NOT reopen it — and the existing **Close (×)** that clears the
   selection. Hide keeps the selection; Close drops it.
+  **Corrected — the X is gone (Shipped 2026-07-13, T-159, commit `13ad1a4`).** The two affordances
+  above read as confusable in practice (the audit + the maintainer's own notes both flagged
+  "connect-mode + X vs ›"), so the redundant **Close (×)** button is **removed**; only the **›**
+  Hide/collapse remains. Clearing the selection is now a canvas background-click or Escape. The
+  same commit also fixes Connect mode's user-node body being un-selectable (a click there now
+  selects the node, matching the seeded tool/agent card path) and adds a read-only `CatalogRef`
+  panel that maps a user node whose name matches a seeded catalog Tool to that tool's **Params**
+  and declared **I/O** — previously stranded on the seeded-card-only `ToolView` and unreachable
+  from the default (editable) flow; absent sha/size render `—`, never fabricated, since artifact
+  bytes only exist for a bound run. See
+  [journal 2026-07-13-audit-fixes-ia.md](../../journal/2026-07-13-audit-fixes-ia.md).
 - **Footer action row: `[Delete node] [Save]` (Shipped 2026-07-12, commit `e40784c` → renamed
   `7c5c073`).** In Edit, an editable subject (user node / tool / reference — never a gate/agent)
   shows one bottom action row: **Delete node** (user nodes only; tools/references aren't deletable)
@@ -877,7 +959,10 @@ cold-storage of released `run/` dirs) — both stub-first, human-approved, off t
 never edit the pipeline or a verdict. **They no longer launch from the Builder palette** (they act
 on runs/signatures/the organization, not a single graph node); their `PipelineRepairModal` /
 `ArchivistModal` now open from **Agent triage** launcher tiles. The wired-to-real-data behavior
-below is unchanged — only the launch surface moved. **Wired to real data (Shipped
+below is unchanged — only the launch surface moved. **Narrowed further (Shipped 2026-07-13, T-163,
+commits `a499691`/`f230f7e`) — they now open ONLY from the run-independent "System agents" view
+(`/agents`), not from the per-run Agent-triage route that shares the same `AgentTriage.tsx`
+component; see §5.7's IA-duplication-fix note for why.** **Wired to real data (Shipped
 2026-07-10, T-069, commit `adfd7aa`) — both were static previews before this.**
 `PipelineRepairModal` now loads `GET /api/monitoring` for a recurring-signature picker (default:
 top-ranked) and `GET /api/monitoring/signatures/{sig}/repair` for the REAL `RepairProposal`

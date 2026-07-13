@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active — the durable convention registry (so a rule is stated once, not per session) |
-| **Last updated** | 2026-07-12 (MST) |
+| **Last updated** | 2026-07-13 (MST) — UIC-20 added (the `<Missing/>` honesty primitive) |
 | **Audience** | software / design / reviewers |
 | **Related** | [design/frontend/README.md](frontend/README.md) (tokens + per-screen spec), [design/builder-cards/README.md](builder-cards/README.md) (pipeline-card design), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (rules decide / AI advises), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC + draft→approve), [functional.md](../requirements/functional.md) (REQ-F-097), [nonfunctional.md](../requirements/nonfunctional.md) (REQ-NF-070, a11y), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [scale-aware memory], [explicit-edit+audit memory] |
 
@@ -51,6 +51,11 @@ and **UIC-19** (a11y baseline for the shared `Toast`/`ConfirmDialog` primitives)
 `Toast`/`ConfirmDialog` to four more shared primitives (`Tabs`/`Pager`/`SegmentedControl`/
 `RunSelector`) plus form-label association on Submit/Accession/Settings; verdict-token contrast is
 now a verified (not assumed) WCAG AA pass. See the updated UIC-19 entry below.
+
+**UIC-20 added (2026-07-13, T-155, commit `c15a4d2`).** An audit pass surfaced that "absent" was
+rendered six different ways across the app (a bare `—`, a local `not captured` span, an empty cell,
+and — the real bug class — an accidental `0`). One reusable `<Missing/>` primitive now generalizes
+every case; see the entry below.
 
 ---
 
@@ -222,6 +227,15 @@ formal AA+ audit).
   checkbox mass-select + remove, and paginates. **Still open**: the "more robust popout panel" was
   explore-level language, not a hard requirement — a plain staged-edit row shipped instead; a
   dedicated popout stays a future refinement, not tracked as a gap.
+- **Honesty correction (Shipped 2026-07-13, T-162, commit `c583581`).** Edit/save-gating a toggle
+  is not the same as the toggle being *true* — the channel status dot read a green "Connected"
+  though this seam never health-checks anything, and "Save" toasted "Notification settings saved"
+  though nothing persists past a page reload (component state only). Now: a neutral "Configured ·
+  not verified" dot, a "Applied locally — demo seam, not persisted to a backend" toast, a "not
+  wired in this demo" toast on the previously-dead Discord Connect button, and a dashed-border
+  banner stating all three plainly on the panel. See
+  [design/frontend/README.md](frontend/README.md) §5.5 Review queue for the paired Review-queue
+  honesty fix from the same commit.
 
 ### UIC-13 — Admin · ✅
 - **Act-as is password-gated** and logged **immutably** — impersonating another user is a
@@ -351,6 +365,29 @@ change. This is still not a full WCAG audit — the "floor on named components, 
 scope caveat above holds; it widens which components/screens sit on that floor, it does not newly
 claim app-wide AA conformance. Still open: Builder-canvas elements, other screens' form controls,
 and any automated a11y CI gate.
+
+### UIC-20 — Missing-value honesty primitive (`<Missing/>`) · ✅
+An audit pass ("Theme-2") named a recurring pattern across screens: an **absent** scalar (never
+collected, a check that ran but produced no observation, a stage skipped/blocked upstream) was
+rendered six different, ad-hoc ways — a bare `—`, a local `not captured` span
+(`DecisionContextRail`'s own idiom), an empty table cell, or — the actual bug class this closes — an
+**accidental `0`**, which reads as a real measured zero rather than "we don't know." The repo's own
+honesty thesis is **absent ≠ 0 ≠ blocked**; a caller must never be left to decide how to render "no
+value here." **Shipped (2026-07-13, T-155, commit `c15a4d2`):** one reusable
+`frontend/src/components/Missing.tsx` exports `<Missing variant>` (`not-captured` / `not-measured` /
+`not-run` / `not-applicable` / `unknown`, each with a distinct de-emphasized label + hover tooltip —
+the *reason* a value is absent is itself operator-relevant, so the variant carries it) and
+`formatScalar(value, opts)` (renders a real value in the mono/tabular value tone, or falls back to
+`<Missing/>` — `0` and `false` are explicitly real values and render as themselves, never routed to
+the absence path). Adopted the same round by three consumers (T-156/T-157, commits `34f5380`/
+`de14fa3`): `RunReport.tsx`'s provenance pins (Rule pack / Runbook metrics / Events / Started /
+Completed), `DecisionContextRail.tsx`'s Subject field (replacing its own local `NotCaptured()`), and
+`MetricsPanel.tsx`'s `not_measured` Observed cells (a new `Observed` wrapper). **Not yet adopted
+everywhere an ad-hoc `—`/empty-cell still exists** (e.g. `screens/Provenance.tsx`'s own separate
+"Runbook metrics" pin, named in
+[journal 2026-07-13-audit-fixes-ia.md](../journal/2026-07-13-audit-fixes-ia.md)) — a rollout, not a
+one-shot migration; extend to a new absent-scalar site as it's found rather than treating this as
+"done everywhere."
 
 ---
 
