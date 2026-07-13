@@ -323,6 +323,27 @@ metrics:
     parser_version: null
     aliases: [freemix]
 
+  # COMPUTED (WS-04): GIAB truth concordance from hap.py, wired via the WS-03 ingest adapter
+  # (`ingest.nfcore._extract_happy` reads the SNP + PASS row's METRIC.F1_Score from summary.csv) and
+  # gated by an OPTIONAL runbook threshold — a FLOOR (higher is better). hap.py needs a GIAB truth
+  # VCF + a high-confidence BED (LABELLED pipeline inputs, NEVER fabricated — ADR-0004: never invent
+  # truth), so it is not in the base profile: an absent value is never NA-flagged (required=False).
+  concordance.snp_f1:
+    display_name: SNP F1 (GIAB concordance)
+    gate: qc
+    category: concordance
+    canonical_unit: fraction
+    value_type: float
+    direction: higher_is_better
+    source:
+      module: happy
+      source_file: summary.csv
+      raw_field: METRIC.F1_Score
+    raw_units_allowed: [fraction]
+    parser: happy_summary
+    parser_version: null
+    aliases: [snp_f1]
+
   # VARIANT GATE IS DP-ONLY (audit P3-10): only `variant.dp` below is a runbook threshold. `variant.gq`
   # and `variant.titv` are registered + wired but UNGATED observations; `variant.allele_balance` is
   # not computed (above). A genotype-depth gate, not a full variant-quality gate.

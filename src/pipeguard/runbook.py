@@ -249,6 +249,20 @@ class Runbook(BaseModel):
                 required=False,
                 unit="%",
             ),
+            # WS-04: GIAB SNP-F1 concordance (hap.py). A FLOOR — SNP-F1 is monotonic-good-high, so
+            # a one_sided higher_is_better gate (NOT target_band; there is no "too-high" tail). F1
+            # >= 0.99 PASS, < 0.99 WARN/HOLD, < 0.95 CRITICAL/RERUN. required=False: hap.py needs
+            # GIAB truth inputs and is not in the base profile, so a run without a truth comparison
+            # is never NA-flagged. The floor is ILLUSTRATIVE / operator-configurable, NOT a clinical
+            # threshold (CLAUDE.md life-science guardrail 3). F1 is a fraction, shown as-is.
+            QCThreshold(
+                metric="snp_f1",
+                our_key="concordance.snp_f1",
+                label="SNP F1 (GIAB concordance)",
+                gate=0.99,
+                hard_fail=0.95,
+                required=False,
+            ),
             # VARIANT-GATE SCOPE (audit P3-10): the variant gate is DP-ONLY — `variant.dp` is the
             # only variant-tier THRESHOLD here. GQ (`variant.gq`) and Ts/Tv (`variant.titv`) are
             # registered + wired but UNGATED observations (a phred / target-band metric the

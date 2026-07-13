@@ -30,6 +30,7 @@ scope) — see the module TODO.
 
 from __future__ import annotations
 
+import csv
 import glob
 import gzip
 import json
@@ -91,9 +92,11 @@ class _Observation(NamedTuple):
 _FASTP_GLOB = "fastp.json"
 _MOSDEPTH_SUMMARY_GLOB = "*mosdepth.summary.txt"
 _MOSDEPTH_THRESHOLDS_GLOB = "*thresholds.bed.gz"
-# OPTIONAL, non-default tool (WS-02) — verifybamid2 is not in the germline base profile, so an
-# absent .selfSM is NOT a hole (see the extract call below), only a present one scores.
+# OPTIONAL, non-default tools (WS-02 / WS-04) — verifybamid2 and hap.py are not in the germline base
+# profile, so an absent output is NOT a hole (see the extract calls below), only a present one is
+# scored.
 _VERIFYBAMID_GLOB = "*selfSM"
+_HAPPY_GLOB = "*summary.csv"
 
 
 def _one_optional(results: Path, sample: str, pattern: str) -> Path | None:
@@ -248,6 +251,46 @@ def _extract_verifybamid(path: Path) -> list[_Observation]:
             _Observation("contamination.freemix", freemix, "fraction", path.name, "freemix", None)
         ]
     return []
+
+
+def _extract_happy(path: Path) -> list[_Observation]:
+    """hap.py ``summary.csv`` → SNP concordance F1 (``concordance.snp_f1``), unit ``fraction``.
+
+    hap.py writes one row per ``(Type, Filter)`` combination; concordance is read from the SNP +
+    PASS row's ``METRIC.F1_Score`` (the standard "how well did we recover truth after filtering"),
+    falling back to SNP + ALL when a PASS row is absent. The row is selected by (Type, Filter), NOT
+    by position, so the INDEL rows can never be misread as SNP. F1 is a 0-1 fraction — DECLARED
+    ``fraction``. A missing file/column/row yields no observation (a signal, not a crash).
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    # csv.DictReader consumes any line iterable; splitlines() drops the trailing newline cleanly.
+    snp_rows = [
+        r
+        for r in csv.DictReader(text.splitlines())
+        if (r.get("Type") or "").strip().upper() == "SNP"
+    ]
+
+    def _row(filt: str) -> dict[str, str] | None:
+        return next((r for r in snp_rows if (r.get("Filter") or "").strip().upper() == filt), None)
+
+    row = _row("PASS")
+    locator = "SNP/PASS"
+    if row is None:
+        row = _row("ALL")
+        locator = "SNP/ALL"
+    if row is None:
+        return []
+    raw = row.get("METRIC.F1_Score")
+    if raw is None or not raw.strip():
+        return []
+    try:
+        f1 = float(raw)
+    except ValueError:
+        return []
+    return [_Observation("concordance.snp_f1", f1, "fraction", path.name, "snp_f1", locator)]
 
 
 # MultiQC general-stats scale is read from the column HEADER's declaration (its `suffix`), never
@@ -424,12 +467,16 @@ def ingest_results_dir(
             absent.append(UnmappedKey(sid, "qc.breadth_20x", "(absent)", "absent_source"))
             absent.append(UnmappedKey(sid, "qc.breadth_30x", "(absent)", "absent_source"))
 
-        # OPTIONAL add-on tools (WS-02) — not in the germline base profile, so their absence is NOT
-        # a hole: no `absent_source` is recorded (that would flag every lean run). Only a PRESENT
-        # output scores, matching the `required=False` runbook thresholds for these metrics.
+        # OPTIONAL add-on tools (WS-02 / WS-04) — not in the germline base profile, so their absence
+        # is NOT a hole: no `absent_source` is recorded (that would flag every lean run). Only a
+        # PRESENT output scores, matching the `required=False` runbook thresholds for these metrics.
         selfsm = _one_optional(results, sid, _VERIFYBAMID_GLOB)
         if selfsm is not None:
             observations.extend(_extract_verifybamid(selfsm))
+
+        happy = _one_optional(results, sid, _HAPPY_GLOB)
+        if happy is not None:
+            observations.extend(_extract_happy(happy))
 
         # 2. MultiQC general-stats (secondary — fills only what structured files did not) ---------
         observations.extend(multiqc.get(sid, []))

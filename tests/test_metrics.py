@@ -40,6 +40,7 @@ SEED_KEYS = {
     "identity.ngscheckmate_match",
     "identity.sex_concordance",
     "contamination.freemix",
+    "concordance.snp_f1",
     "variant.dp",
     "variant.gq",
     "variant.allele_balance",
