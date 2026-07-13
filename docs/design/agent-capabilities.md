@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| **Status** | 🚧 §1 archivist DB retrieval **built** (P3, wired into the chat, live-verified); §2 pipeline-repair corpora + §3 node-author QoL still design |
-| **Last updated** | 2026-07-13 (MST) — §1 built: `api/archivist_retrieval.py` (read-only cross-run aggregate, projection-first with run-dir-derivation fallback) grounds the archivist chat for run-independent questions. Prior: initial design |
+| **Status** | 🚧 §1 archivist DB retrieval **built**; §2 pipeline-repair **docs corpus built** (issues+resolutions half deferred — needs the monitoring tool-agent); §3 node-author QoL still design |
+| **Last updated** | 2026-07-13 (MST) — §2 docs-corpus built: `pipeline_repair/knowledge/bayleaf_system.jsonl` + catalog-derived tool docs (`load_system_corpus`) ground the repair chat; live-verified. Prior: §1 `api/archivist_retrieval.py`; initial design |
 | **Audience** | software / design / reviewers |
 | **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) (corpora/retrieval), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0023](../adr/ADR-0023-agent-taxonomy-and-action-boundary.md), [ADR-0024](../adr/ADR-0024-scope-by-wiring.md), [ADR-0025](../adr/ADR-0025-versioned-reversible-agent-config.md), [agents.md](agents.md), [agent-authoring-contract.md](agent-authoring-contract.md) |
 
@@ -36,11 +36,18 @@ Two grounding sources beyond today's remediation corpus:
 1. **Recurring issues + resolutions**, as **structured records**, fed by the monitoring tool-agent's
    issue store (ADR-0023 §4) and by past `RepairProposal`s marked resolved. Shape:
    `{signature, class, first_seen, count, run_ids, resolution?, resolved_by?, resolved_at?}`. This
-   is the live, minable memory that makes repair proposals better over time.
-2. **A documentation corpus** covering (a) each tool card's tool docs and (b) **bayleaf's own
-   system docs** (architecture, ADRs, limitations) so the agent understands the systems involved,
-   their seams and limits — not just the tool in isolation. Retrieval over this corpus uses the
-   existing seam (`KeywordRetriever` now; the `EmbeddingRetriever` seam later, ADR-0009).
+   is the live, minable memory that makes repair proposals better over time. **Deferred** — its
+   producer is the monitoring tool-agent (ADR-0023), not yet built.
+2. **A documentation corpus** — **BUILT (P3, 2026-07-13):** `pipeline_repair/knowledge/
+   bayleaf_system.jsonl` (8 curated **bayleaf-system** entries — the gate/ADR-0001, AI-off/ADR-0006,
+   compose≠execute/ADR-0003, the ledger/ADR-0002, the illustrative metric catalog, the agent
+   taxonomy/ADR-0023, scope-by-wiring/ADR-0024, ClinVar/GIAB truth/ADR-0004 — each citing its doc +
+   stating the LIMIT) PLUS a **zero-drift tool-doc entry per catalogued tool** derived from
+   `PROCESS_CATALOG` (`retrieval.load_system_corpus`). The repair **chat** retrieves over the
+   combined corpora (`agent_chat._repair_grounding`); `propose()` stays on the remediation corpus
+   (pinned proposals unchanged). Retrieval uses the existing `KeywordRetriever`; the
+   `EmbeddingRetriever` seam is later (ADR-0009). Live-verified (Opus cited `sys_compose_not_execute`
+   + `sys_agent_taxonomy` on a system question).
 
 Repair stays **advisory**: it proposes cited remediations; it never edits a pipeline or sets a
 verdict (unchanged from today).
