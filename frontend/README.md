@@ -1,9 +1,8 @@
 # bayleaf — frontend
 
 The React + Vite + Tailwind UI for **bayleaf** (an AI-assisted provenance & QC decision gate
-for genomics runs). It consumes the FastAPI read-API in [`../api`](../api); the Streamlit app in
-[`../app`](../app) is the offline fallback. See the [top-level README](../README.md) for the
-product overview.
+for genomics runs). It consumes the FastAPI read-API in [`../api`](../api). See the
+[top-level README](../README.md) for the product overview.
 
 ---
 
