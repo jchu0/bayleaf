@@ -71,3 +71,10 @@ python scripts/fetch_giab_hg002.py                 # fetch the small truth artif
 
 Do **not** commit raw reads or large artifacts — commit accessions + a fetch
 script instead (see `.gitignore` and the data strategy).
+
+**Exception — small DERIVED real-GIAB QC outputs are committed as offline test fixtures.** We commit
+the *parsed* run dir [`data/RUN-2026-07-08-GIAB-HG002/`](RUN-2026-07-08-GIAB-HG002/) (bytes–KB CSVs
++ provenance) and a trimmed [`tests/fixtures/giab_real/results/`](../tests/fixtures/giab_real/results/)
+slice (only the small structured QC files — `fastp.json` + mosdepth summary/thresholds) so a fresh
+clone greens the ingest→`SampleMetrics` and gate fixtures offline — **never** raw reads/BAM/VCF (those
+stay accession + fetch-script, gitignored under `data/real-giab/`).

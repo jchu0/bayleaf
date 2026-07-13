@@ -1,0 +1,13 @@
+[Header]
+FileFormatVersion,2
+RunName,RUN-2026-07-08-GIAB-HG002
+InstrumentPlatform,HiSeq 2500
+Date,2026-07-08
+
+[Reads]
+Read1Cycles,250
+Read2Cycles,250
+
+[BCLConvert_Data]
+Sample_ID,index,index2
+HG002,NA,NA

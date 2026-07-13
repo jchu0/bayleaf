@@ -19,6 +19,16 @@ from api.main import app
 
 client = TestClient(app)
 
+# The archive-digest cache test hits a real GIAB monitoring run whose parsed QC is gitignored
+# (data/RUN-*-GIAB-*/*, only NOTE.md travels) — present on the maintainer's machine, absent in a
+# fresh clone. Path-existence skip-guard (NOT an env flag): a maintainer WITH the run dir runs and
+# passes; a fresh clone that lacks it SKIPS (the endpoint would 404 the unknown run).
+_ARCHIVE_RUN = Path(__file__).resolve().parent.parent / "data" / "RUN-2026-06-05-GIAB-A"
+_needs_archive_run = pytest.mark.skipif(
+    not (_ARCHIVE_RUN / "SampleSheet.csv").exists(),
+    reason="needs the gitignored real GIAB monitoring run dir data/RUN-2026-06-05-GIAB-A/",
+)
+
 
 @pytest.fixture(autouse=True)
 def _isolate(monkeypatch: Any, tmp_path: Path) -> None:
@@ -81,6 +91,7 @@ def test_node_proposal_endpoint_is_cached() -> None:
     assert a.json()["id"] == b.json()["id"]  # same proposal — cached, not regenerated
 
 
+@_needs_archive_run
 def test_archive_digest_endpoint_is_cached() -> None:
     run = "RUN-2026-06-05-GIAB-A"
     a = client.get(f"/api/runs/{run}/archive-digest")

@@ -146,5 +146,14 @@ Thumbs.db
 data/RUN-*-GIAB-*/*
 !data/RUN-*-GIAB-*/NOTE.md
 
+# Carve-out: the ONE committed real-GIAB run dir. Its parsed QC outputs are tiny (bytes–KB, DERIVED
+# not raw) and are committed as offline test fixtures (tests/test_gate.py::test_hg002_committed_run_*
+# + the flag-for-review negative control) so a fresh clone can green them — never the GB-scale
+# reads/BAM/VCF, which stay accession + fetch-script (data/strategy.md; CLAUDE.md data-handling 1).
+!data/RUN-2026-07-08-GIAB-HG002/*.csv
+!data/RUN-2026-07-08-GIAB-HG002/versions.txt
+!data/RUN-2026-07-08-GIAB-HG002/origin
+!data/RUN-2026-07-08-GIAB-HG002/pipeline.log
+
 # Submitted-run outputs from POST /api/runs (real-giab-derived, local; regenerate via Submit)
 data/RUN-SUBMIT-*/

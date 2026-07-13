@@ -166,5 +166,7 @@ def test_clinvar_rth_fixture_escalates_via_per_run_arming() -> None:
     assert ffr.gate.value == "variant"
     # Verbatim ClinVar quote, no bayleaf-authored pathogenicity.
     assert any(e.source_field == "CLNSIG" and e.value == "Pathogenic" for e in ffr.evidence)
-    # A stock committed run carries no marker → flag-for-review stays OFF.
-    assert not _active_runbook("RUN-2026-07-04-GIAB-A").flag_for_review.armed
+    # A stock committed run carries no marker → flag-for-review stays OFF. Uses the committed HG002
+    # GIAB run dir (data/RUN-2026-07-08-GIAB-HG002/, present in every clone) so this negative
+    # control holds offline — earlier it named a gitignored run absent from a fresh clone.
+    assert not _active_runbook("RUN-2026-07-08-GIAB-HG002").flag_for_review.armed

@@ -334,6 +334,81 @@ def test_run_store_root_is_resolved_at_call_time_not_import(
     assert run_store_root() == tmp_path
 
 
+# ------------------------------------------------- REAL-DATA acceptance (committed, every clone)
+# Unlike the env-gated live leg below, this runs in EVERY checkout: a trimmed slice of a REAL
+# published germline `results/` dir (the small structured QC files only — fastp.json + mosdepth
+# summary/thresholds; no BAM/FASTQ/VCF/HTML, which are GB-scale and never committed) lives under
+# tests/fixtures/giab_real/results/. It proves the ingest → SampleMetrics spine on genuine GIAB
+# tool output offline, so the "confident surface vs thin wiring" gap can't reopen in a fresh clone.
+
+_COMMITTED_REAL_RESULTS = Path(__file__).resolve().parent / "fixtures" / "giab_real" / "results"
+
+
+def test_committed_real_results_ingest_to_sample_metrics() -> None:
+    """REAL-DATA acceptance (offline, committed): ingest a trimmed slice of a genuine published
+    germline `results/` dir → the exact `SampleMetrics` the adapter derives from real fastp/mosdepth
+    output. Every published QC key resolves (zero unmapped), and the canonical values are the REAL
+    numbers the tools wrote — a hand-returned constant could not reproduce them AND stay coupled to
+    the parse, so this pins the spine on real data in every checkout, not just the maintainer's."""
+    ing = ingest_results_dir(_COMMITTED_REAL_RESULTS)
+    assert [sm.sample_id for sm in ing.samples] == ["HG002"]
+    assert ing.unmapped == []  # every published key folded to a registry our_key — nothing dropped
+
+    sm = ing.samples[0]
+    # The raw observations carry the tools' TRUE declared scales (fractions / fold-x), not a
+    # pre-scaled percent — a real parse, never a guessed unit.
+    assert sm.raw["qc.q30"].raw_unit == "fraction"
+    assert sm.raw["qc.mean_target_coverage"].raw_unit == "x"
+
+    # The canonical MetricValues the gate thresholds on — the REAL numbers this HG002 run produced.
+    by_key = {mv.metric_key: mv for mv in metric_values_for(sm)}
+    assert set(by_key) == {
+        "qc.q30",
+        "qc.reads_passing_filter",
+        "qc.duplication",
+        "qc.mean_target_coverage",
+        "qc.breadth_20x",
+        "qc.breadth_30x",
+    }
+    assert by_key["qc.q30"].normalized_value == pytest.approx(0.895624)  # real fastp Q30 ~89.6%
+    assert by_key["qc.reads_passing_filter"].normalized_value == pytest.approx(0.99484608857)
+    assert by_key["qc.duplication"].normalized_value == pytest.approx(3.09965e-05)
+    assert by_key["qc.mean_target_coverage"].normalized_value == pytest.approx(47.66)  # mosdepth x
+    assert by_key["qc.breadth_20x"].normalized_value == pytest.approx(0.81253164655)
+    assert by_key["qc.breadth_30x"].normalized_value == pytest.approx(0.79714255158)
+
+
+def test_committed_real_results_gate_end_to_end() -> None:
+    """The committed real-data slice flows through the WS-06·PR2 Union into `run_gate` and yields a
+    card (offline, every clone) — the same structural cluster_pf-missing HOLD the env-gated live leg
+    below asserts, proving the ingested `SampleMetrics` gate the same way the driver's own parse
+    does. This is the committed complement to `test_real_nextflow_results_ingest_and_gate`."""
+    from bayleaf import run_gate
+    from bayleaf.models import RunArtifacts, Sample, SampleSheetEntry, Verdict
+    from bayleaf.synthesis import StubSynthesizer
+
+    ing = ingest_results_dir(_COMMITTED_REAL_RESULTS)
+    art = RunArtifacts(
+        run_id="COMMITTED-REAL-INGEST",
+        sample_sheet=[SampleSheetEntry(sample_id="HG002")],
+        samples=[
+            Sample(
+                sample_id="HG002",
+                subject_id="HG002",
+                tissue="blood",
+                library_prep="panel",
+                submitted_by="giab",
+            )
+        ],
+        qc=ing.samples,  # SampleMetrics from real tool output — the WS-06·PR2 Union
+    )
+    card = {c.sample_id: c for c in run_gate(art, synthesizer=StubSynthesizer())}["HG002"]
+    # A reads-only path can't produce the run-level %PF metric → the honest structural HOLD, from
+    # ingested metrics (never a synthesizer-authored verdict, ADR-0001).
+    assert card.verdict is Verdict.HOLD
+    assert any(f.rule_id == "QC-CLUSTER_PF-NA" for f in card.findings)
+
+
 # --------------------------------------------------------------- REAL-PATH acceptance (env-gated)
 # The live leg the fixture tests above deliberately don't cover: a real `nextflow run` publishes a
 # results/ dir, WS-03 ingests it, and the WS-06·PR2 Union lets the gate consume it end-to-end. Runs

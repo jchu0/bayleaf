@@ -27,6 +27,17 @@ RUN_1 = DATA / "mock_run_01"
 RUN_2 = DATA / "mock_run_02"
 RUN_3 = DATA / "mock_run_03"
 
+# A real all-clean GIAB monitoring run dir. Its parsed QC lives on the maintainer's machine but is
+# gitignored (data/RUN-*-GIAB-*/*, only NOTE.md travels) — so a fresh clone lacks it. Path-existence
+# skip-guard (NOT an env flag): a maintainer WITH the run dir runs and passes the clean-run
+# regression; a fresh clone SKIPS it. The mock_run_* fixtures above ARE committed, so the rest of
+# this suite is unaffected.
+_CLEAN_GIAB_RUN = DATA / "RUN-2026-06-05-GIAB-A"
+_needs_clean_giab_run = pytest.mark.skipif(
+    not (_CLEAN_GIAB_RUN / "SampleSheet.csv").exists(),
+    reason="needs the gitignored real GIAB monitoring run dir data/RUN-2026-06-05-GIAB-A/",
+)
+
 
 @pytest.fixture(scope="module")
 def run1() -> RunArchiveInput:
@@ -147,6 +158,7 @@ def test_empty_input_yields_an_empty_digest():
     assert "no runs" in digest.summary.lower()
 
 
+@_needs_clean_giab_run
 def test_digest_over_a_clean_run_with_no_recurring_signatures():
     """Regression: a released, all-PROCEED run has runs present but NO recurring signatures.
     The run-scope summary must guard `signatures[0]` (it was evaluated eagerly and 500'd the
