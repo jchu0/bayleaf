@@ -1,7 +1,7 @@
 """bayleaf — AI-assisted provenance & QC decision gate for genomics runs.
 
-Framework-agnostic core. The Streamlit MVP and any future FastAPI service both
-import from here; nothing in this package depends on a UI framework.
+Framework-agnostic core. The FastAPI service (and any other delivery layer)
+imports from here; nothing in this package depends on a web framework.
 """
 
 from .engine import get_synthesizer, run_gate, run_gate_from_dir

@@ -32,10 +32,8 @@ all `BAYLEAF_*` env vars, `X-Bayleaf-*` wire headers). The historical name was
 uv sync --all-extras                        # .venv + deps + dev tools, editable install
 uv run pre-commit install --install-hooks   # ruff/mypy/secret-scan (commit) + pytest (push)
 
-# Run the dashboard (offline; no API key needed) — the guaranteed-working demo fallback
-uv run streamlit run app/streamlit_app.py   # http://localhost:8501
-
-# Run the full stack (FastAPI read-API + React; Vite proxies /api -> :8010)
+# Run the full stack (FastAPI read-API + React; Vite proxies /api -> :8010).
+# Offline + no API key needed by default (agents are stub-first); this IS the demo.
 uv run uvicorn api.main:app --port 8010     # backend
 npm --prefix frontend run dev               # frontend (Vite dev server)
 npm --prefix frontend run build             # tsc -b + vite build (the pre-push tsc gate)
@@ -298,9 +296,10 @@ uv run python -c "from bayleaf import run_gate_from_dir; \
       corpus stays fixed (no genuine new-tool onboarding). Boundaries:
       [design/agent-authoring-contract.md](docs/design/agent-authoring-contract.md).
 
-4. **Delivery layers (thin, over the core).**
-   a. `app/` = Streamlit demo (kept as the guaranteed-working fallback).
-   b. `api/` = FastAPI read-API + **off-gate writes**. Authz: the dev-shim `api/auth.py` (Role
+4. **Delivery layers (thin, over the core).** The FastAPI read-API + React frontend are the
+   product surface (the Streamlit MVP was removed 2026-07-13 — the offline, stub-first full stack
+   is the demo).
+   a. `api/` = FastAPI read-API + **off-gate writes**. Authz: the dev-shim `api/auth.py` (Role
       viewer|reviewer|approver + `Actor` + `current_actor()` from `X-Bayleaf-Actor/-Role` headers,
       permissive dev-default, `require_role`) — the shared authz source and the single swap point for
       real auth. Off-gate stores are all pluggable (jsonl/sqlite/postgres, degrade-to-jsonl):
@@ -361,7 +360,7 @@ uv run python -c "from bayleaf import run_gate_from_dir; \
          the same bundle as JSON or a `.zip`. `scripts/seed_approved_germline.py` seeds the runnable
          `germline-panel` baseline. Feature routers (settings / review-queue / pipelines-lifecycle:
          save→submit→approve / dry-run / diff) fold into `main.py`.
-   c. `frontend/` = React + Vite + Tailwind: 12 operator screens in a three-group nav (Operate /
+   b. `frontend/` = React + Vite + Tailwind: 12 operator screens in a three-group nav (Operate /
       Analyze / Configure) + Admin + Inbox + Accession, behind a demo login (T-081, every production
       auth seam labelled NOT implemented). Two **frontend-only** governance capabilities over the wire
       roles — `isAdmin` and page-access (`access.ts`/`AccessContext`) — gate **VIEWS, not the API**:

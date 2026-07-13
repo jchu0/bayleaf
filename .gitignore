@@ -91,6 +91,7 @@ chat_sessions.jsonl
 chat_sessions.jsonl.tmp
 agent_bindings.jsonl
 agent_output_cache.jsonl
+library_entries.jsonl
 
 # Nextflow run artifacts (ADR-0003) — the generated pipeline TEXT under pipelines/ is committed;
 # its execution outputs are not. `nextflow run` writes these into the CWD it runs from.

@@ -8,8 +8,8 @@ sample.registered / finding.emitted / verdict.decided per sample, bracketed by
 analysis_run.started / .completed. Pass a ledger to capture (and persist) them;
 omit it and the events are still emitted into a throwaway in-memory ledger.
 
-This is the single entry point the UI calls. Swapping Streamlit for FastAPI later
-means calling `run_gate` from a request handler instead of a Streamlit script.
+This is the single entry point a delivery layer calls — e.g. the FastAPI service
+calls `run_gate` from a request handler; nothing here depends on the caller.
 """
 
 from __future__ import annotations
