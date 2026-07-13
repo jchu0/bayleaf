@@ -6,7 +6,7 @@ import { CollapsibleRow } from '../components/CollapsibleRow'
 import { DecisionContextRail } from '../components/DecisionContextRail'
 import { DecisionFeedback } from '../components/DecisionFeedback'
 import { DecisionLoading, DecisionReleased, DecisionSynthesisError } from '../components/DecisionStates'
-import { DecisionVerdictBar } from '../components/DecisionVerdictBar'
+import { FacetBar } from '../components/FacetBar'
 import { CitedEvidence } from '../components/EvidenceTable'
 import { Tabs } from '../components/Tabs'
 import { Truncate } from '../components/Truncate'
@@ -27,7 +27,7 @@ import type {
   RunbookPolicy,
   Verdict,
 } from '../types'
-import { GATE_DOT, GATE_TAG, VERDICT_ORDER, governingGate } from '../verdict'
+import { GATE_DOT, GATE_TAG, VERDICT_LABEL, VERDICT_ORDER, governingGate } from '../verdict'
 import { usePrefs } from '../context/PrefsContext'
 import { useAccess } from '../context/AccessContext'
 import { useRun } from '../hooks/useRun'
@@ -245,15 +245,6 @@ export function RunDetail() {
     const filtered = cards.filter((c) =>
       filter === 'all' ? true : filter === 'attention' ? c.verdict !== 'proceed' : c.verdict === filter,
     )
-    const chips: { key: CardFilter; label: string; count: number }[] = [
-      { key: 'all', label: 'All', count: cards.length },
-      { key: 'attention', label: 'Needs attention', count: detail.summary.n_attention },
-      { key: 'escalate', label: 'Escalate', count: counts.escalate ?? 0 },
-      { key: 'rerun', label: 'Rerun', count: counts.rerun ?? 0 },
-      { key: 'hold', label: 'Hold', count: counts.hold ?? 0 },
-      { key: 'proceed', label: 'Proceed', count: counts.proceed ?? 0 },
-    ]
-
     // Synthesis-error banner (rules decide / AI narrates): the rule engine produced findings but
     // narration is blank across the board — surface it, and STILL render the cards below.
     const synthesisError =
@@ -276,36 +267,61 @@ export function RunDetail() {
 
         {synthesisError && <DecisionSynthesisError onRetry={() => refresh()} />}
 
-        <DecisionVerdictBar counts={counts} />
-
-        {detail.summary.n_attention > 0 && (
-          <div className="mt-3.5 flex items-center gap-3 rounded-[12px] border border-hold-bd bg-hold-bg px-4 py-3">
-            <div className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[9px] border border-hold-bd bg-white">
-              <AlertTriangle size={18} strokeWidth={2} className="text-hold" />
-            </div>
-            <div className="flex-1 text-[13.5px] text-hold-fg">
-              <b>{detail.summary.n_attention} sample(s) need operator attention</b> before this run can be released.
-            </div>
-            {/* The review queue is RequirePage-gated — only invite the actor there when they can
-                see the page, so a restricted user isn't sent into an access-denied dead-end. */}
-            {canSee('queue') && (
-              <Link
-                to="/queue"
-                className="whitespace-nowrap rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-text-3"
-              >
-                Open review queue
-              </Link>
-            )}
-          </div>
-        )}
+        {/* ONE clickable FacetBar (UX-DUP RunDetail #4): the verdict bar's legend IS the filter
+            control, and the attention roll-up is its header CTA — replacing the old three renderings
+            of the same counts (bar + banner + a separate tab strip). */}
+        <FacetBar
+          counts={counts}
+          active={filter === 'all' || filter === 'attention' ? null : filter}
+          onSelect={(v) => setFilter(v ?? 'all')}
+          header={
+            detail.summary.n_attention > 0 ? (
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  aria-pressed={filter === 'attention'}
+                  onClick={() => setFilter(filter === 'attention' ? 'all' : 'attention')}
+                  title="Filter to the flagged samples (deep-linkable as ?filter=attention)"
+                  className={`inline-flex items-center gap-2 rounded-[9px] border bg-hold-bg px-3 py-1.5 text-[13px] text-hold-fg transition-[filter] ${
+                    filter === 'attention' ? 'border-hold' : 'border-hold-bd hover:brightness-[0.97]'
+                  }`}
+                >
+                  <AlertTriangle size={15} strokeWidth={2} className="text-hold" />
+                  <span>
+                    <b>{detail.summary.n_attention}</b> sample(s) need operator attention
+                  </span>
+                </button>
+                {/* The review queue is RequirePage-gated — only invite the actor there when they can
+                    see the page, so a restricted user isn't sent into an access-denied dead-end. */}
+                {canSee('queue') && (
+                  <Link
+                    to="/queue"
+                    className="whitespace-nowrap rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-text-3"
+                  >
+                    Open review queue
+                  </Link>
+                )}
+              </div>
+            ) : undefined
+          }
+        />
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <Tabs<CardFilter>
-              items={chips.map((c) => ({ value: c.key, label: c.label, count: c.count }))}
-              value={filter}
-              onChange={setFilter}
-            />
+          <div className="min-w-0 flex-1 text-[12.5px] text-text-2">
+            {filter === 'all' ? (
+              `${cards.length} sample${cards.length === 1 ? '' : 's'}`
+            ) : (
+              <>
+                Showing {filtered.length} · {filter === 'attention' ? 'needs attention' : VERDICT_LABEL[filter]}
+                <button
+                  type="button"
+                  onClick={() => setFilter('all')}
+                  className="ml-2 text-text-3 underline-offset-2 hover:text-text hover:underline"
+                >
+                  clear
+                </button>
+              </>
+            )}
           </div>
           <button
             onClick={() => {
