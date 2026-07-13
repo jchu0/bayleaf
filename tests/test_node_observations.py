@@ -24,6 +24,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import api.routers.node_observations as obs
+from api.agent_binding_store import get_agent_binding_store
 from api.main import app
 
 client = TestClient(app)
@@ -193,3 +194,61 @@ def test_traversal_run_id_rejected(run_tree: Path) -> None:
     with pytest.raises(HTTPException) as ei:
         obs._guard_run_id("../etc")
     assert ei.value.status_code == 404
+
+
+# ── scope-by-wiring enforcement over the populated publish dir (ADR-0024, T-148) ────────────────
+# The run's executed-graph bindings are snapshotted server-side at launch; when a request names its
+# ``agent`` AND the run has a captured snapshot, the agent may read ONLY the nodes it is wired to
+# (else 403), and the response is CAPPED to that binding's grants. Exercised here against the
+# ``run_tree`` publish dir so a WIRED agent gets REAL scoped files, not just an honest-empty view.
+
+
+@pytest.fixture
+def bound_run(run_tree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """``run_tree`` plus a captured executed-graph binding: agent ``qc_triage`` is WIRED to
+    ``n_fastp`` with the ``outputs`` grant only. Recorded into an ISOLATED binding store (its own
+    tmp jsonl) so the enforcement path is deterministic and never touches the repo-root default."""
+    monkeypatch.delenv("BAYLEAF_AGENT_BINDING_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_AGENT_BINDING_PATH", str(tmp_path / "bindings.jsonl"))
+    get_agent_binding_store().record(
+        _RUN,
+        [{"agent": "qc_triage", "node": "n_fastp", "grants": ["outputs"]}],
+        captured_at="2026-07-13T00:00:00+00:00",
+    )
+    return run_tree
+
+
+def test_wired_agent_reads_scoped_outputs(bound_run: Path) -> None:
+    """A WIRED agent reads the node's scoped outputs (200), capped to its binding's grants — proven
+    against a populated publish dir, so the wired path returns the REAL fastp files, not empty."""
+    resp = client.get(
+        f"/api/runs/{_RUN}/nodes/n_fastp/observations?agent=qc_triage", headers=_VIEWER
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["grants"] == ["outputs"]  # capped to the binding
+    assert {a["name"] for a in body["outputs"]} == {
+        "HG002.trim.R1.fastq.gz",
+        "HG002.trim.R2.fastq.gz",
+        "HG002.fastp.json",
+        "HG002.fastp.html",
+    }
+
+
+def test_unwired_agent_is_403(bound_run: Path) -> None:
+    """The SAME agent is 403'd on a node it is NOT wired to — the endpoint's scope-by-wiring 403
+    branch (the one intake-launched runs now reach, since intake snapshots its bindings too)."""
+    resp = client.get(f"/api/runs/{_RUN}/nodes/n_bwa/observations?agent=qc_triage", headers=_VIEWER)
+    assert resp.status_code == 403
+    assert "not wired" in resp.json()["detail"]
+
+
+def test_wired_agent_grants_capped_to_binding(bound_run: Path) -> None:
+    """A wired agent's grants are CAPPED to its binding: a reviewer (who clears the ``logs``
+    wire-role bar) asking outputs+logs on an outputs-only binding gets outputs only."""
+    resp = client.get(
+        f"/api/runs/{_RUN}/nodes/n_fastp/observations?agent=qc_triage&grants=outputs,logs",
+        headers=_REVIEWER,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["grants"] == ["outputs"]  # 'logs' dropped by the binding cap

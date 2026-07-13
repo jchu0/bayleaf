@@ -30,6 +30,7 @@ from fastapi.testclient import TestClient
 from scripts.seed_approved_germline import germline_graph_dict
 
 import api.routers.intake as intake
+from api.agent_binding_store import get_agent_binding_store
 from api.job_store import KIND_INTAKE
 from api.main import app
 
@@ -152,6 +153,10 @@ def env(tmp_path: Any, monkeypatch: Any) -> dict[str, Any]:
     monkeypatch.setattr(intake, "_NF_RUNS", tmp_path / ".nf-runs")
     monkeypatch.setenv("BAYLEAF_JOB_STORE", "jsonl")
     monkeypatch.setenv("BAYLEAF_JOB_PATH", str(tmp_path / "jobs.jsonl"))
+    # Isolate the agent-binding store too: submit now snapshots this run's executed-graph bindings
+    # (ADR-0024), so keep those writes off the repo-root default (mirrors test_scope_by_wiring).
+    monkeypatch.delenv("BAYLEAF_AGENT_BINDING_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_AGENT_BINDING_PATH", str(tmp_path / "bindings.jsonl"))
     intake._active.clear()
 
     fired: list[str] = []
@@ -409,6 +414,57 @@ def test_schedule_without_scheduled_at_is_422(env: dict[str, Any]) -> None:
 def test_schedule_bad_timestamp_is_422(env: dict[str, Any]) -> None:
     resp = _submit(run_name="RUN-SCHED-TS", mode="schedule", scheduled_at="not-a-date")
     assert resp.status_code == 422 and "ISO-8601" in resp.json()["detail"]
+
+
+# --- 2b. Agent-binding capture (ADR-0024 / T-148 — intake-launched enforcement parity) --------
+# Intake previously recorded NO executed-graph bindings, so ``GET .../observations?agent=X`` was
+# never gated for an intake-launched run. Submit now snapshots them server-side (keyed by run id),
+# exactly like the Builder-run path, so scope-by-wiring enforcement works identically here.
+
+
+def test_submit_snapshots_authored_pipeline_agent_bindings(env: dict[str, Any]) -> None:
+    """An intake run of an authored pipeline SNAPSHOTS that graph's agent bindings server-side, so
+    the node-observation read path can enforce scope-by-wiring for intake-launched runs — the
+    previously-missing run→executed-graph linkage."""
+    graph = {
+        **germline_graph_dict(),
+        "agent_bindings": [{"agent": "qc_triage", "node": "n_fastp", "grants": ["outputs"]}],
+    }
+    _seed_store(env["monkeypatch"], _record("bound-panel", 1, approved=True, graph=graph))
+    assert _submit(run_name="RUN-BOUND", pipeline="bound-panel").status_code == 202
+    rec = get_agent_binding_store().get("RUN-BOUND")
+    assert rec is not None
+    assert rec["bindings"] == [{"agent": "qc_triage", "node": "n_fastp", "grants": ["outputs"]}]
+
+
+def test_submit_records_empty_binding_snapshot_for_default_reference(env: dict[str, Any]) -> None:
+    """The committed germline reference carries no agent bindings, but intake still records an EMPTY
+    snapshot — so the enforcement path stays CONSISTENT (a captured-but-empty binding set still 403s
+    an unwired agent), never a silently-unenforced intake run."""
+    assert _submit(run_name="RUN-NOBIND").status_code == 202
+    rec = get_agent_binding_store().get("RUN-NOBIND")
+    assert rec is not None and rec["bindings"] == []
+
+
+def test_held_submit_snapshots_bindings_at_submit_not_release(env: dict[str, Any]) -> None:
+    """The snapshot is taken at SUBMIT (the executed graph is fixed then), so even a held run —
+    which fires the driver only at a later manual release — already carries its access record,
+    without the release path having to record anything."""
+    graph = {
+        **germline_graph_dict(),
+        "agent_bindings": [
+            {"agent": "qc_triage", "node": "n_mosdepth", "grants": ["outputs", "logs"]}
+        ],
+    }
+    _seed_store(env["monkeypatch"], _record("bound-hold", 1, approved=True, graph=graph))
+    resp = _submit(run_name="RUN-BOUND-HOLD", pipeline="bound-hold", mode="hold")
+    assert resp.status_code == 202 and resp.json()["status"] == "held"
+    assert env["fired"] == []  # held — the driver did not fire, yet the binding is already recorded
+    rec = get_agent_binding_store().get("RUN-BOUND-HOLD")
+    assert rec is not None
+    assert rec["bindings"] == [
+        {"agent": "qc_triage", "node": "n_mosdepth", "grants": ["outputs", "logs"]}
+    ]
 
 
 # --- 3. Backward-compatibility -----------------------------------------------------------------

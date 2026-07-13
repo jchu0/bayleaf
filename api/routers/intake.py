@@ -36,6 +36,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from scripts.run_giab_pipeline import GIAB_SAMPLE_IDS
 
+from api.agent_binding_store import get_agent_binding_store, normalize_bindings
 from api.auth import Actor, require_role
 from api.authored_pipeline import (
     check_inputs_suppliable,
@@ -268,12 +269,15 @@ def _run_pipeline(run_id: str) -> None:
             _active.discard(run_id)
 
 
-def _prepare_authored_pipeline(run_id: str, name: str, version: int | None) -> str:
+def _prepare_authored_pipeline(
+    run_id: str, name: str, version: int | None
+) -> tuple[str, list[dict[str, Any]]]:
     """Resolve + compile the named APPROVED pipeline and materialize it to this run's scratch.
 
     The SAME approval gate as ``POST /api/pipelines/run`` (ADR-0014/0021): a 409 if the name has no
     approved version, a 422 if the approved graph won't compile / has no tool node. Returns the path
-    to the compiled ``main.nf`` the driver runs via ``--pipeline``. Never a raw client graph.
+    to the compiled ``main.nf`` the driver runs via ``--pipeline`` AND this run's executed-graph
+    agent bindings (for the ADR-0024 access snapshot). Never a raw client graph.
 
     WS-09 fail-fast: before materializing, validate the compiled graph against what intake can
     actually run — its required external inputs must all be HG002 defaults intake supplies
@@ -286,7 +290,11 @@ def _prepare_authored_pipeline(run_id: str, name: str, version: int | None) -> s
     check_inputs_suppliable(graph, name, _INTAKE_SUPPLIABLE_KINDS)
     check_parse_contract(graph, name)
     main_nf = materialize_bundle(bundle, _NF_RUNS / run_id / "pipeline")
-    return str(main_nf)
+    # ADR-0024: the run's executed-graph agent bindings ride in the approved graph's opaque
+    # envelope (``graph.agent_bindings``, which the compiler never dereferences) — surface them so
+    # the caller can snapshot them server-side as THIS run's node-observation access record.
+    bindings = normalize_bindings((record.get("graph") or {}).get("agent_bindings"))
+    return str(main_nf), bindings
 
 
 @router.post("/runs", status_code=202)
@@ -332,11 +340,17 @@ def submit_run(
 
     # Resolve + compile the authored pipeline (if named) BEFORE reserving the run id, so a 409/422
     # from the approval gate leaves no half-registered job. Absent → the driver's germline default.
-    pipeline_path = (
-        _prepare_authored_pipeline(run_id, body.pipeline, body.pipeline_version)
-        if body.pipeline
-        else None
-    )
+    # Also capture the run's executed-graph agent bindings for the ADR-0024 access snapshot: a named
+    # authored pipeline carries them in its graph envelope; the committed germline reference has
+    # none, so its snapshot is empty (still enforceable — see the record call below).
+    pipeline_path: str | None
+    agent_bindings: list[dict[str, Any]]
+    if body.pipeline:
+        pipeline_path, agent_bindings = _prepare_authored_pipeline(
+            run_id, body.pipeline, body.pipeline_version
+        )
+    else:
+        pipeline_path, agent_bindings = None, []
 
     # The processing gate (ADR-0021): immediate fires the driver now; hold/schedule register the run
     # WITHOUT launching a thread (an operator releases it later). Initial status mirrors the mode.
@@ -394,6 +408,17 @@ def submit_run(
             get_job_store().upsert(record)
     if conflict:
         raise HTTPException(status_code=409, detail=f"run '{run_id}' already exists")
+
+    # Scope-by-wiring (ADR-0024): snapshot THIS run's executed-graph agent bindings so the
+    # node-observation read path enforces that an agent reads only nodes it is wired to — parity
+    # with the Builder-run path (``routers/pipeline_run.py``), closing the intake-launched
+    # enforcement gap (an intake run previously recorded no bindings, so ``?agent=X`` was never
+    # gated). The executed graph is FIXED at submit — the authored pipeline is already resolved into
+    # ``pipeline_path`` above, and a held/scheduled run reuses it at release — so ONE snapshot here
+    # covers every mode without touching the release path. The default reference records an EMPTY
+    # snapshot: a captured-but-empty binding set still 403s an unwired agent, never silently
+    # unenforced.
+    get_agent_binding_store().record(run_id, agent_bindings, captured_at=now)
 
     if body.mode == "immediate":
         threading.Thread(target=_run_pipeline, args=(run_id,), daemon=True).start()
