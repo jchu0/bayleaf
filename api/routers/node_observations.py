@@ -1,17 +1,19 @@
 """PHASE 4 — an attached advisory agent's SCOPED READ of a bound node's published outputs.
 
 This is the read mechanism behind the Wave-2 agent-binding model (``frontend/src/types.ts``
-``AgentBinding {agent, node, grants:('outputs'|'logs')[]}``, carried CLIENT-SIDE in the Builder
-graph envelope ``graph.agent_bindings``). The binding expresses INTENT — an advisory agent (e.g.
-QC-triage) should observe ONE graph node's results, a **narrowing** of what agents already see (the
-whole analysis-output tree). **Honest scope (WS-08):** the server does NOT persist or enforce that
-per-agent binding — there is no server-side ``AgentBinding`` model, and no run records which graph
-it executed. So access here is NOT gated by the binding; it is gated by (1) the node SCOPE (outputs
-matched to the node's own catalogued output globs — never a sibling's files, enforced below) and
-(2) the WIRE ROLE (``outputs``: viewer+; the PII-adjacent ``logs``: reviewer+). Real per-agent
-enforcement (load the run's bindings, match the requesting agent, intersect grants) is a documented
-deferral: it needs server-side binding persistence **and** a run→executed-graph linkage, neither of
-which exists today. The binding is an advisory client-side hint, not an access-control boundary:
+``AgentBinding {agent, node, grants:('outputs'|'logs')[]}``, carried in the Builder graph envelope
+``graph.agent_bindings``). The binding expresses INTENT — an advisory agent (e.g. QC-triage) should
+observe ONE graph node's results, a **narrowing** of what agents already see (the whole
+analysis-output tree). **Scope-by-wiring enforcement (ADR-0024, was the WS-08 deferral):** the
+run's executed-graph bindings are now SNAPSHOTTED server-side at launch (``api.agent_binding_store``
+keyed by ``run_id`` — the run→executed-graph linkage) and when a request identifies its ``agent``
+AND
+the run's bindings were captured, access IS gated by the binding: the agent must be WIRED to the
+node (else 403) and the response is CAPPED to the grants the binding gives. Two gates still apply
+underneath: (1) the node SCOPE (outputs matched to the node's own catalogued output globs — never a
+sibling's files) and (2) the WIRE ROLE (``outputs``: viewer+; the PII-adjacent ``logs``: reviewer+).
+Back-compat: a run with NO captured bindings (the committed reference, or a pre-capture run), or a
+request without ``agent``, keeps the node-scope + wire-role behavior — the enforcement is additive.
 
   ``GET /api/runs/{run_id}/nodes/{node_id}/observations?grants=outputs[,logs]``
 
@@ -67,6 +69,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.agent_binding_store import get_agent_binding_store, granted_grants
 from api.auth import Actor, require_role
 from api.deid import DEID_POLICY_ID, default_policy, scrub_text
 from api.job_store import KIND_INTAKE, get_job_store
@@ -88,6 +91,13 @@ AgentGrant = Literal["outputs", "logs"]
 # not built in the argument default). Repeated (?grants=outputs&grants=logs) or comma-joined
 # (?grants=outputs,logs); absent → the binding model's default-on 'outputs'.
 _GRANTS_QUERY = Query(None, description="Repeated or comma-joined: outputs[,logs]")
+
+# The requesting agent id (ADR-0024 scope-by-wiring enforcement). When supplied AND the run has a
+# captured executed-graph (get_agent_binding_store().get(run_id) is not None), access is enforced:
+# the agent must be WIRED to this node, and the response is capped to the grants the binding gives.
+_AGENT_QUERY = Query(
+    None, description="Requesting agent id; enforces scope-by-wiring when the run's bindings exist"
+)
 
 # Last N lines of a task log to return — a tail, not the whole file (a real log can be large; an
 # agent needs the recent context, and a bounded tail keeps the response small + the scrub cheap).
@@ -378,6 +388,7 @@ def node_observations(
     run_id: str,
     node_id: str,
     grants: list[str] | None = _GRANTS_QUERY,
+    agent: str | None = _AGENT_QUERY,
     actor: Actor = Depends(require_role("viewer", "reviewer", "approver")),
 ) -> NodeObservation:
     """A bound advisory agent's SCOPED READ of a node's published outputs for a run (off the gate).
@@ -402,4 +413,20 @@ def node_observations(
                 "a viewer may read 'outputs' only"
             ),
         )
+    # Scope-by-wiring enforcement (ADR-0024): when the caller identifies its agent AND this run's
+    # executed-graph bindings were captured at launch, the agent may read ONLY nodes it is wired
+    # to, and only the grants that binding gives (the response is CAPPED). A run with no captured
+    # bindings (the committed reference, or a pre-capture run) is not enforceable here — today's
+    # node-scope + wire-role behavior stands (documented back-compat; the agent-consumption path,
+    # when built, always passes `agent`).
+    if agent:
+        rec = get_agent_binding_store().get(run_id)
+        if rec is not None:
+            allowed = granted_grants(rec.get("bindings") or [], agent, node_id)
+            if allowed is None:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"agent '{agent}' is not wired to node '{node_id}' in this run's graph",
+                )
+            parsed = [g for g in parsed if g in allowed]  # cap to the binding's grants
     return gather_node_observations(run_id, node_id, parsed)
