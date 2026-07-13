@@ -85,6 +85,13 @@ settings_overrides.jsonl
 settings_overrides.jsonl.tmp
 settings_overrides.sqlite
 
+# Agent-layer off-gate sinks (2026-07-13) — local product state, never committed (.sqlite already
+# covered by *.sqlite above; .tmp catches the atomic-rewrite temp file).
+chat_sessions.jsonl
+chat_sessions.jsonl.tmp
+agent_bindings.jsonl
+agent_output_cache.jsonl
+
 # Nextflow run artifacts (ADR-0003) — the generated pipeline TEXT under pipelines/ is committed;
 # its execution outputs are not. `nextflow run` writes these into the CWD it runs from.
 .nextflow/

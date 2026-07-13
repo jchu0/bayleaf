@@ -29,10 +29,18 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.agent_output_cache import cache_through
 from api.auth import Actor, require_role
 from api.library_store import get_library_store
 from bayleaf.identifiers import new_id, utc_now
-from bayleaf.node_author import NodeProposal, check_conformance, propose_node, render_scaffolds
+from bayleaf.node_author import (
+    NODE_AUTHOR_CORPUS_VERSION,
+    NodeProposal,
+    check_conformance,
+    get_node_author_agent,
+    propose_node,
+    render_scaffolds,
+)
 
 router = APIRouter(prefix="/api", tags=["node_author"])
 
@@ -65,9 +73,31 @@ def get_node_proposal(
     runs a tool, or sets a verdict (ADR-0001/0003). A blank or unmatched request yields a
     conservative "defer to a human" proposal that fabricates no tool or ports — never an error.
     Stub-first ($0) unless ``BAYLEAF_NODE_AUTHOR_AGENT=claude`` is set; it degrades to the stub
-    on any live-API error.
+    on any live-API error. Cache-through (api/agent_output_cache): an identical request is served
+    from the backend, not regenerated (no Claude re-call on navigation).
     """
-    return propose_node(request)
+    return _cached_proposal(request)
+
+
+def _cached_proposal(request: str) -> NodeProposal:
+    """The cache-through node proposal — shared by the proposal + scaffolds endpoints so a request
+    that was already proposed (or scaffolded) reuses the SAME cached proposal (no repeat Claude
+    call). Non-``None`` always (``propose_node`` returns a defer proposal, never ``None``)."""
+    agent = get_node_author_agent()
+    model = getattr(agent, "model", None) if agent.name == "claude" else None
+    proposal = cache_through(
+        namespace="node_author",
+        key_inputs={
+            "request": request,
+            "agent": agent.name,
+            "model": model,
+            "corpus_version": NODE_AUTHOR_CORPUS_VERSION,
+        },
+        generate=lambda: propose_node(request, agent=agent),
+        model_cls=NodeProposal,
+        expected_by=agent.name,
+    )
+    return proposal if proposal is not None else propose_node(request)
 
 
 class NodeScaffolds(BaseModel):
@@ -95,7 +125,7 @@ def get_node_scaffolds(
     skeleton; a HUMAN authors the compute (compose ≠ execute, ADR-0001/0003). Read-only, runs no
     tool; an unmatched request yields an empty ``scaffolds`` (nothing to scaffold), never an error.
     """
-    proposal = propose_node(request)
+    proposal = _cached_proposal(request)  # reuse the cached proposal from the proposal endpoint
     return NodeScaffolds(
         request=request,
         matched=proposal.matched,

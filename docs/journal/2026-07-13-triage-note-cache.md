@@ -44,6 +44,27 @@ The commit was initially made on `main` by mistake (right after merging PR #5 th
 `main`); recovered by moving it to `feat/triage-cache` and resetting local `main` to `origin/main`
 (the commit was never pushed to `main`). This change ships via its own PR.
 
+## Generalized to all cacheable agent reads (same session)
+
+The triage cache was then generalized into **`api/agent_output_cache.py`** — one reusable store
+(`agent_output_cache`, jsonl/sqlite/postgres) + `agent_cache_key(namespace, key_inputs)` +
+`cache_through(namespace, key_inputs, generate, model_cls, expected_by)`. `api/triage_cache.py`
+became a thin wrapper over it (the triage-specific `triage_cache_store.py` was removed). Then the
+other stable-input, live-Claude, re-fetched-on-navigation reads were wired through it:
+
+1. **Pipeline-repair proposal** (`GET /api/monitoring/signatures/{sig}/repair`) — key: signature +
+   count + run_ids + agent + model + corpus version.
+2. **Node-author proposal** (`GET /api/builder/node-proposal`) — key: request + agent + model +
+   corpus version; the **scaffolds** endpoint reuses the SAME cached proposal (shared key), so it
+   never triggers a second Claude call.
+3. **Archivist digest** (`GET /api/runs/{id}/archive-digest`, `/api/archive/index`) — key: scope +
+   run id(s) + agent + model + digest version.
+
+Same honest `expected_by` policy across all four (a live→stub degrade isn't cached under the live
+key). **NOT cached (deliberate):** system-agents chat (already persisted in `chat_store`) and
+free-text triage-ask / chat turns (each question differs — nothing to hit). Endpoint-level tests
+assert each read returns the SAME result id twice (cached, not regenerated); full suite 781 passed.
+
 ## Follow-ups (not built)
 
 - Cache **eviction/TTL** — entries are keyed by content so they self-supersede, but old keys
