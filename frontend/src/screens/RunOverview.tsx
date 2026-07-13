@@ -1,7 +1,6 @@
 import { AlertTriangle, ChevronRight, RotateCw, Search, Truck } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../api'
 import { SegmentBar } from '../components/Bar'
 import { DateRangePicker } from '../components/DateRangePicker'
 import { PageHeader } from '../components/PageHeader'
@@ -9,6 +8,7 @@ import { Pager, type PerPage } from '../components/Pager'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { Tabs } from '../components/Tabs'
 import { useApiHealth, type Health } from '../hooks/useApiHealth'
+import { useRuns } from '../hooks/useRuns'
 import type { RunStatus, RunSummary } from '../types'
 import { RUN_STATUS_META as STATUS_META, VERDICT_BAR, VERDICT_LABEL } from '../verdict'
 
@@ -233,11 +233,13 @@ function RunsEmpty({
 }
 
 export function RunOverview() {
-  const [runs, setRuns] = useState<RunSummary[] | null>(null)
-  // Header-borne full-set facet counts (X-PipeGuard-Status-Counts) — authoritative and stable
-  // across the client-side filters below, so a chip's count never shifts as you narrow the list.
-  const [statusCounts, setStatusCounts] = useState<Record<RunStatus, number> | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // The runs list + header-borne full-set facet counts (X-PipeGuard-Status-Counts, authoritative and
+  // stable across the client-side filters below so a chip's count never shifts as you narrow the
+  // list) come from the shared useRuns store (UX-DUP Runs #6) — the SAME single fetch that feeds the
+  // Layout Sidebar/TopBar and the RunSelector fallback, not a third parallel copy. `refresh` drives
+  // the error-state retry. The scale kit (search · facet · sort · date · paginate) still runs
+  // client-side over that one fetch (see the memo below).
+  const { runs, statusCounts, error, refresh: load } = useRuns()
 
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFacet>('all')
@@ -246,26 +248,6 @@ export function RunOverview() {
   const [dateEnd, setDateEnd] = useState<string | null>(null)
   const [perPage, setPerPage] = useState<PerPage>('25')
   const [page, setPage] = useState(1)
-
-  // The whole scale kit (search · facet · sort · date · paginate) runs client-side over one
-  // fetch: date-range has no backend param (F16) and it couples with pagination, so a single
-  // in-memory pass keeps facet counts + the pager trivially consistent (28 runs). runsPage still
-  // supplies the header-borne total + status-facet counts a header-blind runs() would drop.
-  const load = useCallback(() => {
-    setError(null)
-    setRuns(null)
-    api
-      .runsPage()
-      .then((res) => {
-        setRuns(res.data)
-        setStatusCounts(res.statusCounts)
-      })
-      .catch((e) => setError(String(e)))
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
 
   const filtered = useMemo(() => {
     if (!runs) return []
