@@ -45,7 +45,7 @@ const GATE_PASS_LABEL: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC 
 // as the run count changes; the chart holds a ~14-day frame (FRAME_W) and scrolls sideways beyond it.
 const COL_W = 42
 const FRAME_W = 588
-const CLEARED_KEY = 'pipeguard.monitoring.cleared'
+const CLEARED_KEY = 'bayleaf.monitoring.cleared'
 
 // Throughput-bar date in DD-MM-YY (maintainer preference, includes the year) from the run's [Header]
 // ISO date. We never fabricate a date: an undated run (shouldn't appear in a dated window) → run id.
@@ -127,7 +127,7 @@ export function Monitoring() {
   // Server-side pagination of the per-run throughput array (`runs[]`), the payload-size guard at
   // volume (T-072). Only the throughput chart is sliced; the KPIs, gate rates, and signatures
   // inside `data` stay aggregated over the whole window server-side. `runsTotal` is the pre-slice
-  // run count from the X-PipeGuard-Total-Count header, so the Pager sizes correctly.
+  // run count from the X-Bayleaf-Total-Count header, so the Pager sizes correctly.
   const [runsPerPage, setRunsPerPage] = useState<PagerPerPage>('25')
   const [runsPage, setRunsPage] = useState(1)
   const [runsTotal, setRunsTotal] = useState(0)

@@ -5,7 +5,7 @@
 | **Status** | Active |
 | **Date** | 2026-07-07 (MST) |
 | **From → To** | Alignment review (Claude Code) → design |
-| **Graded** | `PipeGuard.html` prototype vs the final schema/QC design |
+| **Graded** | `bayleaf.html` prototype vs the final schema/QC design |
 | **Related** | [frontend-design-brief.md](../frontend-design-brief.md), [schemas.md](../../../data/schemas.md), [qc_metrics.md](../../../data/qc_metrics.md), [metric_registry.md](../../../data/metric_registry.md) |
 
 ## Context

@@ -1,7 +1,7 @@
 """Regenerate ``pipelines/germline/`` from the seeded germline card graph.
 
 The committed reference pipeline is exactly the compiler's output for the Builder's seeded germline
-template (``pipeguard.nextflow.germline_graph``), so there is one source of truth and a drift test
+template (``bayleaf.nextflow.germline_graph``), so there is one source of truth and a drift test
 (``tests/test_nextflow_compile.py``) pins it. Run this after changing the catalog or the seeded
 graph; the drift test fails until you do.
 
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pipeguard.nextflow import compile_graph, germline_graph
+from bayleaf.nextflow import compile_graph, germline_graph
 
 _ROOT = Path(__file__).resolve().parent.parent / "pipelines" / "germline"
 

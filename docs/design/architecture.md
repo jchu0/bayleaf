@@ -8,8 +8,8 @@
 | **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md), [schemas.md](../data/schemas.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [provenance.md](../data/provenance.md), [design/ui-conventions.md](ui-conventions.md), [design/builder-cards/](builder-cards/), [design/node-authoring-agent.md](node-authoring-agent.md), [design/agent-authoring-contract.md](agent-authoring-contract.md), [design/variant-interpretation.md](variant-interpretation.md), [design/nextflow-codegen.md](nextflow-codegen.md), [HISTORY.md](../HISTORY.md) (the dated wave/batch build chronology relocated out of this doc) |
 
 > **Naming.** The product surface is now branded **bayleaf**; the Python package, env vars
-> (`PIPEGUARD_*`), and repository stay `pipeguard`. This doc uses "bayleaf" for the product and
-> `pipeguard` for the code.
+> (`BAYLEAF_*`), and repository stay `bayleaf`. This doc uses "bayleaf" for the product and
+> `bayleaf` for the code.
 
 > **Chronology lives in [HISTORY.md](../HISTORY.md).** This doc describes the *current* system
 > shape and its honest limits. For "when/why did screen X or seam Y land" (the former
@@ -55,7 +55,7 @@ Every finding and verdict is labelled with the gate it came from:
  (offline fallback)       (read-API seam, ADR-0010)   (Vite+Tailwind, ADR-0014)
 ```
 
-1. **Core (`src/pipeguard/`), framework-agnostic.**
+1. **Core (`src/bayleaf/`), framework-agnostic.**
    - `parsers` → a typed `RunArtifacts` bundle (tolerant: a missing field is a signal).
    - `metrics` — the **metric registry** (versioned `metric_registry.yaml` + `MetricValue`):
      resolves each source key to a canonical `our_key` and normalizes the value to a canonical
@@ -90,12 +90,12 @@ Every finding and verdict is labelled with the gate it came from:
    synthesizer = **six AI seams**, each stub-first ($0), lazy `anthropic` import, degrade-to-stub on
    any error (ADR-0006). The full roster + shared invariants live in [agents.md](agents.md):
    1. **QC-triage** (`triage/`) — grounds a `TriageNote` on a flagged card in a curated corpus.
-   2. **Pipeline-repair** (`src/pipeguard/pipeline_repair/`) — a recurring cross-run signature →
+   2. **Pipeline-repair** (`src/bayleaf/pipeline_repair/`) — a recurring cross-run signature →
       a cited, human-reviewed `RepairProposal` (never edits a pipeline, never sets a verdict).
    3. **Archivist** (`api/archivist.py`, off-gate) — released runs → an organizational
       `ArchiveDigest` (no verdict/confidence field by construction).
    4. **Feedback-triage** (`api/feedback_agent.py`, off-gate) — categorizes the in-app feedback corpus.
-   5. **Node-authoring** (`src/pipeguard/node_author/`, T-046) — retrieves over a curated
+   5. **Node-authoring** (`src/bayleaf/node_author/`, T-046) — retrieves over a curated
       **9-card** tool corpus (7 germline tools + Reference FASTA + Panel BED) to propose a typed
       `NodeProposal` for the Pipeline Builder palette. A **read-only** `GET /api/builder/node-proposal`
       (W2, T-127) backs the Builder's "Author a tool node" modal. **Accept path is backend-built**
@@ -103,7 +103,7 @@ Every finding and verdict is labelled with the gate it came from:
       proposal server-side, runs it through `node_author.conformance.check_conformance()`
       (mechanically enforces [agent-authoring-contract.md](agent-authoring-contract.md)'s capability
       pins), and stores a `draft` `LibraryEntry` — metadata only, never a runnable command — in
-      `api/library_store.py` (`PIPEGUARD_LIBRARY_STORE=jsonl|sqlite`, ADR-0016 item 9). A companion
+      `api/library_store.py` (`BAYLEAF_LIBRARY_STORE=jsonl|sqlite`, ADR-0016 item 9). A companion
       `node_author/importer.py` deterministically parses an nf-core `nextflow_schema.json` into a
       proposal for a tool outside the curated corpus (unknown kinds → reserved, never invented).
       **Still deferred, labelled:** the Builder's own "Accept to library" button (no frontend caller
@@ -117,7 +117,7 @@ Every finding and verdict is labelled with the gate it came from:
    settings) — plus an **`isAdmin`-gated Admin** group (`/admin`, off the deterministic gate).
    Everything in this layer is **additive over an untouched core** — sorting, paging, aggregation,
    product writes, the draft→approve authoring lifecycle, and auth all live in `api/`, never
-   `src/pipeguard/`. Two frontend-only governance capabilities (`isAdmin`, and a page-access
+   `src/bayleaf/`. Two frontend-only governance capabilities (`isAdmin`, and a page-access
    view-gate `access.ts`/`AccessContext`) layer over the wire roles; both gate **VIEWS, not API
    authorization** — server-side `require_role` (below) is the only real enforcement. The build
    chronology (batches 2–8, waves 7–12, the P3-backlog + audit + fleet + custom-script sessions) is
@@ -130,11 +130,11 @@ Every finding and verdict is labelled with the gate it came from:
    - **Auth / RBAC primitive (`api/auth.py`).** One shared identity+authorization source for every
      draft→approve flow: `Role` = `viewer` < `reviewer` < `approver` (authorization is *set-
      membership*, not an ordinal compare), the frozen `Actor{id, role}`, `current_actor()` (reads
-     `X-PipeGuard-Actor`/`-Role` headers), and `require_role(*roles)` (403s an under-privileged
+     `X-Bayleaf-Actor`/`-Role` headers), and `require_role(*roles)` (403s an under-privileged
      caller, else returns the `Actor` so a handler captures `actor.id` into `*_by` audit fields).
      **Honest posture: a documented DEV SHIM, not a production auth boundary** — header-trust is
      permissive (no headers → `Actor(id="dev", role="approver")`), so any client can name itself; a
-     one-shot log warns, and `PIPEGUARD_AUTH_STRICT` opt-in defaults the header-less role to
+     one-shot log warns, and `BAYLEAF_AUTH_STRICT` opt-in defaults the header-less role to
      `viewer`. A real deployment swaps *only* `current_actor()` for a verified IdP returning the
      same `Actor`; every `require_role(...)` gate stays unchanged (a single chokepoint to harden).
      Wholly OFF the gate: gates who may *write* product state, never a verdict/finding/confidence.
@@ -146,7 +146,7 @@ Every finding and verdict is labelled with the gate it came from:
      per-sample verdict). `GET /api/runs` also has backward-compatible **Tier-0 list params** (bare
      call = byte-identical body): a `status` filter, a platform-aware case-insensitive `q`, a closed
      `sort` vocabulary + aliases, a `verdict` filter, `page`/`limit` pagination, totals + a
-     full-set per-status facet count on `X-PipeGuard-*` headers.
+     full-set per-status facet count on `X-Bayleaf-*` headers.
    - **Monitoring aggregate.** `GET /api/monitoring?window=&page=&limit=` returns one pre-aggregated
      dashboard payload (fleet KPIs, per-run rows, per-gate flagged/total, ranked recurring
      signatures). `auto_proceed_pct` and each signature's `trend` are **display heuristics**, not
@@ -191,7 +191,7 @@ Every finding and verdict is labelled with the gate it came from:
      submitted samplesheet and triggers the Nextflow-first driver (`scripts/run_giab_pipeline.py`) as
      a background subprocess (409 on a dup run id, reserved atomically under the lock);
      `GET /api/runs/{id}/intake-status` polls `queued|running|complete|failed|lost`. The job registry
-     is a durable job store (`api/job_store.py`, `PIPEGUARD_JOB_STORE=jsonl|sqlite`) so a job survives
+     is a durable job store (`api/job_store.py`, `BAYLEAF_JOB_STORE=jsonl|sqlite`) so a job survives
      a restart (a gone `running` process reconciles to `complete` if its dir is on disk, else `lost`,
      never an eternal spinner); the driver runs in its own process group, reaped with `killpg` on the
      shared `DRIVER_TIMEOUT_S`. **Operator-gated + authored-pipeline processing (ADR-0021):**
@@ -215,7 +215,7 @@ Every finding and verdict is labelled with the gate it came from:
      surfaced by the Builder's "Export to Nextflow" button; a cycle/bad/empty/blank-custom-script
      graph 422s with the compiler's reason. Never persists, never runs Nextflow.
    - **Sandboxed file browser (`api/routers/files.py`, ADR-0020's Branch B).** `GET /api/files?root=&path=`
-     lists one directory level under an **allowlisted** root (`PIPEGUARD_BROWSE_ROOTS`, default
+     lists one directory level under an **allowlisted** root (`BAYLEAF_BROWSE_ROOTS`, default
      `{"data": <repo>/data}`) — metadata only (name/size/ext-inferred kind), never file bytes;
      traversal-hardened (`..`/absolute → 400, an escaping symlink → 403, unknown root/missing dir →
      404), any authenticated role. Powers the Builder's custom-script `FileBrowser.tsx` "Browse…" picker.
@@ -224,9 +224,9 @@ Every finding and verdict is labelled with the gate it came from:
    verdict category, with cited observed-vs-expected evidence. Like every other seam it **formats
    what the gate decided, never a verdict** (ADR-0001): stub-first ($0, in-memory), with Slack /
    Teams / Discord adapters all off by default — each armed only by its OWN live flag
-   (`PIPEGUARD_SLACK_LIVE` / `PIPEGUARD_TEAMS_LIVE` / `PIPEGUARD_DISCORD_LIVE`, the webhook pair also
-   needing `PIPEGUARD_{TEAMS,DISCORD}_WEBHOOK_URL`) — and every send recorded as a
-   `notification.emitted` ledger event. `python -m pipeguard.notify <run_dir>` is the CLI.
+   (`BAYLEAF_SLACK_LIVE` / `BAYLEAF_TEAMS_LIVE` / `BAYLEAF_DISCORD_LIVE`, the webhook pair also
+   needing `BAYLEAF_{TEAMS,DISCORD}_WEBHOOK_URL`) — and every send recorded as a
+   `notification.emitted` ledger event. `python -m bayleaf.notify <run_dir>` is the CLI.
 
 ## Data flow
 
@@ -249,7 +249,7 @@ the deterministic path, and an approved config override records intent without m
 2. **AI is OFF by default** with a deterministic fallback; all six AI seams (synthesizer, QC-triage,
    feedback-triage, pipeline-repair, archivist, node-authoring) flip via env, $0 by default (ADR-0006).
 3. **Event log is authoritative**; the DB is a disposable, rebuildable projection (ADR-0002).
-4. **Core stays framework-agnostic** — no Streamlit/FastAPI/React imports in `src/pipeguard/`; ports & adapters (ADR-0003).
+4. **Core stays framework-agnostic** — no Streamlit/FastAPI/React imports in `src/bayleaf/`; ports & adapters (ADR-0003).
 5. **Findings are immutable + content-hashed**; confidence is omitted until grounded.
 6. **Off-gate product state never re-enters the gate** — in-app feedback, saved Pipeline Builder
    graphs, config-threshold overrides, and review-queue tickets are written by dedicated `api/` seams
@@ -266,36 +266,36 @@ the deterministic path, and an approved config override records intent without m
    `ConfirmProvider`/`useConfirm()`) requires a named confirmation before a stakes-y off-gate write
    fires; low-stakes/non-destructive actions stay direct one-clicks. This is the frontend-UX
    realization of the audit guarantee ADR-0017 already requires server-side (ADR-0017 realized addendum).
-9. **Compose ≠ execute** — the core (`src/pipeguard/`, incl. the Nextflow compiler) never runs a
+9. **Compose ≠ execute** — the core (`src/bayleaf/`, incl. the Nextflow compiler) never runs a
    tool. Only out-of-core drivers (`scripts/run_giab_pipeline.py`) and the API layer (`intake.py`,
    `pipeline_run.py`) shell out to Nextflow, and only inside a saved+approved pipeline for an
-   operator-authored custom script (ADR-0003/0020). PipeGuard transcribes an operator's custom
+   operator-authored custom script (ADR-0003/0020). bayleaf transcribes an operator's custom
    command verbatim — it never authors or vets it.
 
 ## Swappable seams (the flex points)
 
 | Seam | Switch | Default |
 |---|---|---|
-| Synthesizer (narration) | `PIPEGUARD_SYNTHESIZER=stub\|claude` | stub ($0) |
-| Triage agent | `PIPEGUARD_TRIAGE_AGENT=stub\|claude` | stub ($0) |
-| Feedback-triage agent (off-gate) | `PIPEGUARD_FEEDBACK_AGENT=stub\|claude` (`_MODEL`); advisory categorization of the in-app feedback corpus (`api/feedback_agent.py`) | stub ($0) |
-| Pipeline-repair agent (advisory) | `PIPEGUARD_PIPELINE_REPAIR_AGENT=stub\|claude` (`_MODEL`, default Opus-high); cross-run remediation over a recurring signature (`src/pipeguard/pipeline_repair/`) | stub ($0) |
-| Archivist agent (off-gate) | `PIPEGUARD_ARCHIVIST_AGENT=stub\|claude` (`_MODEL`, default Haiku); organizational digest over released runs (`api/archivist.py`) | stub ($0) |
-| Node-authoring agent (advisory) | `PIPEGUARD_NODE_AUTHOR_AGENT=stub\|claude` (`_MODEL`, default Sonnet); retrieves a `NodeProposal` over a curated **9-card** tool corpus (`src/pipeguard/node_author/`, T-046). Read endpoint `GET /api/builder/node-proposal` + Builder wiring shipped (W2); `POST /api/builder/node-proposal/accept` → library store shipped (T-135, backend-only). See [agent-authoring-contract.md](agent-authoring-contract.md) | stub ($0) |
-| Tool-card library store (off-gate product) | `PIPEGUARD_LIBRARY_STORE=jsonl\|sqlite` (`api/library_store.py`, T-135); accepted `NodeProposal`s as versioned `draft` `LibraryEntry` records, gated through `check_conformance()` at accept time. **No Postgres by design** — node-local corpus, not shared product state (ADR-0016 item 9) | JSONL |
-| Sandboxed file browser (off-gate, read) | `GET /api/files?root=&path=` (`api/routers/files.py`, ADR-0020); one directory level under an ALLOWLISTED root (`PIPEGUARD_BROWSE_ROOTS`, default `{"data": <repo>/data}`) — metadata only, traversal-hardened; any authenticated role | allowlisted `data/` only |
-| Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack\|teams\|discord`; each adapter armed by its OWN `PIPEGUARD_{SLACK,TEAMS,DISCORD}_LIVE=1` (Teams/Discord also need `_WEBHOOK_URL`) | stub ($0, no network) |
+| Synthesizer (narration) | `BAYLEAF_SYNTHESIZER=stub\|claude` | stub ($0) |
+| Triage agent | `BAYLEAF_TRIAGE_AGENT=stub\|claude` | stub ($0) |
+| Feedback-triage agent (off-gate) | `BAYLEAF_FEEDBACK_AGENT=stub\|claude` (`_MODEL`); advisory categorization of the in-app feedback corpus (`api/feedback_agent.py`) | stub ($0) |
+| Pipeline-repair agent (advisory) | `BAYLEAF_PIPELINE_REPAIR_AGENT=stub\|claude` (`_MODEL`, default Opus-high); cross-run remediation over a recurring signature (`src/bayleaf/pipeline_repair/`) | stub ($0) |
+| Archivist agent (off-gate) | `BAYLEAF_ARCHIVIST_AGENT=stub\|claude` (`_MODEL`, default Haiku); organizational digest over released runs (`api/archivist.py`) | stub ($0) |
+| Node-authoring agent (advisory) | `BAYLEAF_NODE_AUTHOR_AGENT=stub\|claude` (`_MODEL`, default Sonnet); retrieves a `NodeProposal` over a curated **9-card** tool corpus (`src/bayleaf/node_author/`, T-046). Read endpoint `GET /api/builder/node-proposal` + Builder wiring shipped (W2); `POST /api/builder/node-proposal/accept` → library store shipped (T-135, backend-only). See [agent-authoring-contract.md](agent-authoring-contract.md) | stub ($0) |
+| Tool-card library store (off-gate product) | `BAYLEAF_LIBRARY_STORE=jsonl\|sqlite` (`api/library_store.py`, T-135); accepted `NodeProposal`s as versioned `draft` `LibraryEntry` records, gated through `check_conformance()` at accept time. **No Postgres by design** — node-local corpus, not shared product state (ADR-0016 item 9) | JSONL |
+| Sandboxed file browser (off-gate, read) | `GET /api/files?root=&path=` (`api/routers/files.py`, ADR-0020); one directory level under an ALLOWLISTED root (`BAYLEAF_BROWSE_ROOTS`, default `{"data": <repo>/data}`) — metadata only, traversal-hardened; any authenticated role | allowlisted `data/` only |
+| Notify (outbound) | `BAYLEAF_NOTIFIER=stub\|slack\|teams\|discord`; each adapter armed by its OWN `BAYLEAF_{SLACK,TEAMS,DISCORD}_LIVE=1` (Teams/Discord also need `_WEBHOOK_URL`) | stub ($0, no network) |
 | Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — add/remap a source metric without touching rules | canonical decimals; ON the critical path |
 | Repository (persistence) | `Repository` port; SqliteRepository **and** guarded PostgresRepository built (ADR-0016), `get_repository()` selects | SQLite + JSONL (Postgres off by default) |
-| Artifact store (staging) | `PIPEGUARD_ARTIFACT_STORE=local\|s3` (`src/pipeguard/artifacts/`); S3 adapter OFF by default (lazy `boto3`, degrade-to-local), realized + tested; entry `run_gate_from_store` (ADR-0003) | `local` |
+| Artifact store (staging) | `BAYLEAF_ARTIFACT_STORE=local\|s3` (`src/bayleaf/artifacts/`); S3 adapter OFF by default (lazy `boto3`, degrade-to-local), realized + tested; entry `run_gate_from_store` (ADR-0003) | `local` |
 | Feedback sink (off-gate) | `FeedbackStore` port (`api/feedback_store.py`); jsonl/sqlite/postgres, degrade-to-JSONL (ADR-0016) | JSONL |
-| Pipeline-graph store (off-gate product) | `PIPEGUARD_PIPELINE_STORE=jsonl\|sqlite\|postgres` (`api/pipeline_store.py`); degrade-to-JSONL, never logs the DSN (ADR-0016) | JSONL |
-| Settings-override store (off-gate authoring) | `PIPEGUARD_SETTINGS_STORE=jsonl\|sqlite\|postgres` (`api/settings_store.py`); records intent, **never mutates the live runbook** (ADR-0001/0016) | JSONL |
-| Review-queue store (off-gate product) | `PIPEGUARD_REVIEW_STORE=jsonl\|sqlite\|postgres` (`api/review_store.py`); ticket lifecycle over already-decided samples (ADR-0010/0016) | JSONL |
-| Share sink (off-gate egress) | `PIPEGUARD_SHARE_STORE=jsonl\|sqlite\|postgres` (`api/share_store.py`, ADR-0018 D3); the de-identified share/`DATA_EXPORTED` ledger, separate from the gate's `EventLedger`; degrade-to-JSONL | JSONL |
-| Durable job store (off-gate execution bookkeeping) | `PIPEGUARD_JOB_STORE=jsonl\|sqlite` (`api/job_store.py`, T-131); intake/Builder-run jobs survive a restart (`lost` if no result dir, else `complete`). **No Postgres by design** — node-local scratch (ADR-0016 item 8). Hosts the shared, `killpg`-reaped `run_driver()` + the atomic dup-run-id reservation | JSONL |
-| Auth / identity (off-gate) | `api/auth.py` `current_actor()` header-shim (`X-PipeGuard-Actor`/`-Role`) → swap for a verified IdP (OIDC / signed JWT) returning the same `Actor`; downstream `require_role(...)` unchanged (ADR-0010/0017) | permissive dev shim (`id=dev`, `role=approver`) |
-| Pipeline codegen (compose, never execute) | `pipeguard.nextflow.compile_graph()` — a card graph → Nextflow bundle; `POST /api/pipelines/compile` (JSON/`.zip`); curated catalog, uncatalogued tool → a labelled placeholder. **Operator-authored custom-script processes (ADR-0020)** are a third path: a non-empty `NfNode.script` renders verbatim (catalog never consulted); a blank script is a `CompileError`; reaches a compute host only behind the W1 `POST /api/pipelines/run` approval gate ([nextflow-codegen.md](nextflow-codegen.md), T-123) | pure text codegen, no execution |
+| Pipeline-graph store (off-gate product) | `BAYLEAF_PIPELINE_STORE=jsonl\|sqlite\|postgres` (`api/pipeline_store.py`); degrade-to-JSONL, never logs the DSN (ADR-0016) | JSONL |
+| Settings-override store (off-gate authoring) | `BAYLEAF_SETTINGS_STORE=jsonl\|sqlite\|postgres` (`api/settings_store.py`); records intent, **never mutates the live runbook** (ADR-0001/0016) | JSONL |
+| Review-queue store (off-gate product) | `BAYLEAF_REVIEW_STORE=jsonl\|sqlite\|postgres` (`api/review_store.py`); ticket lifecycle over already-decided samples (ADR-0010/0016) | JSONL |
+| Share sink (off-gate egress) | `BAYLEAF_SHARE_STORE=jsonl\|sqlite\|postgres` (`api/share_store.py`, ADR-0018 D3); the de-identified share/`DATA_EXPORTED` ledger, separate from the gate's `EventLedger`; degrade-to-JSONL | JSONL |
+| Durable job store (off-gate execution bookkeeping) | `BAYLEAF_JOB_STORE=jsonl\|sqlite` (`api/job_store.py`, T-131); intake/Builder-run jobs survive a restart (`lost` if no result dir, else `complete`). **No Postgres by design** — node-local scratch (ADR-0016 item 8). Hosts the shared, `killpg`-reaped `run_driver()` + the atomic dup-run-id reservation | JSONL |
+| Auth / identity (off-gate) | `api/auth.py` `current_actor()` header-shim (`X-Bayleaf-Actor`/`-Role`) → swap for a verified IdP (OIDC / signed JWT) returning the same `Actor`; downstream `require_role(...)` unchanged (ADR-0010/0017) | permissive dev shim (`id=dev`, `role=approver`) |
+| Pipeline codegen (compose, never execute) | `bayleaf.nextflow.compile_graph()` — a card graph → Nextflow bundle; `POST /api/pipelines/compile` (JSON/`.zip`); curated catalog, uncatalogued tool → a labelled placeholder. **Operator-authored custom-script processes (ADR-0020)** are a third path: a non-empty `NfNode.script` renders verbatim (catalog never consulted); a blank script is a `CompileError`; reaches a compute host only behind the W1 `POST /api/pipelines/run` approval gate ([nextflow-codegen.md](nextflow-codegen.md), T-123) | pure text codegen, no execution |
 | Intake execution driver | `scripts/run_giab_pipeline.py`, triggered by `POST /api/runs`; **Nextflow-first** — runs `pipelines/germline/main.nf` via `nextflow run`. Pre-flight-guarded (FASTQ pairing/format, reference↔panel-BED contig naming, reference-index sidecars — loud `sys.exit` before launch) + per-run `versions.txt` capture (T-131). Post-run parse is **N-sample capable** (offline-verified vs fixture publish dirs) but the driver still submits a single-row (HG002-only) samplesheet — a live multi-sample run stays unverified. Now optionally runs an **operator-authored approved pipeline** by name + supports hold/schedule/release (ADR-0021) | local `-profile conda`/`standard`, HG002-fixture-scoped |
 | Deployment | ports & adapters; Nextflow now **executable** for local compute; a `slurm` executor profile exists (env-driven, auto-selected on `sbatch`) but is CONFIG-verified not CLUSTER-verified; AWS-Batch/HealthOmics executor config stays wishlist (ADR-0003) | local |
 
@@ -306,13 +306,13 @@ versioned YAML/mapping, not by editing `rules`, keeping verdicts byte-identical 
 ## Deployment
 
 Local today: Streamlit (offline) + FastAPI (`uvicorn`) + React (Vite). The ports-&-adapters boundary
-carries portability. **Nextflow (compute) is a realized seam for local execution** — `pipeguard.nextflow`
+carries portability. **Nextflow (compute) is a realized seam for local execution** — `bayleaf.nextflow`
 compiles a card graph into a runnable pipeline and the intake driver runs it for real via `nextflow
 run -profile conda`/`standard`. Slurm / AWS Batch / HealthOmics **executor config** for that same
 generated pipeline remains wishlist (a `slurm` profile exists but has never run on a real cluster) —
 the compute-portability gap left is "point Nextflow at a cluster," not "get Nextflow running at all."
 **Storage** portability is likewise realized: the S3 artifact-store adapter is built + tested
-(`PIPEGUARD_ARTIFACT_STORE=s3`, off by default; lazy `boto3`, degrade-to-local). The core has no
+(`BAYLEAF_ARTIFACT_STORE=s3`, off by default; lazy `boto3`, degrade-to-local). The core has no
 cloud/DB coupling; **both** repository adapters are built — `SqliteRepository` (default) and a
 guarded, off-by-default `PostgresRepository` (ADR-0016, with a `deploy/postgres/docker-compose.yml`
 + a compose-gated live test verified green). IaC remains a Phase-2+ concern.

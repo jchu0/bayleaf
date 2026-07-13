@@ -15,19 +15,19 @@ Four independent pieces, all keeping the verdict a deterministic function of cit
 
 ## Exact changes
 
-### `src/pipeguard/models.py`
+### `src/bayleaf/models.py`
 - `Sample` (309-317): add `i7_index: str | None = None`, `i5_index: str | None = None` — the **accessioned expected** indexes (independent source for PROV-001).
 - `QCMetrics` (320-347): add `freemix: float | None = None`.
 - `RunArtifacts` (466-500): add `undetermined_reads: int | None = None`, `undetermined_pct: float | None = None` (parsed from the demux "Undetermined" row); keep it **out** of `sample_ids()` (487-500) so it doesn't become a phantom biological sample.
 
-### `src/pipeguard/parsers.py`
+### `src/bayleaf/parsers.py`
 - `_KNOWN_META_FIELDS` (36): add `i7_index`/`i5_index` (accept `index`/`index2` aliases via `_first_present`).
 - `parse_sample_metadata` (69-89): populate `Sample.i7_index`/`i5_index`.
 - `parse_qc_metrics` (210-237): read a new optional `freemix` column.
 - `parse_demux_stats` (186-207): recognize the `Undetermined` `SampleID` row; return it separately so `load_run` can set `RunArtifacts.undetermined_reads/undetermined_pct` (compute pct from the row, or reads/Σreads).
 - `load_run` (333-374): thread the undetermined values onto `RunArtifacts`.
 
-### `src/pipeguard/rules.py`
+### `src/bayleaf/rules.py`
 - **Replace** `_check_barcode` (43-82) with `_check_index_consistency(sid, sheet, accession: Sample|None)` → **PROV-001**, `Category.PROVENANCE`, CRITICAL, `ESCALATE`. Compare sheet `index`/`index2` to `accession.i7_index`/`i5_index`; i7 exact, i5 **equal-or-reverse-complement**. Evidence cites `SampleSheet.csv` **and** `sample_metadata.csv (accessioning)`. New copy: "Sample-sheet index disagrees with the accessioning record — a transcription typo between two independently authored records; reconcile before release. This is a consistency check, not a molecular identity guarantee." When `accession` has no index columns → return `None` **but** mark the category NOT RUN (see readout) rather than passing silently.
 - Add helpers `_reverse_complement(seq)` and `_index_eq(a, b, *, allow_revcomp)` (case-insensitive; non-ACGT → no revcomp match).
 - Add `_check_contamination(sid, qc, runbook)` → **CONTAM-001**, `Category.CONTAMINATION`, gates `qc.freemix` normalized via `default_registry().observe("contamination.freemix", …, raw_unit="fraction")`; borderline → WARN/`HOLD`, hard-fail → CRITICAL/`ESCALATE` (contamination/swap is provenance-class, so ESCALATE not RERUN — its own rule, not the generic `_evaluate_metric`, so it authors its own verdict+evidence). Evidence: source `verifybamid2 selfSM`, `source_field="FREEMIX"`.
@@ -36,13 +36,13 @@ Four independent pieces, all keeping the verdict a deterministic function of cit
 - `evaluate_sample` (436-478): swap the barcode call (445-447) for `_check_index_consistency`; add `_check_contamination` inside the `if qc is not None:` block (453) and `_check_demux_share`.
 - `evaluate_run` (481-486): after the per-sample dict, append run-level findings under a **reserved key** `RUN_SCOPE = "__run__"` **only when non-empty** (so clean runs are byte-identical; a demux problem surfaces as one actionable run-level card via the existing engine loop — no `engine.py`/model change).
 
-### `src/pipeguard/metrics/mapping.py`
+### `src/bayleaf/metrics/mapping.py`
 - `_QCMETRICS_MAP` (23-40): add `("freemix", "contamination.freemix", "fraction")`.
 
-### `src/pipeguard/runbook.py`
+### `src/bayleaf/runbook.py`
 - Add fields to `Runbook` (76-192): `freemix_gate: float = 0.03`, `freemix_hard_fail: float = 0.05`; `demux_undetermined_gate: float = 0.05`, `demux_undetermined_hard_fail: float = 0.10`; `demux_read_share_dropout_ratio: float = 0.2` (flag a sample below 0.2× mean share). Defaults chosen so the existing mock runs (S1–S5 shares 15–21%, no Undetermined row, no freemix column) produce **zero** new findings.
 
-### `src/pipeguard/metrics/metric_registry.yaml`
+### `src/bayleaf/metrics/metric_registry.yaml`
 - Remove the `# NOT COMPUTED` flag on `contamination.freemix` (296-312) — now wired. Leave `identity.ngscheckmate_match`/`identity.sex_concordance` flagged (still not computed) but they become **NOT RUN** rows in the readout (below), not silently hidden. Registry version unchanged (no entry semantics change → existing `MetricValue` snapshots stay valid).
 
 ### `scripts/run_giab_pipeline.py`
@@ -104,10 +104,10 @@ Shared-core files touched: `rules.py`, `models.py`, `parsers.py`, `runbook.py`, 
 - **Run-level findings via a reserved `"__run__"` key** avoid an engine/model refactor but introduce a card whose `sample_id` isn't a biological sample; the frontend should label it "Run-level (demultiplexing)". Alternative (a first-class run card) is a larger contract change deferred to WS-05.
 
 ### Critical Files for Implementation
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/rules.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/parsers.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/models.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/runbook.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/rules.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/parsers.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/models.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/runbook.py
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/scripts/run_giab_pipeline.py
 
 ## Test-First Contract (per surfaced gap)
@@ -120,7 +120,7 @@ Test-authoring note (all four gaps): the demo fixtures (`data/mock_run_01`, `dat
 
 ### Gap PROV-001 — sample-sheet ⋈ accessioning consistency (independent source + honest copy)
 
-Today `pipeguard.rules._check_barcode` (`rules.py:43-82`) compares `SampleSheet.csv` against `demux_stats.csv`, and `tests/test_gate.py::test_s4_barcode_mismatch_is_critical_provenance` asserts the evidence sources are `{"SampleSheet.csv", "demux_stats.csv"}` — two **non-independent** sources (demux derives from the sheet). The fix replaces `_check_barcode` with `_check_index_consistency(sid, sheet, accession: Sample|None)` comparing the sheet's `index`/`index2` to the **accessioned** `Sample.i7_index`/`i5_index` (i7 exact, i5 equal-or-reverse-complement).
+Today `bayleaf.rules._check_barcode` (`rules.py:43-82`) compares `SampleSheet.csv` against `demux_stats.csv`, and `tests/test_gate.py::test_s4_barcode_mismatch_is_critical_provenance` asserts the evidence sources are `{"SampleSheet.csv", "demux_stats.csv"}` — two **non-independent** sources (demux derives from the sheet). The fix replaces `_check_barcode` with `_check_index_consistency(sid, sheet, accession: Sample|None)` comparing the sheet's `index`/`index2` to the **accessioned** `Sample.i7_index`/`i5_index` (i7 exact, i5 equal-or-reverse-complement).
 
 - **Red acceptance test — `tests/test_index_consistency.py::test_prov001_fires_on_sheet_vs_accession_i5_typo`** (new file, patterned on `tests/test_gate.py`). Build a `RunArtifacts` (or write a `tmp_path` run dir + `load_run`) where `SampleSheetEntry(sample_id="S4").index2 = "GGCTCTGA"` but the accessioned `Sample(sample_id="S4").i5_index = "AGGCGAAG"` (a non-revcomp disagreement). Assert `evaluate_sample("S4", art, DEFAULT_RUNBOOK)` yields **exactly one** `PROV-001` finding, `Severity.CRITICAL`, `suggested_verdict is Verdict.ESCALATE`, and `{e.source for e in f.evidence} == {"SampleSheet.csv", "sample_metadata.csv"}`; then `aggregate_verdict(findings["S4"]) is Verdict.ESCALATE`. Exercises the full **parse → rule → verdict** path: `parse_sample_metadata` must populate `Sample.i7_index/i5_index` (`parsers.py:69-89`), `parse_sample_sheet` supplies the sheet index (`parsers.py:144-183`), `_check_index_consistency` cross-checks them, `aggregate_verdict` escalates.
   - **Why a stub/scaffold cannot pass it:** `Sample` has no `i7_index`/`i5_index` field today (`models.py:309-317`), so the fixture can't even be constructed, and `_check_index_consistency` does not exist. Pointing the *current* `_check_barcode` at the accession record is a no-op (there is no index field to read → returns `None` → zero findings → `len(prov)==1` fails). The evidence-source set assertion `{"SampleSheet.csv","sample_metadata.csv"}` fails for any implementation still reading `demux_stats.csv`. Green requires the field + parser + rule all wired.
@@ -139,7 +139,7 @@ Today `contamination.freemix` is registered in `metric_registry.yaml:297-311` bu
 - **Red acceptance test — `tests/test_contamination.py::test_freemix_hard_fail_is_critical_escalate`** (new file, patterned on `tests/test_gate.py::test_metric_hard_fail_is_rerun`). Build `QCMetrics(sample_id="SX", freemix=0.06)` (past `freemix_hard_fail=0.05`, plan §runbook), call `_check_contamination("SX", qc, DEFAULT_RUNBOOK)` (and the full `evaluate_sample`). Assert one `CONTAM-001` finding, `Severity.CRITICAL`, `Category.CONTAMINATION`, `suggested_verdict is Verdict.ESCALATE` (contamination/swap is provenance-class → escalate to human, **not** `RERUN`), and its evidence cites `source="verifybamid2 selfSM"`, `source_field="FREEMIX"`. Add `::test_freemix_borderline_is_hold` (0.04 → WARN/`HOLD`), `::test_freemix_clean_no_finding` (0.01 → `None`), `::test_freemix_absent_no_finding_under_default` (`freemix=None` → no `CONTAM-001`, because it ships `required=False`).
   - **Why a stub/scaffold cannot pass it:** `QCMetrics(freemix=...)` raises today (no field, `models.py:320-346`), so the test can't even be authored against the scaffold; `_check_contamination` does not exist. Merely un-commenting the YAML `# NOT COMPUTED` line produces zero findings (nothing reads the registry entry). Green requires the field + mapping + rule, gating on the registry-**normalized** value with an ESCALATE authored by the rule itself.
 - **Red acceptance test — `tests/test_contamination.py::test_freemix_column_parses_and_gates_end_to_end`** (patterned on `tests/test_run_giab_multisample.py`, which round-trips a run dir through `run_gate_from_dir`). Write a `tmp_path` run dir whose `qc_metrics.csv` carries a `freemix` column (one sample at `0.08`), then `arts, cards = run_gate_from_dir(run_dir)`; assert that sample's `card.verdict is Verdict.ESCALATE` and a `CONTAM-001` finding rides the card. Exercises **parse (`parse_qc_metrics` new column, `parsers.py:210-237`) → map (`metric_values_for`, `mapping.py`) → rule (`_check_contamination`) → verdict (`aggregate_verdict`)** as one wire. **Why a scaffold fails:** the column must actually flow into `QCMetrics.freemix`, become a `contamination.freemix` `MetricValue`, and gate — a decorative column that parses to nothing leaves the card PROCEED and fails the assertion.
-- **Anti-scaffold guard — `tests/test_contamination.py::test_freemix_is_wired_not_registered_only` (CONTAM-G3).** Freezes review §2a's exact finding ("registered in the metric vocabulary but computed by nothing"): assert (a) `("freemix", "contamination.freemix", "fraction")` is present in `pipeguard.metrics.mapping._QCMETRICS_MAP`; (b) `metric_values_for(QCMetrics(sample_id="SX", freemix=0.02))` yields a `MetricValue` with `metric_key == "contamination.freemix"` (mirrors `tests/test_metrics_mapping.py::test_cluster_pf_maps_to_its_registry_key`) — so removing the mapping tuple reopens the gap loudly; (c) the fail-closed direction: a hard-fail freemix aggregates to `ESCALATE`, never `RERUN` or `PROCEED`, and the verdict is identical with `StubSynthesizer` as without one (rules decide, not narration).
+- **Anti-scaffold guard — `tests/test_contamination.py::test_freemix_is_wired_not_registered_only` (CONTAM-G3).** Freezes review §2a's exact finding ("registered in the metric vocabulary but computed by nothing"): assert (a) `("freemix", "contamination.freemix", "fraction")` is present in `bayleaf.metrics.mapping._QCMETRICS_MAP`; (b) `metric_values_for(QCMetrics(sample_id="SX", freemix=0.02))` yields a `MetricValue` with `metric_key == "contamination.freemix"` (mirrors `tests/test_metrics_mapping.py::test_cluster_pf_maps_to_its_registry_key`) — so removing the mapping tuple reopens the gap loudly; (c) the fail-closed direction: a hard-fail freemix aggregates to `ESCALATE`, never `RERUN` or `PROCEED`, and the verdict is identical with `StubSynthesizer` as without one (rules decide, not narration).
 - **Real-data acceptance — REQUIRED (this is the ingestion/science gap where "fixture green ≠ real run works" hid).** `tests/test_contamination.py::test_verifybamid2_freemix_on_real_hg002`, env-gated with the repo's skip-safe pattern (mirroring `tests/test_nextflow_compile.py:264-269`): `pytest.skip(...)` unless `Path("data/real-giab/HG002.GRCh38.panel.bam").exists()` **and** `shutil.which("verifybamid2")` (plus the SVD resource) are present. When present: run `run_verifybamid2(cfg, results, "HG002")` against the **real** on-disk HG002 panel BAM (`data/real-giab/HG002.GRCh38.panel.bam`, confirmed present), assert `parse_selfsm` returns a `float` in `[0.0, 1.0]` (a real FREEMIX parsed from the real BAM — **not** a fabricated constant), thread it into a run dir, and `run_gate_from_dir` emits a `CONTAM-001`-classifiable card. **Honest caveat (plan §risks):** verifybamid2 on a chr20-only panel is low-power, so the *number's* confidence is not WGS-grade — the acceptance criterion is that the **wiring produces a real parsed number from the real BAM**, not that the value is clinically calibrated. Paired offline guard **`::test_run_verifybamid2_returns_none_when_tool_absent`** (monkeypatch `shutil.which`→`None`, mirroring `tests/test_run_giab_driver.py`): assert `run_verifybamid2` returns `None`, never a fabricated `0.0` — the "never invent a metric" posture that matches `cluster_pf`.
 - **Definition of Done:** all `tests/test_contamination.py` rule + end-to-end tests green; CONTAM-G3 guard green; `test_run_verifybamid2_returns_none_when_tool_absent` green offline; and `test_verifybamid2_freemix_on_real_hg002` green **on the real HG002 BAM** (or skip-clean where the tool/SVD resource is absent, exactly like the live Nextflow tests) — the real-run leg is what flips this gap done, not the fixture leg alone.
 

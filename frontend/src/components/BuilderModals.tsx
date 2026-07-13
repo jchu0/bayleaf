@@ -813,7 +813,7 @@ export function NextflowExportModal({ graph, onClose }: { graph: NextflowGraphBo
 }
 
 // ── Run pipeline (REAL execution; operator picks inputs; ADR-0003) ────────────
-// PipeGuard COMPOSES the pipeline; Nextflow EXECUTES it. A human operator absolutely can run it —
+// bayleaf COMPOSES the pipeline; Nextflow EXECUTES it. A human operator absolutely can run it —
 // the compose≠execute guardrail is about AI *agents* (advisory, never run a tool/set a verdict) and
 // the decision *core* (framework-agnostic), not about operators. Compiles the current graph, runs it
 // via `POST /api/pipelines/run` against the operator's chosen inputs, polls to a gate-able run.

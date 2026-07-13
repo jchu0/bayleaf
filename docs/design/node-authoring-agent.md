@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Built, narrower than proposed (2026-07-10, T-046, commit `71d4ff9`)** — roster agent #5. The core Python agent (`src/pipeguard/node_author/`) is built and tested; the flow this doc originally proposed (drop a tool's docs → parse → propose) was **not** what shipped — see "What actually shipped" below. **Updated 2026-07-11 (W2, T-127): a read-only `api/` endpoint + Pipeline-Builder wiring now exist** — the builder's "Author a tool node" modal renders the real proposal instead of a static `phase-2` preview. **Updated again 2026-07-11 (W2 backend, T-135): accept→library, a conformance harness, and a structured doc-drop importer are now built (backend-only)** — `POST /api/builder/node-proposal/accept` + `api/library_store.py` + `src/pipeguard/node_author/conformance.py` + `src/pipeguard/node_author/importer.py`. **Still deferred:** the Builder's own "Accept to library" button (no frontend caller yet), the `draft→approved` transition, and the free-text `--help`/README half of the importer — see item 5 below + [agent-authoring-contract.md](agent-authoring-contract.md). **Corrected: the corpus is 9 cards** — the unwired Truth VCF reference-node card was retired (Branch A, `feat/custom-script-io`, 11→10), then NGSCheckMate was retired-but-pinned from the *proposable* corpus (10→9): its card is commented out in `tool_cards.jsonl` so `load_tool_card_corpus()` skips it, while the `ngscheckmate` KIND stays in the vocabulary. See item 7 below. |
+| **Status** | **Built, narrower than proposed (2026-07-10, T-046, commit `71d4ff9`)** — roster agent #5. The core Python agent (`src/bayleaf/node_author/`) is built and tested; the flow this doc originally proposed (drop a tool's docs → parse → propose) was **not** what shipped — see "What actually shipped" below. **Updated 2026-07-11 (W2, T-127): a read-only `api/` endpoint + Pipeline-Builder wiring now exist** — the builder's "Author a tool node" modal renders the real proposal instead of a static `phase-2` preview. **Updated again 2026-07-11 (W2 backend, T-135): accept→library, a conformance harness, and a structured doc-drop importer are now built (backend-only)** — `POST /api/builder/node-proposal/accept` + `api/library_store.py` + `src/bayleaf/node_author/conformance.py` + `src/bayleaf/node_author/importer.py`. **Still deferred:** the Builder's own "Accept to library" button (no frontend caller yet), the `draft→approved` transition, and the free-text `--help`/README half of the importer — see item 5 below + [agent-authoring-contract.md](agent-authoring-contract.md). **Corrected: the corpus is 9 cards** — the unwired Truth VCF reference-node card was retired (Branch A, `feat/custom-script-io`, 11→10), then NGSCheckMate was retired-but-pinned from the *proposable* corpus (10→9): its card is commented out in `tool_cards.jsonl` so `load_tool_card_corpus()` skips it, while the `ngscheckmate` KIND stays in the vocabulary. See item 7 below. |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | all (contributors and Claude Code) |
 | **Related** | [design/agents.md](agents.md) (roster #5) · [design/agent-authoring-contract.md](agent-authoring-contract.md) (the boundaries MD this agent's endpoint + UI must satisfy) · [design/frontend/pipeline-builder-brief.md](frontend/pipeline-builder-brief.md) · [design/frontend/README.md](frontend/README.md) (§4 node model) · [design/frontend/handoffs/2026-07-09-review-to-design.md](frontend/handoffs/2026-07-09-review-to-design.md) (§4h, §6) · [design/builder-cards/](builder-cards/) (the tool-card corpus this agent retrieves over) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) (item 9, the library store) · [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the operator custom-script card — the human-authoring surface this agent's contract presupposes, and Branch A's corpus-count correction) · [scope-and-wishlist.md](../requirements/scope-and-wishlist.md) (#9, #11) · [planning/tasks.md](../planning/tasks.md) (T-044, T-046, T-127, T-135) · [functional.md](../requirements/functional.md) (REQ-F-025, REQ-F-089, REQ-F-096, REQ-F-098) · [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md) · [journal 2026-07-11 custom-script-io](../journal/2026-07-11-custom-script-io.md) |
@@ -15,7 +15,7 @@
 
 ## What actually shipped (2026-07-10, T-046) — read this first
 
-The built agent (`src/pipeguard/node_author/`, verified by reading `agent.py`/`models.py`/
+The built agent (`src/bayleaf/node_author/`, verified by reading `agent.py`/`models.py`/
 `retrieval.py` + `tests/test_node_author.py`, 19 tests) is **retrieval over a small curated
 tool-card corpus**, mirroring the `pipeline_repair/` agent's shape almost exactly — **not** the
 doc-drop pipeline this note originally proposed:
@@ -50,14 +50,14 @@ doc-drop pipeline this note originally proposed:
 6. **Accept→library, a conformance harness, and a structured doc-drop importer, ALL BACKEND-ONLY
    (2026-07-11, W2 backend, T-135, commit `5a3dd6a`).** `POST /api/builder/node-proposal/accept`
    (`reviewer`/`approver`) re-derives the proposal server-side (never trusts a client-supplied
-   one), runs it through a new `src/pipeguard/node_author/conformance.py` `check_conformance()`
+   one), runs it through a new `src/bayleaf/node_author/conformance.py` `check_conformance()`
    (mechanically enforces the [agent-authoring-contract.md](agent-authoring-contract.md)
    capability pins: advisory-True, no verdict/confidence anywhere, no `script`/`stub` command-body
    key, closed port vocabulary with unknown→reserved, versioned four ways), and stores a `draft`
-   `LibraryEntry` in the new `api/library_store.py` (`PIPEGUARD_LIBRARY_STORE=jsonl|sqlite`, no
+   `LibraryEntry` in the new `api/library_store.py` (`BAYLEAF_LIBRARY_STORE=jsonl|sqlite`, no
    Postgres by design — [ADR-0016 item 9](../adr/ADR-0016-postgres-port.md)); `GET
    /api/builder/library` lists accepted entries. A companion
-   `src/pipeguard/node_author/importer.py` (`import_from_nextflow_schema`) deterministically parses
+   `src/bayleaf/node_author/importer.py` (`import_from_nextflow_schema`) deterministically parses
    an nf-core `nextflow_schema.json` into a `NodeProposal` for a tool **not** in the curated
    corpus — the structured, lowest-injection-risk half of the "bring your own tools" gap item 4
    above names; a param maps to a real `ARTIFACT_KINDS` kind only on a confident match, else a
@@ -89,7 +89,7 @@ doc-drop pipeline this note originally proposed:
 What DID carry over faithfully from the design: **advisory-only, off the gate** (`advisory: True`,
 no verdict/confidence field), **never invents a port kind** (`PortSpec.known` computed against the
 real `ARTIFACT_KINDS` vocabulary; an unknown kind is `reserved`, never wired), **stub-first / off by
-default with a deterministic fallback** (`PIPEGUARD_NODE_AUTHOR_AGENT=stub|claude`, degrade-to-stub
+default with a deterministic fallback** (`BAYLEAF_NODE_AUTHOR_AGENT=stub|claude`, degrade-to-stub
 on any error including a safety refusal), and a **conservative "defer to a human" proposal** when no
 request/no match (fabricates no tool or ports). Model tier is **mid (Sonnet)**, not the design's
 "low–mid" framing — moderate composition, matching the QC-triage default, not the cheap
@@ -147,7 +147,7 @@ A surprising amount needs **no LLM**, so this is the same stub|claude split as t
    most of the value with zero API cost and no fabrication risk.
 2. **LLM layer (opt-in Claude):** adds value only for the fuzzy parts — the `ArtifactKind`
    mapping, and parsing unstructured `--help`/README when no schema exists. Lazy `anthropic`,
-   degrade to the deterministic path on any error, off by default (`PIPEGUARD_*_AGENT=stub|claude`).
+   degrade to the deterministic path on any error, off by default (`BAYLEAF_*_AGENT=stub|claude`).
 
 So this is not net-new scope — it is **#9 (schema form) + an ArtifactKind-mapping layer,
 surfaced inside the builder**.
@@ -183,7 +183,7 @@ that isn't already captured by those.
 2. ~~Wire the Pipeline Builder's `AuthorToolNodeModal` to that endpoint~~ **DONE** (T-127).
 3. **The doc-drop parsing this note originally proposed — PARTIALLY DONE (T-135).** The structured
    half (`nextflow_schema.json` → a `NodeProposal` for a tool NOT already in the curated corpus,
-   `src/pipeguard/node_author/importer.py`) is built, backend-only, no `api/` exposure. **Still
+   `src/bayleaf/node_author/importer.py`) is built, backend-only, no `api/` exposure. **Still
    unbuilt:** the free-text `--help`/README half (the unbounded-input, higher injection-risk
    parse, wants its own spike + safety tests) and any `api/` endpoint for either importer path.
 4. The Builder's own "Accept to library" button — `POST /api/builder/node-proposal/accept` +

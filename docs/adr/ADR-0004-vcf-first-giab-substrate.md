@@ -55,7 +55,7 @@ the provenance ledger as `real-giab` or `synthetic`. End-to-end generation
    accessions manifest, `real-giab` origin — data never committed), validated end-to-end on a
    bioconda env (real truth VCF + a `samtools -X` panel-reads slice) (T-017). Running the slice
    through the QC/coverage gate remains.
-2. **Synthetic track built.** `pipeguard.synthetic` generates labeled failure-mode runs
+2. **Synthetic track built.** `bayleaf.synthetic` generates labeled failure-mode runs
    (`synthetic` origin) that drive all four verdicts and seed the demo scenario (T-013). Every
    artifact carries its origin tag per [ADR-0007](ADR-0007-ml-ready-structured-outputs.md).
 

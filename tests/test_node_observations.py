@@ -29,8 +29,8 @@ from api.main import app
 client = TestClient(app)
 
 _RUN = "RUN-TEST-OBS"
-_VIEWER = {"X-PipeGuard-Role": "viewer", "X-PipeGuard-Actor": "v"}
-_REVIEWER = {"X-PipeGuard-Role": "reviewer", "X-PipeGuard-Actor": "r"}
+_VIEWER = {"X-Bayleaf-Role": "viewer", "X-Bayleaf-Actor": "v"}
+_REVIEWER = {"X-Bayleaf-Role": "reviewer", "X-Bayleaf-Actor": "r"}
 
 # Planted PII that MUST NOT survive the de-id scrub in a returned log tail.
 _SUBJECT = "SUBJ-00042-JohnDoe"
@@ -181,7 +181,7 @@ def test_viewer_allowed_invalid_principal_rejected(run_tree: Path) -> None:
     assert ok.status_code == 200  # viewer is within viewer+
     bad = client.get(
         f"/api/runs/{_RUN}/nodes/n_fastp/observations",
-        headers={"X-PipeGuard-Role": "banana", "X-PipeGuard-Actor": "x"},
+        headers={"X-Bayleaf-Role": "banana", "X-Bayleaf-Actor": "x"},
     )
     assert bad.status_code == 400  # an unrecognized principal role is rejected, not defaulted
 

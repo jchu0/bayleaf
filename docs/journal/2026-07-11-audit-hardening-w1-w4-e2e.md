@@ -106,7 +106,7 @@ emits **metadata, never a runnable command**. The `NodeProposal`/`PortSpec`/`Too
 it fills have no field that could hold a `script:`/`stub:` body — that's not a convention the agent
 happens to follow, it's structurally impossible for it to violate, because the Nextflow catalog's
 `ProcessSpec.script`/`ProcessSpec.stub` live in a completely separate, human-curated module
-(`pipeguard.nextflow.catalog`) the agent never touches. This is the same "compose ≠ execute" trust
+(`bayleaf.nextflow.catalog`) the agent never touches. This is the same "compose ≠ execute" trust
 seam ADR-0003 already established, restated at the agent-authoring layer: if it ever softened,
 agent-authored metadata would become a route to arbitrary command execution.
 
@@ -127,7 +127,7 @@ standing up the full `api/report.py` projection + `ReportStore` + sign-off lifec
 variant-interpretation design describes. This is a real, deliberate narrowing, not a shortcut
 hidden as a full implementation: a page reload re-derives the same report from the same
 already-decided cards, there's no persisted/signed artifact, and the sign-off footer states in
-plain language that human sign-off is a labelled seam, not a button — PipeGuard cannot mark a
+plain language that human sign-off is a labelled seam, not a button — bayleaf cannot mark a
 report final on its own. `test_api.py` gained `test_downstream_artifact_stage_seams` pinning the
 new filename→stage mapping; the route-to-human hero panel's ClinVar quote is separately asserted
 verbatim by the E2E test below (`test_report_route_to_human_quotes_clinvar_verbatim`), not just
@@ -203,7 +203,7 @@ Recomputed per-file test counts via `pytest --collect-only -q | grep '::' | sed 
 uniq -c` to ground the `evaluation.md` census table exactly, rather than trusting the commit
 messages' self-reported numbers. ruff+mypy clean (per the commit messages; re-verified pytest
 directly in this session). No verdict, gate, or confidence field was touched by any of this —
-confirmed by reading `src/pipeguard/rules.py`'s diff (the P1-4 fix changes only a display-string
+confirmed by reading `src/bayleaf/rules.py`'s diff (the P1-4 fix changes only a display-string
 computation, not the underlying `MetricValue`/threshold comparison) and by the E2E test's own
 assertion that `confidence` stays `None` on every card.
 

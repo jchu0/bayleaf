@@ -3,7 +3,7 @@
 ``POST /api/pipelines/run`` (ADR-0014) only runs a pipeline that has an approver-blessed
 (``emitted``) version — an unapproved draft is a 409. A fresh store has no such baseline, so a
 demo/E2E "Run" beat has nothing to name. This committed, idempotent helper closes that gap: it
-composes the seeded germline card graph (``pipeguard.nextflow.germline_graph`` — the SAME chain the
+composes the seeded germline card graph (``bayleaf.nextflow.germline_graph`` — the SAME chain the
 Builder ships and the compiler emits under ``pipelines/germline/``) and drives it through the real
 lifecycle — save → submit → approve — so an approved ``germline-panel`` baseline is runnable **by
 name** without clicking through the Builder.
@@ -20,8 +20,8 @@ ledger row, and this script never runs a tool (compose != execute, ADR-0003).
 Run as a MODULE (``-m``) from the repo root so the app-layer ``api`` package (deliberately not part
 of the installable library) is importable. Idempotent: if the name already has an approved
 (emitted) version, it reports it and appends nothing (re-running never mints duplicate revisions).
-Point it at any store via the usual env (``PIPEGUARD_PIPELINE_STORE`` / ``PIPEGUARD_PIPELINE_PATH``
-/ ``PIPEGUARD_PIPELINE_DB``).
+Point it at any store via the usual env (``BAYLEAF_PIPELINE_STORE`` / ``BAYLEAF_PIPELINE_PATH``
+/ ``BAYLEAF_PIPELINE_DB``).
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ from api.pipeline_store import (
     record_emission,
     record_transition,
 )
-from pipeguard.nextflow import germline_graph
+from bayleaf.nextflow import germline_graph
 
 # The name the demo runs by: `POST /api/pipelines/run {"name": "germline-panel", ...}`.
 DEFAULT_NAME = "germline-panel"

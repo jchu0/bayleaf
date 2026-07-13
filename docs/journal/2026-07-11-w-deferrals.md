@@ -17,7 +17,7 @@ no endpoint served `VariantCall` rows at all (confirmed at the time: `api/report
 exist).
 
 This commit closes that specific gap, narrowly: a new `GET /api/runs/{run_id}/variants`
-(`api/main.py`) reuses `pipeguard.parsers.parse_variant_calls` — the SAME parser
+(`api/main.py`) reuses `bayleaf.parsers.parse_variant_calls` — the SAME parser
 `rules._check_route_to_human` (VAR-RTH-001) already calls — so there is no new parsing logic, only
 a new read surface over an existing one. Read pattern matches `get_run`/`get_card`: 404 for an
 unknown run id, `[]` (not a 404) for a run with no `variants.csv`. No `require_role` — this is a
@@ -27,7 +27,7 @@ Grounded by reading the diff directly (`git show fec0f83`): the endpoint is 15 l
 docstring; `RunReport.tsx` adds a `useEffect` fetch + a paginated table (`VariantRow`) rendering
 `clinvar_significance` in quotes, explicitly labelled VERBATIM in a code comment
 ("`// VERBATIM — the cited source's value, rendered unmodified (G3/G4).`"); the empty state reads
-"Variant annotation is an externally-produced input PipeGuard READS (ADR-0018), never runs." The
+"Variant annotation is an externally-produced input bayleaf READS (ADR-0018), never runs." The
 3 new tests (`tests/test_run_variants.py`) assert the CLINVAR-RTH fixture's exact fields verbatim,
 an empty list (not 404) for `mock_run_01`, and a 404 for an unknown run id — matching the honesty
 framing exactly.
@@ -94,9 +94,9 @@ Walked the [Doc-update map](../TABLE_OF_CONTENTS.md#doc-update-map) against both
 4. **🔴 A task changes status or is created** → `planning/tasks.md` T-133 (W3 continuation) +
    T-134 (W4 continuation), both `done` (the commits already landed), depending on T-128/T-129
    respectively.
-5. **🔴 `src/pipeguard/models.py`/`parsers.py`/`persistence/`** did NOT fire — `VariantCall` was
+5. **🔴 `src/bayleaf/models.py`/`parsers.py`/`persistence/`** did NOT fire — `VariantCall` was
    already a full core model (no field added), and the driver/API changes are outside
-   `src/pipeguard/` entirely (a script + an `api/routers/` file). `data/schemas.md` was still
+   `src/bayleaf/` entirely (a script + an `api/routers/` file). `data/schemas.md` was still
    touched, but for a narrower reason: it documents API-level pydantic shapes too (it already
    documented `IntakeStatus`), so the additive `SampleStatus`/`IntakeStatus.samples` field and the
    new `/variants` wire projection both earned a note there, under the existing

@@ -1,4 +1,4 @@
-## Specialist 4 — Integration-seam audit → PipeGuard release-hardening (Track A, Fable 5)
+## Specialist 4 — Integration-seam audit → bayleaf release-hardening (Track A, Fable 5)
 
 **Scope run:** code-only / headless. Every claim re-opened and the quoted string confirmed in the file. Owns: `api/routers/*`, `api/main.py` routes, `api/*_store.py`, six agent modules, `frontend/src/api.ts` call sites, `BuilderModals.tsx`, `SettingsModelTier.tsx`, `app/streamlit_app.py`.
 
@@ -13,7 +13,7 @@
 | Compile / export | ✔ `NextflowExportModal` | ✔ `POST /api/pipelines/compile` `nextflow.py:74` | none (stateless) | none | n/a | ✔ | off-gate transform, honest |
 | Node-authoring agent | ✗ `AuthorToolNodeModal` static mock | ✗ (`grep node_author api/` empty) | ✗ | ✗ | ✔ core `propose_node` `node_author/agent.py:333` | core only | F-INT-01 |
 | metrics-expansion agent | roster row only `SettingsModelTier.tsx:54` | ✗ | ✗ | ✗ | ✗ (no module; env var absent from `.env.example`) | ✗ | vaporware, F-INT-03 |
-| SettingsModelTier Save | ✔ local React state `SettingsModelTier.tsx:171` | ✗ (`settings.py` only `/thresholds`) | ✗ | not bound to `PIPEGUARD_*_MODEL` | n/a | n/a | F-INT-04 |
+| SettingsModelTier Save | ✔ local React state `SettingsModelTier.tsx:171` | ✗ (`settings.py` only `/thresholds`) | ✗ | not bound to `BAYLEAF_*_MODEL` | n/a | n/a | F-INT-04 |
 | `RunHandoffModal` | exported, 0 call sites `BuilderModals.tsx:79` | — | — | — | — | — | orphaned; CLAUDE.md:341 still describes it — F-INT-05 |
 | Pipeline-repair modal | ✔ read `api.monitoring`/`api.signatureRepair` | read endpoints exist | ✗ write | — | ✔ (advisory) | — | "Send to review queue" navigate-only `BuilderModals.tsx:504-513`; no repair→ticket bridge — F-INT-06 |
 | Archivist modal | ✔ read `api.archiveIndex` | read exists | ✗ write | — | ✔ (advisory) | — | "Queue archive" `onClose` only `BuilderModals.tsx:586-587` — F-INT-07 |
@@ -35,7 +35,7 @@ Builder "Run pipeline" compiles and executes the operator's **live canvas graph*
 - Demo-critical: Y (Builder golden path). Fix risk: doc-only = none; adding the gate risks breaking the demo Run beat → defer to W1.
 
 **F-INT-01 · Node-authoring agent is core-only; the Builder "add to palette" button registers nothing · Medium · Confirmed · incomplete-integration**
-`AuthorToolNodeModal`'s primary CTA "Review kinds & add to palette" is `onClick={onClose}` (`BuilderModals.tsx:340-342`) — identical to the "Discard" handler; it surfaces/registers nothing. The real agent is core-only: `propose_node` exists (`src/pipeguard/node_author/agent.py:333`) but `grep -rn node_author api/` = empty and `grep -rn propose_node frontend/src` = empty (no endpoint, no transport). The modal is honestly tagged "roster #5 · phase-2" (`BuilderModals.tsx:210-212`), which keeps this from being a truthfulness Blocker, but the button verb "add to palette" implies a side effect that never happens.
+`AuthorToolNodeModal`'s primary CTA "Review kinds & add to palette" is `onClick={onClose}` (`BuilderModals.tsx:340-342`) — identical to the "Discard" handler; it surfaces/registers nothing. The real agent is core-only: `propose_node` exists (`src/bayleaf/node_author/agent.py:333`) but `grep -rn node_author api/` = empty and `grep -rn propose_node frontend/src` = empty (no endpoint, no transport). The modal is honestly tagged "roster #5 · phase-2" (`BuilderModals.tsx:210-212`), which keeps this from being a truthfulness Blocker, but the button verb "add to palette" implies a side effect that never happens.
 - Min fix: relabel the CTA to a phase-2-honest verb (e.g. "Preview proposal (phase-2)") so it doesn't imply palette registration. Demo-critical: Y (on the Builder path). Fix risk: trivial.
 
 **F-INT-08 · D3 Share egress is invisible in the Admin Activity feed · Medium · Confirmed · missing-user-facing-state**
@@ -47,11 +47,11 @@ The modal is read-wired (fetches `api.monitoring('all',25)` `BuilderModals.tsx:3
 - Min fix: keep the honest toast; drop/relabel the stale "phase-2" badge to "read-only" so the label matches the wiring. Demo-critical: N. Fix risk: trivial.
 
 **F-INT-04 · SettingsModelTier Save persists nothing but toasts "Updated N agents" · Medium · Confirmed · missing-user-facing-state**
-`applyPanel()` only mutates local React state — `setRows(next)` (`SettingsModelTier.tsx:171`) — with no `api.ts` call; `settings.py` exposes only `/thresholds` endpoints (`api/routers/settings.py:185,228,266`), and agent models are read solely from `PIPEGUARD_*_MODEL` env vars at agent init (`api/feedback_agent.py:196`, `api/archivist.py:495`). The confirm dialog is honest ("Demo seam — nothing here persists to the backend yet" `:166`), but the terminal success toast `Updated ${panelKeys.length} agent…` (`:174`) reads as an applied change.
+`applyPanel()` only mutates local React state — `setRows(next)` (`SettingsModelTier.tsx:171`) — with no `api.ts` call; `settings.py` exposes only `/thresholds` endpoints (`api/routers/settings.py:185,228,266`), and agent models are read solely from `BAYLEAF_*_MODEL` env vars at agent init (`api/feedback_agent.py:196`, `api/archivist.py:495`). The confirm dialog is honest ("Demo seam — nothing here persists to the backend yet" `:166`), but the terminal success toast `Updated ${panelKeys.length} agent…` (`:174`) reads as an applied change.
 - Min fix: qualify the toast (e.g. "Staged locally — not persisted"). Demo-critical: N (off recording). Fix risk: trivial.
 
 **F-INT-03 · metrics-expansion agent is pure vaporware surfaced as a roster row; nothing structurally blocks a "Live" toggle · Medium · Probable · incomplete-integration**
-Roster row `{ key: 'metrics_expand', … env: 'PIPEGUARD_METRICS_AGENT', wired: false, phase2: true }` (`SettingsModelTier.tsx:54`) — there is **no backend module** and the env var is **absent from `.env.example`** (`grep -n AGENT= .env.example` shows only TRIAGE/PIPELINE_REPAIR/ARCHIVIST/NODE_AUTHOR; `grep -rn PIPEGUARD_METRICS_AGENT .` hits only frontend + docs). It starts in "Available" (`INITIAL_ACTIVE` filters `a.wired` `:57`), but the Execution live/stub `SegmentedControl` (`:279-283`) has no guard preventing a phase-2/unwired row from being edited to "Live" — a user who adds it to the roster and toggles Live would see a vaporware agent render "Live" (client-only). The `phase-2` label persists in the editor header (`:228`), which mitigates it.
+Roster row `{ key: 'metrics_expand', … env: 'BAYLEAF_METRICS_AGENT', wired: false, phase2: true }` (`SettingsModelTier.tsx:54`) — there is **no backend module** and the env var is **absent from `.env.example`** (`grep -n AGENT= .env.example` shows only TRIAGE/PIPELINE_REPAIR/ARCHIVIST/NODE_AUTHOR; `grep -rn BAYLEAF_METRICS_AGENT .` hits only frontend + docs). It starts in "Available" (`INITIAL_ACTIVE` filters `a.wired` `:57`), but the Execution live/stub `SegmentedControl` (`:279-283`) has no guard preventing a phase-2/unwired row from being edited to "Live" — a user who adds it to the roster and toggles Live would see a vaporware agent render "Live" (client-only). The `phase-2` label persists in the editor header (`:228`), which mitigates it.
 - Min fix: disable the Live segment for `wired:false` rows (force Stub), or hide `metrics_expand` from the roster entirely for the demo. Demo-critical: N (Settings, off path). Fix risk: low. Confidence Probable because the Live-read requires a multi-step user interaction and stays client-only.
 
 **F-INT-07 · Archivist "Queue archive" is write-inert; stale phase-2 badge · Low · Confirmed · incomplete-integration**
@@ -67,8 +67,8 @@ Read-wired (`api.archiveIndex()` `BuilderModals.tsx:530`); the "Queue archive" C
 - Min fix: add optional `page`/`limit` to `runs[]` mirroring the run-list pager (`main.py:438-439,490-494`). Demo-critical: N. Fix risk: low.
 
 **F-INT-10 · SettingsModelTier roster `env` labels don't match the real env vars · Low · Confirmed · design-inconsistency**
-The roster displays each agent's env var (`single.env`, `SettingsModelTier.tsx:225`; tooltip "Each model is a PIPEGUARD_*_MODEL env var" `:335`), but several labels are wrong: synthesizer `env: 'PIPEGUARD_SYNTHESIZER'` (`:48`) while the real model var is `PIPEGUARD_CLAUDE_MODEL` (`.env.example:12`); node-author `env: 'PIPEGUARD_NODE_AUTHOR'` (`:53`) while the real vars are `PIPEGUARD_NODE_AUTHOR_AGENT` / `PIPEGUARD_NODE_AUTHOR_MODEL` (`.env.example:49,54`). An operator copying these strings into a `.env` would set a no-op var.
-- Min fix: correct the `env` strings to the real `PIPEGUARD_*_MODEL` names. Demo-critical: N. Fix risk: trivial.
+The roster displays each agent's env var (`single.env`, `SettingsModelTier.tsx:225`; tooltip "Each model is a BAYLEAF_*_MODEL env var" `:335`), but several labels are wrong: synthesizer `env: 'BAYLEAF_SYNTHESIZER'` (`:48`) while the real model var is `BAYLEAF_CLAUDE_MODEL` (`.env.example:12`); node-author `env: 'BAYLEAF_NODE_AUTHOR'` (`:53`) while the real vars are `BAYLEAF_NODE_AUTHOR_AGENT` / `BAYLEAF_NODE_AUTHOR_MODEL` (`.env.example:49,54`). An operator copying these strings into a `.env` would set a no-op var.
+- Min fix: correct the `env` strings to the real `BAYLEAF_*_MODEL` names. Demo-critical: N. Fix risk: trivial.
 
 ---
 
@@ -76,5 +76,5 @@ The roster displays each agent's env var (`single.env`, `SettingsModelTier.tsx:2
 - **Page-access RBAC is honestly scoped.** `frontend/src/access.ts:2` self-documents "a client-side VIEW-GATE, NOT a security control" and `:7-9` "it never authorizes a server write. The wire role … continues to govern every real write via api/auth.py's require_role, entirely unchanged." No write relies on client gating — checklist item 10 confirmed clean.
 - **`/metrics` exporter is real and links are honestly off-path.** `_render_prometheus()` (`api/main.py:1505`) is a real exporter; Admin surfaces `Prometheus /metrics` as the read-API seam and Prometheus `:9090` / Grafana `:3000` as external links explicitly noted "not part of the offline demo path" (`Admin.tsx:759-761`). Checklist item 11 confirmed honest.
 - **Streamlit is a genuine parallel layer.** `app/streamlit_app.py:19-21` imports `load_run`, `run_gate`, `get_synthesizer` from the core directly — an independent presentation over the same core, not a mock. Untracked by React seams (as the plan notes) but honest.
-- **Both run endpoints and the compile endpoint keep `compose ≠ execute` at the core and are RBAC-gated** (`intake.py:128`, `pipeline_run.py:176`, `nextflow.py` stateless). The core (`src/pipeguard/`) shells out nowhere.
+- **Both run endpoints and the compile endpoint keep `compose ≠ execute` at the core and are RBAC-gated** (`intake.py:128`, `pipeline_run.py:176`, `nextflow.py` stateless). The core (`src/bayleaf/`) shells out nowhere.
 - **Repair/Archivist modals do not fabricate linkage** — their inert CTAs are paired with honest copy; the defect is stale badges + missing write bridges, not a false success claim.

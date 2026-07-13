@@ -1,10 +1,10 @@
 # Optional local telemetry stack for the "connect your APM" demo moment.
 #
-# Stands up Prometheus + Grafana that scrape the locally-running PipeGuard
+# Stands up Prometheus + Grafana that scrape the locally-running bayleaf
 # read-API (`uv run uvicorn api.main:app --port 8010`) over its /metrics seam.
 #
 # DEMO SIZZLE ONLY — this is NOT on the offline Streamlit/API demo path and is not
-# required to run PipeGuard. Anonymous Grafana admin + a default password are for a
+# required to run bayleaf. Anonymous Grafana admin + a default password are for a
 # throwaway localhost demo; do not expose these ports publicly.
 #
 #   Start:  docker compose -f deploy/telemetry/docker-compose.yml up
@@ -14,12 +14,12 @@
 # `extra_hosts` maps that name to the host gateway so it also works on Linux, where
 # Docker does not provide host.docker.internal automatically.
 
-name: pipeguard-telemetry
+name: bayleaf-telemetry
 
 services:
   prometheus:
     image: prom/prometheus:v2.54.1
-    container_name: pipeguard-prometheus
+    container_name: bayleaf-prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
     volumes:
@@ -31,17 +31,17 @@ services:
 
   grafana:
     image: grafana/grafana:11.2.0
-    container_name: pipeguard-grafana
+    container_name: bayleaf-grafana
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
       GF_SECURITY_ADMIN_PASSWORD: "${GF_ADMIN_PASSWORD:-admin}"
     volumes:
-      - ./grafana-datasource.yml:/etc/grafana/provisioning/datasources/pipeguard.yml:ro
-      # Dashboard provider + the dashboard JSON it loads (the "PipeGuard — QC decision gate" board
+      - ./grafana-datasource.yml:/etc/grafana/provisioning/datasources/bayleaf.yml:ro
+      # Dashboard provider + the dashboard JSON it loads (the "bayleaf — QC decision gate" board
       # over the four /metrics series). Same provisioning pattern as the datasource above.
-      - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/pipeguard.yml:ro
-      - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/pipeguard-overview.json:ro
+      - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/bayleaf.yml:ro
+      - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/bayleaf-overview.json:ro
     ports:
       - "3000:3000"
     depends_on:

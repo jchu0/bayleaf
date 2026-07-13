@@ -2,12 +2,12 @@
 
 | Field | Value |
 |---|---|
-| **Focus** | Read the design agent's updated deliverables (`briefs/`, `handoffs/01-03`, the evolved `source/PipeGuard.dc.html`), extract every backend obligation, and build the parallel-safe near-term backend the design assumes. |
+| **Focus** | Read the design agent's updated deliverables (`briefs/`, `handoffs/01-03`, the evolved `source/bayleaf.dc.html`), extract every backend obligation, and build the parallel-safe near-term backend the design assumes. |
 | **Outcome** | Gap analysis (75 raw obligations → tiered). Built + shipped (2 commits, [e096bd7](#), [7855333](#), pushed; **317 tests**, mypy strict + ruff clean): the auth/RBAC primitive, three draft→approve RBAC surfaces (settings authoring = T-051, review-queue, pipeline lifecycle), the card-readout projection, and the Tier-0 runs-list reconciliations. ADR-0017 captures the decision. Tier-2 north-star surfaces deferred with a scope flag. |
 
 ## Discussion
 
-**The design expanded a lot.** The evolved prototype (`PipeGuard.dc.html`) is a north-star with
+**The design expanded a lot.** The evolved prototype (`bayleaf.dc.html`) is a north-star with
 whole new surfaces (run submissions/ingest, a BaseSpace connector, conversational triage chat,
 ticketing, two more advisory agents, a run hand-off). The three handoff READMEs are the nearer-term
 spec. I fanned out five readers (brief + 3 handoffs + the prototype's `support.js` data layer) to

@@ -26,7 +26,7 @@ graph the offline tests run is a real, ``nextflow -stub-run``-valid pipeline —
 ``nextflow`` is absent (mirrors ``test_nextflow_compile.py::test_generated_germline_stub_runs``).
 
 Guardrails (CLAUDE.md / ADR-0001): the test never sets a verdict/confidence — it asserts what the
-RULES decided. The route-to-human evidence is ClinVar quoted VERBATIM (G3/G4); PipeGuard authors no
+RULES decided. The route-to-human evidence is ClinVar quoted VERBATIM (G3/G4); bayleaf authors no
 pathogenicity. Compose != execute: every "run" is a hand-off assertion, not an execution.
 """
 
@@ -45,13 +45,13 @@ from scripts.seed_approved_germline import germline_graph_dict, seed_approved_ge
 import api.routers.intake as intake
 import api.routers.pipeline_run as pr
 from api.main import app
-from pipeguard.nextflow import compile_graph, germline_graph
+from bayleaf.nextflow import compile_graph, germline_graph
 
 client = TestClient(app)
 
-_REVIEWER = {"X-PipeGuard-Role": "reviewer", "X-PipeGuard-Actor": "a.rivera"}
-_APPROVER = {"X-PipeGuard-Role": "approver", "X-PipeGuard-Actor": "b.chen"}
-_VIEWER = {"X-PipeGuard-Role": "viewer", "X-PipeGuard-Actor": "v.iewer"}
+_REVIEWER = {"X-Bayleaf-Role": "reviewer", "X-Bayleaf-Actor": "a.rivera"}
+_APPROVER = {"X-Bayleaf-Role": "approver", "X-Bayleaf-Actor": "b.chen"}
+_VIEWER = {"X-Bayleaf-Role": "viewer", "X-Bayleaf-Actor": "v.iewer"}
 
 # The committed fixtures the Report assertions read (never fabricated; pinned demo scenarios).
 _MOCK = "mock_run_01"  # proceed / hold / escalate mix (the pinned scenario)
@@ -70,10 +70,10 @@ def _isolate_store(tmp_path: Path, monkeypatch: Any) -> None:
     """Point every ``get_*_store()`` caller (pipeline / share) at a tmp JSONL, so a test never reads
     real, session-polluted local state — e.g. a stray ``data.exported`` a local Share left in the
     gitignored ``share.events.jsonl`` (the stores read the env fresh per call, no cache)."""
-    monkeypatch.delenv("PIPEGUARD_PIPELINE_STORE", raising=False)  # default jsonl, whatever the env
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_PATH", str(tmp_path / "pipeline_graphs.jsonl"))
-    monkeypatch.delenv("PIPEGUARD_SHARE_STORE", raising=False)
-    monkeypatch.setenv("PIPEGUARD_SHARE_PATH", str(tmp_path / "share.events.jsonl"))
+    monkeypatch.delenv("BAYLEAF_PIPELINE_STORE", raising=False)  # default jsonl, whatever the env
+    monkeypatch.setenv("BAYLEAF_PIPELINE_PATH", str(tmp_path / "pipeline_graphs.jsonl"))
+    monkeypatch.delenv("BAYLEAF_SHARE_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_SHARE_PATH", str(tmp_path / "share.events.jsonl"))
 
 
 def _fake_catalog(tmp_path: Path) -> dict[str, list[pr._InputOption]]:
@@ -247,7 +247,7 @@ def test_report_data_verdict_mix_and_per_sample_gate_outcomes() -> None:
 
 def test_report_route_to_human_quotes_clinvar_verbatim() -> None:
     """The route-to-human Report (W3): HG002 escalates via VAR-RTH-001 on the variant gate, and the
-    ClinVar significance is QUOTED VERBATIM as cited evidence — PipeGuard authors no pathogenicity
+    ClinVar significance is QUOTED VERBATIM as cited evidence — bayleaf authors no pathogenicity
     (G3/G4, ADR-0004). The per-run arming (data/RUN-…-CLINVAR-RTH/route_to_human) drives it; the
     core default stays disarmed."""
     detail = client.get(f"/api/runs/{_RTH}").json()
@@ -258,10 +258,10 @@ def test_report_route_to_human_quotes_clinvar_verbatim() -> None:
     assert rth["gate"] == "variant"  # lands on the variant gate, not QC
     # The finding QUOTES ClinVar verbatim + cites the accession — it authors no significance.
     clnsig = next(e for e in rth["evidence"] if e["source_field"] == "CLNSIG")
-    assert clnsig["value"] == "Pathogenic"  # verbatim — NOT PipeGuard's determination
+    assert clnsig["value"] == "Pathogenic"  # verbatim — NOT bayleaf's determination
     assert clnsig["locator"] == "VCV000017661"  # the cited ClinVar accession
     assert "ClinVar" in clnsig["source"]
-    # The prose defers to a human; it never claims PipeGuard decided pathogenicity.
+    # The prose defers to a human; it never claims bayleaf decided pathogenicity.
     assert "makes no pathogenicity determination" in rth["detail"]
 
 
@@ -315,7 +315,7 @@ def test_approved_germline_pipeline_stub_runs_live(tmp_path: Path) -> None:
     ``nextflow -stub-run``-valid pipeline. With ``nextflow`` on PATH, the compiled germline bundle
     validates end-to-end (every process' stub touches its outputs, so the whole DAG executes with no
     tools/data). Absent Nextflow → skip, never fail (this sandbox's default)."""
-    nextflow = os.environ.get("PIPEGUARD_NEXTFLOW_BIN") or shutil.which("nextflow")
+    nextflow = os.environ.get("BAYLEAF_NEXTFLOW_BIN") or shutil.which("nextflow")
     if not nextflow:
         pytest.skip("no `nextflow` on PATH — skipping the live stub-run check")
 

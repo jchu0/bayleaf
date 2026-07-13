@@ -34,7 +34,7 @@ All optional; **no params → byte-identical to today** (safe to adopt increment
 - `q` — run_id substring filter.
 - `sort` — one of `run_id,-run_id,run_date,-run_date,n_samples,-n_samples,n_attention,-n_attention` (default `run_id` asc). Unknown → `400`.
 - `page`, `limit` — 1-based; pagination applies **only when `limit` is given**. `<1` → `422`.
-- Response headers: `X-PipeGuard-Total-Count` (always, pre-pagination) + `X-PipeGuard-Page` / `X-PipeGuard-Limit` (when `limit` given). All three are CORS-exposed.
+- Response headers: `X-Bayleaf-Total-Count` (always, pre-pagination) + `X-Bayleaf-Page` / `X-Bayleaf-Limit` (when `limit` given). All three are CORS-exposed.
 
 **Frontend:** the runs list scale kit (brief §1/§5b) wires to these. Body stays `RunSummary[]`;
 read the total off the header. Works for either scale model (infinite-scroll or pages).
@@ -78,7 +78,7 @@ fields existing on read; the transition endpoint is still to come.
 ## 5. Batch 2 (later 2026-07-09) — auth, RBAC surfaces, card readout, Tier-0 params
 
 **5a. Auth headers (RBAC).** Every write/transition below is gated by a role. Send two request
-headers on those calls: `X-PipeGuard-Actor: <user-id>` + `X-PipeGuard-Role: viewer|reviewer|approver`
+headers on those calls: `X-Bayleaf-Actor: <user-id>` + `X-Bayleaf-Role: viewer|reviewer|approver`
 (today's UI `a.rivera` / `Reviewer` becomes these). With no headers the backend uses a permissive
 **dev-default** (`dev` / `approver`) so nothing breaks — but a real deployment enforces them. Read
 the role to show/hide approve controls. Insufficient role → `403`. (Dev shim; ADR-0017.)
@@ -86,7 +86,7 @@ the role to show/hide approve controls. Insufficient role → `403`. (Dev shim; 
 **5b. `/api/runs` Tier-0 params** (additive on the runs list): `status=running|needs_review|released`
 filter; `q` now matches **run_id OR platform** (case-insensitive — the "search run id or platform"
 box); sort aliases `recent|urgent|date` (plus the canonical tokens). **Per-status facet counts** ride
-on an `X-PipeGuard-Status-Counts` header (JSON `{running,needs_review,released}`, CORS-exposed) — the
+on an `X-Bayleaf-Status-Counts` header (JSON `{running,needs_review,released}`, CORS-exposed) — the
 All/Needs-review/Sequencing/Released chips read totals from it, independent of the active page/filter.
 Note: the backend value is `needs_review` (map to your `review` label on display).
 
@@ -120,6 +120,6 @@ locator vs a real run dir → `matched|ambiguous|missing`; **never runs anything
 2. **Tier-2 north-star** (T-057): run submissions/ingest + samplesheet upload, the BaseSpace connector,
    conversational multi-turn triage chat, the pipeline-repair + archivist agents, and the run hand-off.
    The hand-off/ingest ones must preserve **compose ≠ execute** (emit + hand off, never run).
-3. **Real auth** behind `X-PipeGuard-*` (today a dev shim) + the **median-review-time** KPI wiring
+3. **Real auth** behind `X-Bayleaf-*` (today a dev shim) + the **median-review-time** KPI wiring
    (the review store already records the timestamps).
 4. Any `frontend/` change — untouched; consuming all of the above is the implementation step.

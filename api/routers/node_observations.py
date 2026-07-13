@@ -51,7 +51,7 @@ linkage isn't tracked yet) — a documented seam; it degrades to honest-empty, n
 files.
 
 **Triage-consumption seam.** :func:`gather_node_observations` is the reusable core the QC-triage
-agent (``src/pipeguard/triage``) can call to consume a bound node's scoped view when it advises. It
+agent (``src/bayleaf/triage``) can call to consume a bound node's scoped view when it advises. It
 is intentionally NOT wired into the agent in this slice (the agent stays a pure narrator over rule
 findings today) — this endpoint + this function are the read mechanism; agent consumption is the
 labelled next step.
@@ -70,8 +70,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from api.auth import Actor, require_role
 from api.deid import DEID_POLICY_ID, default_policy, scrub_text
 from api.job_store import KIND_INTAKE, get_job_store
-from pipeguard.nextflow.catalog import ProcessSpec, catalog_entry
-from pipeguard.nextflow.germline import germline_graph
+from bayleaf.nextflow.catalog import ProcessSpec, catalog_entry
+from bayleaf.nextflow.germline import germline_graph
 
 router = APIRouter(prefix="/api", tags=["node_observations"])
 

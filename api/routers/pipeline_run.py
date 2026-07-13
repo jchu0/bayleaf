@@ -6,7 +6,7 @@ against the operator's CHOSEN inputs as a background job — producing a gate-ab
 
 Human operators absolutely CAN execute (that is the point). The guardrails this respects are the
 *other* two: AI **agents** stay advisory (never run a tool or set a verdict, ADR-0001), and the
-decision **core** (``src/pipeguard/``) stays framework-agnostic (never shells out) — the execution
+decision **core** (``src/bayleaf/``) stays framework-agnostic (never shells out) — the execution
 is orchestrated by Nextflow from this API/driver layer, exactly like the intake endpoint.
 
 Only an APPROVED pipeline version runs (the approval gate, ADR-0014): the body NAMES a saved
@@ -41,7 +41,7 @@ from api.job_store import (
     run_driver,
 )
 from api.pipeline_store import get_pipeline_store
-from pipeguard.nextflow import required_inputs
+from bayleaf.nextflow import required_inputs
 
 # ``resolve_approved`` (the approval gate) and the graph→NfGraph adapter now live in
 # ``api.authored_pipeline`` so the intake sample-processing path shares this exact resolve+compile
@@ -116,9 +116,9 @@ _lock = threading.Lock()
 
 
 def _bioconda_env() -> dict[str, str]:
-    """Prepend PIPEGUARD_BIOCONDA_BIN to PATH so the driver finds nextflow + the bioconda tools."""
+    """Prepend BAYLEAF_BIOCONDA_BIN to PATH so the driver finds nextflow + the bioconda tools."""
     env = dict(os.environ)
-    bin_dir = os.environ.get("PIPEGUARD_BIOCONDA_BIN", "").strip()
+    bin_dir = os.environ.get("BAYLEAF_BIOCONDA_BIN", "").strip()
     if bin_dir:
         env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
     return env
@@ -228,7 +228,7 @@ def run_pipeline(
     (202; poll ``GET /api/pipelines/run/{run_id}``). The approval gate (ADR-0014): the body NAMES a
     saved pipeline — the run compiles + executes that pipeline's approver-blessed (``emitted``)
     snapshot from the store, so an unapproved draft can never run (409 if none). Compose ≠ execute
-    holds at the CORE — the driver, not ``src/pipeguard/``, orchestrates Nextflow."""
+    holds at the CORE — the driver, not ``src/bayleaf/``, orchestrates Nextflow."""
     run_id = body.run_id.strip()
     if not _RUN_ID_RE.match(run_id):
         raise HTTPException(status_code=422, detail="run_id must be a slug (A-Za-z0-9._-)")

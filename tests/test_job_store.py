@@ -56,8 +56,8 @@ def _job(kind: str, run_id: str, *, status: str = "queued", **extra: Any) -> dic
 
 
 def _use_jsonl(monkeypatch: Any, tmp_path: Path) -> None:
-    monkeypatch.delenv("PIPEGUARD_JOB_STORE", raising=False)
-    monkeypatch.setenv("PIPEGUARD_JOB_PATH", str(tmp_path / "jobs.events.jsonl"))
+    monkeypatch.delenv("BAYLEAF_JOB_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_JOB_PATH", str(tmp_path / "jobs.events.jsonl"))
 
 
 # --- round-trip + upsert semantics ----------------------------------------------------------
@@ -132,9 +132,9 @@ def test_sqlite_selection_degrades_to_jsonl(monkeypatch: Any, tmp_path: Path) ->
     # =sqlite pointed at an unconstructable path must NOT crash — it degrades to JSONL.
     blocker = tmp_path / "blocker"
     blocker.write_text("i am a file, not a dir", encoding="utf-8")  # parent-of-DB is a plain file
-    monkeypatch.setenv("PIPEGUARD_JOB_STORE", "sqlite")
-    monkeypatch.setenv("PIPEGUARD_JOB_DB", str(blocker / "nested" / "jobs.sqlite"))
-    monkeypatch.setenv("PIPEGUARD_JOB_PATH", str(tmp_path / "jobs.events.jsonl"))
+    monkeypatch.setenv("BAYLEAF_JOB_STORE", "sqlite")
+    monkeypatch.setenv("BAYLEAF_JOB_DB", str(blocker / "nested" / "jobs.sqlite"))
+    monkeypatch.setenv("BAYLEAF_JOB_PATH", str(tmp_path / "jobs.events.jsonl"))
     store = get_job_store()
     assert isinstance(store, JsonlJobStore)  # fell back rather than raising
     store.upsert(_job(KIND_INTAKE, "RUN-A"))  # still writes, via the fallback

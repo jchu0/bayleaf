@@ -11,9 +11,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from pipeguard import Verdict, load_run, run_gate, triage_card
-from pipeguard.synthesis import StubSynthesizer
-from pipeguard.triage import (
+from bayleaf import Verdict, load_run, run_gate, triage_card
+from bayleaf.synthesis import StubSynthesizer
+from bayleaf.triage import (
     AgentReply,
     KeywordRetriever,
     StubTriageAgent,
@@ -175,7 +175,7 @@ class _FakeClient:
 
 
 def _claude_agent(monkeypatch, client):
-    from pipeguard.triage.agent import ClaudeTriageAgent
+    from bayleaf.triage.agent import ClaudeTriageAgent
 
     agent = ClaudeTriageAgent()
     monkeypatch.setattr(agent, "_get_client", lambda: client)

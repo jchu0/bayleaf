@@ -1,4 +1,4 @@
-# PipeGuard — judge one-pager
+# bayleaf — judge one-pager
 
 | Field | Value |
 |---|---|
@@ -18,9 +18,9 @@ proceed / hold / rerun / escalate — by combing scattered logs, QC reports, and
 by hand, then reconstructing what happened, why it matters, and what to do next. That
 reconstruction is slow, error-prone, and lives in one person's head.
 
-## 2. What PipeGuard is
+## 2. What bayleaf is
 
-PipeGuard is the **operations layer** — a decision gate for a sequencing run. It ingests
+bayleaf is the **operations layer** — a decision gate for a sequencing run. It ingests
 the run's artifacts, checks them for provenance risks, missing metadata, and borderline
 QC, and produces a **decision card per sample** with **cited evidence**. The human still
 makes the call; they just no longer reconstruct the context by hand. The load-bearing

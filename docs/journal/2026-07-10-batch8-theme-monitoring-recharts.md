@@ -74,7 +74,7 @@ trigger fires this sweep.
      [constraints.md](../requirements/constraints.md) for any existing frontend-npm-dependency
      tracking precedent: **none** — neither doc mentions React, Vite, Tailwind, FastAPI, or any
      other existing frontend/API dependency; `licensing.md`'s own Overview line scopes it to "the
-     genomics tools and reference data PipeGuard sits on top of" (external-process invocation,
+     genomics tools and reference data bayleaf sits on top of" (external-process invocation,
      GPL-binary-bundling risk) — a fundamentally different licensing shape than a statically
      bundled MIT React component library. **Decision: waive licensing.md/constraints.md for this
      dependency** (see Decisions table) — the justification instead lives in CLAUDE.md's code map
@@ -133,7 +133,7 @@ frontend-only diff:
    fired** — no new capability crossed from wishlist to built, no scope line changed; this is
    UI polish on already-`done` (T-062-era) screens. Waived.
 6. **🔴 `models.py`/`parsers.py`/`persistence/`** → `data/schemas.md`. **Not fired** — confirmed
-   zero `src/pipeguard/` changes in all three diffs.
+   zero `src/bayleaf/` changes in all three diffs.
 7. **🔴 tests/ added/removed/renamed, or an EVAL case** → `quality/evaluation.md`. **Not fired**
    — confirmed zero `tests/` changes (`git diff --stat 1169e37 f8a6f35 -- tests/` empty, a
    subset of the broader check above). Waived — no census to recount.

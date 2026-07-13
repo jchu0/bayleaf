@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard import load_run, run_gate
-from pipeguard.models import Gate
-from pipeguard.pipeline_repair import (
+from bayleaf import load_run, run_gate
+from bayleaf.models import Gate
+from bayleaf.pipeline_repair import (
     PipelineStage,
     RecurringSignature,
     RemediationRetriever,
@@ -24,7 +24,7 @@ from pipeguard.pipeline_repair import (
     propose_repair,
     recurring_signature,
 )
-from pipeguard.synthesis import StubSynthesizer
+from bayleaf.synthesis import StubSynthesizer
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 # PIPE-001 (a logged pipeline failure for S5) recurs across these two runs — a genuine
@@ -221,7 +221,7 @@ class _FakeClient:
 
 
 def _claude_agent(monkeypatch, client):
-    from pipeguard.pipeline_repair.agent import ClaudeRepairAgent
+    from bayleaf.pipeline_repair.agent import ClaudeRepairAgent
 
     agent = ClaudeRepairAgent()
     monkeypatch.setattr(agent, "_get_client", lambda: client)

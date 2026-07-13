@@ -25,9 +25,9 @@ connects to a `fastq` port). Nothing here invents an I/O fastp doesn't have.
         -o HG002.trim.R1.fastq.gz -O HG002.trim.R2.fastq.gz \
         -j HG002.fastp.json -h HG002.fastp.html -w 3
   ```
-  Paired-end in, paired-end trimmed out, one JSON report (parsed by PipeGuard's `parse_fastp`
+  Paired-end in, paired-end trimmed out, one JSON report (parsed by bayleaf's `parse_fastp`
   for Q30/reads-PF/duplication, `run_giab_pipeline.py:230`) and one HTML report.
-- **PG status:** `ours` — PipeGuard parses this tool's JSON directly for gated metrics.
+- **PG status:** `ours` — bayleaf parses this tool's JSON directly for gated metrics.
 
 ## 2. Input ports
 
@@ -49,7 +49,7 @@ Notes:
 | Port kind | Produces (flag → file) | Downstream consumer card(s) | Card side |
 |---|---|---|---|
 | `fastq` | `-o` / `-O` → `HG002.trim.R{1,2}.fastq.gz` | bwa-mem2 (`fastq` in) | right |
-| `fastp_json` | `-j` → `HG002.fastp.json` | MultiQC (`fastp_json` in); PipeGuard `parse_fastp` | bottom |
+| `fastp_json` | `-j` → `HG002.fastp.json` | MultiQC (`fastp_json` in); bayleaf `parse_fastp` | bottom |
 | `fastp_html` *(optional)* | `-h` → `HG002.fastp.html` | Human report / MultiQC | bottom |
 | `unpaired_fastq` *(optional)* | `--unpaired1/2` → `HG002.unpaired.fastq.gz` | (none by default) | right |
 | `failed_fastq` *(optional)* | `--failed_out` → `HG002.failed.fastq.gz` | (none by default) | bottom |

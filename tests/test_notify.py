@@ -3,7 +3,7 @@
 These run fully offline (no network, no Slack SDK). They pin the guarantees that make the
 seam safe: the stub builds a well-formed payload for a flagged card, the notify policy
 skips clean cards, the payload is deterministic, the port NEVER touches the verdict, and
-`PIPEGUARD_NOTIFIER=slack` with no creds degrades to the stub instead of raising or
+`BAYLEAF_NOTIFIER=slack` with no creds degrades to the stub instead of raising or
 sending. The (deferred) live-send seam is exercised with a fake client — never the wire.
 """
 
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard import Verdict, load_run, notify_card, run_gate
-from pipeguard.notify import (
+from bayleaf import Verdict, load_run, notify_card, run_gate
+from bayleaf.notify import (
     DiscordNotifier,
     NotifyStatus,
     SlackNotifier,
@@ -25,7 +25,7 @@ from pipeguard.notify import (
     get_notifier,
     should_notify,
 )
-from pipeguard.synthesis import StubSynthesizer
+from bayleaf.synthesis import StubSynthesizer
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
 
@@ -43,9 +43,9 @@ def _disarm_live_send(monkeypatch):
     machine whose shell or .env has a ``*_LIVE`` flag + real creds set. Every adapter's live
     send is env-armed, so we force ALL of them off for every test; the few tests that
     exercise a live seam re-arm one explicitly (after this autouse fixture runs)."""
-    monkeypatch.delenv("PIPEGUARD_SLACK_LIVE", raising=False)
-    monkeypatch.delenv("PIPEGUARD_TEAMS_LIVE", raising=False)
-    monkeypatch.delenv("PIPEGUARD_DISCORD_LIVE", raising=False)
+    monkeypatch.delenv("BAYLEAF_SLACK_LIVE", raising=False)
+    monkeypatch.delenv("BAYLEAF_TEAMS_LIVE", raising=False)
+    monkeypatch.delenv("BAYLEAF_DISCORD_LIVE", raising=False)
 
 
 # --- notify policy ----------------------------------------------------------
@@ -143,22 +143,22 @@ def test_payload_is_deterministic(cards):
 
 
 def test_get_notifier_defaults_to_stub(monkeypatch):
-    monkeypatch.delenv("PIPEGUARD_NOTIFIER", raising=False)
+    monkeypatch.delenv("BAYLEAF_NOTIFIER", raising=False)
     assert isinstance(get_notifier(), StubNotifier)
 
 
 def test_get_notifier_selects_slack_from_env(monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_NOTIFIER", "slack")
+    monkeypatch.setenv("BAYLEAF_NOTIFIER", "slack")
     assert isinstance(get_notifier(), SlackNotifier)
 
 
 def test_get_notifier_unknown_value_falls_back_to_stub(monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_NOTIFIER", "carrier-pigeon")
+    monkeypatch.setenv("BAYLEAF_NOTIFIER", "carrier-pigeon")
     assert isinstance(get_notifier(), StubNotifier)
 
 
 def test_notify_card_entry_point_uses_env_notifier_and_injection(cards, monkeypatch):
-    monkeypatch.delenv("PIPEGUARD_NOTIFIER", raising=False)
+    monkeypatch.delenv("BAYLEAF_NOTIFIER", raising=False)
     # Default (env-selected) path: the stub prepares a flagged card.
     result = notify_card(cards["S4"])
     assert result.adapter == "stub" and result.status is NotifyStatus.PREPARED
@@ -173,8 +173,8 @@ def test_notify_card_entry_point_uses_env_notifier_and_injection(cards, monkeypa
 
 def test_slack_with_no_creds_falls_back_to_stub_without_sending(cards, monkeypatch):
     """Slack selected + no creds: degrades to the stub, does not raise, does not send."""
-    monkeypatch.delenv("PIPEGUARD_SLACK_CHANNEL", raising=False)
-    monkeypatch.delenv("PIPEGUARD_SLACK_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("BAYLEAF_SLACK_CHANNEL", raising=False)
+    monkeypatch.delenv("BAYLEAF_SLACK_BOT_TOKEN", raising=False)
     result = SlackNotifier().notify(cards["S4"])
     assert result.status is NotifyStatus.PREPARED  # payload built...
     assert result.adapter == "stub"  # ...by the stub fallback
@@ -185,9 +185,9 @@ def test_slack_with_no_creds_falls_back_to_stub_without_sending(cards, monkeypat
 
 
 def test_slack_env_path_degrades_and_does_not_send(cards, monkeypatch):
-    """PIPEGUARD_NOTIFIER=slack end-to-end via the public entry point never delivers."""
-    monkeypatch.setenv("PIPEGUARD_NOTIFIER", "slack")
-    monkeypatch.delenv("PIPEGUARD_SLACK_BOT_TOKEN", raising=False)
+    """BAYLEAF_NOTIFIER=slack end-to-end via the public entry point never delivers."""
+    monkeypatch.setenv("BAYLEAF_NOTIFIER", "slack")
+    monkeypatch.delenv("BAYLEAF_SLACK_BOT_TOKEN", raising=False)
 
     # Spy: with the guard at its shipped default, the client seam must never be reached
     # (proves "no socket", not just "result looks like a stub").
@@ -201,7 +201,7 @@ def test_slack_env_path_degrades_and_does_not_send(cards, monkeypatch):
 
 
 def test_slack_channel_is_read_from_env_never_hardcoded(cards, monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_SLACK_CHANNEL", "C0EXAMPLE")
+    monkeypatch.setenv("BAYLEAF_SLACK_CHANNEL", "C0EXAMPLE")
     result = SlackNotifier().notify(cards["S4"])
     assert result.payload is not None
     assert result.payload.channel == "C0EXAMPLE"  # resolved from env
@@ -209,7 +209,7 @@ def test_slack_channel_is_read_from_env_never_hardcoded(cards, monkeypatch):
 
 def test_slack_live_seam_falls_back_to_stub_on_error(cards, monkeypatch):
     """With live send armed, any send error still degrades to stub."""
-    monkeypatch.setenv("PIPEGUARD_SLACK_LIVE", "1")
+    monkeypatch.setenv("BAYLEAF_SLACK_LIVE", "1")
     agent = SlackNotifier()
 
     def _boom():
@@ -223,13 +223,13 @@ def test_slack_live_seam_falls_back_to_stub_on_error(cards, monkeypatch):
 
 def test_slack_live_seam_missing_client_lib_falls_back_to_stub(cards, monkeypatch):
     """Live armed but slack_sdk absent: the lazy import raises ImportError → stub fallback."""
-    monkeypatch.setenv("PIPEGUARD_SLACK_LIVE", "1")
+    monkeypatch.setenv("BAYLEAF_SLACK_LIVE", "1")
     # Force `import slack_sdk` to fail regardless of the developer's environment (a None
     # entry in sys.modules makes the import raise ImportError) and drop any token — so this
     # test can NEVER build a real client or touch the wire, even on a machine that happens
     # to have slack_sdk installed with a token in a local .env.
     monkeypatch.setitem(sys.modules, "slack_sdk", None)
-    monkeypatch.delenv("PIPEGUARD_SLACK_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("BAYLEAF_SLACK_BOT_TOKEN", raising=False)
     result = SlackNotifier().notify(cards["S4"])
     assert result.adapter == "stub" and result.delivered is False
 
@@ -240,7 +240,7 @@ def test_slack_live_seam_posts_via_client_when_explicitly_enabled(cards, monkeyp
     This is the one place SENT can occur, and only because live send is armed in the test
     AND a fake client is injected. The default demo/suite never reaches here.
     """
-    monkeypatch.setenv("PIPEGUARD_SLACK_LIVE", "1")
+    monkeypatch.setenv("BAYLEAF_SLACK_LIVE", "1")
 
     class _FakeSlackClient:
         def __init__(self):
@@ -267,10 +267,10 @@ def test_slack_live_seam_posts_via_client_when_explicitly_enabled(cards, monkeyp
 
 
 def test_slack_never_sends_when_not_armed_even_with_creds(cards, monkeypatch):
-    """With PIPEGUARD_SLACK_LIVE unset, a token + channel alone never trigger a send."""
-    monkeypatch.setenv("PIPEGUARD_SLACK_BOT_TOKEN", "xoxb-not-a-real-token")
-    monkeypatch.setenv("PIPEGUARD_SLACK_CHANNEL", "C0EXAMPLE")
-    # (the autouse fixture already ensures PIPEGUARD_SLACK_LIVE is unset)
+    """With BAYLEAF_SLACK_LIVE unset, a token + channel alone never trigger a send."""
+    monkeypatch.setenv("BAYLEAF_SLACK_BOT_TOKEN", "xoxb-not-a-real-token")
+    monkeypatch.setenv("BAYLEAF_SLACK_CHANNEL", "C0EXAMPLE")
+    # (the autouse fixture already ensures BAYLEAF_SLACK_LIVE is unset)
     agent = SlackNotifier()
 
     # Spy: the client seam must never be touched when live send isn't armed, even with
@@ -314,8 +314,8 @@ class _RecordingOpener:
 # (adapter class, its live-arm env var, the vendor's JSON body key) — one row per webhook
 # adapter so every guarantee below is asserted identically for Teams and Discord.
 _WEBHOOK_ADAPTERS = [
-    (TeamsNotifier, "PIPEGUARD_TEAMS_LIVE", "PIPEGUARD_TEAMS_WEBHOOK_URL", "text"),
-    (DiscordNotifier, "PIPEGUARD_DISCORD_LIVE", "PIPEGUARD_DISCORD_WEBHOOK_URL", "content"),
+    (TeamsNotifier, "BAYLEAF_TEAMS_LIVE", "BAYLEAF_TEAMS_WEBHOOK_URL", "text"),
+    (DiscordNotifier, "BAYLEAF_DISCORD_LIVE", "BAYLEAF_DISCORD_WEBHOOK_URL", "content"),
 ]
 
 
@@ -439,22 +439,22 @@ def test_teams_body_is_legacy_messagecard_text():
 
 
 def test_get_notifier_selects_teams_from_env(monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_NOTIFIER", "teams")
+    monkeypatch.setenv("BAYLEAF_NOTIFIER", "teams")
     assert isinstance(get_notifier(), TeamsNotifier)
 
 
 def test_get_notifier_selects_discord_from_env(monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_NOTIFIER", "discord")
+    monkeypatch.setenv("BAYLEAF_NOTIFIER", "discord")
     assert isinstance(get_notifier(), DiscordNotifier)
 
 
-# --- the `python -m pipeguard.notify` CLI ------------------------------------
+# --- the `python -m bayleaf.notify` CLI ------------------------------------
 
 
 def test_notify_cli_gates_and_reports_actionable(monkeypatch, capsys):
     """The CLI gates a run and reports its actionable cards via the env-selected notifier."""
-    monkeypatch.setenv("PIPEGUARD_NOTIFIER", "stub")  # never live in tests
-    from pipeguard.notify.__main__ import main
+    monkeypatch.setenv("BAYLEAF_NOTIFIER", "stub")  # never live in tests
+    from bayleaf.notify.__main__ import main
 
     assert main([str(DATA)]) == 0
     out = capsys.readouterr().out
@@ -464,7 +464,7 @@ def test_notify_cli_gates_and_reports_actionable(monkeypatch, capsys):
 
 
 def test_notify_cli_no_args_returns_usage(capsys):
-    from pipeguard.notify.__main__ import main
+    from bayleaf.notify.__main__ import main
 
     assert main([]) == 2
     assert "usage:" in capsys.readouterr().err

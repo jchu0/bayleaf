@@ -4,14 +4,14 @@
 |---|---|
 | **Purpose** | Hand a scoped, prioritized design brief to **claude design** after a burst of parallel frontend work. Folds the maintainer's 15 review points together with a 6-agent fidelity + scale audit of the built React app vs the design handoffs. |
 | **Audience** | claude design (+ contributors) |
-| **Sources** | The built app (`frontend/src/`), the operator-UI handoff (`../operator-ui-handoff-README.md`), the Pipeline Builder handoff (`../README.md`, `../pipeline-builder-brief.md`), the prototype (`../PipeGuard.html`). |
+| **Sources** | The built app (`frontend/src/`), the operator-UI handoff (`../operator-ui-handoff-README.md`), the Pipeline Builder handoff (`../README.md`, `../pipeline-builder-brief.md`), the prototype (`../bayleaf.html`). |
 | **Status** | Brief — recreate faithfully in the React codebase; not code to ship verbatim. |
 
 ## 0. How to read this
 
 > **These are observations of the live local React app, not a prototype diff.** The maintainer
-> evaluated the *running app* as a product. The prototype (`PipeGuard.html`) is a reference **only**
-> for the items explicitly tagged "see PipeGuard.html" (e.g. the console side-by-side layout, the
+> evaluated the *running app* as a product. The prototype (`bayleaf.html`) is a reference **only**
+> for the items explicitly tagged "see bayleaf.html" (e.g. the console side-by-side layout, the
 > port-linked edges, the Decision-card layout) — it is **not** a gold standard. Several gaps here
 > (Tidy, drag-and-drop, the static canvas, no-op export verbs, read-only locators) exist in the
 > prototype **too** — it's an MVP mockup as well — so those are **build-forward**, not a copy-back.
@@ -43,8 +43,8 @@ these to ground it — in order. Nothing needs to travel with this file; the who
 4. `docs/design/frontend/pipeline-builder-brief.md` + `docs/design/frontend/README.md` — the **Pipeline
    Builder spec pair.** All of §4's vocabulary (Locators, `ArtifactKind`, `StageKind` lane order,
    `run_layout.yaml`, composes-≠-executes, gate-terminal / agents-port-less) is defined here, not here in the brief.
-5. `docs/design/frontend/PipeGuard.html` — the **prototype.** Open **only** for items tagged
-   "see PipeGuard.html" (port-anchored edges, console layout, decision-card layout); per §0 it is a
+5. `docs/design/frontend/bayleaf.html` — the **prototype.** Open **only** for items tagged
+   "see bayleaf.html" (port-anchored edges, console layout, decision-card layout); per §0 it is a
    reference, **not** a gold standard (it shares several of the app's limitations).
 
 **Grounding (as needed):**
@@ -105,7 +105,7 @@ This is partly a **data-model** ask (see Runs / Monitoring below): `RunSummary` 
 The MVP renders the seeded germline chain faithfully but is a **static mockup**: hardcoded 2560×460 canvas with literal node coords + 16 static edge paths, read-only locators, inert params, and no-op export verbs — it cannot produce `run_layout.yaml`. The design goal is to make it a real, scalable authoring surface while keeping the load-bearing invariants (composes ≠ executes; gate terminal + no verdict control; agents port-less).
 
 ### 4a. Fix-now gaps (some prototype-referenced, some build-forward)
-- **#2 Port-anchored edges** *(prototype-referenced — "see PipeGuard.html")*. The build dropped the prototype's `-12px` port margins, so port dots sit ~12–16px *inside* the card padding and every edge stops short. Fix: restore the port offsets **and** compute edge endpoints from actual port anchor positions (not hardcoded `d` strings) so edges visibly link an **output port → the next node's input port**, and recompute on zoom/move. (This also unblocks #7/#3.)
+- **#2 Port-anchored edges** *(prototype-referenced — "see bayleaf.html")*. The build dropped the prototype's `-12px` port margins, so port dots sit ~12–16px *inside* the card padding and every edge stops short. Fix: restore the port offsets **and** compute edge endpoints from actual port anchor positions (not hardcoded `d` strings) so edges visibly link an **output port → the next node's input port**, and recompute on zoom/move. (This also unblocks #7/#3.)
 - **Validation rows** are inert single-color `<div>`s that ignore each row's `sev` *(the prototype colors them by severity — recoverable)*. Make them severity-grouped (critical/warn/info), colored, and **click-to-focus** onto the offending node.
 - **#1 Console layout** *(side-by-side is prototype-referenced; adjustable + pop-out are build-forward)*. Validation list and `run_layout.yaml` should sit **side-by-side** (see prototype); the console should also be **height-adjustable** (drag handle) and **pop-out** (detach to a modal / new window) for large YAML — neither the app nor the prototype does that yet. Today it's a fixed 240px pane.
 - **Palette search** is a decorative `<div>` — make it a real filtering input. **Params** are uncontrolled `defaultValue`. **Copy/Download/Emit** are no-ops. Note: **these are no-ops in the prototype too** (`bCopy`/`bDownload`/`bTidy` are empty in the source) — so this is **build-forward** (make the deliverable-producing verbs actually work), not a copy-back from the prototype.

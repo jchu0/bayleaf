@@ -7,7 +7,7 @@ category / area / sentiment / priority + an aggregate rollup + recurring themes 
 product iteration. Advisory only: it never touches a verdict, a finding, or the decision
 projection (feedback is off-gate telemetry, ADR-0001).
 
-Env: ``PIPEGUARD_FEEDBACK_AGENT`` = "stub" (default) | "claude"; ``PIPEGUARD_FEEDBACK_MODEL``
+Env: ``BAYLEAF_FEEDBACK_AGENT`` = "stub" (default) | "claude"; ``BAYLEAF_FEEDBACK_MODEL``
 default ``claude-haiku-4-5-20251001`` (categorization is a cheap, high-volume task, ADR-0012).
 
 PII posture: the deterministic categorization uses only the structured fields; the Claude path
@@ -193,7 +193,7 @@ class ClaudeFeedbackAgent:
     name = "claude"
 
     def __init__(self, model: str | None = None, max_tokens: int = 512) -> None:
-        self.model = model or os.environ.get("PIPEGUARD_FEEDBACK_MODEL", _DEFAULT_FEEDBACK_MODEL)
+        self.model = model or os.environ.get("BAYLEAF_FEEDBACK_MODEL", _DEFAULT_FEEDBACK_MODEL)
         self.max_tokens = max_tokens
         self._fallback = StubFeedbackAgent()
         self._client: Any = None
@@ -251,7 +251,7 @@ class ClaudeFeedbackAgent:
 
 def get_feedback_agent() -> FeedbackAgent:
     """Select the feedback agent from the environment (default: the zero-cost stub)."""
-    choice = os.environ.get("PIPEGUARD_FEEDBACK_AGENT", "stub").strip().lower()
+    choice = os.environ.get("BAYLEAF_FEEDBACK_AGENT", "stub").strip().lower()
     if choice == "claude":
         return ClaudeFeedbackAgent()
     return StubFeedbackAgent()

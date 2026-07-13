@@ -102,7 +102,7 @@ frontend-only diff:
    ticket-action UX this commit changes. No scope/wishlist item names or claims "one-click, no
    confirm" today, so nothing here goes stale. Waived.
 6. **🔴 `models.py`/`parsers.py`/`persistence/`** → `data/schemas.md`. **Not fired** — confirmed
-   zero `src/pipeguard/` changes (the grounding-pass empty-diff check above is a superset).
+   zero `src/bayleaf/` changes (the grounding-pass empty-diff check above is a superset).
 7. **🔴 `tests/` added/removed/renamed, or an EVAL case** → `quality/evaluation.md`. **Not
    fired** — `git diff --stat 9733842 d65c9c1 -- tests/` is empty (subset of the check above);
    no Python test census to recount, and this frontend repo has no test-file census tracked in

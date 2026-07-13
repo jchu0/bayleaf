@@ -1,4 +1,4 @@
-# PipeGuard — Release-Hardening Audit · SYNTHESIS
+# bayleaf — Release-Hardening Audit · SYNTHESIS
 
 **Verdict handling.** 0 findings were REFUTED (nothing dropped) and 0 were UNCERTAIN. Every item is either **[CONFIRMED]** (verifier independently reproduced it) or **[UNVERIFIED]** (verifier did not re-check — it rests on the specialist's own confidence, noted inline; treated as Probable-at-best where confidence < Confirmed).
 **Dedup.** 60 raw findings → 26 consolidated items. The big overlaps — "Gate online" (×3), MonitoringSignature drift (×2), node-author no-op CTA (×5), phase-2 badge understatement (×5), Archivist inert CTA (×4), SettingsModelTier (×2), Share-not-in-Admin-feed (×3), poll-hangs/non-durable-jobs (×3) — are merged, each resolved by a single fix.
@@ -39,7 +39,7 @@
 - **Effort:** `<30min` (guard) / `30-90min` (labeled banner) · **Risk:** low-medium (touches Submit init state a maintainer may be editing) · **Raised by:** S10 `T-TRU-02`, S8 `DEMO-06` · **Verdict: [CONFIRMED] (verifier reproduced; specialist confidence upgraded Probable→Confirmed).**
 
 ### P1-4 · Fraction-scaled QC metrics render 100× too small in DecisionCard finding text
-- **Where:** `src/pipeguard/rules.py:234` prints `mv.raw_value:g` + `threshold.unit` and `:224` denormalizes the gate to `raw_unit`; for the four fraction-raw metrics (`breadth_20x/breadth_30x/pct_mapped/on_target`, `metrics/mapping.py:~33`) this yields e.g. `0.85%` / gate `≥ 0.9%`. Correct sibling `api/card_readout.py:222-224` shows `85%` / `≥ 90%`.
+- **Where:** `src/bayleaf/rules.py:234` prints `mv.raw_value:g` + `threshold.unit` and `:224` denormalizes the gate to `raw_unit`; for the four fraction-raw metrics (`breadth_20x/breadth_30x/pct_mapped/on_target`, `metrics/mapping.py:~33`) this yields e.g. `0.85%` / gate `≥ 0.9%`. Correct sibling `api/card_readout.py:222-224` shows `85%` / `≥ 90%`.
 - **Why P1 (not P0):** Verifier confirms the bug **but** notes it is **latent on the shipped fixtures** — no demo run emits a *failing* fraction metric, and the two hero HOLD/ESCALATE beats don't trip it, so the wrong string won't appear on camera. It becomes visibly, scientifically wrong the moment any live/sparse run fails one of these metrics. Fix before submission.
 - **Fix:** Render observed value + thresholds through the same display conversion `card_readout._to_display` uses (normalized_value → threshold.unit), not `raw_value` + denormalize-to-raw_unit.
 - **Effort:** `30-90min` · **Risk:** low, **but** `Finding.detail`/`Evidence` feed `content_hash`/signature — regenerate any golden fixtures asserting those strings and re-run the gate tests. · **Raised by:** S7 `SCI-01` · **Verdict: [CONFIRMED] + independently reproduced (latency caveat confirmed).**
@@ -61,7 +61,7 @@
 ## P2 — HIDE OR DOCUMENT (fine outside the demo when clearly labelled)
 
 ### P2-1 · One relabel clears the whole node-author "add to palette" no-op cluster
-- **Where:** `frontend/src/components/BuilderModals.tsx:340-342` primary CTA `Review kinds & add to palette` has `onClick={onClose}` — registers nothing; static mock `:186-345`, honestly badged `roster #5 · phase-2` (`:210-211`) and "never auto-adds" (`:333-335`). No transport: `grep node_author|propose_node api/` and `frontend/src` = empty (core-only agent `src/pipeguard/node_author/agent.py`).
+- **Where:** `frontend/src/components/BuilderModals.tsx:340-342` primary CTA `Review kinds & add to palette` has `onClick={onClose}` — registers nothing; static mock `:186-345`, honestly badged `roster #5 · phase-2` (`:210-211`) and "never auto-adds" (`:333-335`). No transport: `grep node_author|propose_node api/` and `frontend/src` = empty (core-only agent `src/bayleaf/node_author/agent.py`).
 - **Fix:** Relabel the primary to a non-actionable "Close (phase-2 preview)" / demote from accent styling. Modal is off the recording and already phase-2 badged → document + relabel, do not build.
 - **Effort:** `<30min` · **Raised by:** S3 `J2`, S4 `F-INT-01` (Y-demo-critical), S8 `DEMO-05`, S10 `T-TRU-07`, (author-half of S1 `UIUX-07`) · **Verdict: [CONFIRMED] (J2 reproduced) + 4 corroborating (UNVERIFIED, specialist-Confirmed).**
 
@@ -91,8 +91,8 @@
 - **Effort:** `<30min` · **Raised by:** S4 `F-INT-04`, S10 `T-TRU-06` · **Verdict: [UNVERIFIED] ×2 — specialist-Confirmed (T-TRU-06 Probable).**
 
 ### P2-7 · metrics-expansion roster is vaporware that can read "Live", and roster env labels are wrong
-- **Where:** `SettingsModelTier.tsx:54` `metrics_expand` `wired:false, phase2:true`, `env:'PIPEGUARD_METRICS_AGENT'` — no backend module, absent from `.env.example`; the Live SegmentedControl `:279-283` is not disabled for `wired:false` rows. Separately, displayed env strings drift from real vars: `:48` `PIPEGUARD_SYNTHESIZER` (real: `PIPEGUARD_CLAUDE_MODEL`), `:53` `PIPEGUARD_NODE_AUTHOR` (real: `PIPEGUARD_NODE_AUTHOR_MODEL/_AGENT`).
-- **Fix:** Mark `metrics_expand` "design-only (no backend)" and force Stub / disable Live for `wired:false` rows; correct the displayed env strings to the real `PIPEGUARD_*_MODEL/_AGENT` names.
+- **Where:** `SettingsModelTier.tsx:54` `metrics_expand` `wired:false, phase2:true`, `env:'BAYLEAF_METRICS_AGENT'` — no backend module, absent from `.env.example`; the Live SegmentedControl `:279-283` is not disabled for `wired:false` rows. Separately, displayed env strings drift from real vars: `:48` `BAYLEAF_SYNTHESIZER` (real: `BAYLEAF_CLAUDE_MODEL`), `:53` `BAYLEAF_NODE_AUTHOR` (real: `BAYLEAF_NODE_AUTHOR_MODEL/_AGENT`).
+- **Fix:** Mark `metrics_expand` "design-only (no backend)" and force Stub / disable Live for `wired:false` rows; correct the displayed env strings to the real `BAYLEAF_*_MODEL/_AGENT` names.
 - **Effort:** `30-90min` · **Raised by:** S4 `F-INT-03` (Probable), `F-INT-10`, S10 `T-TRU-08` · **Verdict: [UNVERIFIED] ×3 — specialist-Confirmed except F-INT-03 (Probable).**
 
 ### P2-8 · Share/DATA_EXPORTED egress is absent from the central Admin Activity feed

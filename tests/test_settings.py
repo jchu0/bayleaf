@@ -3,11 +3,11 @@
 Driven fully IN ISOLATION per the build contract: each test builds its OWN tiny FastAPI app that
 mounts ONLY ``api/routers/settings.py`` and drives it with a TestClient. Nothing here imports
 ``api/main.py`` — a failure points at the settings seam, not at unrelated wiring. Offline: the
-JSONL store is a tmp file (``PIPEGUARD_SETTINGS_PATH``) and the SQLite store a tmp DB, so no test
+JSONL store is a tmp file (``BAYLEAF_SETTINGS_PATH``) and the SQLite store a tmp DB, so no test
 touches the repo or the network.
 
 Auth is the dev-shim (``api/auth.py``): with NO headers the actor is ``dev``/``approver`` (clears
-every gate), and the ``X-PipeGuard-Role`` header lets a test act as a lower role to prove the
+every gate), and the ``X-Bayleaf-Role`` header lets a test act as a lower role to prove the
 403 gates.
 """
 
@@ -30,8 +30,8 @@ from api.settings_store import (
 @pytest.fixture
 def client(tmp_path, monkeypatch) -> Iterator[TestClient]:
     """A throwaway app mounting ONLY the settings router, backed by a tmp JSONL store."""
-    monkeypatch.setenv("PIPEGUARD_SETTINGS_PATH", str(tmp_path / "settings.jsonl"))
-    monkeypatch.delenv("PIPEGUARD_SETTINGS_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_SETTINGS_PATH", str(tmp_path / "settings.jsonl"))
+    monkeypatch.delenv("BAYLEAF_SETTINGS_STORE", raising=False)
     app = FastAPI()
     app.include_router(router)
     yield TestClient(app)
@@ -72,12 +72,12 @@ def test_save_draft_captures_submitter_and_authors_fields(client):
 
 
 def test_submitted_by_reflects_the_header_actor(client):
-    # The dev-shim reads X-PipeGuard-Actor / X-PipeGuard-Role; a reviewer may save a draft and the
+    # The dev-shim reads X-Bayleaf-Actor / X-Bayleaf-Role; a reviewer may save a draft and the
     # captured submitter is the header identity, not a hardcoded/client-supplied value.
     resp = client.post(
         "/api/settings/thresholds",
         json=_body(name="beta"),
-        headers={"X-PipeGuard-Actor": "a.rivera", "X-PipeGuard-Role": "reviewer"},
+        headers={"X-Bayleaf-Actor": "a.rivera", "X-Bayleaf-Role": "reviewer"},
     )
     assert resp.status_code == 201
     assert resp.json()["submitted_by"] == "a.rivera"
@@ -113,7 +113,7 @@ def test_approve_requires_approver_and_audits_approver(client):
 
     # A reviewer may SAVE but not APPROVE -> 403, and nothing is appended.
     forbidden = client.post(
-        "/api/settings/thresholds/wgs/approve", headers={"X-PipeGuard-Role": "reviewer"}
+        "/api/settings/thresholds/wgs/approve", headers={"X-Bayleaf-Role": "reviewer"}
     )
     assert forbidden.status_code == 403
     assert [o["version"] for o in client.get("/api/settings/thresholds/wgs").json()] == [1]
@@ -121,7 +121,7 @@ def test_approve_requires_approver_and_audits_approver(client):
     # A viewer is likewise blocked from approving.
     assert (
         client.post(
-            "/api/settings/thresholds/wgs/approve", headers={"X-PipeGuard-Role": "viewer"}
+            "/api/settings/thresholds/wgs/approve", headers={"X-Bayleaf-Role": "viewer"}
         ).status_code
         == 403
     )
@@ -129,7 +129,7 @@ def test_approve_requires_approver_and_audits_approver(client):
     # An approver (dev default) approves -> a NEW immutable revision, status=approved + approved_by.
     approved = client.post(
         "/api/settings/thresholds/wgs/approve",
-        headers={"X-PipeGuard-Actor": "boss", "X-PipeGuard-Role": "approver"},
+        headers={"X-Bayleaf-Actor": "boss", "X-Bayleaf-Role": "approver"},
     )
     assert approved.status_code == 201
     rec = approved.json()
@@ -165,7 +165,7 @@ def test_malformed_actor_header_is_400_before_any_write(client):
     # A newline in the actor id could forge a log/JSONL line -> rejected at the auth boundary (400),
     # and nothing is persisted (the store is never reached).
     resp = client.post(
-        "/api/settings/thresholds", json=_body(name="x"), headers={"X-PipeGuard-Actor": "e\nvil"}
+        "/api/settings/thresholds", json=_body(name="x"), headers={"X-Bayleaf-Actor": "e\nvil"}
     )
     assert resp.status_code == 400
     assert client.get("/api/settings/thresholds").json() == []
@@ -242,8 +242,8 @@ def test_sqlite_store_roundtrips_through_the_endpoint(tmp_path, monkeypatch):
     # Route the endpoint's saves into a real (offline, zero-dep) SQLite DB, then read them back
     # through the store — proving "threshold overrides in a database" end to end.
     db = tmp_path / "settings_overrides.sqlite"
-    monkeypatch.setenv("PIPEGUARD_SETTINGS_STORE", "sqlite")
-    monkeypatch.setenv("PIPEGUARD_SETTINGS_DB", str(db))
+    monkeypatch.setenv("BAYLEAF_SETTINGS_STORE", "sqlite")
+    monkeypatch.setenv("BAYLEAF_SETTINGS_DB", str(db))
     app = FastAPI()
     app.include_router(router)
     c = TestClient(app)
@@ -255,12 +255,12 @@ def test_sqlite_store_roundtrips_through_the_endpoint(tmp_path, monkeypatch):
 
 
 def test_store_factory_selects_and_degrades(tmp_path, monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_SETTINGS_DB", str(tmp_path / "s.sqlite"))
-    monkeypatch.delenv("PIPEGUARD_SETTINGS_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_SETTINGS_DB", str(tmp_path / "s.sqlite"))
+    monkeypatch.delenv("BAYLEAF_SETTINGS_STORE", raising=False)
     assert isinstance(get_settings_store(), JsonlSettingsStore)  # default
-    monkeypatch.setenv("PIPEGUARD_SETTINGS_STORE", "sqlite")
+    monkeypatch.setenv("BAYLEAF_SETTINGS_STORE", "sqlite")
     assert isinstance(get_settings_store(), SqliteSettingsStore)
     # postgres selected but no DATABASE_URL here -> degrade to JSONL, never raise.
-    monkeypatch.setenv("PIPEGUARD_SETTINGS_STORE", "postgres")
+    monkeypatch.setenv("BAYLEAF_SETTINGS_STORE", "postgres")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     assert isinstance(get_settings_store(), JsonlSettingsStore)

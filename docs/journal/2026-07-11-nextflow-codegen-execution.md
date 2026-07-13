@@ -2,15 +2,15 @@
 
 | Field | Value |
 |---|---|
-| **Focus** | SWEEP + AUTHOR the docs owed by 5 already-landed commits (`10f1816`→`e4ba174`, offline suite 423 passed / 4 skipped on a machine with `nextflow` on `PATH`, a machine-gated live `nextflow run -stub-run` test passing; ruff+mypy+tsc+oxlint clean): a new `src/pipeguard/nextflow/` card-graph→Nextflow (DSL2) compiler, `POST /api/pipelines/compile` + a Builder "Export to Nextflow" UI, and a Nextflow-first `scripts/run_giab_pipeline.py` intake driver. This makes ADR-0003's "Nextflow carries compute portability" decision executable, not aspirational, and retires the "not Nextflow" framing every prior doc carried since T-057. Pure doc-keeper work — no product code, tests, or fixtures touched. |
+| **Focus** | SWEEP + AUTHOR the docs owed by 5 already-landed commits (`10f1816`→`e4ba174`, offline suite 423 passed / 4 skipped on a machine with `nextflow` on `PATH`, a machine-gated live `nextflow run -stub-run` test passing; ruff+mypy+tsc+oxlint clean): a new `src/bayleaf/nextflow/` card-graph→Nextflow (DSL2) compiler, `POST /api/pipelines/compile` + a Builder "Export to Nextflow" UI, and a Nextflow-first `scripts/run_giab_pipeline.py` intake driver. This makes ADR-0003's "Nextflow carries compute portability" decision executable, not aspirational, and retires the "not Nextflow" framing every prior doc carried since T-057. Pure doc-keeper work — no product code, tests, or fixtures touched. |
 | **Participants** | doc-keeper subagent, invoked in SWEEP + AUTHOR mode |
-| **Outcome** | Authored [design/nextflow-codegen.md](../design/nextflow-codegen.md); swept every doc the Doc-update map obligates plus two bonus drift fixes found while reading (`data-platform-and-archivist.md`'s "we run no nextflow" row + intro sentence). Every claim below is grounded by reading the actual code (`src/pipeguard/nextflow/{catalog,compiler,germline}.py`, `api/routers/nextflow.py`, `scripts/run_giab_pipeline.py`, `scripts/generate_reference_pipeline.py`, `pipelines/germline/`, `tests/test_nextflow_{compile,api}.py`) and running the offline suite + a fresh test census in this sandbox. |
+| **Outcome** | Authored [design/nextflow-codegen.md](../design/nextflow-codegen.md); swept every doc the Doc-update map obligates plus two bonus drift fixes found while reading (`data-platform-and-archivist.md`'s "we run no nextflow" row + intro sentence). Every claim below is grounded by reading the actual code (`src/bayleaf/nextflow/{catalog,compiler,germline}.py`, `api/routers/nextflow.py`, `scripts/run_giab_pipeline.py`, `scripts/generate_reference_pipeline.py`, `pipelines/germline/`, `tests/test_nextflow_{compile,api}.py`) and running the offline suite + a fresh test census in this sandbox. |
 
 ## Discussion
 
 ### What landed in code (verified by reading, not the task description alone)
 
-1. **`src/pipeguard/nextflow/`** — a pure-text compiler, confirmed to never shell out or import
+1. **`src/bayleaf/nextflow/`** — a pure-text compiler, confirmed to never shell out or import
    `subprocess` anywhere in `catalog.py`/`compiler.py`/`germline.py` (grepped). `catalog.py`'s
    `PROCESS_CATALOG` covers exactly 7 tools (fastp, bwa-mem2, samtools markdup, mosdepth,
    bcftools call, bcftools norm, MultiQC) — read every `ProcessSpec`'s `script:` and confirmed
@@ -171,7 +171,7 @@ binary available in this sandbox — see the census section above for how that's
   deterministic codegen module, not an advisory-agent seam (it has no LLM path at all, unlike the
   six `stub|claude` agents this row governs). Waiving the 🟠 "a new advisory agent" row.
 - **`.env.example` / `pyproject.toml`.** Confirmed via `git show --stat` across all four commits:
-  neither file touched. No new documented env var (the test-only `PIPEGUARD_NEXTFLOW_BIN` override
+  neither file touched. No new documented env var (the test-only `BAYLEAF_NEXTFLOW_BIN` override
   in `test_nextflow_compile.py` is a test convenience, not a documented product knob) and no new
   Python dependency (Nextflow is external tooling on `PATH`, not a `uv` package) — so
   `data/licensing.md` and `requirements/constraints.md` are not owed either.

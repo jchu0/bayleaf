@@ -95,7 +95,7 @@ frontend-only diff:
    panel actually parse a file," which was never what item 9 was about. No wishlist status flips.
    Waived.
 6. **🔴 `models.py`/`parsers.py`/`persistence/`** → `data/schemas.md`. **Not fired** — confirmed
-   zero `src/pipeguard/` changes in both diffs (the grounding-pass empty-diff check above is a
+   zero `src/bayleaf/` changes in both diffs (the grounding-pass empty-diff check above is a
    superset of this).
 7. **🔴 `tests/` added/removed/renamed, or an EVAL case** → `quality/evaluation.md`. **Not
    fired** — `git diff --stat e39bb4e 1bb79b8 -- tests/` is empty (subset of the check above); no

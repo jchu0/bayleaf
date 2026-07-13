@@ -2,12 +2,7 @@
 
 **Add subtle flavor to your NGS project** — an AI-assisted provenance & QC decision gate for genomics runs.
 
-Built with Claude · Life Sciences hackathon. *(Formerly “PipeGuard”.)*
-
-> **Name vs. package.** The product is **bayleaf**; the importable Python package is still
-> `pipeguard` (`from pipeguard import …`, the `PIPEGUARD_*` env vars, `src/pipeguard/`). The
-> module rename is a deliberate, separate change — this pass rebrands the product *surface*
-> (UI, docs, icons), not the code identifiers, so every command below still works verbatim.
+Built with Claude · Life Sciences hackathon.
 
 Bioinformatics pipelines are good at *executing* workflow steps, but *operating* them
 is still manual: intake, provenance review, QC interpretation, and failure triage
@@ -37,14 +32,14 @@ The credibility of a decision gate depends on its recommendations being **ground
 bayleaf splits the work along one load-bearing invariant — **rules decide; AI narrates
 and advises, and never sets or overrides a verdict** ([ADR-0001](docs/adr/ADR-0001-deterministic-gate-advisory-ai.md)):
 
-1. **Rule engine** (`pipeguard.rules`) owns the *facts*: barcode/index-swap and
+1. **Rule engine** (`bayleaf.rules`) owns the *facts*: barcode/index-swap and
    sample-identity checks, missing metadata, QC vs. runbook thresholds, pipeline
    failures. Each is emitted as a cited, immutable, content-hashed `Finding` that traces
    to a source file and a rule. The **verdict is computed from the findings.**
-2. **Synthesizer** (`pipeguard.synthesis`) owns the *narration*: the verdict's headline,
+2. **Synthesizer** (`bayleaf.synthesis`) owns the *narration*: the verdict's headline,
    rationale, and next steps in operator language. The model phrases the card; it does
    not decide it.
-3. **Triage agent** (`pipeguard.triage`) is *advisory*: on a flagged card it suggests a
+3. **Triage agent** (`bayleaf.triage`) is *advisory*: on a flagged card it suggests a
    likely cause and next action, grounded in a curated knowledge corpus with citations —
    **off the deterministic critical path**, and it never touches the verdict
    ([ADR-0009](docs/adr/ADR-0009-corpora-retrieval-upskilling.md)).
@@ -89,7 +84,7 @@ lives in the [ADRs](docs/adr/).
  (offline fallback)       (read-API seam)             (Vite + Tailwind)
 ```
 
-1. **Core (`src/pipeguard/`), framework-agnostic** — no UI framework imports. `parsers`
+1. **Core (`src/bayleaf/`), framework-agnostic** — no UI framework imports. `parsers`
    build a tolerant, typed `RunArtifacts` bundle (a missing field is a *signal*, not a
    crash); `rules` is the trust anchor (cited, immutable `Finding`s); `models` is the
    pydantic data contract; `runbook` holds operator-configurable QC policy; `metrics/`
@@ -111,16 +106,16 @@ lives in the [ADRs](docs/adr/).
    consuming the API ([ADR-0014](docs/adr/ADR-0014-productionization-fastapi-react.md)).
    An outbound `notify/` port turns each *actionable* card into a per-verdict, evidence-cited
    notification — stub-first ($0); the Slack adapter's live post is opt-in via
-   `PIPEGUARD_SLACK_LIVE` and every send is recorded as a `notification.emitted` ledger event
-   (`python -m pipeguard.notify <run_dir>`).
+   `BAYLEAF_SLACK_LIVE` and every send is recorded as a `notification.emitted` ledger event
+   (`python -m bayleaf.notify <run_dir>`).
 
 ### Swappable seams (the flex points)
 
 | Seam | Switch | Default |
 |---|---|---|
-| Synthesizer (narration) | `PIPEGUARD_SYNTHESIZER=stub\|claude` | `stub` ($0) |
-| Triage agent (advice) | `PIPEGUARD_TRIAGE_AGENT=stub\|claude` | `stub` ($0) |
-| Notify (outbound) | `PIPEGUARD_NOTIFIER=stub\|slack`; `PIPEGUARD_SLACK_LIVE=1` to arm live send | `stub` (no network) |
+| Synthesizer (narration) | `BAYLEAF_SYNTHESIZER=stub\|claude` | `stub` ($0) |
+| Triage agent (advice) | `BAYLEAF_TRIAGE_AGENT=stub\|claude` | `stub` ($0) |
+| Notify (outbound) | `BAYLEAF_NOTIFIER=stub\|slack`; `BAYLEAF_SLACK_LIVE=1` to arm live send | `stub` (no network) |
 | Metric registry (normalization) | versioned `metric_registry.yaml` + `our_key` mapping — absorb a new tool key / unit without touching `rules` | canonical decimals; on the critical path |
 | Repository (persistence) | `Repository` port; SqliteRepository → Postgres later | SQLite + JSONL |
 
@@ -156,15 +151,15 @@ make check                   # lint + strict type-check + tests (ruff + mypy + p
 uv run pre-commit install --install-hooks   # ruff/mypy/secret-scan (commit) + pytest (push)
 
 # Ad-hoc run of the core, no UI:
-uv run python -c "from pipeguard import run_gate_from_dir; \
+uv run python -c "from bayleaf import run_gate_from_dir; \
   _, cards = run_gate_from_dir('data/mock_run_01'); \
   print([(c.sample_id, c.verdict.value) for c in cards])"
 # -> [('S4', 'escalate'), ('S5', 'hold'), ('S1', 'proceed'), ('S2', 'proceed'), ('S3', 'proceed')]
 
 # Regenerate the committed demo data (offline, deterministic):
-uv run python -m pipeguard.synthetic          # demo (default): all committed runs, incl. the 30-sample scale run
-uv run python -m pipeguard.synthetic scale    # one large run (default: the 30-sample showcase)
-uv run python -m pipeguard.synthetic bulk --count 24 --samples 12   # many runs -> git-ignored data/synthetic_bulk/
+uv run python -m bayleaf.synthetic          # demo (default): all committed runs, incl. the 30-sample scale run
+uv run python -m bayleaf.synthetic scale    # one large run (default: the 30-sample showcase)
+uv run python -m bayleaf.synthetic bulk --count 24 --samples 12   # many runs -> git-ignored data/synthetic_bulk/
 ```
 
 ### Enabling live Claude (optional)
@@ -176,11 +171,11 @@ refusal** — a flaky conference network can't break the demo:
 
 ```bash
 cp .env.example .env                 # then fill in ANTHROPIC_API_KEY
-export PIPEGUARD_SYNTHESIZER=claude  # and/or PIPEGUARD_TRIAGE_AGENT=claude
+export BAYLEAF_SYNTHESIZER=claude  # and/or BAYLEAF_TRIAGE_AGENT=claude
 ```
 
 Model selection (and a cheaper tier to conserve credits) is env-configurable via
-`PIPEGUARD_CLAUDE_MODEL` / `PIPEGUARD_TRIAGE_MODEL`; each card is a small structured
+`BAYLEAF_CLAUDE_MODEL` / `BAYLEAF_TRIAGE_MODEL`; each card is a small structured
 output, so cost per run is minimal. See [`.env.example`](.env.example) for every knob.
 
 ---
@@ -189,7 +184,7 @@ output, so cost per run is minimal. See [`.env.example`](.env.example) for every
 
 The two "wow" moments (full script in [docs/demo/demo_plan.md](docs/demo/demo_plan.md)):
 
-1. **Flip the AI on, live.** Set `PIPEGUARD_TRIAGE_AGENT=claude` (and/or the synthesizer)
+1. **Flip the AI on, live.** Set `BAYLEAF_TRIAGE_AGENT=claude` (and/or the synthesizer)
    and the same triage panel now shows Claude-written prose — while the **citations and
    the verdict stay deterministic.** If the API errors or the safety classifier refuses,
    it silently degrades to the stub.
@@ -213,7 +208,7 @@ The two "wow" moments (full script in [docs/demo/demo_plan.md](docs/demo/demo_pl
 ## Project layout
 
 ```
-src/pipeguard/            # framework-agnostic core (no UI dependency)
+src/bayleaf/            # framework-agnostic core (no UI dependency)
   models.py               # Verdict / Finding / DecisionCard / RunArtifacts (pydantic)
   parsers.py              # tolerant Illumina-style artifact parsers -> RunArtifacts
   rules.py                # deterministic rule engine -> cited Findings
@@ -238,7 +233,7 @@ tests/                    # offline tests pinning the demo scenario
 
 **Data posture** — `mock_run_01` is hand-authored and pinned; `mock_run_02/03` and the
 30-sample scale showcase `mock_run_scale_30` are reproducible from the synthetic generator
-(`uv run python -m pipeguard.synthetic`), which also drives on-demand bulk volume into a
+(`uv run python -m bayleaf.synthetic`), which also drives on-demand bulk volume into a
 git-ignored `data/synthetic_bulk/`. Real GIAB HG002 truth data is **fetched, never
 committed** — the repo carries the accession manifest + fetch script, and the bytes land in a
 git-ignored `data/real-giab/`. See [data/README.md](data/README.md) and

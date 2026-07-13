@@ -108,7 +108,7 @@ export function toAccessionCsv(records: AccessionRecord[]): string {
 // A localStorage courier keyed by sample id carrying ONLY {subject_id, tissue} — the exact shape
 // Submit's client-side SampleMeta merge already consumes. No network call: accessioning transmits
 // nothing. Submit reads this on mount and clears it (a one-shot handoff, not a persistent store).
-const HANDOFF_KEY = 'pipeguard.accession.handoff'
+const HANDOFF_KEY = 'bayleaf.accession.handoff'
 export type HandoffMap = Record<string /* sampleId */, { subject_id?: string; tissue?: string }>
 
 export function stashHandoff(records: AccessionRecord[]): void {
@@ -146,7 +146,7 @@ export function clearHandoff(): void {
 // ── Accession draft persistence (client-side only) ───────────────────────────────────────────
 // Save draft keeps an in-progress accessioning batch across a refresh (like PrefsContext / the demo
 // session) — still purely client-side, never a server round-trip.
-const DRAFT_KEY = 'pipeguard.accession.draft'
+const DRAFT_KEY = 'bayleaf.accession.draft'
 
 export function saveAccessionDraft(records: AccessionRecord[]): void {
   try {
@@ -261,7 +261,7 @@ export function joinSignature(join: IdentityJoin): string {
 // field, so — like the page-access store — this trail is an honest client-side seam, surfaced in the
 // Submit screen. Capped so it can't grow unbounded.
 export type SubmitAuditEntry = { at: string; actor: string; action: string; detail: string }
-const SUBMIT_AUDIT_KEY = 'pipeguard.submit.audit'
+const SUBMIT_AUDIT_KEY = 'bayleaf.submit.audit'
 const SUBMIT_AUDIT_CAP = 200
 
 export function readSubmitAudit(): SubmitAuditEntry[] {

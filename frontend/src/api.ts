@@ -1,7 +1,7 @@
 // Thin typed client over the FastAPI read-API (proxied to :8010 in dev). Reads are header-blind
 // `get<T>`; the runs list additionally exposes a header-aware variant (`runsPage`) because
 // pagination totals + status-facet counts ride response headers. Writes inject the RBAC actor
-// (X-PipeGuard-Actor/-Role) set by the RoleContext — approver unlocks approvals only, never a
+// (X-Bayleaf-Actor/-Role) set by the RoleContext — approver unlocks approvals only, never a
 // verdict (rules decide / AI advises). Only endpoints that actually exist are called here.
 
 import type {
@@ -54,7 +54,7 @@ import type {
   Verdict,
 } from './types'
 
-// The advisory answer POST .../ask returns (mirrors pipeguard.triage.AgentReply). Defined here (not
+// The advisory answer POST .../ask returns (mirrors bayleaf.triage.AgentReply). Defined here (not
 // types.ts) so the client owns the ask request/response shape — like RunPipelineArgs/TicketsQuery.
 // `advisory` is pinned true and there is deliberately no verdict/confidence: the agent answers, the
 // rules decide (ADR-0001). `generated_by`/`model` carry the honest provenance — 'stub' is a real
@@ -80,7 +80,7 @@ export function setApiActor(actor: Actor | null): void {
 }
 function authHeaders(): Record<string, string> {
   if (!_actor) return {}
-  return { 'X-PipeGuard-Actor': _actor.id, 'X-PipeGuard-Role': _actor.role }
+  return { 'X-Bayleaf-Actor': _actor.id, 'X-Bayleaf-Role': _actor.role }
 }
 
 // ── low-level fetch ──────────────────────────────────────────────────────────
@@ -151,10 +151,10 @@ async function fetchRunsPage(opts: RunsQuery = {}): Promise<RunsPage> {
   const res = await fetch(`/api/runs${runsQs(opts)}`)
   if (!res.ok) throw await httpError(res)
   const data = (await res.json()) as RunSummary[]
-  const totalHeader = res.headers.get('X-PipeGuard-Total-Count')
-  const countsHeader = res.headers.get('X-PipeGuard-Status-Counts')
-  const pageHeader = res.headers.get('X-PipeGuard-Page')
-  const limitHeader = res.headers.get('X-PipeGuard-Limit')
+  const totalHeader = res.headers.get('X-Bayleaf-Total-Count')
+  const countsHeader = res.headers.get('X-Bayleaf-Status-Counts')
+  const pageHeader = res.headers.get('X-Bayleaf-Page')
+  const limitHeader = res.headers.get('X-Bayleaf-Limit')
   let statusCounts: Record<RunStatus, number> | null = null
   if (countsHeader) {
     try {
@@ -196,7 +196,7 @@ async function fetchTicketsPage(opts: TicketsQuery = {}): Promise<TicketsPage> {
   const res = await fetch(`/api/review/tickets${ticketsQs(opts)}`)
   if (!res.ok) throw await httpError(res)
   const data = (await res.json()) as Ticket[]
-  const totalHeader = res.headers.get('X-PipeGuard-Ticket-Total')
+  const totalHeader = res.headers.get('X-Bayleaf-Ticket-Total')
   return { data, total: totalHeader ? Number(totalHeader) : null }
 }
 
@@ -222,9 +222,9 @@ async function fetchMonitoringPage(
   const res = await fetch(`/api/monitoring?${p.toString()}`)
   if (!res.ok) throw await httpError(res)
   const data = (await res.json()) as MonitoringMetrics
-  const totalHeader = res.headers.get('X-PipeGuard-Total-Count')
-  const pageHeader = res.headers.get('X-PipeGuard-Page')
-  const limitHeader = res.headers.get('X-PipeGuard-Limit')
+  const totalHeader = res.headers.get('X-Bayleaf-Total-Count')
+  const pageHeader = res.headers.get('X-Bayleaf-Page')
+  const limitHeader = res.headers.get('X-Bayleaf-Limit')
   return {
     data,
     total: totalHeader ? Number(totalHeader) : data.runs.length,
@@ -298,7 +298,7 @@ export const api = {
     return get<MonitoringMetrics>(`/api/monitoring?${p.toString()}`)
   },
   // Header-aware variant: the body is MonitoringMetrics, but the pre-slice per-run total rides the
-  // X-PipeGuard-Total-Count header a plain get<T> drops — mirrors runsPage. Used by the Monitoring
+  // X-Bayleaf-Total-Count header a plain get<T> drops — mirrors runsPage. Used by the Monitoring
   // screen to server-paginate the throughput array without capping the KPIs/gates/signatures.
   monitoringPage: (window: MonitoringWindow = 'all', opts?: MonitoringPageQuery) =>
     fetchMonitoringPage(window, opts),
@@ -360,7 +360,7 @@ export const api = {
   createTicket: (body: TicketIn) => write<Ticket>('/api/review/tickets', 'POST', body),
   listTickets: (opts: TicketsQuery = {}) => get<Ticket[]>(`/api/review/tickets${ticketsQs(opts)}`),
   // Header-aware variant: the body is Ticket[], but the status-scoped total (ignoring `since`) rides
-  // the X-PipeGuard-Ticket-Total header a plain get<T> would drop — mirrors fetchRunsPage. Used by
+  // the X-Bayleaf-Ticket-Total header a plain get<T> would drop — mirrors fetchRunsPage. Used by
   // the Review queue's Resolved tab to show "N resolved total" while it loads only a recent window.
   listTicketsPage: (opts: TicketsQuery = {}) => fetchTicketsPage(opts),
   ticketAction: (id: string, action: ReviewActionName) =>

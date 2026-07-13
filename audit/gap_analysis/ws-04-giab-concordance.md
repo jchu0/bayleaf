@@ -13,23 +13,23 @@ Concordance is only computable where a truth set is bound to the sample (HG002).
 Invariants preserved: rules decide (VAR-CONC-001 is a pure function of parsed numbers vs runbook), AI narrates; the new check cites its own Evidence (`concordance.csv` rows + truth-set citation); absence of an *expected* concordance fails CLOSED (→ HOLD via WS-01), never PROCEED; the seam is closed for the benchmark and labeled for everyone else.
 
 ## Exact changes
-- **`src/pipeguard/models.py`**
+- **`src/bayleaf/models.py`**
   - New enum member on `Category` (`models.py:54-63`): reuse existing `Category.VARIANT` (no new member needed — keeps `_CATEGORY_GATE` mapping at `:97-106`, so findings route to `Gate.VARIANT` automatically).
   - New frozen model `ConcordanceRecord` (per sample): `sample_id`, and optional `snp_recall/snp_precision/snp_f1`, `indel_recall/indel_precision/indel_f1`, `snp_titv_query`, `indel_count_truth`, plus provenance `caller`, `truth_set`, `truth_regions`, `engine`. All optional (a partial/garbled hap.py summary is a signal, not a crash — same posture as `VariantCall`, `models.py:446-464`).
   - `RunArtifacts` (`models.py:466-500`): add `concordance: list[ConcordanceRecord] = Field(default_factory=list)`; include its ids in `sample_ids()` (`:487-500`).
-- **`src/pipeguard/parsers.py`**
+- **`src/bayleaf/parsers.py`**
   - New `parse_concordance(path)` modeled on `parse_variant_calls` (`parsers.py:282-325`) — tolerant `pd.read_csv`, `_first_present` column spellings, verbatim numbers.
   - `load_run` (`:333-374`): parse `concordance.csv` (absent → `[]`) and pass into `RunArtifacts`.
-- **`src/pipeguard/metrics/metric_registry.yaml`**
+- **`src/bayleaf/metrics/metric_registry.yaml`**
   - Add six `gate: variant`, `canonical_unit: fraction`, `direction: higher_is_better` keys: `concordance.snp_recall/…_precision/…_f1`, `concordance.indel_recall/…_precision/…_f1` (source module `happy`, `source_file: happy.summary.csv`). These are *new computed* keys (not the 7 NOT-COMPUTED ones).
   - Flip `variant.titv` from ungated observation to a target-band gate (see data-contract below); keep `contamination.freemix`/identity keys for WS-02.
-- **`src/pipeguard/rules.py`**
+- **`src/bayleaf/rules.py`**
   - New `_check_concordance(sid, concordance, runbook)` → **VAR-CONC-001**, `category=Category.VARIANT`. Gate SNP **F1 and Recall** (recall = clinical sensitivity) against runbook thresholds; below `hard_fail` → `CRITICAL`/`RERUN`, borderline → `WARN`/`HOLD`. Evidence cites `concordance.csv` (`locator=sample_id`, `value=f1=…`, `expected=≥ gate`) **and** the truth set (`source=f"GIAB {truth_set}"`, `source_field="F1/Recall"`, `source_kind=SourceKind.METRIC`) plus the caller string. Detail text hard-codes the honest label ("concordance vs benchmark, `bcftools call -mv`, confident∩panel — not clinical validation").
   - Wire into `evaluate_sample` (`rules.py:436-478`) next to the QC loop, resolving `next((c for c in artifacts.concordance if c.sample_id==sid), None)`.
-- **`src/pipeguard/runbook.py`**
+- **`src/bayleaf/runbook.py`**
   - Add concordance `QCThreshold`s (`required=False` — a non-benchmark run has no truth, so absence is *not* a spurious HOLD; WS-01's expected-metric-set upgrades absence to a finding for the benchmark profile). Thresholds calibrated to `bcftools call -mv` on a panel (e.g. SNP F1 gate `0.90`, hard-fail `0.80`; SNP recall gate `0.90`, hard-fail `0.80`).
   - `variant.titv` becomes a `target_band` threshold (needs WS-06 gate-type; see ordering).
-- **`src/pipeguard/engine.py`** (`:140-146`)
+- **`src/bayleaf/engine.py`** (`:140-146`)
   - After `metric_values_for(qc)`, also append registry `MetricValue`s for the sample's `ConcordanceRecord` (via `registry.observe(metric_key="concordance.snp_f1", …)`) so the card's `metric_values` carry them and the VARIANT gate group in `card_readout.py` renders them. Additive, off the hash (same treatment as existing metric_values).
 - **`scripts/run_giab_pipeline.py`** (driver, outside core)
   - New `parse_happy_summary(results, sample)` → reads `${sample}.happy.summary.csv` via `_one_for` (`:424-439`), extracts SNP/INDEL PASS precision/recall/F1 + Ts/Tv.
@@ -80,9 +80,9 @@ Invariants preserved: rules decide (VAR-CONC-001 is a pure function of parsed nu
 
 ### Critical Files for Implementation
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/scripts/run_giab_pipeline.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/rules.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/models.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/metrics/metric_registry.yaml
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/rules.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/models.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/metrics/metric_registry.yaml
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/pipelines/germline/main.nf
 
 ## Test-First Contract (per surfaced gap)
@@ -125,7 +125,7 @@ parse→rule→verdict path**: `parse_concordance` populating `RunArtifacts.conc
   scaffold that writes "concordance looks good" into a narration string sets **no** `Finding` and
   cannot move the verdict — the rule must exist and be a pure function of the parsed numbers.
 - **Determinism/fail-closed asserts baked in:** `test_concordance_verdict_is_synthesizer_independent`
-  runs the same armed `RunArtifacts` under `PIPEGUARD_SYNTHESIZER=stub` and a mocked `claude` and
+  runs the same armed `RunArtifacts` under `BAYLEAF_SYNTHESIZER=stub` and a mocked `claude` and
   asserts an **identical** `card.verdict` (rules decide, AI narrates); the collapsed-F1 case fails
   **closed** to RERUN, never PROCEED.
 

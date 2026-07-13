@@ -10,10 +10,10 @@ No **Blocker** findings. Highest first.
 - **Severity:** High · **Confidence:** Confirmed · **Category:** confirmed defect
 - **Area / journey:** Operate → Decision cards (`/runs/:id`) — the hero output. Affects `breadth_20x`, `breadth_30x`, `pct_mapped`, `on_target`.
 - **Evidence:**
-  - `src/pipeguard/rules.py:224` — `disp_gate = reg.denormalize(threshold.our_key, threshold.gate, mv.raw_unit)` (denormalizes the gate to the metric's **raw** unit).
-  - `src/pipeguard/rules.py:234` — `f"{threshold.label} for {sid} is {mv.raw_value:g}{threshold.unit}; runbook gate is "` (renders the **raw** value, then appends `threshold.unit`, which is `"%"`).
-  - `src/pipeguard/metrics/mapping.py:34-36` — `("breadth_20x", "qc.breadth_20x", "fraction")`, `("pct_mapped", "qc.pct_mapped", "fraction")`, `("on_target", "qc.on_target", "fraction")` (these metrics' `raw_unit` is **fraction**, i.e. 0–1).
-  - `src/pipeguard/runbook.py:124-128` — breadth_20x `unit="%"` (display symbol is percent).
+  - `src/bayleaf/rules.py:224` — `disp_gate = reg.denormalize(threshold.our_key, threshold.gate, mv.raw_unit)` (denormalizes the gate to the metric's **raw** unit).
+  - `src/bayleaf/rules.py:234` — `f"{threshold.label} for {sid} is {mv.raw_value:g}{threshold.unit}; runbook gate is "` (renders the **raw** value, then appends `threshold.unit`, which is `"%"`).
+  - `src/bayleaf/metrics/mapping.py:34-36` — `("breadth_20x", "qc.breadth_20x", "fraction")`, `("pct_mapped", "qc.pct_mapped", "fraction")`, `("on_target", "qc.on_target", "fraction")` (these metrics' `raw_unit` is **fraction**, i.e. 0–1).
+  - `src/bayleaf/runbook.py:124-128` — breadth_20x `unit="%"` (display symbol is percent).
   - Contrast the correct sibling surface `api/card_readout.py:222-224` — `if canonical_unit is CanonicalUnit.FRACTION: return value * 100.0, "%"` and it renders `mv.normalized_value` (not `raw_value`).
 - **Reproduction (read-only, project venv):** `_evaluate_metric` on a failing `breadth_20x=0.85` / `on_target=0.30` emits:
   - `Breadth ≥20x for S1 is 0.85%; runbook gate is ≥ 0.9% (hard-fail 0.8%).`
@@ -33,11 +33,11 @@ No **Blocker** findings. Highest first.
 - **Severity:** Medium · **Confidence:** Confirmed · **Category:** scientific-correctness risk
 - **Area / journey:** Operate — live intake / Builder Run → Decision cards. Owns the "rules-decide moment."
 - **Evidence:**
-  - `src/pipeguard/runbook.py:99-106` — `QCThreshold(metric="cluster_pf", our_key="qc.cluster_pf", …)` with `required` defaulting to `True` (`runbook.py:42` `required: bool = True`).
+  - `src/bayleaf/runbook.py:99-106` — `QCThreshold(metric="cluster_pf", our_key="qc.cluster_pf", …)` with `required` defaulting to `True` (`runbook.py:42` `required: bool = True`).
   - `scripts/run_giab_pipeline.py:224` — `# cluster_pf is a run-level SAV/InterOp metric not derivable from reads → left blank (honest).`
   - `scripts/run_giab_pipeline.py:229` — writes an empty `cluster_pf` field: `f"{cfg.sample},{q30:.2f},{reads_pf:.2f},{coverage:.1f},{dup:.4f},,{b20:.4f},{b30:.4f}\n"`.
   - `data/RUN-2026-07-08-GIAB-HG002/qc_metrics.csv` — `HG002,88.22,99.31,54.2,0.0057,,0.9924,0.9707` (empty `cluster_pf`).
-  - `src/pipeguard/rules.py:172-191` — a missing **required** metric → `QC-CLUSTER_PF-NA` WARN → `Verdict.HOLD`.
+  - `src/bayleaf/rules.py:172-191` — a missing **required** metric → `QC-CLUSTER_PF-NA` WARN → `Verdict.HOLD`.
 - **Actual:** `cluster_pf` (Cluster PF) is an instrument-level Illumina SAV/InterOp metric that the fastp/bwa/mosdepth chain cannot produce, yet it is a `required=True` gate metric. Every run executed through the real Nextflow path (or the Builder Run path) therefore emits a "cluster_pf missing" HOLD — PROCEED is unreachable on the live path. This conflates "metric absent because this pipeline doesn't produce it" with "quality concern."
 - **Expected (as a platform):** a SAV-only metric should be `required=False` (score it when present, don't NA-flag a reads-only run), or the missing-required message should distinguish "not produced by this pipeline" from "expected but absent."
 - **Min fix:** set the `cluster_pf` threshold `required=False` (matching the other non-frozen checks), OR gate `required` on whether the run declares a SAV source.
@@ -51,9 +51,9 @@ No **Blocker** findings. Highest first.
 - **Severity:** Medium · **Confidence:** Confirmed · **Category:** scientific-correctness risk
 - **Area / journey:** Builder → Export/Run Nextflow; provenance ledger.
 - **Evidence:**
-  - `src/pipeguard/nextflow/catalog.py:71` — `container="quay.io/biocontainers/fastp:0.23.4--h5f740d0_0"` (a mutable build **tag**, not `@sha256`); same pattern for every `ProcessSpec` (`catalog.py:96-97,121,143,167,186,203`).
+  - `src/bayleaf/nextflow/catalog.py:71` — `container="quay.io/biocontainers/fastp:0.23.4--h5f740d0_0"` (a mutable build **tag**, not `@sha256`); same pattern for every `ProcessSpec` (`catalog.py:96-97,121,143,167,186,203`).
   - `pipelines/germline/nextflow.config:5` — `nextflowVersion = '>=23.04.0'` (a **floor**, not a pin).
-  - `src/pipeguard/provenance.py:57-59` — `AnalysisRun` docstring: "Phase 1 captures the **gate provenance** … The **pipeline provenance** (sarek params_hash / execution_trace) is added in Phase 2" — no resolved image digest / Nextflow version field exists on the run record (grep for per-run digest/version capture in `api/`+`src/pipeguard/` returns only this Phase-2 note).
+  - `src/bayleaf/provenance.py:57-59` — `AnalysisRun` docstring: "Phase 1 captures the **gate provenance** … The **pipeline provenance** (sarek params_hash / execution_trace) is added in Phase 2" — no resolved image digest / Nextflow version field exists on the run record (grep for per-run digest/version capture in `api/`+`src/bayleaf/` returns only this Phase-2 note).
 - **Actual:** "deterministic reruns" is true only for the **wiring** (compiler output is byte-pinned by the drift test) and the **gate re-derivation** (same inputs → same verdict). The actual toolchain that produces variant calls is pinned to floating tags + a version floor, and nothing captures the resolved digests/version into the run's ledger — so a rerun months later can silently pull a different image build or a newer Nextflow and produce different variant output with no provenance signal.
 - **Expected / min fix:** either pin containers by `@sha256` and set an exact `nextflowVersion`, or (lighter) capture the resolved image digests + `nextflow -version` into `AnalysisRun.gate_provenance` per run so a drift is at least **detectable**. At minimum, label every "deterministic/reproducible" surface as "pinned wiring + versions, not bitwise-identical variant output."
 - **Demo-critical:** N (stub/mock path). **Risk of fixing now:** Low if limited to capturing versions; Medium if changing container pins (could break the conda/container resolve on the demo box).
@@ -67,7 +67,7 @@ No **Blocker** findings. Highest first.
 - **Evidence:**
   - `pipelines/germline/main.nf:15` — `ch_reads = Channel.value([file(params.read1), file(params.read2)])` — R1/R2 are taken as two independent path params, no pairing/order/length check.
   - `scripts/run_giab_pipeline.py:243-244` — `--read1`/`--read2` are independent CLI args; the driver performs no R1/R2 sync validation.
-  - No gate rule validates FASTQ synchronization — `src/pipeguard/rules.py` has provenance/metadata/qc/pipeline/variant families only; none inspects read pairing.
+  - No gate rule validates FASTQ synchronization — `src/bayleaf/rules.py` has provenance/metadata/qc/pipeline/variant families only; none inspects read pairing.
 - **Actual:** a swapped, mismatched, or unequal-length R1/R2 pair is not caught at compile/intake; it fails (if at all) only at runtime inside bwa-mem2. There is no "reads look wrong" finding, so a paired-end integrity problem is invisible to the decision gate.
 - **Expected / min fix:** accept as a documented seam and label it, OR add a lightweight pre-flight (equal record counts / matching read-name stems) surfaced as a provenance finding. This is upstream of chain-of-custody, so a rule-level check is defensible.
 - **Demo-critical:** N. **Risk of fixing now:** Low (additive read-only check).
@@ -106,7 +106,7 @@ No **Blocker** findings. Highest first.
 ### SCI-07 · `qc.duplication` registry source contract names Picard, but the real driver parses fastp
 - **Severity:** Low · **Confidence:** Confirmed · **Category:** design inconsistency
 - **Evidence:**
-  - `src/pipeguard/metrics/metric_registry.yaml:100-103` — `module: picard_markduplicates`, `source_file: markdup_metrics`, `raw_field: PERCENT_DUPLICATION`.
+  - `src/bayleaf/metrics/metric_registry.yaml:100-103` — `module: picard_markduplicates`, `source_file: markdup_metrics`, `raw_field: PERCENT_DUPLICATION`.
   - `scripts/run_giab_pipeline.py:183` — `dup = d["duplication"]["rate"] * 100.0` (duplication actually comes from **fastp**, not Picard markdup).
 - **Actual:** the registry's declared source contract for `qc.duplication` (Picard `PERCENT_DUPLICATION`, a fraction) does not match the real parser (fastp `duplication.rate`, multiplied to percent). Numerically consistent — the mapping declares `raw_unit="percent"` and the driver emits percent, so the gate is correct — but the source provenance recorded/documented for the metric is wrong, which undermines "standalone-interpretable" `MetricValue` provenance (ADR-0007).
 - **Min fix:** either add a fastp-sourced entry/alias for the reads-derived duplication metric, or update the `source` block to reflect the fastp path actually used by the driver.
@@ -117,7 +117,7 @@ No **Blocker** findings. Highest first.
 ### SCI-08 · The "variant gate" is a DP-only stub; GQ/Ts-Tv/allele-balance are ungated and AF is absent
 - **Severity:** Low · **Confidence:** Confirmed · **Category:** scientific-correctness risk (honest-but-overstated label)
 - **Evidence:**
-  - `src/pipeguard/runbook.py:157-165` — the only variant threshold is `variant.dp`; `variant.gq` and `variant.titv` are registered + mapped (`metric_registry.yaml:306-352`, `mapping.py:38-39`) but carry **no** `QCThreshold`, so they are ungated observations.
+  - `src/bayleaf/runbook.py:157-165` — the only variant threshold is `variant.dp`; `variant.gq` and `variant.titv` are registered + mapped (`metric_registry.yaml:306-352`, `mapping.py:38-39`) but carry **no** `QCThreshold`, so they are ungated observations.
   - No `INFO/AF`/gnomAD path (design-only), no caller-specific filters, and `variant.allele_balance` (`metric_registry.yaml:322`) has no parser.
 - **Actual:** the variant gate scores only genotype depth (plus the off-by-default ClinVar route-to-human). This is honestly a call-quality stub, but the "variant gate" framing can read as broader coverage than DP.
 - **Min fix:** none required for the hackathon; keep the DP-only scope explicit in UI/docs so it isn't read as full variant QC. (Post-hackathon: add GQ/AF thresholds.)
@@ -129,7 +129,7 @@ No **Blocker** findings. Highest first.
 - **Severity:** Low · **Confidence:** Confirmed · **Category:** post-hackathon improvement
 - **Evidence:**
   - `metric_registry.yaml` entries `qc.zero_cov_targets:193`, `qc.fold_enrichment:209`, `qc.fold_80:225`, `identity.ngscheckmate_match:241`, `identity.sex_concordance:257`, `contamination.freemix:273`, `variant.allele_balance:322`.
-  - grep over `src/pipeguard/models.py`, `parsers.py`, `metrics/mapping.py` returns **0** references for each — no `QCMetrics` field, no parser, no mapping entry; none is in a runbook threshold.
+  - grep over `src/bayleaf/models.py`, `parsers.py`, `metrics/mapping.py` returns **0** references for each — no `QCMetrics` field, no parser, no mapping entry; none is in a runbook threshold.
 - **Actual:** these are controlled-vocabulary entries only (the registry is intentionally the vocabulary layer). Contamination (verifybamid2 FREEMIX) is therefore **not** computed on the real-GIAB path. This is honest at the data layer, but must never be surfaced as "computed." Cross-check the UI (Truthfulness/Specialist 10) that a registered-but-unparsed metric isn't rendered as an observed value.
 - **Min fix:** none needed; ensure any registry-driven UI list marks these as "vocabulary / not computed," not observations.
 - **Demo-critical:** N.
@@ -139,7 +139,7 @@ No **Blocker** findings. Highest first.
 ### SCI-10 · Stale `mapping.py` docstring claims `cluster_pf` is unmapped
 - **Severity:** Low · **Confidence:** Confirmed · **Category:** design inconsistency (doc drift)
 - **Evidence:**
-  - `src/pipeguard/metrics/mapping.py:54` — "Unmapped fields (e.g. `cluster_pf`) are omitted until the registry gains an entry for them."
+  - `src/bayleaf/metrics/mapping.py:54` — "Unmapped fields (e.g. `cluster_pf`) are omitted until the registry gains an entry for them."
   - But `mapping.py:27` — `("cluster_pf", "qc.cluster_pf", "percent")` maps it, and `metric_registry.yaml:77` registers `qc.cluster_pf`.
 - **Actual:** the docstring example is stale — `cluster_pf` is now mapped and registered. Minor, but misleads a reader about the mapping's completeness.
 - **Min fix:** update the example (e.g. cite a genuinely-unmapped field, or drop the parenthetical).
@@ -149,7 +149,7 @@ No **Blocker** findings. Highest first.
 
 ## Honest surfaces (verified correct — clean signal)
 
-- **Gate is on normalized values, not raw** — `src/pipeguard/rules.py:195-196` compares `mv.normalized_value` against the canonical threshold; a source raw-unit change cannot move a verdict. The SCI-01 defect is **display-only**; the decision is correct.
+- **Gate is on normalized values, not raw** — `src/bayleaf/rules.py:195-196` compares `mv.normalized_value` against the canonical threshold; a source raw-unit change cannot move a verdict. The SCI-01 defect is **display-only**; the decision is correct.
 - **`card_readout.py` renders units correctly** — `api/card_readout.py:209-232` converts fraction→percent via `mv.normalized_value` (test `tests/test_card_readout.py:65` asserts `observed_display == "84.1%"`). This is the reference the buggy `rules.py` path should match.
 - **G4 honored** — `DecisionCard.confidence` defaults `None` (`models.py:231-233`), documented "omitted until grounded (T-019)"; no heuristic bar.
 - **G3 honored** — ClinVar `CLNSIG` quoted verbatim (`rules.py:387` `value=hit.clinvar_significance`, `source_field="CLNSIG"`; `parsers.py:291` "preserved VERBATIM"); route-to-human disarmed by default (`runbook.py:60` `significances: tuple[str, ...] = ()`).

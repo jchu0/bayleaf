@@ -32,7 +32,7 @@ from scripts.run_giab_pipeline import (
     write_run_dir_multi,
 )
 
-from pipeguard import run_gate_from_dir
+from bayleaf import run_gate_from_dir
 
 # ------------------------------------------------------------------ fixture publish-dir builders
 

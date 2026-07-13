@@ -5,7 +5,7 @@ import type { Actor, Role } from '../types'
 
 // One shared RBAC + auth source for the whole app (README §4). The demo login gate establishes WHO
 // you are (`session`); the Admin "Act as" flow + the demo role toggle change WHO the app acts as
-// (`actor`). It feeds the API client's X-PipeGuard-Actor/-Role headers. This is a DEMO affordance —
+// (`actor`). It feeds the API client's X-Bayleaf-Actor/-Role headers. This is a DEMO affordance —
 // flipping to approver unlocks approvals only, never a rules-decided verdict (dc.html labels the
 // toggle "Toggle RBAC role (demo)"). `session` vs `actor`: an admin can Act-as another user for
 // audited writes while keeping their own admin governance (isAdmin follows the login, not the act).

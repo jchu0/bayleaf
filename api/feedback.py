@@ -2,7 +2,7 @@
 
 Framework boundary + guardrail (CLAUDE.md 1, ADR-0001): this module holds the feedback
 data *contract* (the pydantic models), with **no** FastAPI import and **no** import of the
-`pipeguard` core — so the one write path in the app can never touch a verdict, finding,
+`bayleaf` core — so the one write path in the app can never touch a verdict, finding,
 provenance event, or the EventLedger. It mirrors `api/deid.py`: a self-contained telemetry
 seam beside the read-API, not inside the gate wiring. The pluggable sink (JSONL / SQLite /
 Postgres) lives in `api/feedback_store.py` (ADR-0016).

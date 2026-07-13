@@ -22,9 +22,9 @@ from __future__ import annotations
 
 import pytest
 
-from pipeguard import Verdict, evaluate_run, load_run, run_gate
-from pipeguard.models import QCMetrics, RunArtifacts, Sample, SampleSheetEntry
-from pipeguard.runbook import (
+from bayleaf import Verdict, evaluate_run, load_run, run_gate
+from bayleaf.models import QCMetrics, RunArtifacts, Sample, SampleSheetEntry
+from bayleaf.runbook import (
     DEFAULT_RUNBOOK,
     DEFAULT_RUNBOOK_SET,
     GERMLINE_PANEL_RUNBOOK,
@@ -33,7 +33,7 @@ from pipeguard.runbook import (
     RunbookProfile,
     RunbookSet,
 )
-from pipeguard.synthesis import aggregate_verdict
+from bayleaf.synthesis import aggregate_verdict
 
 DATA = "data/mock_run_01"
 

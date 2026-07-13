@@ -30,7 +30,7 @@ type PrefsState = {
 
 type Persisted = { theme: Theme; density: Density; palette: Palette; navCollapsed: boolean }
 
-const KEY = 'pipeguard.prefs'
+const KEY = 'bayleaf.prefs'
 const DEFAULTS: Persisted = {
   theme: 'light',
   density: 'split',

@@ -19,9 +19,9 @@ from api.review_store import get_review_store
 from api.routers import review_queue
 
 # Explicit principals via the dev-shim auth headers (api/auth.py). No headers == approver.
-VIEWER = {"X-PipeGuard-Role": "viewer"}
-REVIEWER = {"X-PipeGuard-Actor": "a.rivera", "X-PipeGuard-Role": "reviewer"}
-APPROVER = {"X-PipeGuard-Actor": "b.chen", "X-PipeGuard-Role": "approver"}
+VIEWER = {"X-Bayleaf-Role": "viewer"}
+REVIEWER = {"X-Bayleaf-Actor": "a.rivera", "X-Bayleaf-Role": "reviewer"}
+APPROVER = {"X-Bayleaf-Actor": "b.chen", "X-Bayleaf-Role": "approver"}
 
 
 @pytest.fixture
@@ -30,8 +30,8 @@ def client(tmp_path, monkeypatch):
 
     The store path + choice are set per test so tickets never leak between tests or into the repo.
     """
-    monkeypatch.setenv("PIPEGUARD_REVIEW_PATH", str(tmp_path / "tickets.jsonl"))
-    monkeypatch.delenv("PIPEGUARD_REVIEW_STORE", raising=False)  # default: offline JSONL
+    monkeypatch.setenv("BAYLEAF_REVIEW_PATH", str(tmp_path / "tickets.jsonl"))
+    monkeypatch.delenv("BAYLEAF_REVIEW_STORE", raising=False)  # default: offline JSONL
     app = FastAPI()
     app.include_router(review_queue.router)
     return TestClient(app)
@@ -76,7 +76,7 @@ def _seed(created_at, *, status="open", **over):
 
     The ``created_at`` is server-authored at open-time, so it can't be set through the API — the
     ``since`` window + total-header tests seed the store directly (the fixture's monkeypatched
-    ``PIPEGUARD_REVIEW_PATH`` is already active because the test requests the ``client`` fixture).
+    ``BAYLEAF_REVIEW_PATH`` is already active because the test requests the ``client`` fixture).
     """
     record = {
         **_ticket(**over),
@@ -324,12 +324,12 @@ def test_since_window_and_total_header(client):
     r = client.get("/api/review/tickets")
     assert r.status_code == 200
     assert [t["rule_id"] for t in r.json()] == ["OLD-1", "NEW-1"]
-    assert r.headers["X-PipeGuard-Ticket-Total"] == "2"
+    assert r.headers["X-Bayleaf-Ticket-Total"] == "2"
 
     # `since` mid-window: only the newer ticket, but the header still reports the FULL total.
     r = client.get("/api/review/tickets", params={"since": "2026-06-01"})
     assert [t["rule_id"] for t in r.json()] == ["NEW-1"]
-    assert r.headers["X-PipeGuard-Ticket-Total"] == "2"
+    assert r.headers["X-Bayleaf-Ticket-Total"] == "2"
 
     # `since` boundary is inclusive (created_at on the since date passes).
     assert len(client.get("/api/review/tickets", params={"since": "2026-07-01"}).json()) == 1
@@ -337,7 +337,7 @@ def test_since_window_and_total_header(client):
     # `since` after everything: empty body, header total unchanged.
     r = client.get("/api/review/tickets", params={"since": "2027-01-01"})
     assert r.json() == []
-    assert r.headers["X-PipeGuard-Ticket-Total"] == "2"
+    assert r.headers["X-Bayleaf-Ticket-Total"] == "2"
 
     # Garbage `since` -> 400 (closed contract), never a silent empty result.
     assert client.get("/api/review/tickets", params={"since": "not-a-date"}).status_code == 400
@@ -352,7 +352,7 @@ def test_total_header_scopes_to_status_and_ignores_since(client):
     # Only the recent resolved ticket is returned...
     assert [t["rule_id"] for t in r.json()] == ["R-NEW"]
     # ...but the header counts ALL resolved (ignores `since`), not open, not the recent slice.
-    assert r.headers["X-PipeGuard-Ticket-Total"] == "2"
+    assert r.headers["X-Bayleaf-Ticket-Total"] == "2"
 
 
 # --- resilience + off-gate -------------------------------------------------------------------

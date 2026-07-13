@@ -21,7 +21,7 @@ Documented in `schemas.md` §6 + **ADR-0015** (layered data contract).
 
 **Notify port + Slack (T-015b).** `NotifyPort` + StubNotifier + SlackNotifier wired into
 `run_gate` as an off-by-default `notifier=` hook emitting `notification.emitted` events;
-per-verdict, evidence-cited messages; live send behind `PIPEGUARD_SLACK_LIVE`, verified
+per-verdict, evidence-cited messages; live send behind `BAYLEAF_SLACK_LIVE`, verified
 end-to-end against a real workspace.
 
 **Real GIAB through the FULL gate (T-017 → T-002b).** `scripts/gate_giab.py`: `mosdepth --by`
@@ -53,7 +53,7 @@ on `/api/runbook`; robustified the Prometheus test.
 **Export slice (T-030 backend).** `GET /api/export` over the in-memory cards: `grain=decision`
 (narration + findings) / `grain=feature` (the ML corpus, one `MetricValue`/row). `format=csv|
 jsonl|parquet` (pyarrow optional extra, lazy import, 501 fallback). Every row carries `origin`
-(tagged the mock runs contrived/synthetic); `submitted_by` never emitted; `X-PipeGuard-Export-
+(tagged the mock runs contrived/synthetic); `submitted_by` never emitted; `X-Bayleaf-Export-
 Source: live-recompute` honesty label.
 
 ## Decisions
@@ -87,5 +87,5 @@ Source: live-recompute` honesty label.
   [`planning/tasks.md`](../planning/tasks.md) (T-024→T-034),
   [`requirements/scope-and-wishlist.md`](../requirements/scope-and-wishlist.md),
   [`TABLE_OF_CONTENTS.md`](../TABLE_OF_CONTENTS.md), [`demo/one-pager.md`](../demo/one-pager.md).
-- Code: `src/pipeguard/{metrics,notify,models,engine,rules,runbook}`, `api/main.py`
+- Code: `src/bayleaf/{metrics,notify,models,engine,rules,runbook}`, `api/main.py`
   (runbook/metrics/export), `frontend/` (MetricsPanel + polish), `scripts/gate_giab.py`.

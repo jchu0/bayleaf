@@ -22,7 +22,7 @@ from api.main import app
 
 client = TestClient(app)
 
-_REVIEWER = {"X-PipeGuard-Role": "reviewer", "X-PipeGuard-Actor": "a.rivera"}
+_REVIEWER = {"X-Bayleaf-Role": "reviewer", "X-Bayleaf-Actor": "a.rivera"}
 
 # The default fixture is a REAL gate-able pipeline — the seeded germline chain (fastp → bwa-mem2 →
 # markdup → mosdepth → bcftools call/norm → MultiQC), reused verbatim from the shared
@@ -111,7 +111,7 @@ def test_run_requires_reviewer_or_approver() -> None:
     denied = client.post(
         "/api/pipelines/run",
         json=_body(),
-        headers={"X-PipeGuard-Role": "viewer", "X-PipeGuard-Actor": "v"},
+        headers={"X-Bayleaf-Role": "viewer", "X-Bayleaf-Actor": "v"},
     )
     assert denied.status_code == 403
 

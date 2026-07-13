@@ -172,7 +172,7 @@ def _read_feedback(path):
 
 def test_feedback_decision_target_records_and_acks(tmp_path, monkeypatch):
     store = tmp_path / "feedback.jsonl"
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(store))
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_PATH", str(store))
     resp = client.post("/api/feedback", json=_decision_body(message="  disagree with this call  "))
     assert resp.status_code == 201
     ack = resp.json()
@@ -198,7 +198,7 @@ def test_feedback_decision_target_records_and_acks(tmp_path, monkeypatch):
 
 def test_feedback_product_target_strips_message_and_defaults_origin_unknown(tmp_path, monkeypatch):
     store = tmp_path / "feedback.jsonl"
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(store))
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_PATH", str(store))
     resp = client.post(
         "/api/feedback",
         json={
@@ -216,7 +216,7 @@ def test_feedback_product_target_strips_message_and_defaults_origin_unknown(tmp_
 
 
 def test_feedback_cross_field_validation(tmp_path, monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
     # decision with no signal
     assert (
         client.post(
@@ -255,7 +255,7 @@ def test_feedback_cross_field_validation(tmp_path, monkeypatch):
 
 
 def test_feedback_enum_and_bounds_validation(tmp_path, monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
     assert (
         client.post("/api/feedback", json={"target": "bogus", "source": "product-fab"}).status_code
         == 422
@@ -279,7 +279,7 @@ def test_feedback_enum_and_bounds_validation(tmp_path, monkeypatch):
 
 def test_feedback_forbids_extra_fields_as_pii_guard(tmp_path, monkeypatch):
     store = tmp_path / "f.jsonl"
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(store))
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_PATH", str(store))
     assert (
         client.post("/api/feedback", json=_decision_body(email="a@b.com")).status_code == 422
     )  # smuggled identity
@@ -305,7 +305,7 @@ def test_feedback_forbids_extra_fields_as_pii_guard(tmp_path, monkeypatch):
 
 def test_feedback_message_stays_one_jsonl_line(tmp_path, monkeypatch):
     store = tmp_path / "f.jsonl"
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(store))
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_PATH", str(store))
     nasty = 'line1\nline2 "quoted"\ttab'
     assert client.post("/api/feedback", json=_decision_body(message=nasty)).status_code == 201
     assert store.read_text(encoding="utf-8").count("\n") == 1  # exactly one physical record
@@ -324,7 +324,7 @@ def test_feedback_write_failure_returns_503_without_leak(monkeypatch):
 
 
 def test_feedback_cors_allows_post_from_dev_origin_only(tmp_path, monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
     ok = client.options(
         "/api/feedback",
         headers={"Origin": "http://localhost:5173", "Access-Control-Request-Method": "POST"},
@@ -338,7 +338,7 @@ def test_feedback_cors_allows_post_from_dev_origin_only(tmp_path, monkeypatch):
 
 
 def test_feedback_does_not_touch_decision_domain(tmp_path, monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_PATH", str(tmp_path / "f.jsonl"))
     before = client.get("/api/runs/mock_run_01").json()
     assert client.post("/api/feedback", json=_decision_body()).status_code == 201
     assert client.get("/api/runs/mock_run_01").json() == before  # verdicts/provenance unchanged
@@ -348,8 +348,8 @@ def test_feedback_sqlite_store_roundtrips_through_the_endpoint(tmp_path, monkeyp
     # Route the endpoint's telemetry into a real (offline, zero-dep) SQLite DB, then read it
     # back through the store's read_all — proving "feedback in a database" end to end.
     db = tmp_path / "feedback.sqlite"
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_STORE", "sqlite")
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_DB", str(db))
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_STORE", "sqlite")
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_DB", str(db))
     assert (
         client.post("/api/feedback", json=_decision_body(message="into the DB")).status_code == 201
     )
@@ -369,15 +369,13 @@ def test_feedback_sqlite_store_roundtrips_through_the_endpoint(tmp_path, monkeyp
 
 
 def test_feedback_store_factory_selects_and_degrades(tmp_path, monkeypatch):
-    monkeypatch.setenv(
-        "PIPEGUARD_FEEDBACK_DB", str(tmp_path / "f.sqlite")
-    )  # keep it out of the repo
-    monkeypatch.delenv("PIPEGUARD_FEEDBACK_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_DB", str(tmp_path / "f.sqlite"))  # keep it out of the repo
+    monkeypatch.delenv("BAYLEAF_FEEDBACK_STORE", raising=False)
     assert isinstance(get_feedback_store(), JsonlFeedbackStore)  # default
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_STORE", "sqlite")
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_STORE", "sqlite")
     assert isinstance(get_feedback_store(), SqliteFeedbackStore)
     # postgres selected but no psycopg/DATABASE_URL here -> degrade to JSONL, never raise.
-    monkeypatch.setenv("PIPEGUARD_FEEDBACK_STORE", "postgres")
+    monkeypatch.setenv("BAYLEAF_FEEDBACK_STORE", "postgres")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     assert isinstance(get_feedback_store(), JsonlFeedbackStore)
 
@@ -488,10 +486,10 @@ def test_metrics_prometheus_exposition():
     lines = body.splitlines()  # anchor to whole lines so "... 3" can't match "... 30"
     # Well-formed exposition: every metric family declares HELP + TYPE before its series.
     for name in (
-        "pipeguard_runs_total",
-        "pipeguard_samples_total",
-        "pipeguard_cards_total",
-        "pipeguard_gate_flagged_samples_total",
+        "bayleaf_runs_total",
+        "bayleaf_samples_total",
+        "bayleaf_cards_total",
+        "bayleaf_gate_flagged_samples_total",
     ):
         assert any(ln.startswith(f"# HELP {name} ") for ln in lines), name
         assert f"# TYPE {name} counter" in lines, name
@@ -502,20 +500,20 @@ def test_metrics_prometheus_exposition():
     summaries = client.get("/api/runs").json()
     n_runs = len(summaries)
     n_samples = sum(s["n_samples"] for s in summaries)
-    assert f"pipeguard_runs_total {n_runs}" in lines
-    assert f"pipeguard_samples_total {n_samples}" in lines
+    assert f"bayleaf_runs_total {n_runs}" in lines
+    assert f"bayleaf_samples_total {n_samples}" in lines
     # Per-verdict totals == the summed per-run counts; every verdict series stays present.
     verdicts = {"proceed": 0, "hold": 0, "rerun": 0, "escalate": 0}
     for s in summaries:
         for v in verdicts:
             verdicts[v] += s["counts"].get(v, 0)
     for v, n in verdicts.items():
-        assert f'pipeguard_cards_total{{verdict="{v}"}} {n}' in lines
+        assert f'bayleaf_cards_total{{verdict="{v}"}} {n}' in lines
     assert sum(verdicts.values()) == n_samples  # samples == sum of verdicts, whatever the fixtures
     # Per-gate flagged-sample series: present + a non-negative integer, variant always
     # present-and-≥0 for series stability. Exact counts are data-driven — assert the shape.
     for gate in ("preflight", "qc", "variant"):
-        prefix = f'pipeguard_gate_flagged_samples_total{{gate="{gate}"}} '
+        prefix = f'bayleaf_gate_flagged_samples_total{{gate="{gate}"}} '
         series = next((ln for ln in lines if ln.startswith(prefix)), None)
         assert series is not None, gate
         assert int(series.rsplit(" ", 1)[1]) >= 0
@@ -529,10 +527,10 @@ def test_export_decision_csv():
     assert resp.headers["content-type"].startswith("text/csv")
     assert "attachment" in resp.headers["content-disposition"]
     # Honesty label: a live recompute, not audit provenance (design doc G-EXPORT-SOURCE).
-    assert resp.headers["x-pipeguard-export-source"] == "live-recompute"
+    assert resp.headers["x-bayleaf-export-source"] == "live-recompute"
     rows = _parse_csv(resp.text)
     assert len(rows) == 5  # five samples in mock_run_01
-    assert resp.headers["x-pipeguard-row-count"] == "5"
+    assert resp.headers["x-bayleaf-row-count"] == "5"
     # Operator PII is never a column (D10); origin always is (D11).
     assert "submitted_by" not in rows[0]
     assert "origin" in rows[0]
@@ -547,7 +545,7 @@ def test_export_feature_jsonl_is_the_ml_corpus():
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("application/x-ndjson")
     recs = [json.loads(ln) for ln in resp.text.splitlines() if ln]
-    assert int(resp.headers["x-pipeguard-row-count"]) == len(recs)
+    assert int(resp.headers["x-bayleaf-row-count"]) == len(recs)
     # ADR-0007 self-containment: canonical_unit + registry version ride each row.
     assert {
         "metric_key",
@@ -586,7 +584,7 @@ def test_export_feature_parquet_roundtrips():
     assert resp.headers["content-disposition"].rstrip('"').endswith(".parquet")
     # Round-trip the columnar bytes: schema + row count + a known column survive.
     table = pq.read_table(io.BytesIO(resp.content))
-    assert int(resp.headers["x-pipeguard-row-count"]) == table.num_rows
+    assert int(resp.headers["x-bayleaf-row-count"]) == table.num_rows
     assert {"metric_key", "normalized_value", "canonical_unit", "origin"} <= set(table.column_names)
 
 
@@ -649,7 +647,7 @@ def test_export_default_omits_all_identity_columns():
     # Without include=identity the export is unchanged: no cohort keys, no operator PII.
     resp = client.get("/api/export", params={"grain": "decision", "run_id": "mock_run_01"})
     assert resp.status_code == 200
-    assert resp.headers["x-pipeguard-deid-policy"] == "demo-deid-v1"
+    assert resp.headers["x-bayleaf-deid-policy"] == "demo-deid-v1"
     rows = _parse_csv(resp.text)
     for col in ("submitted_by", "subject_id", "tissue"):
         assert col not in rows[0]
@@ -715,8 +713,8 @@ def test_list_runs_no_params_is_backward_compatible():
     assert {"mock_run_01", "mock_run_02", "mock_run_03"} <= set(ids)
     # The pre-pagination total rides a header so the body stays a plain list; the page/limit
     # headers appear only when paginating.
-    assert resp.headers["x-pipeguard-total-count"] == str(len(runs))
-    assert "x-pipeguard-page" not in resp.headers and "x-pipeguard-limit" not in resp.headers
+    assert resp.headers["x-bayleaf-total-count"] == str(len(runs))
+    assert "x-bayleaf-page" not in resp.headers and "x-bayleaf-limit" not in resp.headers
 
 
 def test_list_runs_q_and_verdict_filters_mirror_export_idiom():
@@ -755,8 +753,8 @@ def test_list_runs_pagination_slices_and_reports_total():
     total = len(full)
     resp1 = client.get("/api/runs", params={"limit": 2, "page": 1})
     assert [r["run_id"] for r in resp1.json()] == full[0:2]
-    assert resp1.headers["x-pipeguard-total-count"] == str(total)  # total is pre-slice
-    assert resp1.headers["x-pipeguard-limit"] == "2" and resp1.headers["x-pipeguard-page"] == "1"
+    assert resp1.headers["x-bayleaf-total-count"] == str(total)  # total is pre-slice
+    assert resp1.headers["x-bayleaf-limit"] == "2" and resp1.headers["x-bayleaf-page"] == "1"
     p2 = client.get("/api/runs", params={"limit": 2, "page": 2}).json()
     assert [r["run_id"] for r in p2] == full[2:4]
     # A page past the end is an empty slice, not an error.
@@ -853,8 +851,8 @@ def test_monitoring_runs_pagination_slices_and_reports_total():
     resp1 = client.get("/api/monitoring", params={"limit": 2, "page": 1})
     body1 = resp1.json()
     assert [r["run_id"] for r in body1["runs"]] == all_runs[0:2]  # sliced to the page
-    assert resp1.headers["x-pipeguard-total-count"] == str(total)  # total is pre-slice
-    assert resp1.headers["x-pipeguard-limit"] == "2" and resp1.headers["x-pipeguard-page"] == "1"
+    assert resp1.headers["x-bayleaf-total-count"] == str(total)  # total is pre-slice
+    assert resp1.headers["x-bayleaf-limit"] == "2" and resp1.headers["x-bayleaf-page"] == "1"
     # The aggregates ignore the page: overall.n_runs counts the WHOLE window, not the 2-run slice.
     assert body1["overall"]["n_runs"] == total
     assert body1["n_signatures_total"] == full["n_signatures_total"]
@@ -868,9 +866,9 @@ def test_monitoring_runs_pagination_slices_and_reports_total():
     # With no limit the runs are unpaginated + no page/limit headers (backward-compatible); the
     # total-count header is still emitted so a client can decide whether to page.
     resp_default = client.get("/api/monitoring")
-    assert "x-pipeguard-page" not in resp_default.headers
-    assert "x-pipeguard-limit" not in resp_default.headers
-    assert resp_default.headers["x-pipeguard-total-count"] == str(total)
+    assert "x-bayleaf-page" not in resp_default.headers
+    assert "x-bayleaf-limit" not in resp_default.headers
+    assert resp_default.headers["x-bayleaf-total-count"] == str(total)
     # The limit/page floors are enforced by the query constraint (422, not a crash), as /api/runs.
     assert client.get("/api/monitoring", params={"limit": 0}).status_code == 422
     assert client.get("/api/monitoring", params={"page": 0}).status_code == 422

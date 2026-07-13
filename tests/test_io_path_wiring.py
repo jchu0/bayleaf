@@ -47,11 +47,11 @@ import api.routers.intake as intake
 import api.routers.pipeline_run as pr
 from api.job_store import KIND_INTAKE
 from api.main import app
-from pipeguard.nextflow.catalog import REFERENCE_PARAM
+from bayleaf.nextflow.catalog import REFERENCE_PARAM
 
 client = TestClient(app)
 
-_REVIEWER = {"X-PipeGuard-Role": "reviewer", "X-PipeGuard-Actor": "a.rivera"}
+_REVIEWER = {"X-Bayleaf-Role": "reviewer", "X-Bayleaf-Actor": "a.rivera"}
 _REPO = Path(__file__).resolve().parent.parent
 
 
@@ -373,8 +373,8 @@ def test_intake_submit_path_uses_driver_defaults_no_input_selection(
         captured["cmd"] = cmd
         return subprocess.CompletedProcess(cmd, 1, "", "stub")
 
-    monkeypatch.setenv("PIPEGUARD_JOB_STORE", "jsonl")
-    monkeypatch.setenv("PIPEGUARD_JOB_PATH", str(tmp_path / "jobs.jsonl"))
+    monkeypatch.setenv("BAYLEAF_JOB_STORE", "jsonl")
+    monkeypatch.setenv("BAYLEAF_JOB_PATH", str(tmp_path / "jobs.jsonl"))
     monkeypatch.setattr(intake, "run_driver", fake_run_driver)
     monkeypatch.setattr(intake, "_mark", lambda *a, **k: None)
     # A default (no authored pipeline) intake job record — the seeded germline path.
@@ -415,7 +415,7 @@ def test_driver_argv_shape_is_accepted_by_the_committed_pipeline_stub_run(tmp_pa
     actually runs — every process' stub touches its outputs, so the whole DAG validates with no
     tools/data. Absent Nextflow → skip, never fail. This proves WIRING (the argv the driver builds
     is the argv the shipped pipeline consumes), not a real toolchain run."""
-    nextflow = os.environ.get("PIPEGUARD_NEXTFLOW_BIN") or shutil.which("nextflow")
+    nextflow = os.environ.get("BAYLEAF_NEXTFLOW_BIN") or shutil.which("nextflow")
     if not nextflow:
         pytest.skip("no `nextflow` on PATH — skipping the live stub-run wiring check")
 

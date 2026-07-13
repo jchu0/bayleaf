@@ -23,7 +23,7 @@ save/list/versions routes in ``main.py``, which are one path segment shorter):
      (approved) snapshot, so an operator sees exactly what drifted since the last blessing.
 
 Guardrails honored (CLAUDE.md): this is wholly OFF the deterministic decision gate (ADR-0001) —
-it never touches a verdict, finding, confidence, or rule, and never imports the ``pipeguard``
+it never touches a verdict, finding, confidence, or rule, and never imports the ``bayleaf``
 core. Writes go only through the append-only pipeline store (``api/pipeline_store.py``); a store
 failure degrades to a generic 503 that never leaks a path/DSN. It is deliberately isolated from
 ``api/main.py`` (it computes its own data root and pulls the store via the factory) so it mounts

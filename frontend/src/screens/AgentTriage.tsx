@@ -87,7 +87,7 @@ export function AgentTriage() {
   }, [runId, active?.sample_id])
 
   // Whether the SERVED note carried a model — the honest signal that the live triage agent is
-  // armed (env: PIPEGUARD_TRIAGE_AGENT=claude). It is not operator-toggleable (arming is env-side),
+  // armed (env: BAYLEAF_TRIAGE_AGENT=claude). It is not operator-toggleable (arming is env-side),
   // so it is reported as a status, never offered as a switch the UI can't action.
   const hasLiveModel = noteState === 'ready' && !!note?.model
   const offline = !hasLiveModel
@@ -238,13 +238,13 @@ export function AgentTriage() {
 }
 
 // The narration-source STATUS indicator (not a switch). Arming the live agent is env-side
-// (PIPEGUARD_TRIAGE_AGENT=claude), so the UI can only report whether the served note came from an
+// (BAYLEAF_TRIAGE_AGENT=claude), so the UI can only report whether the served note came from an
 // armed model — never offer a toggle it can't action. A steady dot + the honest source label; when
 // unarmed it reads "not armed" rather than pretending the operator can flip it on.
 function AgentStatus({ armed, label }: { armed: boolean; label: string }) {
   return (
     <span
-      title="Narration source — the live triage agent is armed env-side (PIPEGUARD_TRIAGE_AGENT=claude). Advisory: never changes the verdict."
+      title="Narration source — the live triage agent is armed env-side (BAYLEAF_TRIAGE_AGENT=claude). Advisory: never changes the verdict."
       className="inline-flex shrink-0 items-center gap-2 rounded-full border border-line-strong bg-card py-[5px] pl-3 pr-3.5 text-[11.5px] font-medium text-text-2"
     >
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${armed ? 'bg-accent' : 'bg-card-3'}`} />

@@ -39,8 +39,8 @@ client = TestClient(app)
 # so the argv-construction tests can call the unpatched implementation directly.
 _ORIGINAL_RUN_PIPELINE = intake._run_pipeline
 
-_REVIEWER = {"X-PipeGuard-Role": "reviewer", "X-PipeGuard-Actor": "a.rivera"}
-_VIEWER = {"X-PipeGuard-Role": "viewer", "X-PipeGuard-Actor": "v"}
+_REVIEWER = {"X-Bayleaf-Role": "reviewer", "X-Bayleaf-Actor": "a.rivera"}
+_VIEWER = {"X-Bayleaf-Role": "viewer", "X-Bayleaf-Actor": "v"}
 
 # The default authored graph for the happy-path tests: the FULL germline chain (produces the
 # frozen-five outputs the post-run parse needs + consumes only HG002-default inputs), so it clears
@@ -150,8 +150,8 @@ def env(tmp_path: Any, monkeypatch: Any) -> dict[str, Any]:
     data.mkdir()
     monkeypatch.setattr(intake, "_DATA", data)
     monkeypatch.setattr(intake, "_NF_RUNS", tmp_path / ".nf-runs")
-    monkeypatch.setenv("PIPEGUARD_JOB_STORE", "jsonl")
-    monkeypatch.setenv("PIPEGUARD_JOB_PATH", str(tmp_path / "jobs.jsonl"))
+    monkeypatch.setenv("BAYLEAF_JOB_STORE", "jsonl")
+    monkeypatch.setenv("BAYLEAF_JOB_PATH", str(tmp_path / "jobs.jsonl"))
     intake._active.clear()
 
     fired: list[str] = []

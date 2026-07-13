@@ -2,7 +2,7 @@
 
 Framework boundary + guardrail (CLAUDE.md 1, ADR-0001): this module holds the pipeline
 *contract* (the pydantic models), with **no** FastAPI import and **no** import of the
-``pipeguard`` core — a saved builder graph is product state, wholly OFF the deterministic
+``bayleaf`` core — a saved builder graph is product state, wholly OFF the deterministic
 decision gate. It never becomes a verdict, finding, provenance event, or ledger row. It
 mirrors ``api/feedback.py``: a self-contained product seam beside the read-API, with its
 pluggable, env-selected sink in ``api/pipeline_store.py`` (ADR-0016).

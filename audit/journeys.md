@@ -1,4 +1,4 @@
-## PipeGuard Release-Hardening Audit — Specialist 3: Feature-completeness (journeys)
+## bayleaf Release-Hardening Audit — Specialist 3: Feature-completeness (journeys)
 
 **Run mode:** Fable 5, code-only / headless (route + `file:line` + quoted string; no browser this pass, per AUDIT_PLAN §Resolved 2026-07-11).
 **Scope:** Journey A (Operate: Accession → Submit → POST /api/runs → intake-status → Decision cards → Review queue → Agent triage → Provenance → Share), Journey B (Builder: compose → Export → Run → Save/Submit/Approve → Dry-run/Diff → Open saved), Journey C (Create-a-tool / node-authoring).
@@ -21,7 +21,7 @@
 
 ### J2 · Create-a-tool (Journey C) is a non-functional dead end — the "add to palette" button is a no-op and the node-author agent has no transport
 - **Severity:** High · **Confidence:** Confirmed · **Category:** incomplete integration · **Journey:** C (Create-a-tool / node-authoring)
-- **Evidence:** `frontend/src/components/BuilderModals.tsx:340-342` — the primary action `<button onClick={onClose} ...>Review kinds &amp; add to palette</button>` (and Discard `:337-339`, also `onClose`); the whole `AuthorToolNodeModal` is a static mock over `STAR_HELP` (`:186-345`, hardcoded input ports fastq/reference_fasta at `:270-276`). Mounted at `frontend/src/screens/PipelineBuilder.tsx:1402`. Grep confirms no transport: `grep -rn "node_author" api/` → empty; `grep -rn "propose_node" frontend/src/` → empty; the only frontend reference is the Settings roster row `SettingsModelTier.tsx:53` (`wired: false, phase2: true`). The real agent (`src/pipeguard/node_author`) is core-only.
+- **Evidence:** `frontend/src/components/BuilderModals.tsx:340-342` — the primary action `<button onClick={onClose} ...>Review kinds &amp; add to palette</button>` (and Discard `:337-339`, also `onClose`); the whole `AuthorToolNodeModal` is a static mock over `STAR_HELP` (`:186-345`, hardcoded input ports fastq/reference_fasta at `:270-276`). Mounted at `frontend/src/screens/PipelineBuilder.tsx:1402`. Grep confirms no transport: `grep -rn "node_author" api/` → empty; `grep -rn "propose_node" frontend/src/` → empty; the only frontend reference is the Settings roster row `SettingsModelTier.tsx:53` (`wired: false, phase2: true`). The real agent (`src/bayleaf/node_author`) is core-only.
 - **Reproduction:** Builder → open "Author a tool node" → edit the proposed node → click **Review kinds & add to palette**. The modal closes; nothing is registered, no node appears in the palette, no request is made.
 - **Expected:** Either the button performs its labelled action (register/propose a node), or its label does not imply a persisted "add to palette."
 - **Actual:** The action-implying primary button only closes the modal; journey C produces nothing. The modal is honestly badged "roster #5 · phase-2" (`:210-212`), so the header is truthful, but the button label overstates.
@@ -30,14 +30,14 @@
 - **Larger fix:** Add `POST /api/nodes/propose` → `propose_node()` and an `api.proposeNode` client call that appends the returned `NodeProposal` to the palette.
 - **Demo-critical:** N (labelled phase-2; off the Operate/Builder demo hops). · **Fix risk:** none (relabel). · **Regression test:** assert the button has an `onClick` that is not merely `onClose`, or that clicking it issues a request.
 
-### J3 · Builder "Emit" console claims it "Wrote src/pipeguard/layout/run_layout.yaml" but only console.logs
+### J3 · Builder "Emit" console claims it "Wrote src/bayleaf/layout/run_layout.yaml" but only console.logs
 - **Severity:** Medium · **Confidence:** Confirmed · **Category:** confirmed defect · **Journey:** B (Builder — Emit)
-- **Evidence:** `frontend/src/screens/PipelineBuilder.tsx:492-499` `onEmit` sets `emitted=true` and `console.log(...)` — no network/file write; the success panel it triggers is `frontend/src/components/BuilderConsole.tsx:423-431`: `Wrote <span className="font-mono">src/pipeguard/layout/run_layout.yaml</span>. Emit writes the config only — no tool runs.`
-- **Reproduction:** Builder → **Emit**. The console tab shows a green check + "Wrote src/pipeguard/layout/run_layout.yaml."
+- **Evidence:** `frontend/src/screens/PipelineBuilder.tsx:492-499` `onEmit` sets `emitted=true` and `console.log(...)` — no network/file write; the success panel it triggers is `frontend/src/components/BuilderConsole.tsx:423-431`: `Wrote <span className="font-mono">src/bayleaf/layout/run_layout.yaml</span>. Emit writes the config only — no tool runs.`
+- **Reproduction:** Builder → **Emit**. The console tab shows a green check + "Wrote src/bayleaf/layout/run_layout.yaml."
 - **Expected:** Emit either writes that file (it does not — the core is framework-agnostic and no endpoint exists) or the message does not assert a filesystem write.
 - **Actual:** A concrete false claim that a specific repo path was written; the follow-up sentence ("Emit writes the config only") softens but the leading verb+path is untrue.
 - **Likely root cause:** Copy carried over from an intended wired-ingest design; the demo path is `console.log` only (comment at `:497`).
-- **Minimum viable fix:** Change "Wrote src/pipeguard/layout/run_layout.yaml" → "Composed run_layout.yaml (preview — not written to disk)."
+- **Minimum viable fix:** Change "Wrote src/bayleaf/layout/run_layout.yaml" → "Composed run_layout.yaml (preview — not written to disk)."
 - **Demo-critical:** N (Builder Emit is not on the stale 6-screen run-of-show). · **Fix risk:** none (copy-only). · **Regression test:** assert the emitted panel text does not contain "Wrote " unless a write call fired.
 
 ### J4 · Submit "Save draft" is a fully inert control on the Operate golden path (no handler), inconsistent with Accession's working Save draft

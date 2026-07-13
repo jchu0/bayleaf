@@ -16,7 +16,7 @@ Two surfaces over the shipped node-authoring agent:
 The hard trust seam W2 is built around stays explicit on BOTH surfaces: they carry METADATA only —
 a tool name, a pinned version, typed ports, suggested locators, a cited rationale. They NEVER author
 a Nextflow ``script:``/``stub:`` body (those live solely in the hand-curated ``ProcessSpec``
-catalog, ``pipeguard.nextflow.catalog``), never run a tool, and carry no verdict/confidence field
+catalog, ``bayleaf.nextflow.catalog``), never run a tool, and carry no verdict/confidence field
 (ADR-0001/0003; ``advisory`` is pinned ``True`` on the model). An accepted entry is metadata a human
 must still turn into a runnable ``ProcessSpec`` before anything compiles — compose ≠ execute. See
 `docs/design/agent-authoring-contract.md`.
@@ -31,8 +31,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from api.auth import Actor, require_role
 from api.library_store import get_library_store
-from pipeguard.identifiers import new_id, utc_now
-from pipeguard.node_author import NodeProposal, check_conformance, propose_node
+from bayleaf.identifiers import new_id, utc_now
+from bayleaf.node_author import NodeProposal, check_conformance, propose_node
 
 router = APIRouter(prefix="/api", tags=["node_author"])
 
@@ -64,7 +64,7 @@ def get_node_proposal(
     rationale. It authors METADATA, never a runnable command; it never wires an edge, adds a card,
     runs a tool, or sets a verdict (ADR-0001/0003). A blank or unmatched request yields a
     conservative "defer to a human" proposal that fabricates no tool or ports — never an error.
-    Stub-first ($0) unless ``PIPEGUARD_NODE_AUTHOR_AGENT=claude`` is set; it degrades to the stub
+    Stub-first ($0) unless ``BAYLEAF_NODE_AUTHOR_AGENT=claude`` is set; it degrades to the stub
     on any live-API error.
     """
     return propose_node(request)
@@ -128,7 +128,7 @@ def accept_node_proposal(
 
     The stored entry is **METADATA** — ports, a pinned version, suggested locators, citations. It is
     **never** a Nextflow ``script:``/``stub:`` body: a human still authors the runnable
-    ``ProcessSpec`` (``pipeguard.nextflow.catalog``) before the accepted tool can compile or run.
+    ``ProcessSpec`` (``bayleaf.nextflow.catalog``) before the accepted tool can compile or run.
     Accepting changes nothing on the deterministic gate (ADR-0001) and runs no tool (ADR-0003).
     """
     proposal = propose_node(body.request)

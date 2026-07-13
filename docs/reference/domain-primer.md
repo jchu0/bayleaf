@@ -9,7 +9,7 @@
 
 ## Overview
 
-Orientation for a reader without a genomics background: what PipeGuard's domain is,
+Orientation for a reader without a genomics background: what bayleaf's domain is,
 enough vocabulary to read the rest of the docs, and why a per-sample QC + provenance
 gate is worth building. This primer explains the *domain*; the *system* is in
 [architecture.md](../design/architecture.md), and precise terms are in the
@@ -29,7 +29,7 @@ thresholds — the runbook treats them as configurable defaults ([qc_metrics.md]
    *sure you can see every reportable position* matters more than raw read count.
 3. **Panel** means sequencing only a curated set of disease-relevant genes (a
    targeted assay), rather than the whole exome (**WES**) or whole genome (**WGS**).
-   PipeGuard's stated domain is a **rare-disease germline DNA panel, Illumina
+   bayleaf's stated domain is a **rare-disease germline DNA panel, Illumina
    short-read** ([architecture.md](../design/architecture.md)).
 
 ## 2. Depth, breadth, and why "deep like cancer" is misleading
@@ -59,12 +59,12 @@ Key points, all cited as guideline **examples** (not universal gates):
 > **No universal depth number.** Major guidelines (ACMG, ACGS, EuroGentest,
 > CAP/AMP) deliberately set *no* single hard depth threshold and defer the minimum
 > to per-assay validation ([qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md)
-> §1). PipeGuard follows this: thresholds are per-assay config, not hardcoded facts.
+> §1). bayleaf follows this: thresholds are per-assay config, not hardcoded facts.
 
 ## 3. From instrument to variants: the short-read pipeline
 
-The upstream genomics pipeline is *input generation* and is out of PipeGuard's scope
-(ADR-0004); PipeGuard reads its outputs. Reference stages
+The upstream genomics pipeline is *input generation* and is out of bayleaf's scope
+(ADR-0004); bayleaf reads its outputs. Reference stages
 ([qc_metrics-sources.md](../data/qc_metrics-sources.md)):
 
 1. **Sequencing (Illumina short-read).** The instrument (e.g. NovaSeq, MiSeq)
@@ -79,7 +79,7 @@ The upstream genomics pipeline is *input generation* and is out of PipeGuard's s
    the indexes and sorts reads back to the right sample using a **sample sheet**
    that declares which barcode belongs to which sample. **Why it matters here:** a
    duplicated, missing, or swapped barcode is a *chain-of-custody* failure — the
-   right data attributed to the wrong patient — so PipeGuard treats barcode/index
+   right data attributed to the wrong patient — so bayleaf treats barcode/index
    integrity as a hard provenance check at the preflight gate
    ([qc_metrics-sources.md](../data/qc_metrics-sources.md) §B).
 3. **Alignment + QC.** Reads are trimmed (fastp), mapped to the reference genome,
@@ -98,7 +98,7 @@ The upstream genomics pipeline is *input generation* and is out of PipeGuard's s
    **gold-standard "truth" VCF and a high-confidence BED** marking regions where the
    truth is trustworthy. **Why it matters:** it is real data with a *known right
    answer*, so it can serve as ground truth to check that a tool's calls (and, for
-   PipeGuard, its verdicts) are correct — an eventual Phase-2 evaluation substrate
+   bayleaf, its verdicts) are correct — an eventual Phase-2 evaluation substrate
    ([strategy.md](../data/strategy.md), [quality/evaluation.md](../quality/evaluation.md)).
    Open license.
 2. **gnomAD (population frequency).** Aggregated allele frequencies across large
@@ -111,7 +111,7 @@ The upstream genomics pipeline is *input generation* and is out of PipeGuard's s
    annotation only.
 
 > **Guardrail.** gnomAD/ClinVar are used to *annotate and surface*, never to assert
-> pathogenicity. PipeGuard makes **no diagnostic, therapeutic, or pathogenicity
+> pathogenicity. bayleaf makes **no diagnostic, therapeutic, or pathogenicity
 > claims** (CLAUDE.md life-science guardrails); clinical variant statements stay
 > grounded in ClinVar/GIAB truth and are never invented.
 
@@ -131,7 +131,7 @@ rare-disease context two failure modes are especially costly:
 A per-sample gate that (a) makes the call from **cited, rule-derived evidence**, (b)
 separates depth from breadth, and (c) records every input and decision in an
 **append-only provenance ledger** turns a manual, siloed judgment into a traceable,
-auditable one. How PipeGuard implements this — the three-gate model, the
+auditable one. How bayleaf implements this — the three-gate model, the
 rules-decide/AI-advises invariant, and the event ledger — is in
 [architecture.md](../design/architecture.md); this primer only motivates *why*.
 

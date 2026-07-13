@@ -44,7 +44,7 @@ from api.review_store import get_review_store
 REVIEW_SCHEMA_VERSION = 1
 
 # Closed vocabularies. `gate`/`verdict` snapshot the decided sample (kept in step with
-# pipeguard.models.Gate/Verdict), so a ticket carries the context it was opened against without
+# bayleaf.models.Gate/Verdict), so a ticket carries the context it was opened against without
 # re-reading — but they are *data on the ticket*, never re-fed to a rule.
 TicketStatus = Literal["open", "in_review", "resolved"]
 TicketPriority = Literal["high", "medium", "low"]
@@ -240,9 +240,9 @@ def list_tickets(
     closed vocabulary (unknown → 400, the same closed-enum idiom the run-list uses); ``run_id`` /
     ``rule_id`` are exact-match filters. ``since`` (an ISO-8601 date/datetime) is a recency window:
     only tickets with ``created_at >= since`` are returned, so a client can load just the recent
-    tail instead of every ticket ever. The ``X-PipeGuard-Ticket-Total`` response header carries the
+    tail instead of every ticket ever. The ``X-Bayleaf-Ticket-Total`` response header carries the
     count for the status/run/rule filter set IGNORING ``since`` — mirroring the run-list's
-    ``X-PipeGuard-Total-Count`` idiom — so a windowed view can still show "N resolved total". A
+    ``X-Bayleaf-Total-Count`` idiom — so a windowed view can still show "N resolved total". A
     store failure maps to a generic 503 without leaking the path/DSN.
     """
     if status is not None and status not in ("open", "in_review", "resolved"):
@@ -264,7 +264,7 @@ def list_tickets(
         raise HTTPException(status_code=503, detail="review store unavailable") from None
     # Total for this status/run/rule set BEFORE the recency window, so the resolved tab can show a
     # true total even when it only loaded the last ~30 days.
-    response.headers["X-PipeGuard-Ticket-Total"] = str(len(records))
+    response.headers["X-Bayleaf-Ticket-Total"] = str(len(records))
     if since is not None:
         # Lexicographic compare is correct for zero-padded ISO-8601: a created_at datetime string
         # sorts against the ISO `since` prefix exactly as the timestamps order (UTC throughout).

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted · Partially realized (QC-triage agent #1, pipeline-repair agent #2, and the archivist librarian all built — advisory + off-path; per-agent model tiers realized as `PIPEGUARD_*_MODEL` env knobs) |
+| **Status** | Accepted · Partially realized (QC-triage agent #1, pipeline-repair agent #2, and the archivist librarian all built — advisory + off-path; per-agent model tiers realized as `BAYLEAF_*_MODEL` env knobs) |
 | **Date** | 2026-07-07 (MST) · updated 2026-07-09 (MST) |
 | **Deciders** | James Hu, Claude Code |
 | **Related** | [ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0005](ADR-0005-config-layer-and-profiles.md), [ADR-0006](ADR-0006-ai-off-by-default-fallback.md), [ADR-0008](ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](ADR-0009-corpora-retrieval-upskilling.md) |
@@ -50,9 +50,9 @@ frequent narration) or insufficient (cheap model on hard, systemic diagnosis).
 ## Realized (2026-07-09)
 
 1. **Agent #1 (QC-triage) built** (`triage/`): advisory, off the deterministic critical path,
-   selected via `PIPEGUARD_TRIAGE_AGENT=stub|claude`, off by default with a stub fallback on any
+   selected via `BAYLEAF_TRIAGE_AGENT=stub|claude`, off by default with a stub fallback on any
    error incl. a safety refusal ([ADR-0006](ADR-0006-ai-off-by-default-fallback.md)). Its model
-   defaults to a cheaper tier (`claude-sonnet-5` via `PIPEGUARD_TRIAGE_MODEL`) than the Opus
+   defaults to a cheaper tier (`claude-sonnet-5` via `BAYLEAF_TRIAGE_MODEL`) than the Opus
    narration default — the per-agent model tiering this ADR called for.
 2. **Agent #2 (pipeline-repair) built** (`pipeline_repair/`): the rare, hard cross-run-reasoning
    case Decision §3a reserves the top tier for. Advisory and off-gate — `advisory` is pinned and it
@@ -62,20 +62,20 @@ frequent narration) or insufficient (cheap model on hard, systemic diagnosis).
    [ADR-0008](ADR-0008-issue-taxonomy-suppression-escalation.md)'s issue taxonomy;
    [ADR-0009](ADR-0009-corpora-retrieval-upskilling.md)), and emits a cited
    `RepairProposal{summary, attach_to, scope}` (`attach_to`/`scope`/citations are deterministic from
-   the corpus, never the LLM). Selected via `PIPEGUARD_PIPELINE_REPAIR_AGENT=stub|claude`, off by
+   the corpus, never the LLM). Selected via `BAYLEAF_PIPELINE_REPAIR_AGENT=stub|claude`, off by
    default with a degrade-to-stub fallback ([ADR-0006](ADR-0006-ai-off-by-default-fallback.md)). Its
-   model defaults to the **Opus-high tier** (`claude-opus-4-8` via `PIPEGUARD_PIPELINE_REPAIR_MODEL`)
+   model defaults to the **Opus-high tier** (`claude-opus-4-8` via `BAYLEAF_PIPELINE_REPAIR_MODEL`)
    — exactly the expensive-but-rare tier §3a reserves for hard, systemic diagnosis. Invoked
    **on-demand** (`GET /api/monitoring/signatures/{signature}/repair`); the
    [ADR-0008](ADR-0008-issue-taxonomy-suppression-escalation.md) ~3× auto-escalation trigger that
    would route into it stays **deferred**.
 3. **Archivist librarian built** (`api/archivist.py`): the low-stakes, *organizational* (not
    diagnostic) interface tier — Decision §3b's frequent/cheap case. Indexes and summarizes released
-   runs into an advisory `ArchiveDigest`. Selected via `PIPEGUARD_ARCHIVIST_AGENT=stub|claude`, off
+   runs into an advisory `ArchiveDigest`. Selected via `BAYLEAF_ARCHIVIST_AGENT=stub|claude`, off
    by default with a degrade-to-stub fallback. Its model defaults to the **Haiku tier**
-   (`claude-haiku-4-5` via `PIPEGUARD_ARCHIVIST_MODEL`) — the cheapest tier, matching the low blast
+   (`claude-haiku-4-5` via `BAYLEAF_ARCHIVIST_MODEL`) — the cheapest tier, matching the low blast
    radius of an organizing task.
-4. **Per-agent model tiering realized** as the `PIPEGUARD_*_MODEL` env knobs — Opus-high for
+4. **Per-agent model tiering realized** as the `BAYLEAF_*_MODEL` env knobs — Opus-high for
    pipeline-repair, Sonnet for QC-triage, Haiku for the archivist — the task-difficulty→model-tier
    mapping this ADR decided. Still env knobs today, **not yet** a composed config profile
    ([ADR-0005](ADR-0005-config-layer-and-profiles.md)).

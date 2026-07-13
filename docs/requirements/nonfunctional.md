@@ -68,8 +68,8 @@ links to [evaluation.md](../quality/evaluation.md).
 1. **REQ-NF-020 — Secrets via env only.** No keys, tokens, credentials, or private
    URLs are hardcoded; the live-AI path reads its key from the environment. The live
    Slack notify path likewise reads its bot token + channel from env
-   (`PIPEGUARD_SLACK_BOT_TOKEN` / `PIPEGUARD_SLACK_CHANNEL`) and stays disarmed unless
-   `PIPEGUARD_SLACK_LIVE=1`, so a stray token cannot post. New required env vars are added
+   (`BAYLEAF_SLACK_BOT_TOKEN` / `BAYLEAF_SLACK_CHANNEL`) and stays disarmed unless
+   `BAYLEAF_SLACK_LIVE=1`, so a stray token cannot post. New required env vars are added
    to `.env.example`. *Trace:* CLAUDE.md Security, [architecture.md](../design/architecture.md)
    §Outbound notify seam.
 2. **REQ-NF-021 — No PHI in the repo.** No raw reads, PHI, or large artifacts are
@@ -142,8 +142,8 @@ links to [evaluation.md](../quality/evaluation.md).
    the untrusted-text boundary is bounded (2026-07-11, audit P3-11 / AS-03/AS-05/AS-07/AS-08).**
    Four related agent-safety hardenings, none changing a default behavior: (a) `api/auth.py`'s
    `current_actor()` logs a single loud warning on first use that the header-trust dev shim is
-   active (any caller can self-assert any role via `X-PipeGuard-Role`) — logged, never raised, so
-   it cannot break the offline demo; a new opt-in `PIPEGUARD_AUTH_STRICT` (OFF by default) defaults
+   active (any caller can self-assert any role via `X-Bayleaf-Role`) — logged, never raised, so
+   it cannot break the offline demo; a new opt-in `BAYLEAF_AUTH_STRICT` (OFF by default) defaults
    a **header-less** request to `viewer` instead of the permissive `approver` — the header itself is
    still trusted either way, only the no-header fallback changes, and the demo's default behavior
    is byte-for-byte unchanged. (b) `api/deid.py`/`api/safe_harbor.py` field-name matching is now
@@ -165,7 +165,7 @@ links to [evaluation.md](../quality/evaluation.md).
    /api/files`, 2026-07-11, branch `feat/custom-script-io`, ADR-0020).** `api/routers/files.py`
    lists directory metadata for the Builder's "Browse…" data picker (REQ-F-099) with two hard
    boundaries, both pinned by `tests/test_files_api.py`: (a) **allowlist, not free filesystem
-   access** — `root` is a *key* into a small configured map (`PIPEGUARD_BROWSE_ROOTS`, default
+   access** — `root` is a *key* into a small configured map (`BAYLEAF_BROWSE_ROOTS`, default
    `{"data": <repo>/data}`), never a raw path, so a caller can only ever browse a root an operator
    deliberately exposed; an unknown key is a 404. (b) **traversal-hardening**, mirroring the
    pre-existing artifact-download idiom in `api/main.py`: a `..` path component or a leading `/`
@@ -279,7 +279,7 @@ links to [evaluation.md](../quality/evaluation.md).
 
 ## Maintainability, type-safety & testing
 
-1. **REQ-NF-050 — Framework-agnostic core.** `src/pipeguard/` imports no
+1. **REQ-NF-050 — Framework-agnostic core.** `src/bayleaf/` imports no
    Streamlit/FastAPI/React; delivery layers depend on the core, not vice versa.
    *Trace:* [architecture.md](../design/architecture.md) invariants, ADR-0003.
 2. **REQ-NF-051 — Strict typing.** Type hints across the board, enforced by strict
@@ -306,11 +306,11 @@ links to [evaluation.md](../quality/evaluation.md).
    synthesis, and triage are swappable; SQLite→Postgres and local→Slurm/cloud paths
    are open via ports & adapters and Nextflow for compute. **Update (2026-07-11):** the Nextflow
    half of this is no longer only "open via" — it is **built and live-verified**: a card-graph →
-   Nextflow compiler (`src/pipeguard/nextflow/`) plus a Nextflow-first intake driver
+   Nextflow compiler (`src/bayleaf/nextflow/`) plus a Nextflow-first intake driver
    (`scripts/run_giab_pipeline.py`) run the real germline chain locally via `nextflow run
    -profile conda` end to end. **Update (2026-07-11, W4):** an executor-profile layer now
    exists — the generated `nextflow.config` also declares `standard` (local single-thread-serial,
-   the demo default) and `slurm` (env-driven `PIPEGUARD_SLURM_QUEUE`/`_CLUSTER_OPTIONS`/
+   the demo default) and `slurm` (env-driven `BAYLEAF_SLURM_QUEUE`/`_CLUSTER_OPTIONS`/
    `_QUEUE_SIZE`, one sbatch job per process instance), with `run_giab_pipeline.py` auto-detecting
    `sbatch` on `PATH` to pick between them. **Honest scope: CONFIG-verified, not
    CLUSTER-verified** — no `sbatch` exists in this sandbox, so only the local-serial branch has

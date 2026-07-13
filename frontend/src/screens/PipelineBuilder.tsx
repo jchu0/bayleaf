@@ -414,7 +414,7 @@ export function PipelineBuilder() {
   const locEditable = isEditableProfile(profile) && !isView
   const yaml = yamlFor(profile, locEdits)
   const curLoc = curLocMap(locEdits)
-  const envHint = `PIPEGUARD_RUN_LAYOUT=${profile}`
+  const envHint = `BAYLEAF_RUN_LAYOUT=${profile}`
 
   // ── locator authoring (writes locEdits, marks the graph dirty → back to draft) ──
   const dirtyToDraft = () => setSaveStatus('draft')

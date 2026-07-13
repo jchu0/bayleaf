@@ -10,14 +10,14 @@
 
 ### What landed in code (verified by reading, not the commit messages)
 
-1. **`1882226`** — `src/pipeguard/models.py` gains `VariantCall` (sample_id + optional gene/hgvs/
+1. **`1882226`** — `src/bayleaf/models.py` gains `VariantCall` (sample_id + optional gene/hgvs/
    clinvar_significance/clinvar_review_status/clinvar_accession/clinvar_version — ClinVar fields
    stored VERBATIM, never renormalized) and `RunArtifacts.variant_calls: list[VariantCall]`
-   (folded into `sample_ids()`). `src/pipeguard/parsers.py` gains `parse_variant_calls` (tolerant
+   (folded into `sample_ids()`). `src/bayleaf/parsers.py` gains `parse_variant_calls` (tolerant
    `variants.csv` reader, absent file → `[]`, alt column spellings for `clnsig`/`clnrevstat`/
-   `clnacc`), wired into `load_run`. `src/pipeguard/runbook.py` gains `RouteToHumanPolicy`
+   `clnacc`), wired into `load_run`. `src/bayleaf/runbook.py` gains `RouteToHumanPolicy`
    (`significances: tuple[str, ...] = ()` — empty ⇒ `.armed is False`) + `Runbook.route_to_human`.
-   `src/pipeguard/rules.py` gains `_check_route_to_human` → rule id **VAR-RTH-001**
+   `src/bayleaf/rules.py` gains `_check_route_to_human` → rule id **VAR-RTH-001**
    (`Category.VARIANT` → `Gate.VARIANT` via the existing `_CATEGORY_GATE` map, `Severity.
    CRITICAL`, `suggested_verdict=Verdict.ESCALATE`), wired into `evaluate_sample` after the
    existing pipeline-trace check. Read every line of all four files plus `tests/
@@ -25,7 +25,7 @@
    separator-/case-insensitive *matching* only (never alters the quoted string), a review-status
    floor, and an end-to-end test asserting the armed run's card verdict is ESCALATE while the
    disarmed run's finding set is byte-identical to a run with no variant data at all.
-2. **`0101f29`** — new `api/safe_harbor.py` (not `src/pipeguard/`, correctly kept out of the
+2. **`0101f29`** — new `api/safe_harbor.py` (not `src/bayleaf/`, correctly kept out of the
    framework-agnostic core since it's an egress-path transform, ADR-0001): `redact_free_text`
    (regex classes: email/URL/SSN/phone/IP/date/ZIP/long-numeric-id → `[REDACTED:CLASS]`),
    `generalize_date` (year-only, fail-closed to `[REDACTED:DATE]` on no recognizable year),

@@ -62,7 +62,7 @@ For now the event bus is **in-process** and the ledger is a local append-only lo
    decision — but it is emitted by the read-API, not `run_gate`, and it is an **egress
    transform only** (reads already-decided `DecisionCard`s, never a rule/verdict/gate input;
    ADR-0001 holds). It is intentionally recorded to a **separate** sink,
-   `api/share_store.py` (a `ShareStore` Protocol; `PIPEGUARD_SHARE_STORE=jsonl|sqlite|postgres`,
+   `api/share_store.py` (a `ShareStore` Protocol; `BAYLEAF_SHARE_STORE=jsonl|sqlite|postgres`,
    default `jsonl`) rather than the gate's `EventLedger`, because the gate ledger is a
    deterministic per-run re-derivation (`api.main._evaluate` is `@lru_cache`) that must stay
    byte-stable and cacheable, while a share is a live, actor-driven side effect that must

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard.nextflow import (
+from bayleaf.nextflow import (
     CompileError,
     NfEdge,
     NfGraph,
@@ -116,7 +116,7 @@ def test_config_emits_standard_and_slurm_executor_profiles() -> None:
     # slurm — env-driven knobs, never hardcoded guesses
     assert "slurm {" in cfg
     assert "process.executor       = 'slurm'" in cfg
-    assert "System.getenv('PIPEGUARD_SLURM_QUEUE')" in cfg
+    assert "System.getenv('BAYLEAF_SLURM_QUEUE')" in cfg
     # the reads param is now the samplesheet `input`, not read1/read2
     assert "input      = null" in cfg
     assert "read1" not in cfg and "read2" not in cfg
@@ -264,7 +264,7 @@ def test_generated_germline_stub_runs(tmp_path: Path) -> None:
     """Skip-safe live check (mirrors the Postgres live test): if `nextflow` is on PATH, the
     generated pipeline must validate end-to-end via `-stub-run` (every process' stub touches its
     outputs, so the whole DAG executes with no tools/data). Absent Nextflow → skip, never fail."""
-    nextflow = os.environ.get("PIPEGUARD_NEXTFLOW_BIN") or shutil.which("nextflow")
+    nextflow = os.environ.get("BAYLEAF_NEXTFLOW_BIN") or shutil.which("nextflow")
     if not nextflow:
         pytest.skip("no `nextflow` on PATH — skipping the live stub-run check")
 

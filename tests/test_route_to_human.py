@@ -1,7 +1,7 @@
 """Route-to-human (VAR-RTH-001) — the OFF-BY-DEFAULT gate rule that escalates a ClinVar-significant
 candidate to MANDATORY human review (ADR-0018 decision D2).
 
-The guardrail this suite pins: PipeGuard authors NO pathogenicity. The rule is disarmed by
+The guardrail this suite pins: bayleaf authors NO pathogenicity. The rule is disarmed by
 default (so the pinned demo scenario is byte-for-byte unchanged), and when armed it merely QUOTES
 ClinVar verbatim as cited evidence and routes to a human (ESCALATE) — it never renders a clinical
 determination. Fully offline; ClinVar significance is a contrived spiked fixture
@@ -10,11 +10,11 @@ determination. Fully offline; ClinVar significance is a contrived spiked fixture
 
 from pathlib import Path
 
-from pipeguard.engine import run_gate
-from pipeguard.models import RunArtifacts, Verdict
-from pipeguard.parsers import parse_variant_calls
-from pipeguard.rules import _check_route_to_human, evaluate_sample
-from pipeguard.runbook import DEFAULT_RUNBOOK, RouteToHumanPolicy, Runbook
+from bayleaf.engine import run_gate
+from bayleaf.models import RunArtifacts, Verdict
+from bayleaf.parsers import parse_variant_calls
+from bayleaf.rules import _check_route_to_human, evaluate_sample
+from bayleaf.runbook import DEFAULT_RUNBOOK, RouteToHumanPolicy, Runbook
 
 # A contrived annotated-variant table: one clearly Pathogenic candidate (would route when armed),
 # one Benign (never routes). Verbatim ClinVar strings, incl. the underscore ClinVar actually uses.
@@ -77,10 +77,10 @@ def test_armed_pathogenic_routes_to_human(tmp_path: Path) -> None:
     assert f.gate.value == "variant"  # lands on the variant gate, not the QC gate
     # The finding QUOTES ClinVar verbatim and cites the accession — it authors no significance.
     clnsig_ev = next(e for e in f.evidence if e.source_field == "CLNSIG")
-    assert clnsig_ev.value == "Pathogenic"  # verbatim, not PipeGuard's determination
+    assert clnsig_ev.value == "Pathogenic"  # verbatim, not bayleaf's determination
     assert "VCV000017661" in (clnsig_ev.locator or "")
     assert "ClinVar" in clnsig_ev.source
-    # The prose never claims PipeGuard decided pathogenicity — it defers to a human.
+    # The prose never claims bayleaf decided pathogenicity — it defers to a human.
     assert "makes no pathogenicity determination" in f.detail
 
 
@@ -155,7 +155,7 @@ def test_clinvar_rth_fixture_escalates_via_per_run_arming() -> None:
     real committed run (closing the "never fires end-to-end" gap), while every unmarked run stays
     disarmed — the arming is scoped per run by `api.main._active_runbook`."""
     from api.main import _active_runbook
-    from pipeguard.engine import run_gate_from_dir
+    from bayleaf.engine import run_gate_from_dir
 
     rb = _active_runbook("RUN-2026-07-11-CLINVAR-RTH")
     assert rb.route_to_human.armed  # the marker armed it for THIS run
@@ -164,7 +164,7 @@ def test_clinvar_rth_fixture_escalates_via_per_run_arming() -> None:
     assert card.verdict is Verdict.ESCALATE
     rth = next(f for f in card.findings if f.rule_id == "VAR-RTH-001")
     assert rth.gate.value == "variant"
-    # Verbatim ClinVar quote, no PipeGuard-authored pathogenicity.
+    # Verbatim ClinVar quote, no bayleaf-authored pathogenicity.
     assert any(e.source_field == "CLNSIG" and e.value == "Pathogenic" for e in rth.evidence)
     # A stock committed run carries no marker → route-to-human stays OFF.
     assert not _active_runbook("RUN-2026-07-04-GIAB-A").route_to_human.armed

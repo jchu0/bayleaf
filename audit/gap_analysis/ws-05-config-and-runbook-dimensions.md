@@ -17,17 +17,17 @@ Three coupled pieces, all fail-closed, all keeping the verdict a pure function o
 The frontend `SettingsAssayTable` must send `our_key`-keyed edits, not display labels — otherwise the typed parser rejects them (the current honest failure mode). Until that lands, `get_config`/the table carry an in-product **"authoring only — not applied to runs"** banner (the §5a honest-label fallback), which is also the safe interim if step 3 slips.
 
 ## Exact changes
-- **`src/pipeguard/runbook.py`**
+- **`src/bayleaf/runbook.py`**
   - Add `RunbookKey` (frozen: `assay/sample_type/platform: str|None`, normalized lower/trim) and `RunbookSet(BaseModel)` with `default: Runbook`, `entries: dict[RunbookKey, Runbook]` (or `list[RunbookEntry]`), and `resolve(assay, sample_type, platform) -> Runbook` implementing the weight-ordered fallback. Document the order in the docstring.
   - Add classmethod `RunbookSet.of(Runbook)` for coercion.
   - Leave `QCThreshold` (`:13-42`) and `Runbook` (`:71-195`) structurally intact — `RunbookSet` composes whatever `QCThreshold` shape WS-06 later produces.
-- **`src/pipeguard/rules.py`**
+- **`src/bayleaf/rules.py`**
   - `evaluate_run` (`:481-486`): accept `Runbook | RunbookSet | None`; coerce; resolve per sample via `set.resolve(artifacts.assay, sample.tissue, artifacts.platform)`; call unchanged `evaluate_sample`. `evaluate_sample` (`:436-478`) signature **unchanged**.
-- **`src/pipeguard/engine.py`**
+- **`src/bayleaf/engine.py`**
   - `run_gate` (`:49-78`): widen `runbook` to `Runbook | RunbookSet`; coerce (`:78`). `gate_provenance["runbook_metrics"]` (`:87`) currently reads one runbook — change to record the **resolved runbook per sample** (or the set's key list) so provenance stays honest under per-sample resolution. `run_gate_from_dir` (`:226`) type widened.
-- **`src/pipeguard/models.py`**
+- **`src/bayleaf/models.py`**
   - `RunArtifacts` (`:466-486`): add `assay: str | None = None` (run-level; `Sample.tissue` at `:312` already supplies sample_type, `platform` at `:483` already exists).
-- **`src/pipeguard/parsers.py`**
+- **`src/bayleaf/parsers.py`**
   - `load_run` (`:333-374`): read an optional `assay` marker file in the run dir (mirrors the `origin`/`route_to_human` marker pattern) and set `RunArtifacts.assay`.
 - **`api/routers/settings.py`**
   - Add `ThresholdEdit` (`our_key: str`, optional `gate/hard_fail/borderline_band: float`) and `ThresholdOverridePayload` (`schema_version`, `assay/sample_type/platform: str|None`, `thresholds: list[ThresholdEdit]`) + a tolerant `parse_override_payload(dict) -> ThresholdOverridePayload | None`. Keep `ThresholdOverrideIn.payload` (`:134`) a `dict` at ingest (store charter), but run `parse_override_payload` in the `_sanity` validator (`:136-142`) so a well-formed typed payload is accepted and a malformed one 422s early (rather than silently unapplied).
@@ -80,9 +80,9 @@ The frontend `SettingsAssayTable` must send `our_key`-keyed edits, not display l
 - **Frontend/core coupling:** step 5 must land or the matrix keeps writing payloads the core ignores; steps 3–4 keep that state *honest* in the meantime rather than silently lying.
 
 ### Critical Files for Implementation
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/runbook.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/rules.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/engine.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/runbook.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/rules.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/engine.py
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/api/main.py
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/api/routers/settings.py
 
@@ -121,7 +121,7 @@ Grounding anchor for the API-level tests: `tests/test_route_to_human.py::test_cl
 
 ### Gap C — `_active_runbook` applies the approved override (or honest "not applied" label) + cache invalidation
 
-1. **Red acceptance test — `tests/test_active_runbook.py::test_approved_override_moves_active_runbook_and_verdict`** (new file; models on `tests/test_route_to_human.py`'s `_active_runbook` + `run_gate_from_dir` pattern, backed by a tmp settings store via `PIPEGUARD_SETTINGS_PATH` like `tests/test_settings.py`).
+1. **Red acceptance test — `tests/test_active_runbook.py::test_approved_override_moves_active_runbook_and_verdict`** (new file; models on `tests/test_route_to_human.py`'s `_active_runbook` + `run_gate_from_dir` pattern, backed by a tmp settings store via `BAYLEAF_SETTINGS_PATH` like `tests/test_settings.py`).
    - **Asserts (loop-closed build):** save a **typed** override (a tightened `qc.mean_target_coverage` gate) for a committed stock run (e.g. `data/RUN-2026-07-04-GIAB-A`), **approve** it via the settings router, then `api.main._active_runbook(run_id)` returns a `RunbookSet`/`Runbook` whose patched `our_key` gate **differs from `DEFAULT_RUNBOOK`**, with every other threshold untouched. Re-gating the run (`run_gate_from_dir` / `_evaluate`) then flips the affected sample's verdict (PROCEED → HOLD) — and the flip is carried by a **new `QC-*` finding** the tightened gate emitted, asserted via `aggregate_verdict`, never by the override "setting" a verdict.
    - **Asserts (honest-label build — the §5a fallback):** if a build ships the label instead of the applied loop, `GET /api/config` (`get_config`, `api/main.py:691`) MUST carry `applied=false` / "authoring only — not applied to runs" **and** `_active_runbook(run_id)` MUST equal `DEFAULT_RUNBOOK` for a run with an approved override. The surface can never claim applied while returning the default (and can never return a moved gate while claiming not-applied). One of the two branches must hold — a build cannot pass with a silent middle state.
    - **Why a stub can't pass:** today `_active_runbook` literally `return DEFAULT_RUNBOOK` (+ only the `route_to_human` marker layering), ignoring the settings store entirely — its output **cannot differ** after an approval, and `get_config` returns a flat `DEFAULT_RUNBOOK.model_dump()` with no `applied` flag. Neither branch can be satisfied by the current wiring.

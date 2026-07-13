@@ -45,20 +45,20 @@ surface that lets operators act on surfaced outputs.
 
 ## Realized (2026-07-08)
 
-1. **Outbound notify port BUILT and wired (T-015b).** `src/pipeguard/notify/` is a stub-first
+1. **Outbound notify port BUILT and wired (T-015b).** `src/bayleaf/notify/` is a stub-first
    `NotifyPort` (`StubNotifier` / `SlackNotifier`) wired into `run_gate(..., notifier=)` as an
    optional, off-by-default, off-critical-path hook that runs *after* the verdict is decided
    ([ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md)). Only actionable (non-PROCEED) cards
    notify; each real notification emits an auditable `notification.emitted` event
    ([ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md)) whose payload holds no secrets.
    Messages are per-verdict, evidence-cited, and run-id-carrying, with a research/demo
-   disclaimer. **Live Slack send is opt-in via `PIPEGUARD_SLACK_LIVE` and was verified
+   disclaimer. **Live Slack send is opt-in via `BAYLEAF_SLACK_LIVE` and was verified
    end-to-end against a real workspace** (a token/channel alone never sends; any error degrades
-   to the offline stub). A `python -m pipeguard.notify` demo CLI exists.
+   to the offline stub). A `python -m bayleaf.notify` demo CLI exists.
    **Webhook adapters added (T-035):** `TeamsNotifier` + `DiscordNotifier` extend the same
    `NotifyPort` with a stdlib `urllib.request` POST to an incoming-webhook URL — no SDK, no
    new dependency. Each keeps Slack's safety shape but with its **own** per-adapter live flag
-   (`PIPEGUARD_TEAMS_LIVE` / `PIPEGUARD_DISCORD_LIVE`, default OFF), so arming one channel
+   (`BAYLEAF_TEAMS_LIVE` / `BAYLEAF_DISCORD_LIVE`, default OFF), so arming one channel
    never arms another; unarmed or with no URL configured, they degrade to the offline stub
    (no socket). The webhook URL is a secret — env-only, never logged, and stripped from the
    `notification.emitted` event payload (only `adapter/status/delivered/verdict` + the
@@ -72,7 +72,7 @@ surface that lets operators act on surfaced outputs.
    The one write endpoint, `POST /api/feedback`, is deliberately *not* a decision write — it
    appends product telemetry (a per-decision agree/disagree signal + a global product note, each
    tagged with the originating UI `source`) through a **pluggable `FeedbackStore`**
-   (`api/feedback_store.py`: jsonl default | sqlite | postgres, `PIPEGUARD_FEEDBACK_STORE`, its
+   (`api/feedback_store.py`: jsonl default | sqlite | postgres, `BAYLEAF_FEEDBACK_STORE`, its
    own table separate from the decision projection) in a module that never imports the core, so
    it can never call `run_gate` or touch provenance ([ADR-0001](ADR-0001-deterministic-gate-advisory-ai.md)).
    It carries no operator identity (`extra="forbid"` structural guard), resolves `origin`

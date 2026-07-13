@@ -8,7 +8,7 @@ verdict or runs a tool (compose != execute). The live Claude path is exercised w
 to prove it degrades safely and that the model only phrases the prose.
 """
 
-from pipeguard.node_author import (
+from bayleaf.node_author import (
     ARTIFACT_KINDS,
     NODE_AUTHOR_CORPUS_VERSION,
     NodeProposal,
@@ -225,7 +225,7 @@ class _FakeClient:
 
 
 def _claude_agent(monkeypatch, client):
-    from pipeguard.node_author.agent import ClaudeNodeAuthor
+    from bayleaf.node_author.agent import ClaudeNodeAuthor
 
     agent = ClaudeNodeAuthor()
     monkeypatch.setattr(agent, "_get_client", lambda: client)

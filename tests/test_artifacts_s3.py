@@ -2,7 +2,7 @@
 
 These run fully offline (no boto3 required, no network, no real bucket). They pin the
 guarantees that make the remote seam safe to flip on later, mirroring the Slack notify tests:
-the pull is OFF unless ``PIPEGUARD_S3_LIVE`` is armed, a configured bucket/creds alone never
+the pull is OFF unless ``BAYLEAF_S3_LIVE`` is armed, a configured bucket/creds alone never
 pull, ANY error (absent boto3, an API failure) degrades to the offline local store, and the
 (deferred) live-pull seam is exercised with an INJECTED FAKE CLIENT — never the wire. The one
 place objects are actually "downloaded", they are copied from a local fixture dir by the fake.
@@ -15,15 +15,15 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard import run_gate_from_dir
-from pipeguard.artifacts import (
+from bayleaf import run_gate_from_dir
+from bayleaf.artifacts import (
     ArtifactStore,
     LocalArtifactStore,
     S3ArtifactStore,
     get_artifact_store,
     run_gate_from_store,
 )
-from pipeguard.synthesis import StubSynthesizer
+from bayleaf.synthesis import StubSynthesizer
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
 
@@ -31,15 +31,15 @@ DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
 @pytest.fixture(autouse=True)
 def _disarm_s3(monkeypatch):
     """Belt-and-suspenders: NO test may pull from a real bucket — even on a machine whose
-    shell/.env has PIPEGUARD_S3_LIVE + creds set. The live pull is env-armed, so force it OFF
+    shell/.env has BAYLEAF_S3_LIVE + creds set. The live pull is env-armed, so force it OFF
     and clear the store config for every test; the few tests that exercise the live seam
     re-arm it explicitly (after this autouse fixture runs) and inject a fake client."""
     for var in (
-        "PIPEGUARD_S3_LIVE",
-        "PIPEGUARD_S3_BUCKET",
-        "PIPEGUARD_S3_PREFIX",
-        "PIPEGUARD_ARTIFACT_STORE",
-        "PIPEGUARD_ARTIFACT_LOCAL_ROOT",
+        "BAYLEAF_S3_LIVE",
+        "BAYLEAF_S3_BUCKET",
+        "BAYLEAF_S3_PREFIX",
+        "BAYLEAF_ARTIFACT_STORE",
+        "BAYLEAF_ARTIFACT_LOCAL_ROOT",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -76,14 +76,14 @@ class _FakeS3Client:
 
 
 def test_get_artifact_store_selects_s3_from_env(monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_ARTIFACT_STORE", "s3")
+    monkeypatch.setenv("BAYLEAF_ARTIFACT_STORE", "s3")
     store = get_artifact_store()
     assert isinstance(store, S3ArtifactStore)
     assert store.name == "s3"
 
 
 def test_get_artifact_store_unknown_value_falls_back_to_local(monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_ARTIFACT_STORE", "gcs-typo")
+    monkeypatch.setenv("BAYLEAF_ARTIFACT_STORE", "gcs-typo")
     assert isinstance(get_artifact_store(), LocalArtifactStore)
 
 
@@ -95,7 +95,7 @@ def test_s3_store_satisfies_the_port():
 
 
 def test_s3_not_armed_degrades_to_local(monkeypatch):
-    """With PIPEGUARD_S3_LIVE unset, fetch degrades to the local store and builds no client."""
+    """With BAYLEAF_S3_LIVE unset, fetch degrades to the local store and builds no client."""
     store = S3ArtifactStore()  # unconfigured bucket + unarmed
 
     def _fail():
@@ -107,7 +107,7 @@ def test_s3_not_armed_degrades_to_local(monkeypatch):
 
 
 def test_s3_never_pulls_when_not_armed_even_with_bucket(monkeypatch):
-    """A configured bucket + prefix alone never trigger a pull — only PIPEGUARD_S3_LIVE does."""
+    """A configured bucket + prefix alone never trigger a pull — only BAYLEAF_S3_LIVE does."""
     store = S3ArtifactStore(bucket="test-bucket", prefix="runs")
 
     def _fail():
@@ -121,7 +121,7 @@ def test_s3_never_pulls_when_not_armed_even_with_bucket(monkeypatch):
 
 
 def test_s3_armed_client_error_degrades_to_local(monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_S3_LIVE", "1")
+    monkeypatch.setenv("BAYLEAF_S3_LIVE", "1")
     store = S3ArtifactStore(bucket="test-bucket")
 
     def _boom():
@@ -133,7 +133,7 @@ def test_s3_armed_client_error_degrades_to_local(monkeypatch):
 
 def test_s3_armed_missing_boto3_degrades_to_local(monkeypatch):
     """Armed but boto3 absent: the lazy import fails and the store degrades to local."""
-    monkeypatch.setenv("PIPEGUARD_S3_LIVE", "1")
+    monkeypatch.setenv("BAYLEAF_S3_LIVE", "1")
     # Force the lazy `import boto3` inside the real _get_client to raise ImportError.
     monkeypatch.setitem(sys.modules, "boto3", None)
     store = S3ArtifactStore(bucket="test-bucket")
@@ -149,7 +149,7 @@ def test_s3_live_seam_stages_objects_with_fake_client(monkeypatch):
     Proves the wiring shape: list under s3://bucket/<prefix>/<run>/, download each object to a
     fresh temp dir. The default demo/suite never reaches here.
     """
-    monkeypatch.setenv("PIPEGUARD_S3_LIVE", "1")
+    monkeypatch.setenv("BAYLEAF_S3_LIVE", "1")
     fake = _FakeS3Client(source=DATA)
     store = S3ArtifactStore(bucket="test-bucket", prefix="runs")
     monkeypatch.setattr(store, "_get_client", lambda: fake)
@@ -174,7 +174,7 @@ def test_s3_live_seam_stages_objects_with_fake_client(monkeypatch):
 def test_run_gate_from_store_via_s3_fake_client_matches_direct(monkeypatch):
     """End-to-end: staging via the S3 seam then gating yields the same verdicts as reading the
     directory directly — the store changes only where the bytes come from (ADR-0001/0003)."""
-    monkeypatch.setenv("PIPEGUARD_S3_LIVE", "1")
+    monkeypatch.setenv("BAYLEAF_S3_LIVE", "1")
     fake = _FakeS3Client(source=DATA)
     store = S3ArtifactStore(bucket="test-bucket", prefix="runs")
     monkeypatch.setattr(store, "_get_client", lambda: fake)

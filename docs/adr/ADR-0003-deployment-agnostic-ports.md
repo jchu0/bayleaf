@@ -53,12 +53,12 @@ Slurm adapters (and Terraform) are future work.
 1. **Ports built with local adapters.** Event bus = `EventLedger` (in-memory + JSONL, `provenance.py`,
    [ADR-0002](ADR-0002-event-driven-core-provenance-ledger.md)); run store = the `Repository`
    protocol (`persistence/repository.py`) with a `SqliteRepository` **and** a guarded OFF-by-default
-   `PostgresRepository` (`get_repository()` from `PIPEGUARD_REPOSITORY`, degrade-to-SQLite;
+   `PostgresRepository` (`get_repository()` from `BAYLEAF_REPOSITORY`, degrade-to-SQLite;
    [ADR-0016](ADR-0016-postgres-port.md)) + a `rebuild-db` replay targeting either; notify =
    `NotifyPort` (`notify/`) with stub + Slack + Teams + Discord adapters
    ([ADR-0010](ADR-0010-ticketing-notify-read-api.md)); **artifact store** = `ArtifactStore`
    (`artifacts/`, T-039) with a zero-dep `LocalArtifactStore` and an OFF-by-default `S3ArtifactStore`
-   (`boto3` a lazy `[s3]` extra; live pull opt-in behind `PIPEGUARD_S3_LIVE`; ANY error degrades to
+   (`boto3` a lazy `[s3]` extra; live pull opt-in behind `BAYLEAF_S3_LIVE`; ANY error degrades to
    local, so a configured bucket alone never pulls and the demo/tests stay offline). Each flips at the
    edge, never from the core. The artifact-store port is a **materialize-to-local boundary UPSTREAM of
    the gate** — `fetch(run_ref) -> local Path`; the unchanged `load_run` reads that dir, so the store
@@ -67,7 +67,7 @@ Slurm adapters (and Terraform) are future work.
    hardcoded table.
 2. **Nextflow is now executable** — the "compute portability is delegated to Nextflow" Decision is
    realized, not aspirational (full design in [design/nextflow-codegen.md](../design/nextflow-codegen.md)):
-   (a) `src/pipeguard/nextflow/` compiles a typed Builder graph → `main.nf`/`modules/*.nf`/
+   (a) `src/bayleaf/nextflow/` compiles a typed Builder graph → `main.nf`/`modules/*.nf`/
    `nextflow.config` — **pure text codegen, never invokes a tool** (compose ≠ execute holds at the
    core). A curated `catalog.py` (the 7 germline-chain tools; an uncatalogued tool → a labelled
    placeholder that fails loudly, never a fabricated command) backs `compile_graph()`; the seeded
@@ -80,7 +80,7 @@ Slurm adapters (and Terraform) are future work.
 3. **Executor profiles: local-serial / Slurm — CONFIG-verified, not CLUSTER-verified.** `nextflow.config`
    bakes in `standard` (demo default: local single-thread-serial, `queueSize=1`/`maxForks=1`/`cpus=1`)
    and `slurm` (`process.executor='slurm'`, queue / `clusterOptions` / cap all env-driven via
-   `PIPEGUARD_SLURM_QUEUE`/`_CLUSTER_OPTIONS`/`_QUEUE_SIZE`, never a baked guess). The driver
+   `BAYLEAF_SLURM_QUEUE`/`_CLUSTER_OPTIONS`/`_QUEUE_SIZE`, never a baked guess). The driver
    auto-selects (`sbatch` on PATH → `slurm`, else `standard`); the compiled bundle is identical either
    way. **Honest limit:** no `sbatch` in the sandbox or the maintainer's env, so every live run to date
    took the `standard` branch — the `slurm` profile has been read/reasoned but **never submitted to a
@@ -95,7 +95,7 @@ Slurm adapters (and Terraform) are future work.
    other data-platform connectors (wishlist #13 — Box/Drive/OneDrive/DNAnexus/Databricks/Snowflake/
    BigQuery/Redshift implement the artifact-store port but each needs its own SDK + auth + fixtures).
    The FastAPI read-API ([ADR-0014](ADR-0014-productionization-fastapi-react.md)) consumes the core
-   through these seams without adding framework imports to `src/pipeguard/`.
+   through these seams without adding framework imports to `src/bayleaf/`.
 
 ## Revisit when
 

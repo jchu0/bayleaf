@@ -19,7 +19,7 @@ export type RunsState = {
   // `null` until the first load settles — RunOverview reads this to show its loading skeleton; a
   // loaded-but-empty index is `[]`. Consumers that only need the list default it to [] themselves.
   runs: RunSummary[] | null
-  // Full-set, filter-independent facet counts (X-PipeGuard-Status-Counts) — authoritative for the
+  // Full-set, filter-independent facet counts (X-Bayleaf-Status-Counts) — authoritative for the
   // RunOverview status tabs so a chip's count never shifts as the client-side filters narrow the list.
   statusCounts: Record<RunStatus, number> | null
   total: number

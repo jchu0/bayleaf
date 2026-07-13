@@ -78,7 +78,7 @@ const STATUS_FILTERS: { key: 'all' | TicketStatus; label: string }[] = [
 
 // Resolved-tab recency window (task 4). The Resolved tab defaults to recently-opened resolved
 // tickets so a long history never floods the view; the full count comes from the backend
-// X-PipeGuard-Ticket-Total header, and "Show all resolved" (or a search) drops the window.
+// X-Bayleaf-Ticket-Total header, and "Show all resolved" (or a search) drops the window.
 const RESOLVED_WINDOW_DAYS = 30
 
 // The `since` value for the resolved window — an ISO date N days back (the backend filters
@@ -239,7 +239,7 @@ export function ReviewQueue() {
       // unreachable) is fine: the queue is derived from flagged cards either way.
       api.listTickets().catch(() => [] as Ticket[]),
       // The recent RESOLVED window + the authoritative system-wide resolved total (task 4). The
-      // total comes from the X-PipeGuard-Ticket-Total header (ignores `since`); `data` names which
+      // total comes from the X-Bayleaf-Ticket-Total header (ignores `since`); `data` names which
       // resolved tickets are recent enough to show by default. Unreachable → no window (show all).
       api
         .listTicketsPage({ status: 'resolved', since: sinceIso(RESOLVED_WINDOW_DAYS) })
@@ -711,7 +711,7 @@ export function ReviewQueue() {
         </button>
       </div>
 
-      {/* Resolved-tab window meta (task 4): the true total (from the X-PipeGuard-Ticket-Total
+      {/* Resolved-tab window meta (task 4): the true total (from the X-Bayleaf-Ticket-Total
           header, or the derived count as a fallback) + a toggle between the recent window and the
           full history. A search already reaches the full history, so the toggle hides while searching. */}
       {filter === 'resolved' && (

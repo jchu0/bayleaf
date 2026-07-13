@@ -9,7 +9,7 @@
 
 ## Overview
 
-How we know PipeGuard is *correct* and *honest*: the properties we check, the tests
+How we know bayleaf is *correct* and *honest*: the properties we check, the tests
 that check them, and the limits of what a demo-stage evaluation can claim. The unit
 of evaluation is a **case** (`EVAL-NNN`) with a precise definition of good and a named
 check. Cases are grouped by type: **Deterministic** (same input → same output),
@@ -44,7 +44,7 @@ The **8 skips** are machine-gated live-integration checks: **3 `nextflow`-gated*
 `test_io_path_wiring.py::test_driver_argv_shape_is_accepted_by_the_committed_pipeline_stub_run`,
 EVAL-016) + **1 new real-path check** (`test_nextflow_promoted_ports.py`'s
 `test_fastp_catalog_command_produces_every_declared_output`, WS-10, gated on
-`PIPEGUARD_BIOCONDA_BIN`/`PATH` + `data/real-giab/fastq/`) + **4 Postgres-live** round-trips
+`BAYLEAF_BIOCONDA_BIN`/`PATH` + `data/real-giab/fastq/`) + **4 Postgres-live** round-trips
 (`test_persistence_postgres_live.py`). **A ninth real-path test is NOT among the skips** —
 `test_ingest.py::test_real_nextflow_results_ingest_and_gate` (WS-03/06) is gated on a committed-run
 `.nf-runs/<run>/nf-out/results/` directory (gitignored, machine-local) rather than tool presence, and
@@ -201,7 +201,7 @@ asserted against.
 
 | Field | Value |
 |---|---|
-| **Target** | Metric registry (`pipeguard.metrics`) — `normalize` / `denormalize` / `observe` |
+| **Target** | Metric registry (`bayleaf.metrics`) — `normalize` / `denormalize` / `observe` |
 | **Type** | Deterministic |
 | **Automated?** | Yes — `test_metrics.py` (`test_percent_to_fraction`, `test_percent_to_fraction_is_exact`, `test_denormalize_is_the_inverse_of_normalize`, `test_x_stays_x`, `test_multiqc_pct_trap`, `test_disallowed_raw_unit_rejected`, `test_unsupported_conversion_rejected`, `test_observe_builds_metric_value`, `test_metric_value_json_round_trip`, `test_unknown_key_rejected`, `test_alias_resolution`) |
 
@@ -248,7 +248,7 @@ silently dropped — surfaced the moment a threshold keys on it
 
 | Field | Value |
 |---|---|
-| **Target** | `pipeguard.nextflow.compile_graph` (card graph → DSL2 Nextflow bundle) + `POST /api/pipelines/compile` |
+| **Target** | `bayleaf.nextflow.compile_graph` (card graph → DSL2 Nextflow bundle) + `POST /api/pipelines/compile` |
 | **Type** | Deterministic (+ one machine-gated live check) |
 | **Automated?** | Yes — `test_nextflow_compile.py` (9 offline + 1 machine-gated) and `test_nextflow_api.py` (4) |
 
@@ -302,7 +302,7 @@ through the Builder, idempotently (a second call mints no duplicate revision). (
 provenance data (W3, REQ-F-087/REQ-F-088): the pinned `mock_run_01` scenario's verdict mix and
 per-sample gate outcomes are exactly what EVAL-001 already pins; the committed
 `RUN-2026-07-11-CLINVAR-RTH` fixture escalates via `VAR-RTH-001` with ClinVar quoted **verbatim**
-(never PipeGuard's own determination); the downstream `review` provenance stage reads ESCALATE
+(never bayleaf's own determination); the downstream `review` provenance stage reads ESCALATE
 (the fired gate wins over "skipped," the W3 honesty fix), while `filter`/`share` honestly read
 "not run in this build" since neither produced an artifact or event on this run.
 
@@ -432,7 +432,7 @@ the "What we do not yet verify" item below.
 
 | Field | Value |
 | --- | --- |
-| **Target** | `api/library_store.py`, `api/routers/node_author.py` (`accept_node_proposal`/`list_library_entries`), `src/pipeguard/node_author/conformance.py`, `src/pipeguard/node_author/importer.py` |
+| **Target** | `api/library_store.py`, `api/routers/node_author.py` (`accept_node_proposal`/`list_library_entries`), `src/bayleaf/node_author/conformance.py`, `src/bayleaf/node_author/importer.py` |
 | **Type** | Deterministic (no live Claude call in any of these tests; no verdict/gate involved) |
 | **Automated?** | Yes — `test_library_store.py` (6), `test_node_author_accept_api.py` (7), `test_node_author_conformance.py` (13), `test_node_author_importer.py` (8), all pure-offline |
 
@@ -449,7 +449,7 @@ itself flagged, `reserved_kind_actually_known`); `corpus_version`/`schema_versio
 `platform_version` pinned, plus the tool `version` when `matched`. It accepts either a validated
 `NodeProposal` or a raw untrusted `Mapping` (the load-bearing path for an importer/agent that
 hasn't been hardened yet). (3) **The store round-trips a `LibraryEntry` exactly** and is
-degrade-to-JSONL like every other pluggable store — `PIPEGUARD_LIBRARY_STORE=sqlite` failing to
+degrade-to-JSONL like every other pluggable store — `BAYLEAF_LIBRARY_STORE=sqlite` failing to
 construct falls back to JSONL, never raises. (4) **The doc-drop importer never fabricates a live
 port.** `import_from_nextflow_schema()` maps a schema's `format: file-path` params to a real
 `ARTIFACT_KINDS` kind only on a confident name/pattern match; every other param becomes a
@@ -464,7 +464,7 @@ not just top-level; one asserts a `known=True` port outside `ARTIFACT_KINDS` is 
 `reserved_kinds` is flagged) plus a conformant-proposal control asserting zero violations, both on
 the raw-dict path and the validated-`NodeProposal` path. `test_node_author_accept_api.py` uses a
 `TestClient`: an unmatched request 422s with no entry stored; a conformant request 201s and the
-returned `LibraryEntry.submitted_by` matches the RBAC actor from the `X-PipeGuard-Actor` header;
+returned `LibraryEntry.submitted_by` matches the RBAC actor from the `X-Bayleaf-Actor` header;
 a `viewer`-role request 403s (accept is `reviewer`/`approver`-gated); the list endpoint's `tool`/
 `status` filters are asserted against a multi-entry fixture. `test_library_store.py` round-trips
 both the JSONL and SQLite adapters with the same fixture record and asserts they agree
@@ -493,7 +493,7 @@ it is invoked against node-authoring candidates only).
 
 | Field | Value |
 | --- | --- |
-| **Target** | `src/pipeguard/nextflow/compiler.py` (`NfNode.script`/`.is_custom()`, `_render_custom`, `_render_module`), `api/routers/nextflow.py` (`CompileNode.script`/`.container`/`.conda`) |
+| **Target** | `src/bayleaf/nextflow/compiler.py` (`NfNode.script`/`.is_custom()`, `_render_custom`, `_render_module`), `api/routers/nextflow.py` (`CompileNode.script`/`.container`/`.conda`) |
 | **Type** | Deterministic (pure text codegen; no live Claude call; no verdict/gate touched) |
 | **Automated?** | Yes — `test_nextflow_custom_process.py` (9, pure-offline, no `TestClient`) + 2 cases in `test_nextflow_api.py` (over a `TestClient`) |
 
@@ -543,9 +543,9 @@ a novel `cnv_segments` kind and asserts it is wired by name (`emit: cnv_segments
 `is_custom()` would be caught by the name-collision test; a regression that rendered a blank script
 as an empty/placeholder command (rather than raising) would fail the parametrized blank-script
 test; a regression that dropped the honest header/label would fail the labelled-render assertion.
-**Not covered by an automated test:** the custom script itself running under any PipeGuard-side
+**Not covered by an automated test:** the custom script itself running under any bayleaf-side
 runtime sandbox (there is none — ADR-0020 states the approval gate + the honest label +
-deployment-side sandboxing are the safety envelope, not a sandbox PipeGuard builds); a LIVE
+deployment-side sandboxing are the safety envelope, not a sandbox bayleaf builds); a LIVE
 `nextflow run` of a custom process against real inputs (only the germline chain's own
 `-stub-run` is live-verified, EVAL-006 — a custom process has never been executed by Nextflow in
 this repo, only compiled); the Builder's `CustomScriptInspector` UI itself (frontend, not unit
@@ -561,7 +561,7 @@ tested here — see [design/builder-cards/README.md §7](../design/builder-cards
 
 **Definition of good.** Two hard boundaries make it safe to point at a real, GB-scale data host:
 (1) **Allowlist, not free filesystem access** — `root` is a KEY into a small configured map
-(`PIPEGUARD_BROWSE_ROOTS`, default `{"data": <repo>/data}`), never a raw path; an unknown key is a
+(`BAYLEAF_BROWSE_ROOTS`, default `{"data": <repo>/data}`), never a raw path; an unknown key is a
 404, never a filesystem probe. (2) **Traversal-hardening that PROVABLY cannot leak** — a `..`
 component or a leading `/` (absolute path) is rejected (400) BEFORE the filesystem is touched; the
 resolved `root/path` is then asserted to remain inside the resolved root, catching an escaping
@@ -572,7 +572,7 @@ extension-inferred kind) — it never reads or serves file bytes.
 
 **Method.** `_make_sandbox` builds a controlled root under `tmp_path` with a nested layout AND
 plants a sentinel string (`_SECRET`) in a file just OUTSIDE the root, redirecting
-`PIPEGUARD_BROWSE_ROOTS` to it per-test (env read per-request, not cached). Every traversal test
+`BAYLEAF_BROWSE_ROOTS` to it per-test (env read per-request, not cached). Every traversal test
 (`test_dotdot_traversal_is_rejected_and_does_not_escape`,
 `test_absolute_path_is_rejected_and_does_not_escape`,
 `test_symlink_escaping_the_root_is_forbidden`) asserts BOTH the correct status code (400/400/403)
@@ -598,7 +598,7 @@ skipped the post-resolve assert would be caught by the symlink-escape test speci
 two pre-checks alone cannot catch it). A regression that echoed the resolved absolute path (leaking
 server filesystem layout) would fail the "echoes only the KEY" assertion in the kind-inference test.
 **Not covered by an automated test:** the Builder's `FileBrowser.tsx` picker UI itself (frontend,
-not exercised here); a live `PIPEGUARD_BROWSE_ROOTS` override pointing at a genuinely large
+not exercised here); a live `BAYLEAF_BROWSE_ROOTS` override pointing at a genuinely large
 (GB-scale) production data host (only a `tmp_path`-scoped sandbox and the repo's own small `data/`
 are exercised); concurrent/multi-request race conditions on a mutating filesystem (the endpoint is
 read-only, so this is a low-probability, low-consequence gap, not asserted either way).
@@ -607,7 +607,7 @@ read-only, so this is a low-probability, low-consequence gap, not asserted eithe
 
 | Field | Value |
 | --- | --- |
-| **Target** | `src/pipeguard/nextflow/compiler.py` |
+| **Target** | `src/bayleaf/nextflow/compiler.py` |
 | **Type** | Deterministic (pure text codegen; compose ≠ execute — no tool runs) |
 | **Automated?** | Yes — `test_nextflow_robustness.py` (17) + the byte-for-byte germline drift guard in `test_nextflow_compile.py` |
 
@@ -661,7 +661,7 @@ this sandbox (EVAL-009).
 
 | Field | Value |
 | --- | --- |
-| **Target** | `src/pipeguard/nextflow/catalog.py`, `src/pipeguard/nextflow/compiler.py`, `api/routers/nextflow.py` (`CompileRequest`) |
+| **Target** | `src/bayleaf/nextflow/catalog.py`, `src/bayleaf/nextflow/compiler.py`, `api/routers/nextflow.py` (`CompileRequest`) |
 | **Type** | Deterministic (pure text codegen; compose ≠ execute — no tool runs) |
 | **Automated?** | Partly. **Port promotion:** Yes — `test_nextflow_promoted_ports.py` (5) + the mosdepth-5-output regression in `test_nextflow_compile.py` + the byte-for-byte germline drift guard (EVAL-006). **Agent-binding compile isolation:** by construction (frontend payload is `{nodes, edges}` only; `CompileRequest` is pydantic `extra="ignore"`), pinned indirectly by the drift guard — no dedicated backend test (`69a2dab` touched no `src/`/`tests/`). |
 
@@ -699,7 +699,7 @@ reserved (a real optional input), so its absence from the emitted channels is ex
 
 | Field | Value |
 |---|---|
-| **Target** | `pipeguard.synthetic` generator across all `FailureMode`s |
+| **Target** | `bayleaf.synthetic` generator across all `FailureMode`s |
 | **Type** | Failure-mode |
 | **Automated?** | Yes — `test_synthetic.py` (`test_each_failure_mode_hits_intended_verdict`, `test_mixed_run_every_sample_matches_intent`, `test_committed_demo_run_verdicts`, `test_committed_demo_run_is_reproducible`, `test_generated_run_parses_with_existing_parsers`) |
 
@@ -763,7 +763,7 @@ significance list, a matching candidate produces a CRITICAL `Finding` (`rule_id=
 `category=variant`, lands on `Gate.VARIANT`) whose `suggested_verdict` is **ESCALATE** and drives
 the card to ESCALATE end-to-end (rules decide, ADR-0001); a Benign candidate never routes; the
 match is separator-/case-insensitive (`Likely_pathogenic` ≈ `"Likely pathogenic"`) while the
-**quoted evidence stays verbatim** (never PipeGuard's own determination, ADR-0004); an optional
+**quoted evidence stays verbatim** (never bayleaf's own determination, ADR-0004); an optional
 review-status allow-list acts as a stricter star-rating floor. The parser preserves
 `clinvar_significance` verbatim and is tolerant of an absent file or alternate column spellings
 (`clnsig`/`clnrevstat`/`clnacc`).
@@ -784,7 +784,7 @@ evidence, while an unmarked committed run (`RUN-2026-07-04-GIAB-A`) stays disarm
 **Known failure modes.** A rule that fired on a disarmed default would move the pinned demo
 verdicts — prevented structurally (empty tuple ⇒ `.armed is False`) and pinned by
 `test_route_to_human_is_off_by_default`/`test_disarmed_run_matches_stock_evaluation`. A rule that
-normalized or reclassified `clinvar_significance` before quoting it would risk PipeGuard
+normalized or reclassified `clinvar_significance` before quoting it would risk bayleaf
 authoring pathogenicity — pinned by `test_armed_pathogenic_routes_to_human` asserting the quoted
 value is verbatim.
 
@@ -792,7 +792,7 @@ value is verbatim.
 
 | Field | Value |
 |---|---|
-| **Target** | `GET /api/runs/{run_id}/variants` (`api/main.py`) — the same `pipeguard.parsers.parse_variant_calls` EVAL-012 exercises, now also served over the wire |
+| **Target** | `GET /api/runs/{run_id}/variants` (`api/main.py`) — the same `bayleaf.parsers.parse_variant_calls` EVAL-012 exercises, now also served over the wire |
 | **Type** | Failure-mode / read-contract |
 | **Automated?** | Yes — `test_run_variants.py` (3 tests): `test_variants_served_for_clinvar_run`, `test_variants_empty_for_run_without_variants_csv`, `test_variants_unknown_run_is_404` |
 
@@ -889,13 +889,13 @@ all-clear notification would spam the channel — the actionable-only policy pre
 
 | Field | Value |
 |---|---|
-| **Target** | Slack adapter live-send seam (`PIPEGUARD_SLACK_LIVE`) + `get_notifier` selection |
+| **Target** | Slack adapter live-send seam (`BAYLEAF_SLACK_LIVE`) + `get_notifier` selection |
 | **Type** | Failure-mode |
 | **Automated?** | Yes — `test_notify.py` (`test_get_notifier_defaults_to_stub`, `test_get_notifier_selects_slack_from_env`, `test_get_notifier_unknown_value_falls_back_to_stub`, `test_slack_with_no_creds_falls_back_to_stub_without_sending`, `test_slack_env_path_degrades_and_does_not_send`, `test_slack_live_seam_falls_back_to_stub_on_error`, `test_slack_live_seam_missing_client_lib_falls_back_to_stub`, `test_slack_live_seam_posts_via_client_when_explicitly_enabled`, `test_slack_never_sends_when_not_armed_even_with_creds`, `test_slack_channel_is_read_from_env_never_hardcoded`) |
 
 **Definition of good.** The notifier defaults to the offline `stub` ($0; nothing leaves the
-machine). `PIPEGUARD_NOTIFIER=slack` selects the adapter, but a real post fires **only** when
-`PIPEGUARD_SLACK_LIVE` is armed *and* a bot token + channel are present. Missing creds, a
+machine). `BAYLEAF_NOTIFIER=slack` selects the adapter, but a real post fires **only** when
+`BAYLEAF_SLACK_LIVE` is armed *and* a bot token + channel are present. Missing creds, a
 missing Slack SDK, or any Slack error degrade to the stub (payload built + recorded, not sent).
 The channel is read from env, never hardcoded. With the seam explicitly enabled and a client
 present, it posts exactly once.
@@ -912,7 +912,7 @@ See [risks.md](risks.md) RISK-033.
 
 | Field | Value |
 |---|---|
-| **Target** | Notify payload builder (`build_payload` / stub adapter) + the `python -m pipeguard.notify` CLI |
+| **Target** | Notify payload builder (`build_payload` / stub adapter) + the `python -m bayleaf.notify` CLI |
 | **Type** | Faithfulness |
 | **Automated?** | Yes — `test_notify.py` (`test_stub_builds_wellformed_payload_for_flagged_card`, `test_payload_is_category_specific_by_verdict`, `test_payload_reflects_the_cards_verdict_not_a_new_one`, `test_payload_is_deterministic`, `test_notify_card_entry_point_uses_env_notifier_and_injection`, `test_notify_cli_gates_and_reports_actionable`, `test_notify_cli_no_args_returns_usage`) |
 
@@ -1067,7 +1067,7 @@ outside it, absence of a call is not evidence. Requires the genomics toolchain
 
 | Field | Value |
 |---|---|
-| **Target** | The whole shipped app (`src/pipeguard/`, `api/`, `frontend/`) as of commit `9878231`, judged against the demo/recording golden path |
+| **Target** | The whole shipped app (`src/bayleaf/`, `api/`, `frontend/`) as of commit `9878231`, judged against the demo/recording golden path |
 | **Type** | Process (manual/multi-agent review) |
 | **Automated?** | **No** — a Fable-5 multi-agent audit run, all read-only (no source changed by the audit itself); its findings are then verified/fixed by the automated test suite (T-126) |
 
@@ -1119,7 +1119,7 @@ timeout, a11y attributes, a Pager/Tabs migration, and server-side monitoring pag
 1. **No calibrated probabilities.** Confidence is a heuristic; we do not evaluate it as
    a probability and do not report ROC/Brier-style calibration.
 2. **No clinical accuracy claim.** Verdicts are checked against *intended* operational
-   outcomes on contrived/synthetic data, not clinical ground truth. PipeGuard is a
+   outcomes on contrived/synthetic data, not clinical ground truth. bayleaf is a
    research/demo tool ([constraints.md](../requirements/constraints.md) REQ-C-030).
 3. **No performance SLA.** No throughput/latency benchmark is measured at this stage
    (see [risks.md](risks.md), [nonfunctional.md](../requirements/nonfunctional.md)

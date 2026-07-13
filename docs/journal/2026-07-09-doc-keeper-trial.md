@@ -23,7 +23,7 @@ code myself before applying anything.
 3. A **pre-existing gap** — the built+tested S3 artifact-store seam (T-039) absent from
    architecture.md's swappable-seams table.
 4. A **meta-staleness** via grep — `metric_registry.md` claimed the metrics module docstrings
-   "still read 'additive only'"; `grep additive src/pipeguard/metrics/` = 0, so the caveat was
+   "still read 'additive only'"; `grep additive src/bayleaf/metrics/` = 0, so the caveat was
    itself stale.
 
 **The lesson (aimed at me, not the agent).** My per-change doc sweeps route off *the files I

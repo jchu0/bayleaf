@@ -108,7 +108,7 @@ commits above:
   empty. `quality/evaluation.md`'s hardcoded count is untouched by this batch; not re-derived since
   nothing could have falsified it.
 - 🟠 `runbook.py`/`rules.py` → N/A, untouched.
-- 🟠 `src/pipeguard/metrics/` → N/A, untouched.
+- 🟠 `src/bayleaf/metrics/` → N/A, untouched.
 - 🟠 `provenance.py`/`engine.py`/`EventType` → N/A, untouched.
 - 🟠 new advisory agent/model tier/corpus → **N/A, waived**: no new agent, model tier, or corpus was
   added — `PipelineRepairModal`/`ArchivistModal` now *consume* the already-built pipeline-repair

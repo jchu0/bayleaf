@@ -33,7 +33,7 @@ def test_germline_reference_chain_satisfies_the_parse_contract() -> None:
     future required kind the reference doesn't produce is caught HERE, not in a live run."""
     from scripts.run_giab_pipeline import REQUIRED_OUTPUT_KINDS
 
-    from pipeguard.nextflow import germline_graph
+    from bayleaf.nextflow import germline_graph
 
     produced = {kind for node in germline_graph().nodes for kind in node.outs}
     assert produced >= REQUIRED_OUTPUT_KINDS

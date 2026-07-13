@@ -37,7 +37,7 @@ def _pipeline_body(**over):
 
 def test_pipeline_jsonl_store_roundtrip_and_versioning(tmp_path, monkeypatch):
     path = tmp_path / "p.jsonl"
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_PATH", str(path))
+    monkeypatch.setenv("BAYLEAF_PIPELINE_PATH", str(path))
     store = JsonlPipelineGraphStore()
 
     # An adversarial graph payload: a key with a newline + quote must NOT forge a second JSONL
@@ -60,7 +60,7 @@ def test_pipeline_jsonl_store_roundtrip_and_versioning(tmp_path, monkeypatch):
 
 
 def test_save_list_and_versions_endpoints(tmp_path, monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_PATH", str(tmp_path / "p.jsonl"))
+    monkeypatch.setenv("BAYLEAF_PIPELINE_PATH", str(tmp_path / "p.jsonl"))
     a1 = client.post("/api/pipelines", json=_pipeline_body(name="alpha"))
     assert a1.status_code == 201
     ack = a1.json()
@@ -89,7 +89,7 @@ def test_saved_graph_reserves_draft_lifecycle_and_rbac_fields(tmp_path, monkeypa
     # The builder-versioning decision reserves a draft -> save -> approve flow with reviewer/
     # approver RBAC. A save mints a `draft` with the *_by fields null; the client cannot set them
     # (extra="forbid"), so no identity/PII enters through the body, and they round-trip on read.
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_PATH", str(tmp_path / "p.jsonl"))
+    monkeypatch.setenv("BAYLEAF_PIPELINE_PATH", str(tmp_path / "p.jsonl"))
     assert client.post("/api/pipelines", json=_pipeline_body(name="wgs")).status_code == 201
     stored = client.get("/api/pipelines/wgs").json()[0]
     assert stored["status"] == "draft"
@@ -104,7 +104,7 @@ def test_saved_graph_reserves_draft_lifecycle_and_rbac_fields(tmp_path, monkeypa
 
 
 def test_save_pipeline_validation(tmp_path, monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_PATH", str(tmp_path / "p.jsonl"))
+    monkeypatch.setenv("BAYLEAF_PIPELINE_PATH", str(tmp_path / "p.jsonl"))
     # Smuggled server-authored fields are a hard 422 (extra="forbid"), never silently stored.
     assert client.post("/api/pipelines", json=_pipeline_body(id="deadbeef")).status_code == 422
     assert client.post("/api/pipelines", json=_pipeline_body(version=99)).status_code == 422
@@ -129,7 +129,7 @@ def test_save_pipeline_write_failure_returns_503_without_leak(monkeypatch):
 
 
 def test_pipeline_does_not_touch_decision_domain(tmp_path, monkeypatch):
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_PATH", str(tmp_path / "p.jsonl"))
+    monkeypatch.setenv("BAYLEAF_PIPELINE_PATH", str(tmp_path / "p.jsonl"))
     before = client.get("/api/runs/mock_run_01").json()
     assert client.post("/api/pipelines", json=_pipeline_body()).status_code == 201
     assert client.get("/api/runs/mock_run_01").json() == before  # verdicts/provenance unchanged
@@ -142,8 +142,8 @@ def test_pipeline_sqlite_store_roundtrips_through_the_endpoint(tmp_path, monkeyp
     # Route the endpoint's saves into a real (offline, zero-dep) SQLite DB, then read them back
     # through the store — proving "pipeline versions in a database" end to end.
     db = tmp_path / "pipeline_graphs.sqlite"
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_STORE", "sqlite")
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_DB", str(db))
+    monkeypatch.setenv("BAYLEAF_PIPELINE_STORE", "sqlite")
+    monkeypatch.setenv("BAYLEAF_PIPELINE_DB", str(db))
     assert client.post("/api/pipelines", json=_pipeline_body(name="wgs")).json()["version"] == 1
     assert client.post("/api/pipelines", json=_pipeline_body(name="wgs")).json()["version"] == 2
     rows = SqlitePipelineGraphStore(str(db)).get_versions("wgs")
@@ -153,12 +153,12 @@ def test_pipeline_sqlite_store_roundtrips_through_the_endpoint(tmp_path, monkeyp
 
 def test_pipeline_store_factory_selects_and_degrades(tmp_path, monkeypatch):
     # Keep the SQLite DB out of the repo.
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_DB", str(tmp_path / "p.sqlite"))
-    monkeypatch.delenv("PIPEGUARD_PIPELINE_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_PIPELINE_DB", str(tmp_path / "p.sqlite"))
+    monkeypatch.delenv("BAYLEAF_PIPELINE_STORE", raising=False)
     assert isinstance(get_pipeline_store(), JsonlPipelineGraphStore)  # default
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_STORE", "sqlite")
+    monkeypatch.setenv("BAYLEAF_PIPELINE_STORE", "sqlite")
     assert isinstance(get_pipeline_store(), SqlitePipelineGraphStore)
     # postgres selected but no DATABASE_URL here -> degrade to JSONL, never raise.
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_STORE", "postgres")
+    monkeypatch.setenv("BAYLEAF_PIPELINE_STORE", "postgres")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     assert isinstance(get_pipeline_store(), JsonlPipelineGraphStore)

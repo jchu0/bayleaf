@@ -287,7 +287,7 @@ export const DEFAULT_CUSTOM_CONDA = 'bioconda::bcftools=1.20'
 // A believable starter body — a step OFF the curated catalog (the exact case ADR-0020 motivates).
 // It references only `${vcf}` (the wired input port — the compiler names each input path variable
 // after its port KIND) and `${meta.id}` (the per-sample meta, always present), so the emitted process
-// is self-consistent. The operator edits it; PipeGuard transcribes it verbatim, never rewriting it.
+// is self-consistent. The operator edits it; bayleaf transcribes it verbatim, never rewriting it.
 export const DEFAULT_CUSTOM_SCRIPT = `# operator-authored — transcribed verbatim into the emitted process (compose ≠ execute)
 # example: split multiallelic sites on a called VCF, then index the result
 bcftools norm -m -both -Oz -o \${meta.id}.norm.vcf.gz \${vcf}
@@ -1088,7 +1088,7 @@ export const ON_CYCLE: Record<OnMultiple, OnMultiple> = { first: 'all', all: 'er
 // Known artifact kinds with NO seeded palette node or emitted locator, kept OFFERABLE so a generic
 // 'File input' source (or a hand-composed node) can still stand in for a retired named source — e.g. a
 // truth/benchmark VCF or an identity report to re-gate. Mirrors the backend node_author ARTIFACT_KINDS
-// literal (src/pipeguard/node_author/models.py), which also carries truth_vcf + ngscheckmate after the
+// literal (src/bayleaf/node_author/models.py), which also carries truth_vcf + ngscheckmate after the
 // Truth VCF / NGSCheckMate palette nodes were removed; the two vocabularies stay in sync.
 const EXTRA_VOCAB_KINDS = ['truth_vcf', 'ngscheckmate']
 // The typed port-kind vocabulary the inspector offers — the UNION of every BTOOLSPEC in/out kind,
@@ -1136,7 +1136,7 @@ function padr(s: string | number, n: number): string {
 
 // Build the live YAML for an editable (giab/custom) profile from the merged locators.
 export function buildYaml(profile: string, edits: LocEdits): string {
-  const out = ['schema_version: run_layout/1', `profile: ${padr(profile, 20)}# PIPEGUARD_RUN_LAYOUT=${profile}`, 'locators:']
+  const out = ['schema_version: run_layout/1', `profile: ${padr(profile, 20)}# BAYLEAF_RUN_LAYOUT=${profile}`, 'locators:']
   for (const g of GIAB_LOC) {
     const m = mergedLoc(g.k, edits)
     const body = `${m.field}: "${m.loc}"`
@@ -1149,7 +1149,7 @@ export function buildYaml(profile: string, edits: LocEdits): string {
 }
 
 export const YAML_DEFAULT = `schema_version: run_layout/1
-profile: default                     # PIPEGUARD_RUN_LAYOUT=default
+profile: default                     # BAYLEAF_RUN_LAYOUT=default
 locators:
   fastp_json:       { path: "qc/{sample}.fastp.json",        parser: fastp_json,       required: true,  role: output,    on_multiple: error, origin: unknown }
   recal_cram:       { glob: "preprocessing/**/*.recal.cram", parser: null,             required: true,  role: output,    on_multiple: error, origin: unknown }
@@ -1161,7 +1161,7 @@ locators:
 
 export const YAML_SAREK = `# sarek profile — illustrative / target-state (not yet wired end-to-end)
 schema_version: run_layout/1
-profile: sarek                       # PIPEGUARD_RUN_LAYOUT=sarek
+profile: sarek                       # BAYLEAF_RUN_LAYOUT=sarek
 locators:
   fastp_json:       { glob: "**/fastp/*.json",              parser: fastp_json,       required: true,  role: output,    on_multiple: error, origin: unknown }
   recal_cram:       { glob: "preprocessing/recalibrated/**/*.cram", parser: null,      required: true,  role: output,    on_multiple: error, origin: unknown }

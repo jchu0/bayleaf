@@ -8,7 +8,7 @@ audited revision (append-only), so the history is a tamper-evident edit trail.
 
 What this is NOT (the load-bearing guardrail, ADR-0001 / CLAUDE.md architecture 1): this router
 **never mutates the live runbook** and never touches a verdict, finding, confidence, or rule.
-``DEFAULT_RUNBOOK`` in ``src/pipeguard/runbook.py`` is untouched. This is an authoring/override
+``DEFAULT_RUNBOOK`` in ``src/bayleaf/runbook.py`` is untouched. This is an authoring/override
 *ledger* — approving an override records intent; it does not change how any run is gated. A
 future step (documented in the module + the integration notes, not built here) could read the
 latest ``approved`` override for a name and layer it onto a per-run runbook *copy* at gate time,

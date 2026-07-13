@@ -17,7 +17,7 @@ import type { Actor, Role } from './types'
 //     login screen as labelled placeholders, not implemented — see Login.tsx.
 //
 // The authenticated identity maps to the same RBAC `Actor` ({id, role}) the API already consumes
-// via X-PipeGuard-Actor/-Role headers, so login simply chooses which actor the app acts as.
+// via X-Bayleaf-Actor/-Role headers, so login simply chooses which actor the app acts as.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type DemoAccount = {
@@ -32,7 +32,7 @@ export type DemoAccount = {
 }
 
 // Shared demo password (labelled on the login screen). Never a real secret.
-export const DEMO_PASSWORD = 'pipeguard'
+export const DEMO_PASSWORD = 'bayleaf'
 
 // The demo roster — the same actor ids the app + audit trails already use, plus a dedicated admin.
 export const DEMO_ACCOUNTS: DemoAccount[] = [
@@ -65,7 +65,7 @@ export function authenticate(email: string, password: string): LoginResult {
 
 // ── session persistence (demo only) ──────────────────────────────────────────
 // We persist ONLY the actor {id, role} so a refresh stays signed in. No token, no password.
-const SESSION_KEY = 'pipeguard.session'
+const SESSION_KEY = 'bayleaf.session'
 
 export function loadSession(): Actor | null {
   try {

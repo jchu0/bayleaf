@@ -43,7 +43,7 @@ Design detail: [design/nextflow-codegen.md](design/nextflow-codegen.md).
    -> local Path`; the unchanged `load_run` then reads that dir, so the store LOCATES a run's bytes
    and never influences a verdict (ADR-0001). `S3ArtifactStore` mirrors the notify seam's safety
    shape: `boto3` is a lazy optional `[s3]` extra; the live pull is opt-in behind
-   `PIPEGUARD_S3_LIVE`; ANY error degrades to the local store. The 7 other data-platform connectors
+   `BAYLEAF_S3_LIVE`; ANY error degrades to the local store. The 7 other data-platform connectors
    (wishlist #13) implement this same port but are deferred (each needs its own SDK + auth +
    fixtures; the warehouses need a query→artifact adapter shape).
 4. Still wishlist at this point: the **job runner** and the **cloud/Slurm compute adapters +
@@ -55,14 +55,14 @@ Design detail: [design/nextflow-codegen.md](design/nextflow-codegen.md).
 (dict + lock, no queue/retry/durability) that triggers `scripts/run_giab_pipeline.py` — at the
 time, a **bioconda-toolchain driver, not Nextflow** — as a background subprocess, then exposes `GET
 /api/runs/{id}/intake-status` to poll it. First time the API layer **triggers** an external pipeline
-run rather than only composing config for one; the core invariant is unchanged (`src/pipeguard/`
+run rather than only composing config for one; the core invariant is unchanged (`src/bayleaf/`
 never runs a tool). Not the wishlist job-runner *port* (no adapter abstraction, one hard-coded
 script, HG002-fixture-scoped). **Superseded 2026-07-11** — the "bioconda-toolchain driver, not
 Nextflow" line no longer holds; the driver now runs the same toolchain *through* Nextflow.
 
 ### 2026-07-11 — Nextflow becomes executable: codegen + a Nextflow-first driver
 
-1. **A card-graph → Nextflow compiler, `src/pipeguard/nextflow/`** (T-123, commits
+1. **A card-graph → Nextflow compiler, `src/bayleaf/nextflow/`** (T-123, commits
    `10f1816`/`be69d6b`). Pure text codegen — emits `main.nf`/`modules/*.nf`/`nextflow.config` for a
    typed Builder graph and never invokes a tool. A curated `catalog.py` (the 7 germline-chain tools:
    bioconda + biocontainer packaging, typed ports, a real `script:` AND a `stub:`) backs
@@ -88,7 +88,7 @@ profiles](design/nextflow-codegen.md).
 1. Two baked-in `nextflow.config` profiles alongside `conda`/`docker`/`singularity`/`stub`:
    `standard` (demo default — local single-thread-serial: `queueSize=1`/`maxForks=1`/`cpus=1`) and
    `slurm` (`process.executor='slurm'`, queue / `clusterOptions` / in-flight cap all env-driven via
-   `PIPEGUARD_SLURM_QUEUE`/`_CLUSTER_OPTIONS`/`_QUEUE_SIZE`, never a baked guess). One sbatch job per
+   `BAYLEAF_SLURM_QUEUE`/`_CLUSTER_OPTIONS`/`_QUEUE_SIZE`, never a baked guess). One sbatch job per
    process instance.
 2. The driver auto-selects: `run_giab_pipeline.py`'s `_detect_profile()` picks `-profile slurm` when
    `sbatch` is on `PATH`, else `-profile standard`. The compiled bundle is identical either way.
@@ -140,7 +140,7 @@ Verified by reading `api/main.py`, `api/share_store.py`, `tests/test_route_to_hu
    feed. 5 tests (`tests/test_share_egress.py`).
 3. **Share sink brought to persistence parity (commit `9a4ef5f`).** `api/share_ledger.py` renamed +
    rebuilt as `api/share_store.py`: a `ShareStore` Protocol + `JsonlShareStore`/`SqliteShareStore`/
-   `PostgresShareStore`, `PIPEGUARD_SHARE_STORE` env-selected (default `jsonl`), degrade-to-JSONL on
+   `PostgresShareStore`, `BAYLEAF_SHARE_STORE` env-selected (default `jsonl`), degrade-to-JSONL on
    any construction failure (logged by exception type, never the DSN). 6 tests
    (`tests/test_share_store.py`) + a live-Postgres round-trip in
    `tests/test_persistence_postgres_live.py`, verified green against a real `postgres:16`. Parity of
@@ -155,7 +155,7 @@ Verified by reading `api/main.py`, `api/share_store.py`, `tests/test_route_to_hu
    artifact) despite the rules having escalated — a fired gate now wins over the no-artifact default.
 5. **The per-variant evidence table (W3 continuation, commit `fec0f83`).** A read-only `GET
    /api/runs/{run_id}/variants` serves every `VariantCall` a run's `variants.csv` carries, parsed via
-   the same `pipeguard.parsers.parse_variant_calls` the route-to-human rule uses (404 unknown run;
+   the same `bayleaf.parsers.parse_variant_calls` the route-to-human rule uses (404 unknown run;
    `[]` when no `variants.csv`). `RunReport.tsx` renders it as a paginated table (Sample · Gene · HGVS
    · ClinVar significance quoted VERBATIM · review status · accession) with its own disclaimer.
    **Narrower than the full `AnnotatedVariant` model:** only `VariantCall`/D2 fields — no gnomAD AF, no

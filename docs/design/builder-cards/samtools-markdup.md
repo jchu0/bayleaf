@@ -13,7 +13,7 @@
    coordinate-sorted BAM. **Pinned version: 1.20** (`BTOOLSPEC['samtools markdup'].version`,
    `TOOLS.n_markdup.version`).
 2. **Role in the germline chain.** Stage 3, `stageLabel: "Duplicate marking"` (`pg: full` —
-   PipeGuard consumes its outputs directly). Sits between **bwa-mem2** (alignment) and the fan-out
+   bayleaf consumes its outputs directly). Sits between **bwa-mem2** (alignment) and the fan-out
    to **mosdepth** (coverage) + **bcftools call** (variant calling); its metrics file also fans
    into **MultiQC**. **Corrected 2026-07-11 (Branch A of the custom-script-card effort):** the
    `NGSCheckMate` palette node this doc used to name as a BAM consumer was an unwired, never-seeded
@@ -48,7 +48,7 @@ hence optional/reserved.
 | `bam` | `HG002.dedup.bam` → GIAB locator glob `align/*.md.bam` (parser `null`, required) | **mosdepth**, **bcftools call** | **right** (primary flow) |
 | `bai` | `HG002.dedup.bam.bai` — from the bundled `samtools index` (L156; markdup can also `--write-index` inline) | **mosdepth**, **bcftools call** (random-access sidecar, travels with `bam`) | **right** (below `bam`) |
 | `markdup_metrics` | `HG002.markdup.txt` → GIAB locator path `qc/HG002.markdup.txt` (parser `markdup_metrics`, **optional** — `required: false`) | **MultiQC** | **bottom** (metrics/QC exit) |
-| `samtools_stats` | `<sample>.samtools_stats.txt` — a real `samtools stats` command over the dedup BAM (`src/pipeguard/nextflow/catalog.py`) | **MultiQC** | **bottom** (QC exit) |
+| `samtools_stats` | `<sample>.samtools_stats.txt` — a real `samtools stats` command over the dedup BAM (`src/bayleaf/nextflow/catalog.py`) | **MultiQC** | **bottom** (QC exit) |
 
 Grounding: `bam`/`markdup_metrics` = markdup `-f` + output at L146–L149; `bai` = `samtools index`
 at L156; both `bam` and `markdup_metrics` match `GIAB_LOC` (`BuilderShared.tsx` L326–L327) and

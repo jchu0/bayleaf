@@ -9,7 +9,7 @@
 
 **Why parallel, and how it was partitioned.** The four tasks are the backend half of the
 T-045 scale/authoring backlog — independent of the frontend design pass, and living entirely in
-`src/pipeguard/` · `api/` · `data/` · `tests/`. They were built by a 4-agent workflow with
+`src/bayleaf/` · `api/` · `data/` · `tests/`. They were built by a 4-agent workflow with
 **disjoint file ownership**. The one real coupling: **A, C, D all edit `api/main.py`**, and **C
 depends on A** (honest time-windowing needs A's real run date — the core `created_at` timestamps
 cluster at server-recompute time, useless for recency). So the workflow ran a **sequential

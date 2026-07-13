@@ -14,12 +14,12 @@ import math
 
 import pytest
 
-from pipeguard.metrics import (
+from bayleaf.metrics import (
     MetricRegistry,
     UnknownMetricError,
     default_registry,
 )
-from pipeguard.models import CanonicalUnit, Gate, MetricValue
+from bayleaf.models import CanonicalUnit, Gate, MetricValue
 
 # The full seed vocabulary (metric_registry.md "Seed registry"). Pinned here so a
 # dropped/renamed entry fails loudly rather than silently shrinking the vocabulary.

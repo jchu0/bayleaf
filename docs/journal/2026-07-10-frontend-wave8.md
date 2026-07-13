@@ -4,7 +4,7 @@
 |---|---|
 | **Focus** | Doc-keeper SWEEP for six maintainer-feedback frontend commits landed on `main` (`1bc0072`→`109557e`, verified `git diff --stat 04adeac 109557e -- src/ api/ tests/` = empty, i.e. frontend-only): a canonical `Tabs` view-selector replacing `FacetChip` + a nav reorder + Review-queue selection redesign (G4/G5/RQ2/RQ3); Submit bulk-edit (S1-S3); Intake gate preflight metadata (IG1); Inbox refinements (IB1-3,5-8, IB4 deferred); a Provenance rewrite into Lineage/Event-trail/Artifacts tabs (PV1) + a shared `Pager`; Pipeline-Builder on-canvas editing — selection, rename, wire-delete, undo/redo, marquee, context menus, alignment guides, drag-to-connect (PB2, P1-P7). Named **"Wave 8"** in the code-map narrative per the task instruction, continuing after "Wave 7" (T-105–T-108) without colliding with the already-used "Batch 7/8" labels. |
 | **Participants** | maintainer (UI feedback); doc-keeper subagent |
-| **Outcome** | All six commits' owed docs updated in one pass: `CLAUDE.md` code map (new "Wave 8" paragraph), `docs/planning/tasks.md` (T-110–T-115), `docs/design/architecture.md` (new Wave-8 bullet + Related), `docs/design/frontend/README.md` (§4/§5.1/§5.3/§5.5/§5.6 rewritten/§6/§11 crosslink), `docs/requirements/functional.md` (REQ-F-042 screen-count/Provenance-description fix + REQ-F-063/REQ-F-074/REQ-F-077 amendments + new REQ-F-078/REQ-F-079), `docs/requirements/scope-and-wishlist.md` (item 5 amendment + wishlist item 11 amendment). No `src/pipeguard/`, `api/`, `tests/`, or ADR file touched (verified below); no design deliverables (`briefs/`, `handoffs/`, `source/`, `PipeGuard.html`) touched. |
+| **Outcome** | All six commits' owed docs updated in one pass: `CLAUDE.md` code map (new "Wave 8" paragraph), `docs/planning/tasks.md` (T-110–T-115), `docs/design/architecture.md` (new Wave-8 bullet + Related), `docs/design/frontend/README.md` (§4/§5.1/§5.3/§5.5/§5.6 rewritten/§6/§11 crosslink), `docs/requirements/functional.md` (REQ-F-042 screen-count/Provenance-description fix + REQ-F-063/REQ-F-074/REQ-F-077 amendments + new REQ-F-078/REQ-F-079), `docs/requirements/scope-and-wishlist.md` (item 5 amendment + wishlist item 11 amendment). No `src/bayleaf/`, `api/`, `tests/`, or ADR file touched (verified below); no design deliverables (`briefs/`, `handoffs/`, `source/`, `bayleaf.html`) touched. |
 
 ## Discussion
 
@@ -52,7 +52,7 @@ only the commit body, per the "ground every claim in code" rule.
    hand, no fetch).
 4. **`2865dac` — Inbox refinements (IB1-3,5-8).** `InboxContext.tsx`'s diff adds `folder`/
    `updatedAt` to `ItemMeta`/`InboxItem`, a new `folders: string[]` state persisted under a new
-   `pipeguard.inbox.folders.<actorId>` key (mirroring the existing per-operator overlay/self-item
+   `bayleaf.inbox.folders.<actorId>` key (mirroring the existing per-operator overlay/self-item
    key pattern), `markAllUnread`, `updateSelfItem`, and `setFolder`/`addFolder`/`renameFolder`/
    `deleteFolder` actions — confirmed against the diff hunks read above. The commit body's
    per-item claims (IB2 mark-all-unread, IB3 calendar composer wording, IB5 notes read-only-
@@ -67,7 +67,7 @@ only the commit body, per the "ground every claim in code" rule.
    in full (232 new lines) and the head of `components/provenance/EventTrail.tsx`: the module
    comment states the event vocabulary is derived "ONLY from what the ledger actually emits
    (engine.py:90-171) — five event types" — cross-checked against
-   `src/pipeguard/provenance.py`'s `EventType` enum, which has **six** members
+   `src/bayleaf/provenance.py`'s `EventType` enum, which has **six** members
    (`ANALYSIS_RUN_STARTED`, `SAMPLE_REGISTERED`, `FINDING_EMITTED`, `VERDICT_DECIDED`,
    `ANALYSIS_RUN_COMPLETED`, plus `NOTIFICATION_EMITTED`) — `run_gate` itself only emits the
    first five; `NOTIFICATION_EMITTED` is a separate notify-port event, so the frontend's "five
@@ -110,7 +110,7 @@ Walked every row of [TABLE_OF_CONTENTS.md#doc-update-map](../TABLE_OF_CONTENTS.m
 - 🔴 doc create/move/status flip — none; no doc was created/moved/renamed (the journal is a new
   *file*, not a doc-registry change — it already has its standing map row).
 - 🔴 `models.py`/`parsers.py`/`persistence/` schema change — **N/A, waived.** Confirmed zero
-  `src/pipeguard/` files in any of the six diffs (`git diff --stat 04adeac 109557e -- src/ api/
+  `src/bayleaf/` files in any of the six diffs (`git diff --stat 04adeac 109557e -- src/ api/
   tests/` = empty, reproduced at session start).
 - 🔴 test census (`quality/evaluation.md`) — **waived**, same reasoning as the Wave-7 sweep
   ([journal 2026-07-10 wave7](2026-07-10-frontend-batch7.md)): the frontend has no test runner

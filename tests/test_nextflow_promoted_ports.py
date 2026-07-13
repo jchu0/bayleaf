@@ -35,8 +35,8 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard.nextflow import NfEdge, NfGraph, NfNode, compile_graph, germline_graph
-from pipeguard.nextflow.catalog import PROCESS_CATALOG, catalog_entry
+from bayleaf.nextflow import NfEdge, NfGraph, NfNode, compile_graph, germline_graph
+from bayleaf.nextflow.catalog import PROCESS_CATALOG, catalog_entry
 
 _REPO = Path(__file__).resolve().parents[1]
 _GIAB_FASTQ = _REPO / "data" / "real-giab" / "fastq"
@@ -49,10 +49,10 @@ def _output_globs(decl: str) -> list[str]:
 
 
 def _resolve_fastp() -> str | None:
-    """fastp from the bioconda bin (``PIPEGUARD_BIOCONDA_BIN``, the documented genomics-toolchain
+    """fastp from the bioconda bin (``BAYLEAF_BIOCONDA_BIN``, the documented genomics-toolchain
     override) or the PATH; ``None`` if neither has it — then the real-path test skips, like the
     live-Nextflow ones."""
-    bioconda = os.environ.get("PIPEGUARD_BIOCONDA_BIN")
+    bioconda = os.environ.get("BAYLEAF_BIOCONDA_BIN")
     if bioconda:
         cand = Path(bioconda) / "fastp"
         if cand.is_file() and os.access(cand, os.X_OK):
@@ -194,7 +194,7 @@ def test_every_catalogued_output_is_created_by_its_stub() -> None:
 # ── WS-10 guard 2 (REAL-PATH acceptance, env-gated): the real command emits it all ─
 @pytest.mark.skipif(
     _resolve_fastp() is None or not (_GIAB_FASTQ / "HG002.R1.fastq.gz").exists(),
-    reason="real-path: needs fastp (PIPEGUARD_BIOCONDA_BIN or PATH) + data/real-giab/fastq/ reads",
+    reason="real-path: needs fastp (BAYLEAF_BIOCONDA_BIN or PATH) + data/real-giab/fastq/ reads",
 )
 def test_fastp_catalog_command_produces_every_declared_output(tmp_path: Path) -> None:
     """REAL-PATH acceptance (env-gated, skip-safe like live-Nextflow tests): run the fastp spec's

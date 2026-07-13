@@ -19,21 +19,21 @@ Four moves, each honoring "close the seam or label it honestly":
 4. **Deliberate demo default.** Ship a demo profile (env, not a code-default change) that flips the synthesizer (and triage) live, and have the UI narrate that the deterministic core is the star and AI is advisory. Keep the `stub` code default so CI/tests stay $0 (ADR-0006).
 
 ## Exact changes
-- `src/pipeguard/synthesis/context.py` (**new**) → factor `sample_context(sample_id, artifacts)` and the caps/`_METADATA_PII_FIELDS` out of `synthesis/claude.py:38,47-48,108-133`; add `cross_sample_context(sample_id, siblings)` that emits sibling metric bands with the **same PII drop applied per sibling**. `ClaudeSynthesizer._sample_context` becomes a thin call — no behavior change.
-- `src/pipeguard/triage/agent.py`:
+- `src/bayleaf/synthesis/context.py` (**new**) → factor `sample_context(sample_id, artifacts)` and the caps/`_METADATA_PII_FIELDS` out of `synthesis/claude.py:38,47-48,108-133`; add `cross_sample_context(sample_id, siblings)` that emits sibling metric bands with the **same PII drop applied per sibling**. `ClaudeSynthesizer._sample_context` becomes a thin call — no behavior change.
+- `src/bayleaf/triage/agent.py`:
   - Protocol `TriageAgent.triage_card` (`:80-85`) and both impls (`:105`, `:200`) → signature `triage_card(card, artifacts=None, *, siblings=())`. `artifacts=None` preserves today's corpus-only behavior.
   - `_ADVICE_SCHEMA` (`:136-144`) → add optional `analysis` (string) — the run-level/cross-sample reasoning; `likely_cause`/`suggested_action` stay grounded.
   - Live `payload` (`:212-225`) → add `artifact_context` + `cross_sample` from the new context builders; extend `_SYSTEM` (`:146-160`) with the untrusted-input clause copied from `synthesis/claude.py:73-78`.
   - `_finding_query` (`:36-42`) → build from metric names + value bands + category, not `rule_id`/`title`.
   - Stub `_assemble_note` call (`:124-131`) → `analysis=None`; update `name`/docstring to "curated lookup."
-- `src/pipeguard/triage/retrieval.py` → add `EmbeddingRetriever` (lazy `anthropic`/local embeddings, offline fallback to keyword); `load_knowledge_corpus` unchanged shape, more rows.
-- `src/pipeguard/triage/models.py` → `TriageNote` (`:81-112`) gains `analysis: str | None = None` (additive); bump `TRIAGE_CORPUS_VERSION` (`:29`) and include `analysis` in `content_hash` (`:114-132`).
+- `src/bayleaf/triage/retrieval.py` → add `EmbeddingRetriever` (lazy `anthropic`/local embeddings, offline fallback to keyword); `load_knowledge_corpus` unchanged shape, more rows.
+- `src/bayleaf/triage/models.py` → `TriageNote` (`:81-112`) gains `analysis: str | None = None` (additive); bump `TRIAGE_CORPUS_VERSION` (`:29`) and include `analysis` in `content_hash` (`:114-132`).
 - `api/main.py`:
   - `get_card_triage` (`:529-545`) → pass `artifacts` + sibling cards from `_evaluate(run_id)` into `triage_card(...)`.
   - **New** `ask_agent` `POST /api/runs/{run_id}/cards/{sample_id}/ask` → `AskRequest{question}` → grounded prose answer; reuses the context builders + injection bounding; advisory-only, never a verdict; offline honest path.
 - `frontend/src/components/AgentComposer.tsx:27-41` → `submit()` calls `api.ask(runId, sampleId, q)` and renders the advisory answer + citations; keep the "won't change the verdict" chrome (`:74,143`).
 - `frontend/src/api.ts:251-252` → add `ask(runId, sampleId, question)` (needs a `post` helper) and an `Ask*` type in `types.ts`.
-- Demo profile: `.env.demo` / `Makefile` target setting `PIPEGUARD_SYNTHESIZER=claude` + `PIPEGUARD_TRIAGE_AGENT=claude`; UI copy in `AgentTriage.tsx:86-97` already distinguishes live vs. rule-derived — extend to the chat.
+- Demo profile: `.env.demo` / `Makefile` target setting `BAYLEAF_SYNTHESIZER=claude` + `BAYLEAF_TRIAGE_AGENT=claude`; UI copy in `AgentTriage.tsx:86-97` already distinguishes live vs. rule-derived — extend to the chat.
 
 ## Data-contract / model changes
 - `TriageAgent.triage_card(card, artifacts: RunArtifacts | None = None, *, siblings: Sequence[DecisionCard] = ())` — optional args, back-compatible.
@@ -74,14 +74,14 @@ Four moves, each honoring "close the seam or label it honestly":
 - **Wider injection surface:** feeding raw artifacts + a free-text question into the LLM ingests more untrusted text; mitigated by reusing the synthesizer's bounded context builder and the prose-only schema — blast radius stays "advisory prose only," verdict deterministic (ADR-0001).
 - **Cross-sample PII leak:** sibling context could carry one subject's identifiers into another sample's prompt — the per-sibling PII drop is load-bearing; test it explicitly.
 - **Embeddings add a dependency + latency + possibly an external call:** privacy requires dropping PII before embedding or using a local model; when offline the keyword fallback means "semantic retrieval" is only live when armed — label it, don't overclaim.
-- **Cost:** more input + live-by-default demo raises token spend; keep triage/Q&A on Sonnet/Haiku, synthesizer configurable (`PIPEGUARD_CLAUDE_MODEL`).
+- **Cost:** more input + live-by-default demo raises token spend; keep triage/Q&A on Sonnet/Haiku, synthesizer configurable (`BAYLEAF_CLAUDE_MODEL`).
 - **Corpus curation is manual:** retrieval quality is still bounded by coverage — an honest limit, not a solved problem; the coverage test makes gaps visible rather than silent.
 - **Honest fallback if de-scoped:** if PR3/PR4 slip, the minimum honest state is relabeling the stub as "curated lookup" and either wiring or **deleting** the chat — never leaving the fabricated conversation (`AgentComposer.tsx:33-38`).
 
 ### Critical Files for Implementation
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/triage/agent.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/triage/retrieval.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/synthesis/claude.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/triage/agent.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/triage/retrieval.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/synthesis/claude.py
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/api/main.py
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/frontend/src/components/AgentComposer.tsx
 

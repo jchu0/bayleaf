@@ -126,7 +126,7 @@ export type RunSummary = {
 }
 
 // One page of the runs list, carrying the header-borne totals + status facet counts that a
-// header-blind fetch would drop (X-PipeGuard-Total-Count / -Status-Counts / -Page / -Limit).
+// header-blind fetch would drop (X-Bayleaf-Total-Count / -Status-Counts / -Page / -Limit).
 export type RunsPage = {
   data: RunSummary[]
   total: number
@@ -171,8 +171,8 @@ export type RunDetail = {
 }
 
 // One annotated candidate variant (GET /api/runs/:id/variants), READ from an externally-produced
-// annotated VCF/table (ADR-0018) — a driver ran the annotator; PipeGuard never does (composes ≠
-// executes). `clinvar_significance` is a VERBATIM ClinVar quotation, never PipeGuard's own call
+// annotated VCF/table (ADR-0018) — a driver ran the annotator; bayleaf never does (composes ≠
+// executes). `clinvar_significance` is a VERBATIM ClinVar quotation, never bayleaf's own call
 // (ADR-0004). Every field but `sample_id` is nullable: a partial annotation is a signal, not a
 // crash. Backs the RunReport's full per-variant table (W3), beneath the route-to-human hero.
 export type VariantCall = {
@@ -367,7 +367,7 @@ export type FeedbackAck = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RBAC (dev shim). Mirrors api/auth.py: an actor id + a role, sent on writes via the
-// X-PipeGuard-Actor / X-PipeGuard-Role headers. Approver unlocks threshold/pipeline approval
+// X-Bayleaf-Actor / X-Bayleaf-Role headers. Approver unlocks threshold/pipeline approval
 // only — never a card verdict (rules decide / AI advises).
 // ─────────────────────────────────────────────────────────────────────────────
 export type Role = 'viewer' | 'reviewer' | 'approver'

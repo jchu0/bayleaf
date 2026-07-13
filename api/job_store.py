@@ -6,10 +6,10 @@ were **non-durable**: a backend restart lost every job's state and orphaned its 
 ``.nf-runs/<run_id>`` scratch, so a poller hung on ``running`` forever. This module makes that job
 state survive a restart, over the shared :mod:`api.base_store` generic (ADR-0016):
 
-  - :class:`JsonlJobStore` — default, zero-dep upsertable JSONL file (``PIPEGUARD_JOB_PATH``).
-  - :class:`SqliteJobStore` — a ``jobs`` table (stdlib; ``PIPEGUARD_JOB_DB``).
+  - :class:`JsonlJobStore` — default, zero-dep upsertable JSONL file (``BAYLEAF_JOB_PATH``).
+  - :class:`SqliteJobStore` — a ``jobs`` table (stdlib; ``BAYLEAF_JOB_DB``).
 
-``get_job_store()`` selects via ``PIPEGUARD_JOB_STORE`` (default ``jsonl``) and **degrades to the
+``get_job_store()`` selects via ``BAYLEAF_JOB_STORE`` (default ``jsonl``) and **degrades to the
 offline JSONL** if the SQLite adapter can't be constructed, so a misconfigured DB never breaks the
 execution path — it just falls back to the file. There is no Postgres adapter here (unlike the
 share/review sinks): a job record is short-lived, single-node scratch bookkeeping, not shared
@@ -25,7 +25,7 @@ This module is ALSO the single home for the shared driver-launch primitive (:fun
 diverged — 900 s in intake, 1800 s in Builder-run — and ``subprocess.run(..., timeout=…)`` reaps
 only the DIRECT child on a timeout, orphaning the Nextflow/JVM/tool subtree. One helper enforces one
 timeout and one process-group kill for both. Compose ≠ execute still holds at the CORE
-(``src/pipeguard/`` never shells out); only this API/driver layer launches a subprocess.
+(``src/bayleaf/`` never shells out); only this API/driver layer launches a subprocess.
 """
 
 from __future__ import annotations
@@ -48,9 +48,9 @@ from api.base_store import JsonlDocStore, SqliteStore, select_backend
 _Record = dict[str, Any]
 _Records = list[dict[str, Any]]
 
-_ENV_JOB_STORE = "PIPEGUARD_JOB_STORE"
-_ENV_JOB_PATH = "PIPEGUARD_JOB_PATH"
-_ENV_JOB_DB = "PIPEGUARD_JOB_DB"
+_ENV_JOB_STORE = "BAYLEAF_JOB_STORE"
+_ENV_JOB_PATH = "BAYLEAF_JOB_PATH"
+_ENV_JOB_DB = "BAYLEAF_JOB_DB"
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 # Default sinks live under ``.nf-runs/`` (already gitignored, the run-scratch home both routers
@@ -179,7 +179,7 @@ class JsonlJobStore(JsonlDocStore):
 
 
 def job_db_path() -> str:
-    """The SQLite job-DB path (``PIPEGUARD_JOB_DB`` or the ``.nf-runs`` default)."""
+    """The SQLite job-DB path (``BAYLEAF_JOB_DB`` or the ``.nf-runs`` default)."""
     return os.environ.get(_ENV_JOB_DB, "").strip() or str(_DEFAULT_JOB_DB)
 
 
@@ -243,7 +243,7 @@ class SqliteJobStore(SqliteStore):
 def get_job_store() -> JobStore:
     """Select the job sink from the environment (default: the offline JSONL file).
 
-    ``PIPEGUARD_JOB_STORE=sqlite`` swaps in the SQLite adapter; ANY failure constructing it (an
+    ``BAYLEAF_JOB_STORE=sqlite`` swaps in the SQLite adapter; ANY failure constructing it (an
     unwritable path) degrades to the JSONL store — see :func:`api.base_store.select_backend`. Any
     other value (incl. the default) is JSONL.
     """

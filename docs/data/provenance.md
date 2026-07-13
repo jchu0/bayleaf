@@ -5,7 +5,7 @@
 | **Status** | Active (Phase 1 seam built; DB projection + `rebuild-db` implemented) |
 | **Last updated** | 2026-07-11 (MST) |
 | **Audience** | software / bioinformatics |
-| **Related** | [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (`data.exported` share egress), [schemas.md](schemas.md), [qc_metrics.md](qc_metrics.md), `src/pipeguard/provenance.py`, `src/pipeguard/engine.py`, `src/pipeguard/rules.py`, `src/pipeguard/persistence/`, `api/share_store.py`, `api/main.py` (`share_run`), [journal 2026-07-11 d2-d3](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 share-store persistence](../journal/2026-07-11-share-store-persistence.md) |
+| **Related** | [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (`data.exported` share egress), [schemas.md](schemas.md), [qc_metrics.md](qc_metrics.md), `src/bayleaf/provenance.py`, `src/bayleaf/engine.py`, `src/bayleaf/rules.py`, `src/bayleaf/persistence/`, `api/share_store.py`, `api/main.py` (`share_run`), [journal 2026-07-11 d2-d3](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 share-store persistence](../journal/2026-07-11-share-store-persistence.md) |
 
 ## Overview
 
@@ -54,14 +54,14 @@ same run dir always replays to the same trail) and must stay byte-stable and cac
 the opposite: a **live, actor-driven side effect** that must survive both that cache and a process
 restart, so it can't be folded into a cached re-derivation. `api/share_store.py` is therefore a
 **standalone, pluggable sink** — a `ShareStore` Protocol keyed on `ProvenanceEvent`, queried by
-`for_run(run_id)` (oldest-first) — env-selected via `PIPEGUARD_SHARE_STORE=jsonl|sqlite|postgres`
+`for_run(run_id)` (oldest-first) — env-selected via `BAYLEAF_SHARE_STORE=jsonl|sqlite|postgres`
 (default `jsonl`), matching the shape of the other four off-gate sinks
 (feedback/pipeline/review/settings, [ADR-0016](../adr/ADR-0016-postgres-port.md)):
 
-1. **`JsonlShareStore`** (default) — append-only, gitignored JSONL (`PIPEGUARD_SHARE_PATH`,
+1. **`JsonlShareStore`** (default) — append-only, gitignored JSONL (`BAYLEAF_SHARE_PATH`,
    default `share.events.jsonl` at the repo root; tolerant reads — a missing file is `[]`, a
    corrupt line is skipped, not fatal).
-2. **`SqliteShareStore`** — a `share_events` table (stdlib `sqlite3`, `PIPEGUARD_SHARE_DB`).
+2. **`SqliteShareStore`** — a `share_events` table (stdlib `sqlite3`, `BAYLEAF_SHARE_DB`).
 3. **`PostgresShareStore`** — a `share_events` table (`[postgres]` extra, `DATABASE_URL`),
    verified against a live `postgres:16` (`tests/test_persistence_postgres_live.py`).
 
@@ -115,7 +115,7 @@ in-memory ledger (so anchoring/hashing always happen), pass one to capture or
 persist them.
 
 ```python
-from pipeguard import run_gate, load_run, EventLedger
+from bayleaf import run_gate, load_run, EventLedger
 ledger = EventLedger(path="run.events.jsonl")
 cards = run_gate(load_run("data/mock_run_01"), ledger=ledger)
 # ledger.events -> the full trail; ledger.by_type(EventType.VERDICT_DECIDED) -> per-sample
@@ -123,7 +123,7 @@ cards = run_gate(load_run("data/mock_run_01"), ledger=ledger)
 
 ## The DB projection (implemented — Phase 2)
 
-The relational projection promised above now exists in `src/pipeguard/persistence/`:
+The relational projection promised above now exists in `src/bayleaf/persistence/`:
 a **rebuildable projection of the ledger**, reached only through a repository port
 so the core never touches a DB directly (ADR-0003).
 
@@ -144,8 +144,8 @@ so the core never touches a DB directly (ADR-0003).
    (clears first, so a rebuild is reproducible and rebuilding twice is idempotent):
 
    ```bash
-   python -m pipeguard.persistence.rebuild run.events.jsonl pipeguard.sqlite
-   # or: make rebuild-db LEDGER=run.events.jsonl DB=pipeguard.sqlite
+   python -m bayleaf.persistence.rebuild run.events.jsonl bayleaf.sqlite
+   # or: make rebuild-db LEDGER=run.events.jsonl DB=bayleaf.sqlite
    ```
 
 Only the current event vocabulary is projected (`analysis_run.started/completed`,

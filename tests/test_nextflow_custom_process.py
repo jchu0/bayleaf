@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from pipeguard.nextflow import (
+from bayleaf.nextflow import (
     CompileError,
     NextflowBundle,
     NfEdge,

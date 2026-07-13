@@ -10,7 +10,7 @@
 
 **Why this pass.** The first React build used *guessed* tokens (dark `#0d1117` sidebar,
 emoji logo, hand-rolled icons). The maintainer then added a self-sufficient handoff
-(`README.md` spec + `source/PipeGuard.dc.html` + `support.js`) with exact tokens, and
+(`README.md` spec + `source/bayleaf.dc.html` + `support.js`) with exact tokens, and
 asked for "a 1:1 representation … actual UI/UX." So this session was fidelity, not
 scope: rebuild each screen against the handoff, comparing screenshots to the prototype
 served on :8090.

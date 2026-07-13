@@ -27,7 +27,7 @@ written before the feature and never revisited:
 **The README is a genuine problem but not mine to fix here.** The repo-root product README was
 overwritten (working tree) with the frontend design-handoff doc ("these are design references, not
 shippable code"). That's wrong for the front door of a shipped/tested product, but it's part of the
-maintainer's uncommitted design drop (`briefs/`, `handoffs/`, `source/`, `PipeGuard.html`) — so it's
+maintainer's uncommitted design drop (`briefs/`, `handoffs/`, `source/`, `bayleaf.html`) — so it's
 their call to restore + relocate, not something to revert unilaterally. Surfaced with a recommendation.
 
 ## Decisions

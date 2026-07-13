@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard import Verdict, run_gate_from_dir
-from pipeguard.synthetic import (
+from bayleaf import Verdict, run_gate_from_dir
+from bayleaf.synthetic import (
     COMMITTED_RUNS,
     DEMO_RUNS,
     INTENDED_VERDICT,
@@ -29,8 +29,8 @@ from pipeguard.synthetic import (
     planted_modes,
     sample_ids,
 )
-from pipeguard.synthetic.__main__ import main as cli_main
-from pipeguard.synthetic.generator import main
+from bayleaf.synthetic.__main__ import main as cli_main
+from bayleaf.synthetic.generator import main
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 
@@ -168,7 +168,7 @@ def test_generated_run_carries_origin_marker(tmp_path: Path) -> None:
     """
     run_dir = generate_run(_ALL_MODES_SPEC, tmp_path)
     log = (run_dir / "pipeline.log").read_text()
-    assert "pipeguard-synthetic" in log
+    assert "bayleaf-synthetic" in log
     assert f"origin={ORIGIN_LABEL}" in log
     assert ORIGIN_LABEL == "contrived"
     assert (run_dir / "origin").read_text() == f"{ORIGIN_LABEL}\n"
@@ -315,13 +315,13 @@ def test_generate_bulk_writes_all_runs(tmp_path: Path) -> None:
 
 
 def test_cli_demo_regenerates_all_committed_runs(tmp_path: Path) -> None:
-    """`python -m pipeguard.synthetic demo` writes every committed run (incl. scale)."""
+    """`python -m bayleaf.synthetic demo` writes every committed run (incl. scale)."""
     cli_main(["demo", "--out", str(tmp_path)])
     for spec in COMMITTED_RUNS:
         assert (tmp_path / spec.run_id / "origin").read_text() == f"{ORIGIN_LABEL}\n"
 
 
 def test_cli_bulk_writes_into_target_dir(tmp_path: Path) -> None:
-    """`python -m pipeguard.synthetic bulk` writes N runs into the target directory."""
+    """`python -m bayleaf.synthetic bulk` writes N runs into the target directory."""
     cli_main(["bulk", "--count", "3", "--samples", "6", "--out", str(tmp_path)])
     assert sum(1 for p in tmp_path.iterdir() if p.is_dir()) == 3

@@ -1,6 +1,6 @@
 """Pluggable sink for accepted tool-card **library entries** (node-author W2, ADR-0016) — off-gate.
 
-A *library entry* is an advisory :class:`~pipeguard.node_author.NodeProposal` a human has
+A *library entry* is an advisory :class:`~bayleaf.node_author.NodeProposal` a human has
 **accepted** into the tool-card library as a versioned **draft**: its typed ports, pinned versions,
 and suggested locators — METADATA a human still turns into a runnable ``ProcessSpec`` (compose ≠
 execute, ADR-0003; see ``docs/design/agent-authoring-contract.md``). It is product state, wholly OFF
@@ -9,12 +9,12 @@ set or override a verdict/finding/confidence — the accepted proposal carries n
 
 This mirrors the other off-gate sinks (``api/review_store.py`` / ``api/share_store.py`` /
 ``api/job_store.py``) over the shared :mod:`api.base_store` generic — a pluggable store env-selected
-via ``PIPEGUARD_LIBRARY_STORE`` (default ``jsonl``); a DB adapter **degrades to the offline JSONL**
+via ``BAYLEAF_LIBRARY_STORE`` (default ``jsonl``); a DB adapter **degrades to the offline JSONL**
 if selection fails (unwritable path), so a misconfigured DB never breaks the accept path — it just
 falls back to the file.
 
-  - :class:`JsonlLibraryStore` — default, zero-dep append file (``PIPEGUARD_LIBRARY_PATH``).
-  - :class:`SqliteLibraryStore` — a ``library_entries`` table (stdlib; ``PIPEGUARD_LIBRARY_DB``).
+  - :class:`JsonlLibraryStore` — default, zero-dep append file (``BAYLEAF_LIBRARY_PATH``).
+  - :class:`SqliteLibraryStore` — a ``library_entries`` table (stdlib; ``BAYLEAF_LIBRARY_DB``).
 
 No Postgres adapter here (like ``job_store``, unlike the share/review sinks): the library is a
 small, node-local corpus of accepted drafts, not high-volume shared product state, so the two local
@@ -44,9 +44,9 @@ from api.base_store import JsonlDocStore, SqliteStore, select_backend
 _Record = dict[str, Any]
 _Records = list[dict[str, Any]]
 
-_ENV_LIBRARY_STORE = "PIPEGUARD_LIBRARY_STORE"
-_ENV_LIBRARY_PATH = "PIPEGUARD_LIBRARY_PATH"
-_ENV_LIBRARY_DB = "PIPEGUARD_LIBRARY_DB"
+_ENV_LIBRARY_STORE = "BAYLEAF_LIBRARY_STORE"
+_ENV_LIBRARY_PATH = "BAYLEAF_LIBRARY_PATH"
+_ENV_LIBRARY_DB = "BAYLEAF_LIBRARY_DB"
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_LIBRARY_PATH = _REPO_ROOT / "library_entries.jsonl"
@@ -147,7 +147,7 @@ class JsonlLibraryStore(JsonlDocStore):
 
 
 def library_db_path() -> str:
-    """The SQLite library-DB path (``PIPEGUARD_LIBRARY_DB`` or the repo-root default)."""
+    """The SQLite library-DB path (``BAYLEAF_LIBRARY_DB`` or the repo-root default)."""
     return os.environ.get(_ENV_LIBRARY_DB, "").strip() or str(_DEFAULT_LIBRARY_DB)
 
 
@@ -211,7 +211,7 @@ class SqliteLibraryStore(SqliteStore):
 def get_library_store() -> LibraryStore:
     """Select the library sink from the environment (default: the offline JSONL file).
 
-    ``PIPEGUARD_LIBRARY_STORE=sqlite`` swaps in the SQLite adapter; ANY failure constructing it (an
+    ``BAYLEAF_LIBRARY_STORE=sqlite`` swaps in the SQLite adapter; ANY failure constructing it (an
     unwritable path) degrades to the JSONL store — see :func:`api.base_store.select_backend`. Any
     other value (incl. the default) is JSONL. No Postgres adapter (see the module docstring).
     """

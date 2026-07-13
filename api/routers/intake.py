@@ -5,9 +5,9 @@ external pipeline driver (``scripts/run_giab_pipeline.py``) as a background subp
 resulting ``data/<run_id>/`` becomes gate-able. The driver is **Nextflow-first** (ADR-0003): it
 runs ``pipelines/germline/main.nf`` — the SAME pipeline the Pipeline Builder compiles from its
 cards — via ``nextflow run``, then parses the published QC outputs into the run dir. **compose ≠
-execute holds at the core:** ``src/pipeguard/`` never runs a tool — the API layer triggers the
+execute holds at the core:** ``src/bayleaf/`` never runs a tool — the API layer triggers the
 external driver, which orchestrates the toolchain through Nextflow. The driver needs ``nextflow`` +
-a JRE + the bioconda tools on PATH; inject the env bin via ``PIPEGUARD_BIOCONDA_BIN`` (a plain
+a JRE + the bioconda tools on PATH; inject the env bin via ``BAYLEAF_BIOCONDA_BIN`` (a plain
 ``uv run uvicorn`` without it fails every submit).
 
 Demo scope: only ``HG002`` has real panel reads on disk, so the endpoint processes exactly the
@@ -149,9 +149,9 @@ class IntakeStatus(BaseModel):
 
 
 def _bioconda_env() -> dict[str, str]:
-    """Prepend PIPEGUARD_BIOCONDA_BIN to PATH so the driver finds fastp/bwa-mem2/samtools/..."""
+    """Prepend BAYLEAF_BIOCONDA_BIN to PATH so the driver finds fastp/bwa-mem2/samtools/..."""
     env = dict(os.environ)
-    bin_dir = os.environ.get("PIPEGUARD_BIOCONDA_BIN", "").strip()
+    bin_dir = os.environ.get("BAYLEAF_BIOCONDA_BIN", "").strip()
     if bin_dir:
         env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
     return env

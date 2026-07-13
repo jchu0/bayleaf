@@ -219,7 +219,7 @@ REQ-NF-042).
 env var and flipped on only for the demo moment ([constraints.md](../requirements/constraints.md)
 REQ-C-010/011; MEMORY: conserve-API-credits).
 
-**Owner / revisit trigger.** Any session that sets `PIPEGUARD_*=claude`.
+**Owner / revisit trigger.** Any session that sets `BAYLEAF_*=claude`.
 
 ### RISK-033 — Live Slack post is a real outbound side effect
 
@@ -236,15 +236,15 @@ leaving the machine. An accidental, mis-targeted, or premature send (wrong chann
 sensitive content) during development or the demo.
 
 **Mitigation.** Off by default: the `stub` adapter builds and records the payload but sends
-nothing ($0, offline). A live post is armed **only** by explicit `PIPEGUARD_SLACK_LIVE=1`
-**and** `PIPEGUARD_NOTIFIER=slack` **and** a bot token + channel read from env (never hardcoded;
+nothing ($0, offline). A live post is armed **only** by explicit `BAYLEAF_SLACK_LIVE=1`
+**and** `BAYLEAF_NOTIFIER=slack` **and** a bot token + channel read from env (never hardcoded;
 `.env.example` documents them). The actionable-only policy means no all-clear spam; any missing
 cred, missing Slack SDK, or Slack error degrades to the stub. EVAL-041 pins that it never sends
 unless armed, and `notification.emitted` records the result and **no secret**
 ([evaluation.md](evaluation.md) EVAL-040/041; [demo_plan.md](../demo/demo_plan.md) §"wow"
 moment 3). Demo content is synthetic/contrived, not PHI.
 
-**Owner / revisit trigger.** Any session that sets `PIPEGUARD_SLACK_LIVE`; demo rehearsal
+**Owner / revisit trigger.** Any session that sets `BAYLEAF_SLACK_LIVE`; demo rehearsal
 against the live workspace; any move toward real (PHI-bearing) data.
 
 ### RISK-034 — Submit's execution boundary depends on an external toolchain on PATH
@@ -260,7 +260,7 @@ against the live workspace; any move toward real (PHI-bearing) data.
 **Risk.** `POST /api/runs` ([`api/routers/intake.py`](../../api/routers/intake.py), T-057)
 triggers `scripts/run_giab_pipeline.py` as a background subprocess that shells out to
 `fastp`/`bwa-mem2`/`samtools`/`mosdepth`/`bcftools`. If the API process wasn't started with
-`PIPEGUARD_BIOCONDA_BIN` prepended to `PATH` (a plain `uv run uvicorn` doesn't have it), every
+`BAYLEAF_BIOCONDA_BIN` prepended to `PATH` (a plain `uv run uvicorn` doesn't have it), every
 live Submit silently fails at the driver — the job flips to `failed` with a truncated stderr tail,
 but a demo operator who didn't set the env var first would hit this **live**. It also takes
 **~15s** end to end (fastp → bwa-mem2 → markdup → gate), a real timing risk if demoed live vs.
@@ -268,7 +268,7 @@ pre-seeded data. Scope is intentionally narrow: only `HG002` has real panel read
 server-side fixture registry), so any other submitted sample is honestly reported *skipped*, not
 silently dropped or fabricated.
 
-**Mitigation.** `.env.example` documents `PIPEGUARD_BIOCONDA_BIN`; the seeded demo data
+**Mitigation.** `.env.example` documents `BAYLEAF_BIOCONDA_BIN`; the seeded demo data
 (`scripts/seed_giab_demo.py`, ~24 runs) and the pinned `data/RUN-2026-07-08-GIAB-HG002/` fixture
 (T-063) mean the demo does **not need** a live Submit to show every other screen — Submit can be
 demoed once, pre-verified, or skipped in favor of the pre-seeded runs if the toolchain isn't
@@ -286,7 +286,7 @@ paths around it. See [ADR-0016](../adr/ADR-0016-postgres-port.md) item 8,
 [nextflow-codegen.md §Pre-flight guards](../design/nextflow-codegen.md#pre-flight-guards--version-capture-2026-07-11-t-131).
 
 **Owner / revisit trigger.** Demo rehearsal on the actual demo machine with a live Submit;
-confirm `PIPEGUARD_BIOCONDA_BIN` is set in the API's launch env before any live Submit demo.
+confirm `BAYLEAF_BIOCONDA_BIN` is set in the API's launch env before any live Submit demo.
 
 ### RISK-035 — The demo login gate is client-side only and is not real access control
 
@@ -300,7 +300,7 @@ confirm `PIPEGUARD_BIOCONDA_BIN` is set in the API's launch env before any live 
 
 **Risk.** `frontend/src/auth.ts` (T-081) gates every route behind a login screen, but the check
 is a **synchronous, client-side** credential compare against a hardcoded roster + a single shared
-password (`pipeguard`), the "session" is `{id, role}` in `localStorage` with **no token**, and the
+password (`bayleaf`), the "session" is `{id, role}` in `localStorage` with **no token**, and the
 CAPTCHA on the login screen is a labelled placeholder that gates submit but verifies nothing. A
 viewer could read the bundled JS, learn the roster/password, or edit `localStorage` directly to
 mint any role — including `admin` — with no server round trip. **The backend is unaffected**:

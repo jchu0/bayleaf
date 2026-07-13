@@ -57,7 +57,7 @@ data/real-giab/
 *.crai
 
 # Bulk synthetic volume — dozens of contrived runs generated on demand by
-# `python -m pipeguard.synthetic bulk` for scale testing. Regenerable, never committed;
+# `python -m bayleaf.synthetic bulk` for scale testing. Regenerable, never committed;
 # the committed record is the CLI + one representative run (data/mock_run_scale_30/).
 data/synthetic_bulk/
 
@@ -127,7 +127,7 @@ Thumbs.db
 
 # Design-prototype strays — the canonical package lives in docs/design/frontend/.
 # Guard the repo root against re-extracting the design zip here (F25).
-/PipeGuard.html
+/bayleaf.html
 /source/
 /briefs/
 /handoffs/

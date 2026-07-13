@@ -66,7 +66,7 @@ fix), un-journaled:
    session) and renders the returned `AgentReply` verbatim — per the commit's own framing,
    "SCAFFOLD→WIRED": no hardcoded reply string, the offline stub is the real
    retrieval-grounded answer. The dead `AgentSourceToggle.tsx` is deleted; the composer now shows a
-   passive "Live agent: not armed" status instead (arming is env-side, `PIPEGUARD_TRIAGE_AGENT=claude`
+   passive "Live agent: not armed" status instead (arming is env-side, `BAYLEAF_TRIAGE_AGENT=claude`
    — the UI can only report it, never toggle it). `App.tsx` gains a run-independent `<Route
    path="/agents">` (same `AgentTriage` component, same `page="agent"` access gate) and
    `Sidebar.tsx` gains a "System agents" nav entry (`Sparkles` icon, `to: '/agents'`) — reachable even
@@ -138,7 +138,7 @@ the maintainer's own words, "system agents and agent triage look like duplicate 
     the one bare `def`. Now gated `Depends(require_role("viewer", "reviewer", "approver"))` — the
     **read-family floor**, not the write/exec reviewer+ floor, because this is advisory (ADR-0001), not
     a mutation. Demo behavior is unchanged (the permissive dev-default clears viewer+ under both
-    normal and `PIPEGUARD_AUTH_STRICT` modes) — the value is closing the seam so a real-IdP swap
+    normal and `BAYLEAF_AUTH_STRICT` modes) — the value is closing the seam so a real-IdP swap
     doesn't leave this one endpoint wide open while every sibling is covered. The docstring notes
     reviewer+ as a one-word cost-control tightening if a deployment wants one.
 

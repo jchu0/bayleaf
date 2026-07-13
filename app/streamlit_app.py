@@ -1,8 +1,8 @@
 """bayleaf dashboard — the operator's provenance & QC decision gate.
 
-Deliberately a THIN view. All logic lives in the `pipeguard` package; this file
+Deliberately a THIN view. All logic lives in the `bayleaf` package; this file
 only loads a run, calls `run_gate`, and renders the decision cards. Porting to
-FastAPI + React later means reusing `pipeguard` untouched and rewriting only
+FastAPI + React later means reusing `bayleaf` untouched and rewriting only
 this rendering layer.
 
 Run:  streamlit run app/streamlit_app.py
@@ -16,9 +16,9 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from pipeguard import DecisionCard, RunArtifacts, load_run, run_gate
-from pipeguard.engine import get_synthesizer
-from pipeguard.notify import StubNotifier
+from bayleaf import DecisionCard, RunArtifacts, load_run, run_gate
+from bayleaf.engine import get_synthesizer
+from bayleaf.notify import StubNotifier
 
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
@@ -119,10 +119,10 @@ def main() -> None:
         st.subheader("Synthesizer")
         if synth.name == "claude":
             st.success("🤖 Live Claude synthesis is ON")
-            st.caption(f"model: `{os.environ.get('PIPEGUARD_CLAUDE_MODEL', 'claude-opus-4-8')}`")
+            st.caption(f"model: `{os.environ.get('BAYLEAF_CLAUDE_MODEL', 'claude-opus-4-8')}`")
         else:
             st.info("📋 Offline rule-based narration (stub)")
-            st.caption("Set `PIPEGUARD_SYNTHESIZER=claude` to enable live Claude synthesis.")
+            st.caption("Set `BAYLEAF_SYNTHESIZER=claude` to enable live Claude synthesis.")
 
     if not run_name:
         st.warning(f"No runs found under `{DATA_ROOT}`.")
@@ -164,7 +164,7 @@ def main() -> None:
     if outbox:
         st.info(
             f"📬 **{len(outbox)} notification(s) queued** (offline stub — nothing sent). "
-            "Set `PIPEGUARD_NOTIFIER=slack` to select the Slack adapter; live send stays "
+            "Set `BAYLEAF_NOTIFIER=slack` to select the Slack adapter; live send stays "
             "deferred until maintainer sign-off."
         )
         with st.expander(f"Preview the {len(outbox)} queued notification(s)"):

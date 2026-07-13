@@ -4,7 +4,7 @@
 |---|---|
 | **Focus** | SWEEP the docs owed by one already-landed commit (`9a4ef5f`, offline suite 409 passed / 4 skipped, ruff+mypy clean, live-Postgres test verified green against a real `postgres:16`): the D3 de-identified-share egress audit sink goes from JSONL-only to the full pluggable jsonl/sqlite/postgres shape, matching the other four off-gate sinks (feedback/pipeline/review/settings). Pure doc-keeper work — no product code, tests, or fixtures touched. |
 | **Participants** | doc-keeper subagent, invoked in SWEEP mode |
-| **Outcome** | Every doc obligated by the Doc-update map for this commit is updated and grounded directly in the code read (`api/share_store.py`, `api/main.py`, `tests/test_share_store.py`, `tests/test_persistence_postgres_live.py`). Fixed every stale `api/share_ledger.py` / `PIPEGUARD_SHARE_LEDGER` / `share_events(...)` / `record_share_event` reference found across the canonical docs (present-tense claims only — the two prior journal entries that correctly describe the pre-rename state at the time they were written were left alone, per "journal is the archive, never rewritten"). |
+| **Outcome** | Every doc obligated by the Doc-update map for this commit is updated and grounded directly in the code read (`api/share_store.py`, `api/main.py`, `tests/test_share_store.py`, `tests/test_persistence_postgres_live.py`). Fixed every stale `api/share_ledger.py` / `BAYLEAF_SHARE_LEDGER` / `share_events(...)` / `record_share_event` reference found across the canonical docs (present-tense claims only — the two prior journal entries that correctly describe the pre-rename state at the time they were written were left alone, per "journal is the archive, never rewritten"). |
 
 ## Discussion
 
@@ -13,15 +13,15 @@
 1. **`api/share_store.py`** (replaces `api/share_ledger.py`, deleted in the same commit — confirmed
    via `git show --stat 9a4ef5f`). Read the whole module: a `ShareStore` `Protocol` (`append`,
    `for_run`) + three adapters —
-   - `JsonlShareStore` (default): append-only, gitignored JSONL at `PIPEGUARD_SHARE_PATH`
+   - `JsonlShareStore` (default): append-only, gitignored JSONL at `BAYLEAF_SHARE_PATH`
      (default `share.events.jsonl` at repo root); tolerant reads (missing file → `[]`, a corrupt
      line is skipped).
-   - `SqliteShareStore`: a `share_events` table (stdlib `sqlite3`, `PIPEGUARD_SHARE_DB`, default
+   - `SqliteShareStore`: a `share_events` table (stdlib `sqlite3`, `BAYLEAF_SHARE_DB`, default
      `share.sqlite`); a fresh connection per op (thread-safe under FastAPI's sync threadpool).
    - `PostgresShareStore`: a `share_events` table (`[postgres]` extra, lazy `psycopg` import,
      `DATABASE_URL`); fails fast at construction (so `get_share_store()` can degrade) if the
      server is unreachable.
-   `get_share_store()` reads `PIPEGUARD_SHARE_STORE` (default `jsonl`); `sqlite`/`postgres`
+   `get_share_store()` reads `BAYLEAF_SHARE_STORE` (default `jsonl`); `sqlite`/`postgres`
    selection degrades to `JsonlShareStore` on **any** construction failure, logged by
    `type(exc).__name__` only — never `str(exc)`, which could carry a DSN password. This exactly
    mirrors `get_repository()` / `get_feedback_store()` / the settings/review/pipeline stores
@@ -32,12 +32,12 @@
    no other behavior change (the merge-into-`RunDetail.events`-at-read-time logic is untouched).
 3. **Tests.** `tests/test_share_store.py` (new, 6 tests): jsonl default, sqlite round-trip,
    sqlite==jsonl parity (both adapters see the same events for a run), degrade-to-jsonl when
-   `PIPEGUARD_SHARE_STORE=postgres` has no `DATABASE_URL`, idempotent re-append (same event id
+   `BAYLEAF_SHARE_STORE=postgres` has no `DATABASE_URL`, idempotent re-append (same event id
    twice doesn't duplicate a row), tolerant corrupt-line read. `tests/test_persistence_postgres_live.py`
    gains `test_postgres_share_store_round_trips` (now 4 live tests, was 3) — compose-gated,
    skip-safe, and per the task's own report, verified green against a real `postgres:16`.
 4. **`.env.example` / `.gitignore`.** Already updated by the requesting session (confirmed present:
-   the `PIPEGUARD_SHARE_STORE`/`_PATH`/`_DB` block at `.env.example` lines 203-211); not touched by
+   the `BAYLEAF_SHARE_STORE`/`_PATH`/`_DB` block at `.env.example` lines 203-211); not touched by
    this doc-keeper pass, per the task's own instruction.
 
 ### Doc-update map sweep

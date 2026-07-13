@@ -26,7 +26,7 @@ Submit screen hands a samplesheet to and which fires the Nextflow driver:
    compel immediate processing; an operator should decide *when*.
 
 Both are execution-boundary concerns, off the deterministic decision gate. The **compose ≠ execute**
-boundary (ADR-0003) must hold: the core (`src/pipeguard/`) still never runs a tool; only the
+boundary (ADR-0003) must hold: the core (`src/bayleaf/`) still never runs a tool; only the
 out-of-core driver shells out to Nextflow.
 
 ## Decision

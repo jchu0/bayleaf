@@ -233,7 +233,7 @@ function RunsEmpty({
 }
 
 export function RunOverview() {
-  // The runs list + header-borne full-set facet counts (X-PipeGuard-Status-Counts, authoritative and
+  // The runs list + header-borne full-set facet counts (X-Bayleaf-Status-Counts, authoritative and
   // stable across the client-side filters below so a chip's count never shifts as you narrow the
   // list) come from the shared useRuns store (UX-DUP Runs #6) — the SAME single fetch that feeds the
   // Layout Sidebar/TopBar and the RunSelector fallback, not a third parallel copy. `refresh` drives

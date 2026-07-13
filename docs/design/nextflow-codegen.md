@@ -9,7 +9,7 @@
 
 ## Overview
 
-`src/pipeguard/nextflow/` compiles a Pipeline-Builder card graph — the exact `{nodes, edges}`
+`src/bayleaf/nextflow/` compiles a Pipeline-Builder card graph — the exact `{nodes, edges}`
 shape the Builder saves — into a runnable nf-core-style Nextflow (DSL2) pipeline: `main.nf` +
 `modules/*.nf` + `nextflow.config` + a `README.md`. It is **pure text codegen**: the compiler
 never invokes `nextflow`, never touches a file outside its own in-memory output, and never sets a
@@ -43,8 +43,8 @@ text (verified by the drift test below).
 | `frontend/src/components/BuilderModals.tsx` (`NextflowExportModal`) | The Builder's "Export to Nextflow" UI: compiles the live canvas graph, previews `main.nf` + the step chain, Copy / Download `.zip`. |
 | `scripts/run_giab_pipeline.py` | The intake execution driver — now runs `pipelines/germline/main.nf` via `nextflow run` instead of calling tools directly (below). |
 
-**Verified by reading the code directly**: `src/pipeguard/nextflow/catalog.py`,
-`src/pipeguard/nextflow/compiler.py`, `src/pipeguard/nextflow/germline.py`,
+**Verified by reading the code directly**: `src/bayleaf/nextflow/catalog.py`,
+`src/bayleaf/nextflow/compiler.py`, `src/bayleaf/nextflow/germline.py`,
 `api/routers/nextflow.py`, `scripts/run_giab_pipeline.py`, `scripts/generate_reference_pipeline.py`,
 `pipelines/germline/{main.nf,modules/*.nf,nextflow.config,README.md}`,
 `tests/test_nextflow_compile.py`, `tests/test_nextflow_api.py`.
@@ -198,7 +198,7 @@ verbatim body is rendered by `_render_custom` and **the catalog is never consult
 the custom tool name collides with a catalogued one, the operator's body wins (pinned by
 `test_custom_node_never_consults_the_catalog_even_on_a_name_collision`). The body is emitted
 byte-for-byte (only re-indented into the `script:` block, exactly as the catalogued path does);
-PipeGuard never rewrites or fabricates it. Ports are meta-threaded and wired from the graph edges
+bayleaf never rewrites or fabricates it. Ports are meta-threaded and wired from the graph edges
 **exactly like a catalogued per-sample process** (`_custom_input_decl` reuses `_with_meta` +
 `REFERENCE_PARAM`/`INDEXED_REFERENCE_PARAMS`), so a custom card drops into a fan-out graph unchanged —
 `ANNOTATE(BCFTOOLS_CALL.out.vcf)` is wired from the edge with zero custom-path wiring code. Each
@@ -212,7 +212,7 @@ script is responsible for producing the declared artifacts) with `emit: <kind>` 
 **Honesty + safety (the whole point, ADR-0020's four-way safety).** The emitted module carries an
 honest header comment + a `label 'operator_authored'` directive — *"operator-authored custom process
 — runs on the compute host; production needs sandboxing/allowlisting; not a curated/catalogued tool.
-PipeGuard transcribed this operator body verbatim (compose ≠ execute) — it did not author or vet the
+bayleaf transcribed this operator body verbatim (compose ≠ execute) — it did not author or vet the
 command."* Two hard rules keep it from becoming a fabrication vector:
 
 1. **Never fabricate a command.** A custom card whose `script` is blank/whitespace is a
@@ -320,9 +320,9 @@ pre-existing `conda`/`docker`/`singularity`/`stub`:
    1`, `process.cpus = 1` — one sample, one process, one CPU at a time. This is deliberately the
    most conservative possible local profile, matching the single-machine demo environment.
 2. **`slurm`** — cluster execution: `process.executor = 'slurm'`, with the queue name
-   (`PIPEGUARD_SLURM_QUEUE`, default `normal`), any `clusterOptions` string (e.g. `-A
-   my-account`, `PIPEGUARD_SLURM_CLUSTER_OPTIONS`), and the in-flight job cap
-   (`PIPEGUARD_SLURM_QUEUE_SIZE`, default `50`) all **env-driven, never a baked guess** — a
+   (`BAYLEAF_SLURM_QUEUE`, default `normal`), any `clusterOptions` string (e.g. `-A
+   my-account`, `BAYLEAF_SLURM_CLUSTER_OPTIONS`), and the in-flight job cap
+   (`BAYLEAF_SLURM_QUEUE_SIZE`, default `50`) all **env-driven, never a baked guess** — a
    deployer supplies their own account/queue/partition via environment, not a hand-edited config
    file. One sbatch job is submitted per process instance, so samples (and independent stages
    within a sample) can run in parallel across the cluster.
@@ -388,7 +388,7 @@ pipeline's **published** QC outputs (`*.fastp.json`, `*.mosdepth.summary.txt`/
 `*.thresholds.bed.gz`, `*.norm.vcf.gz`) into the frozen-five run-dir CSV contract the gate
 consumes (unchanged — `run_gate` was not touched). Needs `nextflow` + a JRE + the bioconda tools
 on `PATH` (e.g. the `hackathon` conda env used to verify this locally — not a repo dependency);
-`api/routers/intake.py` injects an env override via `PIPEGUARD_BIOCONDA_BIN`.
+`api/routers/intake.py` injects an env override via `BAYLEAF_BIOCONDA_BIN`.
 
 **Operator-gated + authored-pipeline processing (ADR-0021).** `POST /api/runs`'s `SubmitRunIn` now
 optionally names a `pipeline` (+`pipeline_version`): when present, intake resolves + compiles that
@@ -404,7 +404,7 @@ holds (the core still never runs a tool). See
 
 **The `compose ≠ execute` boundary, stated precisely:**
 
-1. `src/pipeguard/` (the core, including `src/pipeguard/nextflow/`) **never runs a tool.** The
+1. `src/bayleaf/` (the core, including `src/bayleaf/nextflow/`) **never runs a tool.** The
    compiler emits text. `run_gate`/`rules`/`synthesis` read a CSV run dir; none of them shell out
    to anything.
 2. `scripts/run_giab_pipeline.py` (a driver, outside the core) and `api/routers/intake.py` (the
@@ -526,7 +526,7 @@ authoritative pass/skip census is reconciled in [quality/evaluation.md](../quali
 5. **No `nextflow_schema.json`/`pipeline_info/` round-trip.** The driver parses each process's
    published QC file directly (fastp.json, mosdepth summary) rather than ingesting Nextflow's own
    `pipeline_info/` provenance manifest (`software_versions.yml`, `execution_trace_*.txt`, …) —
-   PipeGuard keeps its own provenance ledger instead (ADR-0002); see
+   bayleaf keeps its own provenance ledger instead (ADR-0002); see
    [nf-core-conventions.md §3](../data/nf-core-conventions.md).
 
 ---

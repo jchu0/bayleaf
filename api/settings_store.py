@@ -6,13 +6,13 @@ runs/cards/events, and — critically — **the store never mutates the live run
 audited draft->approve override ledger; a future step could *apply* an approved override to a
 per-run runbook copy (see the router + integration notes), but that projection is out of scope
 here. This mirrors ``api/pipeline_store.py`` over the shared :mod:`api.base_store` generic — three
-adapters, env-selected via ``PIPEGUARD_SETTINGS_STORE`` (default ``jsonl``); the DB adapters
+adapters, env-selected via ``BAYLEAF_SETTINGS_STORE`` (default ``jsonl``); the DB adapters
 **degrade to the offline JSONL** if selection fails (missing extra / no DSN / unreachable server),
 so a misconfigured DB never breaks the save path — it just falls back to the file.
 
-  - :class:`JsonlSettingsStore` — default, zero-dep append-only file (``PIPEGUARD_SETTINGS_PATH``).
+  - :class:`JsonlSettingsStore` — default, zero-dep append-only file (``BAYLEAF_SETTINGS_PATH``).
   - :class:`SqliteSettingsStore` — a ``settings_overrides`` table (stdlib;
-    ``PIPEGUARD_SETTINGS_DB``).
+    ``BAYLEAF_SETTINGS_DB``).
   - :class:`PostgresSettingsStore` — a ``settings_overrides`` table (``[postgres]`` extra;
     ``DATABASE_URL``).
 
@@ -41,9 +41,9 @@ from api.base_store import JsonlDocStore, SqliteStore, select_backend
 _Record = dict[str, Any]
 _Records = list[dict[str, Any]]
 
-_ENV_SETTINGS_STORE = "PIPEGUARD_SETTINGS_STORE"
-_ENV_SETTINGS_PATH = "PIPEGUARD_SETTINGS_PATH"
-_ENV_SETTINGS_DB = "PIPEGUARD_SETTINGS_DB"
+_ENV_SETTINGS_STORE = "BAYLEAF_SETTINGS_STORE"
+_ENV_SETTINGS_PATH = "BAYLEAF_SETTINGS_PATH"
+_ENV_SETTINGS_DB = "BAYLEAF_SETTINGS_DB"
 _ENV_DATABASE_URL = "DATABASE_URL"
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -158,7 +158,7 @@ class JsonlSettingsStore(JsonlDocStore):
 
 
 def settings_db_path() -> str:
-    """The SQLite settings-DB path (``PIPEGUARD_SETTINGS_DB`` or the repo-root default)."""
+    """The SQLite settings-DB path (``BAYLEAF_SETTINGS_DB`` or the repo-root default)."""
     return os.environ.get(_ENV_SETTINGS_DB, "").strip() or str(_DEFAULT_SETTINGS_DB)
 
 
@@ -286,7 +286,7 @@ class PostgresSettingsStore:
 def get_settings_store() -> SettingsStore:
     """Select the settings sink from the environment (default: the offline JSONL file).
 
-    ``PIPEGUARD_SETTINGS_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing
+    ``BAYLEAF_SETTINGS_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing
     it (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store — see
     :func:`api.base_store.select_backend` (the shared degrade-to-JSONL ladder).
     """

@@ -1,13 +1,13 @@
-# CLAUDE.md — bayleaf (PipeGuard)
+# CLAUDE.md — bayleaf
 
 AI-assisted provenance & QC decision gate for genomics runs (Built with Claude:
 Life Sciences hackathon). This file is the self-contained operating contract for
 this repo — do not assume any global rules apply here.
 
-**Naming:** the *product* was renamed **bayleaf** (user-facing surface only,
-2026-07-11); the Python *package* stays `pipeguard` (`src/pipeguard/`, all
-`PIPEGUARD_*` env vars, `X-PipeGuard-*` wire headers) — a package rename is a
-separate, breaking, deferred pass. Commands below work verbatim.
+**Naming:** the product and the Python package are now both **bayleaf** — the
+breaking package rename landed 2026-07-13 (`src/bayleaf/`, `from bayleaf import …`,
+all `BAYLEAF_*` env vars, `X-Bayleaf-*` wire headers). The historical name was
+"PipeGuard"; some git history and archived journals predate the rename.
 
 ## Start here (every session)
 
@@ -50,7 +50,7 @@ make check                                  # one-shot gate: ruff + mypy + pytes
 uv run ruff check && uv run mypy
 
 # Ad-hoc run of the core (no UI)
-uv run python -c "from pipeguard import run_gate_from_dir; \
+uv run python -c "from bayleaf import run_gate_from_dir; \
   _, cards = run_gate_from_dir('data/mock_run_01'); \
   print([(c.sample_id, c.verdict.value) for c in cards])"
 ```
@@ -70,7 +70,7 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    audits/reviews. When unsure whether two tasks are independent, they usually are — split them.
 
 **Architecture guardrails**
-1. `src/pipeguard/` stays framework-agnostic — no Streamlit/FastAPI imports in the core.
+1. `src/bayleaf/` stays framework-agnostic — no Streamlit/FastAPI imports in the core.
 2. Reuse existing utilities, models, and patterns before adding new ones; no duplicate abstractions.
 3. Don't move files across `src/`, `app/`, `data/`, `docs/`, `tests/` without explaining why.
 
@@ -152,7 +152,7 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 > [docs/HISTORY.md](docs/HISTORY.md) (git-archived, **not** loaded each session). This is
 > current-state only (what exists NOW, per subsystem); the *why* is in the ADRs ([docs/adr/](docs/adr/)).
 
-1. **Core (`src/pipeguard/`) — framework-agnostic (no Streamlit/FastAPI imports).**
+1. **Core (`src/bayleaf/`) — framework-agnostic (no Streamlit/FastAPI imports).**
    a. `rules` emits cited, immutable `Finding`s (each derives its gate + a rule-version-independent
       signature + `content_hash`); `synthesis/base.py` aggregates the verdict (**never** the LLM,
       ADR-0001); confidence omitted until grounded (T-019). Fraction QC metrics render as percent
@@ -250,27 +250,27 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only event trail
    (`analysis_run.started` → per-sample findings/verdict → `completed`) into an `EventLedger`
    (in-memory + JSONL) — the event log is authoritative, the DB a rebuildable projection via
-   `persistence/` `get_repository()` (`PIPEGUARD_REPOSITORY=sqlite|postgres`, default SQLite,
+   `persistence/` `get_repository()` (`BAYLEAF_REPOSITORY=sqlite|postgres`, default SQLite,
    degrade-to-SQLite; SqliteRepository + guarded off-by-default PostgresRepository, ADR-0016);
    `rebuild-db` targets either (ADR-0003). A tenth `EventType` `DATA_EXPORTED` (ADR-0018 D3) is
    emitted by the read-API (not `run_gate`) into a **separate** sink `api/share_store.py` (a
-   `ShareStore` Protocol, jsonl/sqlite/postgres via `PIPEGUARD_SHARE_STORE`, degrade-to-JSONL) —
+   `ShareStore` Protocol, jsonl/sqlite/postgres via `BAYLEAF_SHARE_STORE`, degrade-to-JSONL) —
    kept off the gate's `@lru_cache`'d re-derivation because a share is a live side effect that must
    survive a restart; `GET /api/runs/{id}` merges the two at read. Other ports: notify
    (stub/Slack/Teams/Discord, ADR-0010); artifact store (`LocalArtifactStore` + off-by-default
-   `S3ArtifactStore`, `PIPEGUARD_S3_LIVE`). Multi-worker locking on the off-gate stores is a
+   `S3ArtifactStore`, `BAYLEAF_S3_LIVE`). Multi-worker locking on the off-gate stores is a
    documented seam, not built (ADR-0016).
 
 3. **Swappable AI, OFF by default (ADR-0006 deterministic fallback; ADR-0009/0012 scoping/tiering).**
    Six `stub|claude` seams, all stub-first ($0), lazy `anthropic` import, fall back to the stub on
-   any error (incl. a safety refusal); models via `PIPEGUARD_*_MODEL`. Five are one-liners:
-   a. synthesizer (`PIPEGUARD_SYNTHESIZER`) — **honesty fix (WS-07 Q1, 2026-07-12):** the stub no
+   any error (incl. a safety refusal); models via `BAYLEAF_*_MODEL`. Five are one-liners:
+   a. synthesizer (`BAYLEAF_SYNTHESIZER`) — **honesty fix (WS-07 Q1, 2026-07-12):** the stub no
       longer emits hardcoded per-verdict `next_steps` boilerplate (dropped `_NEXT_STEPS`; stub
       `next_steps=[]`, dishonest filler on a $0 default path a stub cannot ground); the live Claude
       path is unchanged. `api/card_readout.py` now surfaces `qc_reports` (real `fastp.html`/
       `multiqc_report.html` links off the run dir, sibling-scoped) as the AI-off fallback so the
       suggestion box degrades to real artifacts, not silence.
-   b. QC-triage (`triage/`, `PIPEGUARD_TRIAGE_AGENT`) — **`ask` (WS-07 Q2, 2026-07-12):**
+   b. QC-triage (`triage/`, `BAYLEAF_TRIAGE_AGENT`) — **`ask` (WS-07 Q2, 2026-07-12):**
       `TriageAgent.ask` + `POST /api/runs/{run_id}/cards/{sample_id}/ask` (`AskRequest`→`AgentReply`,
       `advisory: Literal[True]`, no verdict/confidence) answers a free-text question about a card,
       even a clean PROCEED one; the stub retrieves + cites corpus knowledge explicitly framed as
@@ -279,11 +279,11 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
       retrieval (`design/agents.md`'s `EmbeddingRetriever` seam) — the corpus + `KeywordRetriever`
       are unchanged; see [audit/gap_analysis/ws-07-ai-earning-its-place.md](audit/gap_analysis/ws-07-ai-earning-its-place.md)
       Design items 1/2/4.
-   c. pipeline-repair (`pipeline_repair/`, `PIPEGUARD_PIPELINE_REPAIR_AGENT`, Opus-high; recurring
+   c. pipeline-repair (`pipeline_repair/`, `BAYLEAF_PIPELINE_REPAIR_AGENT`, Opus-high; recurring
    signature → cited `RepairProposal`); d. feedback-categorization (`api/feedback_agent.py`,
    off-gate); e. archivist (`api/archivist.py`, off-gate, Haiku; released runs → `ArchiveDigest`).
    The sixth:
-   f. node-authoring (`src/pipeguard/node_author/`, `PIPEGUARD_NODE_AUTHOR_AGENT`, Sonnet default): a
+   f. node-authoring (`src/bayleaf/node_author/`, `BAYLEAF_NODE_AUTHOR_AGENT`, Sonnet default): a
       NL request / bare tool name → a cited `NodeProposal` retrieved over a **fixed curated 9-card
       corpus** (7 germline tools + Reference FASTA + Panel BED; NGSCheckMate is retired-but-pinned
       and Truth VCF removed — both KINDS stay in the vocabulary). `advisory: Literal[True]`, no
@@ -301,7 +301,7 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 4. **Delivery layers (thin, over the core).**
    a. `app/` = Streamlit demo (kept as the guaranteed-working fallback).
    b. `api/` = FastAPI read-API + **off-gate writes**. Authz: the dev-shim `api/auth.py` (Role
-      viewer|reviewer|approver + `Actor` + `current_actor()` from `X-PipeGuard-Actor/-Role` headers,
+      viewer|reviewer|approver + `Actor` + `current_actor()` from `X-Bayleaf-Actor/-Role` headers,
       permissive dev-default, `require_role`) — the shared authz source and the single swap point for
       real auth. Off-gate stores are all pluggable (jsonl/sqlite/postgres, degrade-to-jsonl):
       feedback, pipeline-graph, settings, review, share; plus a node-local **durable job store**
@@ -314,13 +314,13 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
       (T-133, ClinVar quoted verbatim), `/monitoring` (server-side `page`/`limit`, T-072 closed),
       advisory-agent reads (repair / archive-digest / archive-index), `/runbook` (three-gate
       readout), and a **sandboxed `GET /api/files`** (`api/routers/files.py`: allowlisted
-      `PIPEGUARD_BROWSE_ROOTS` default `data/`, `resolve()`+`is_relative_to()`, read-only, ADR-0020).
+      `BAYLEAF_BROWSE_ROOTS` default `data/`, `resolve()`+`is_relative_to()`, read-only, ADR-0020).
       **Execution boundaries (out-of-core — the API triggers an external driver; the core still never
       runs a tool):**
       i. **Intake `POST /api/runs`** (`api/routers/intake.py`, T-057) registers a samplesheet and
          drives Nextflow via `scripts/run_giab_pipeline.py` (`nextflow run pipelines/germline/main.nf`,
          parses published QC into the frozen-five run dir; needs `nextflow` + JRE + bioconda on PATH
-         via `PIPEGUARD_BIOCONDA_BIN`). **Verified live on HG002 (local-serial); the multi-sample
+         via `BAYLEAF_BIOCONDA_BIN`). **Verified live on HG002 (local-serial); the multi-sample
          parse is offline-proven vs fixture publish dirs but a live multi-sample run is
          env-gated/unverified (only HG002 has reads); the Slurm profile is config-verified NOT
          cluster-verified.** **Verification milestone (2026-07-12):** the toolchain (`nextflow`

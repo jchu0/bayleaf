@@ -148,7 +148,7 @@ def test_empty_input_yields_an_empty_digest():
 
 
 def test_default_agent_is_the_stub(monkeypatch):
-    monkeypatch.delenv("PIPEGUARD_ARCHIVIST_AGENT", raising=False)
+    monkeypatch.delenv("BAYLEAF_ARCHIVIST_AGENT", raising=False)
     assert isinstance(get_archivist_agent(), StubArchivist)
 
 

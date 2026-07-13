@@ -29,8 +29,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from pipeguard import Runbook, run_gate_from_dir
-from pipeguard.runbook import QCThreshold
+from bayleaf import Runbook, run_gate_from_dir
+from bayleaf.runbook import QCThreshold
 
 _REPO = Path(__file__).resolve().parent.parent
 _GIAB = _REPO / "data" / "real-giab"

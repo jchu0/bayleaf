@@ -48,9 +48,9 @@ ship the **lean** profile and document **granular**.
 ## Realized (2026-07-08)
 
 1. **The environment tier of the resolver is realized.** Each AI/notify seam flips via a
-   `PIPEGUARD_*` env var, stub-first and off by default — `PIPEGUARD_SYNTHESIZER` /
-   `PIPEGUARD_TRIAGE_AGENT` / `PIPEGUARD_NOTIFIER`, the per-agent `PIPEGUARD_*_MODEL` tiers
-   ([ADR-0012](ADR-0012-agent-scoping-model-tiering.md)), and `PIPEGUARD_SLACK_LIVE` — all
+   `BAYLEAF_*` env var, stub-first and off by default — `BAYLEAF_SYNTHESIZER` /
+   `BAYLEAF_TRIAGE_AGENT` / `BAYLEAF_NOTIFIER`, the per-agent `BAYLEAF_*_MODEL` tiers
+   ([ADR-0012](ADR-0012-agent-scoping-model-tiering.md)), and `BAYLEAF_SLACK_LIVE` — all
    documented in `.env.example`.
 2. **Not yet built (honest gap):** the composed `Profile` bundle object and the full
    `defaults → profile → env → override` resolver via pydantic-settings. The runbook is a

@@ -1,12 +1,12 @@
-# OpenTelemetry Collector config for the PipeGuard read-API `/metrics` seam.
+# OpenTelemetry Collector config for the bayleaf read-API `/metrics` seam.
 #
 # Bridges the same pull-based /metrics endpoint to any OTLP-compatible APM
 # (New Relic, Honeycomb, Grafana Cloud, ...) without adding an in-app exporter or
-# a new PipeGuard dependency: the Collector scrapes /metrics (Prometheus receiver)
+# a new bayleaf dependency: the Collector scrapes /metrics (Prometheus receiver)
 # and forwards over OTLP. All backend credentials live in the Collector's env, not
-# in PipeGuard (CLAUDE.md Security 1 — never hardcode keys).
+# in bayleaf (CLAUDE.md Security 1 — never hardcode keys).
 #
-# Pull model: the Collector scrapes; PipeGuard makes no outbound call. The
+# Pull model: the Collector scrapes; bayleaf makes no outbound call. The
 # exposition carries only aggregate counts and closed-enum verdict/gate labels —
 # no sample ids, no PHI (see docs/ops/telemetry-connectors.md).
 #
@@ -18,14 +18,14 @@ receivers:
   prometheus:
     config:
       scrape_configs:
-        - job_name: pipeguard
+        - job_name: bayleaf
           scrape_interval: 30s
           metrics_path: /metrics
           static_configs:
             - targets:
                 - "host.docker.internal:8010"   # host API from a containerized Collector; use API host:port otherwise
               labels:
-                service: pipeguard
+                service: bayleaf
                 component: read-api
 
 processors:
