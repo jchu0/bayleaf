@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Spec — **Slice 1 (§12, "IA move") partially landed 2026-07-13** (commits `a499691`, `f230f7e`), in a lighter-weight form than this spec proposes (see the note below); Slices 2–6 (the `AgentDockProvider` floating window and everything after it) remain spec-only, to be built later |
+| **Status** | Spec — **Slice 1 (§12, "IA move") fully landed 2026-07-13**, including `WS-1b`'s dedicated `systemAgents` `PageId` + `/system-agents` page (see the note below); Slices 2–6 (the `AgentDockProvider` floating window and everything after it) remain spec-only, to be built later |
 | **Date** | 2026-07-12 (MST) |
 | **Type** | Product-design spec sheet (fable) — IA split + a new floating-window interaction |
 | **Problem** | (1) The global **system agents** (pipeline-repair, archivist) are pinned inside a *per-run* screen even though they act cross-run. (2) "Ask the agent" is a static, scrim-backed pop-out that dies on navigation — it cannot follow the operator around the app. |
@@ -11,17 +11,17 @@
 | **Related** | [ui-conventions.md](../ui-conventions.md) (UIC-1..19), [agents.md](../agents.md) (roster + taxonomy), [ADR-0001](../../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0022](../../adr/ADR-0022-agent-observation-binding.md), [frontend/README.md](README.md), [audit/ux-duplicate-data-review.md](../../../audit/ux-duplicate-data-review.md) (the `useRun(runId)` cache this reuses), [journal 2026-07-13-audit-fixes-ia.md](../../journal/2026-07-13-audit-fixes-ia.md) (the partial-landing sweep) |
 
 > **What actually shipped vs. this spec (2026-07-13).** The maintainer's literal complaint — "system
-> agents and agent triage look like duplicate pages" — is fixed, but by a cheaper route than `WS-1`
-> below proposes. `AgentTriage.tsx` was **not** split into a deleted-launchers version plus a new
-> promoted-panel workspace; instead it stayed **one component** with a route-derived
-> `isSystemView = !runId` conditional (the launchers render only when `isSystemView`). `WS-1b`'s
-> dedicated `system-agents` `PageId` in `access.ts`/`PAGE_CATALOG` was **not** added — both
-> `/agents` and `/runs/:id/agent` still share `PageId: 'agent'`; the crumb is disambiguated instead
-> by a route-aware sentinel in `TopBar.tsx` (mirroring how `'admin'` is named without its own
-> `PageId`). Net effect: the visual duplication is gone and the nav/crumb read correctly, but an
-> Admin page-access grant still cannot separate "can see Agent triage" from "can see System
-> agents" — that gap, and everything in §4 (the promoted workspace panels), §5 (the
-> `AgentDockProvider` floating window), and §§6–12, remain exactly as specified below: unbuilt. See
+> agents and agent triage look like duplicate pages" — is fixed. It landed in two steps: first a
+> cheaper interim (one `AgentTriage.tsx` component with a route-derived `isSystemView = !runId`
+> conditional, both routes sharing `PageId: 'agent'`, the crumb disambiguated by a `TopBar.tsx`
+> sentinel), then **`WS-1b` in full (page-naming landing, verified in code):** a dedicated
+> `SystemAgents.tsx` component on its own **`/system-agents`** route with its own **`systemAgents`
+> `PageId`** + "System Agents" nav item in `access.ts`/`PAGE_CATALOG`, while `AgentTriage.tsx` is now
+> the per-run **Triage** page (`/runs/:id/agent`, `PageId: 'agent'`) with the launchers removed. Net
+> effect: the visual duplication is gone, the nav/crumb read correctly, **and** an Admin page-access
+> grant **can now** separate "Triage" from "System Agents" (each has its own `PageId`) — closing the
+> gap the interim left open. **Still unbuilt** below: §4 (the promoted workspace panels), §5 (the
+> `AgentDockProvider` floating window), and §§6–12. See
 > [design/agents.md](../agents.md) § "Pipeline-vs-system agents" for the grounded, dated detail and
 > [journal 2026-07-13-audit-fixes-ia.md](../../journal/2026-07-13-audit-fixes-ia.md).
 
