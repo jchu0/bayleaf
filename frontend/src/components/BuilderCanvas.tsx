@@ -252,6 +252,11 @@ export function BuilderCanvas(props: CanvasProps) {
     () => new Set(agentBindings.filter((b) => b.agent === ADVISORY_AGENT.id).map((b) => b.node)),
     [agentBindings],
   )
+  // The advisory agent's canvas visuals (card, fan connectors, per-node badges, minimap dot) show when
+  // the pipeline is run-linked (showTerminals, ADR-0019 slice 1a) OR when it simply CARRIES an agent
+  // attachment — so a LOADED saved pipeline surfaces its persisted QC-triage bindings instead of hiding
+  // them just because it is not bound to an active run. (An empty, unlinked graph shows none, as before.)
+  const showAgent = showTerminals || boundNodeIds.size > 0
   // Which node's grant popover is open (canvas-local, transient UI — never persisted). Clicking a
   // node's advisory badge opens/closes it; a background press or a switch to another node closes it.
   const [grantMenuNode, setGrantMenuNode] = useState<string | null>(null)
@@ -443,7 +448,7 @@ export function BuilderCanvas(props: CanvasProps) {
   // reflecting that the agent OBSERVES/advises but never carries data or sets a verdict (ADR-0001). ONE
   // agent → MANY tools: a fan-out port per attached tool, placed nearest that tool (like a multi-out ref).
   // The fan reads the agent's CURRENT (movable) position, so the links track the agent card as it's dragged.
-  const attachedTools = showTerminals
+  const attachedTools = showAgent
     ? userNodes.filter((n) => boundNodeIds.has(n.id) && n.ins.length > 0 && n.outs.length > 0)
     : []
   const toolBadgeOf = (n: UserNode) => ({ x: n.x + ADV_BADGE_DX, y: n.y + ADV_BADGE_DY })
@@ -728,7 +733,7 @@ export function BuilderCanvas(props: CanvasProps) {
             ))}
           {/* Advisory agent (off-gate) STAYS on the canvas — the interactive advisory control used while
               editing. Movable; its fan-out ports + dotted links track its position. */}
-          {showTerminals && (
+          {showAgent && (
             <>
               <AgentCard
                 x={agentPos.x}
@@ -754,7 +759,7 @@ export function BuilderCanvas(props: CanvasProps) {
               renaming={renamingId === n.id}
               connectMode={connectMode}
               connectFrom={connectFrom}
-              advisoryShown={showTerminals && n.ins.length > 0 && n.outs.length > 0 && (!isView || boundNodeIds.has(n.id))}
+              advisoryShown={showAgent && n.ins.length > 0 && n.outs.length > 0 && (!isView || boundNodeIds.has(n.id))}
               advisoryEditable={!isView}
               advisoryOn={boundNodeIds.has(n.id)}
               advisoryLogs={bindingFor(agentBindings, n.id)?.grants.includes('logs') ?? false}
@@ -777,7 +782,7 @@ export function BuilderCanvas(props: CanvasProps) {
           {/* Grant popover for the open node's advisory badge (Edit only). Rendered as a canvas-plane
               sibling at the node's badge so it pans/zooms with the card. Observation-only (ADR-0001). */}
           {!isView &&
-            showTerminals &&
+            showAgent &&
             grantMenuNode &&
             (() => {
               const n = userNodes.find((x) => x.id === grantMenuNode)
@@ -886,7 +891,7 @@ export function BuilderCanvas(props: CanvasProps) {
           ))}
         {/* The advisory agent card (the only movable non-graph card left, PASS-6 A) tracks its canvas-local
             position. Ingest + gate were removed from the canvas. */}
-        {showTerminals && (
+        {showAgent && (
           <span
             className="absolute rounded-[1px] bg-accent/50"
             style={{ left: agentPos.x * MM_SCALE, top: MM_VPAD + agentPos.y * MM_SCALE, width: Math.max(4, AGENT_W * MM_SCALE), height: AGENT_H * MM_SCALE }}
