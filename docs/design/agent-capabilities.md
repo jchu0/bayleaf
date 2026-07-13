@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Proposed (design) |
-| **Last updated** | 2026-07-13 (MST) — initial design |
+| **Status** | 🚧 §1 archivist DB retrieval **built** (P3, wired into the chat, live-verified); §2 pipeline-repair corpora + §3 node-author QoL still design |
+| **Last updated** | 2026-07-13 (MST) — §1 built: `api/archivist_retrieval.py` (read-only cross-run aggregate, projection-first with run-dir-derivation fallback) grounds the archivist chat for run-independent questions. Prior: initial design |
 | **Audience** | software / design / reviewers |
 | **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) (corpora/retrieval), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0023](../adr/ADR-0023-agent-taxonomy-and-action-boundary.md), [ADR-0024](../adr/ADR-0024-scope-by-wiring.md), [ADR-0025](../adr/ADR-0025-versioned-reversible-agent-config.md), [agents.md](agents.md), [agent-authoring-contract.md](agent-authoring-contract.md) |
 
@@ -16,10 +16,12 @@ for ML** (timestamps, actor, ids), and any editable asset is **versioned/reversi
 
 ## 1. Archivist — read-only DB retrieval
 
-Today the archivist digests a least-privilege `RunArchiveInput`. Upgrade: give it a **read-only,
-de-identified query tool** over the persistence projection (the SQLite/event-ledger rebuildable
-projection, `persistence/`) so it can "pull historic data if the user asks" (e.g. in a System-agents
-chat). Bounds:
+**Built (P3, 2026-07-13):** `api/archivist_retrieval.py` gives the archivist a read-only cross-run
+aggregate (verdict distribution, recurring signatures, run inventory), tried projection-first
+(`get_repository`) with a run-dir-derivation fallback for the offline demo (the `:memory:` projection
+is empty until `rebuild-db`). It grounds the System-agents chat when the operator asks a historical
+question without naming a run — live-verified (Haiku narrated 31 runs / 184 cards with real counts,
+cited by run id). Bounds (all met):
 
 1. **Read-only** — never writes the ledger/projection; the event log stays authoritative (ADR-0002).
 2. **De-identified** — results pass `api.deid.scrub_text`; no PII surfaces.
