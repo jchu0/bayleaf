@@ -91,6 +91,9 @@ class _Observation(NamedTuple):
 _FASTP_GLOB = "fastp.json"
 _MOSDEPTH_SUMMARY_GLOB = "*mosdepth.summary.txt"
 _MOSDEPTH_THRESHOLDS_GLOB = "*thresholds.bed.gz"
+# OPTIONAL, non-default tool (WS-02) — verifybamid2 is not in the germline base profile, so an
+# absent .selfSM is NOT a hole (see the extract call below), only a present one scores.
+_VERIFYBAMID_GLOB = "*selfSM"
 
 
 def _one_optional(results: Path, sample: str, pattern: str) -> Path | None:
@@ -207,6 +210,44 @@ def _extract_mosdepth_thresholds(path: Path) -> list[_Observation]:
         _Observation("qc.breadth_20x", ge20 / total, "fraction", path.name, "ge_20x/region", None),
         _Observation("qc.breadth_30x", ge30 / total, "fraction", path.name, "ge_30x/region", None),
     ]
+
+
+def _extract_verifybamid(path: Path) -> list[_Observation]:
+    """verifybamid2 ``.selfSM`` → estimated contamination fraction (``FREEMIX``), unit ``fraction``.
+
+    The FREEMIX column is located by its HEADER name (case-sensitive, as verifybamid2 writes it),
+    NOT a hardcoded index, so a column-order change in a future tool version can't silently read the
+    wrong field. verifybamid2 emits exactly one data row (the sample's self-check). FREEMIX is a 0-1
+    fraction as written — DECLARED ``fraction``, never guessed. A missing/malformed file yields no
+    observation (a signal, not a crash — CLAUDE.md data-handling).
+    """
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    header: list[str] | None = None
+    for line in lines:
+        if not line.strip():
+            continue
+        cols = line.split("\t")
+        if header is None:
+            # verifybamid2's header row leads with `#SEQ_ID`; strip the leading `#` off that token.
+            header = [c.lstrip("#") for c in cols]
+            continue
+        try:
+            idx = header.index("FREEMIX")
+        except ValueError:
+            return []  # header present but no FREEMIX column — nothing to extract, don't guess
+        if idx >= len(cols):
+            continue
+        try:
+            freemix = float(cols[idx])
+        except ValueError:
+            return []
+        return [
+            _Observation("contamination.freemix", freemix, "fraction", path.name, "freemix", None)
+        ]
+    return []
 
 
 # MultiQC general-stats scale is read from the column HEADER's declaration (its `suffix`), never
@@ -382,6 +423,13 @@ def ingest_results_dir(
         else:
             absent.append(UnmappedKey(sid, "qc.breadth_20x", "(absent)", "absent_source"))
             absent.append(UnmappedKey(sid, "qc.breadth_30x", "(absent)", "absent_source"))
+
+        # OPTIONAL add-on tools (WS-02) — not in the germline base profile, so their absence is NOT
+        # a hole: no `absent_source` is recorded (that would flag every lean run). Only a PRESENT
+        # output scores, matching the `required=False` runbook thresholds for these metrics.
+        selfsm = _one_optional(results, sid, _VERIFYBAMID_GLOB)
+        if selfsm is not None:
+            observations.extend(_extract_verifybamid(selfsm))
 
         # 2. MultiQC general-stats (secondary — fills only what structured files did not) ---------
         observations.extend(multiqc.get(sid, []))

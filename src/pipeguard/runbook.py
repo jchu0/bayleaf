@@ -233,6 +233,22 @@ class Runbook(BaseModel):
                 required=False,
                 unit="%",
             ),
+            # WS-02: cross-sample contamination (verifybamid2 FREEMIX). LOWER is better — a value
+            # PAST the gate contaminates. gate 0.02 (2%) → WARN/HOLD, hard_fail 0.05 (5%) →
+            # CRITICAL/RERUN. required=False: verifybamid2 is NOT in the germline base profile, so a
+            # run that omits it is never NA-flagged — only a present FREEMIX scores. The band is an
+            # ILLUSTRATIVE, operator-configurable heuristic, NOT a clinical threshold (CLAUDE.md
+            # life-science guardrail 3). Canonical unit is a fraction; displayed as % for operators.
+            QCThreshold(
+                metric="freemix",
+                our_key="contamination.freemix",
+                label="Contamination (FREEMIX)",
+                gate=0.02,
+                hard_fail=0.05,
+                higher_is_better=False,
+                required=False,
+                unit="%",
+            ),
             # VARIANT-GATE SCOPE (audit P3-10): the variant gate is DP-ONLY — `variant.dp` is the
             # only variant-tier THRESHOLD here. GQ (`variant.gq`) and Ts/Tv (`variant.titv`) are
             # registered + wired but UNGATED observations (a phred / target-band metric the

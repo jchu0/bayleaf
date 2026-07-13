@@ -436,11 +436,12 @@ def test_metric_catalog_lists_registered_metrics_and_gated_flag():
     # Every registered metric type is listed (the extensibility story lives here).
     assert body["n_registered"] == 20
     assert len(body["entries"]) == 20
-    # Eleven runbook keys are gated: the five required frozen-CSV metrics + six optional
+    # Twelve runbook keys are gated: the five required frozen-CSV metrics + seven optional
     # (non-blocking) checks that score a richer run without NA-flagging a lean one — five one-sided
-    # plus variant.titv, the first BOTH-TAILS (target_band) gate (WS-06 Gap 2). The rest stay
+    # plus variant.titv (the first BOTH-TAILS target_band gate, WS-06 Gap 2) plus
+    # contamination.freemix (WS-02, an optional ingest-adapter metric). The rest stay
     # registered-but-ungated vocabulary the gate can still adopt.
-    assert body["n_gated"] == 11
+    assert body["n_gated"] == 12
     gated = {e["our_key"] for e in body["entries"] if e["gated"]}
     assert gated == {
         # required (frozen-CSV)
@@ -456,8 +457,9 @@ def test_metric_catalog_lists_registered_metrics_and_gated_flag():
         "qc.on_target",
         "variant.dp",
         "variant.titv",  # WS-06 Gap 2: both-tails target_band gate
+        "contamination.freemix",  # WS-02: optional verifybamid2 contamination gate
     }
-    assert sum(1 for e in body["entries"] if not e["gated"]) == 9
+    assert sum(1 for e in body["entries"] if not e["gated"]) == 8
     # Each entry carries the flattened vocabulary fields the settings catalog renders.
     q30 = next(e for e in body["entries"] if e["our_key"] == "qc.q30")
     assert q30["gated"] is True and q30["gate"] == "qc"

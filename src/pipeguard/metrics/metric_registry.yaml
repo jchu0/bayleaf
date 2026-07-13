@@ -23,11 +23,13 @@
 # Picard `PCT_TARGET_BASES_20X` is a fraction, mosdepth-via-MultiQC `20_x_pc` is a percent.
 #
 # PARSE STATUS (audit P3-10 — registry honesty). A `parser:` value names the DESIGNED parser for
-# an entry; it does NOT assert a value is actually computed today. Of the 20 registered keys, 13
-# are wired end-to-end (mapping.py `_QCMETRICS_MAP`) and the other 7 are REGISTERED-ONLY / NOT
-# COMPUTED (no parser wired) — each is flagged inline below with a `# NOT COMPUTED (audit P3-10)`
-# comment: qc.zero_cov_targets, qc.fold_enrichment, qc.fold_80, identity.ngscheckmate_match,
-# identity.sex_concordance, contamination.freemix, variant.allele_balance. The variant GATE is
+# an entry; it does NOT assert a value is actually computed today. 13 keys are wired end-to-end via
+# the flat-CSV path (mapping.py `_QCMETRICS_MAP`); `contamination.freemix` is computed via the WS-03
+# ingest adapter's `_extract_verifybamid` (nfcore.py) — a real, present-value parser, gated by an
+# optional (verifybamid2-not-in-base-profile) runbook threshold (WS-02). The remaining 6 keys are
+# REGISTERED-ONLY / NOT COMPUTED (no parser wired) — each flagged inline below with a
+# `# NOT COMPUTED (audit P3-10)` comment: qc.zero_cov_targets, qc.fold_enrichment, qc.fold_80,
+# identity.ngscheckmate_match, identity.sex_concordance, variant.allele_balance. The variant GATE is
 # DP-only (only `variant.dp` is a threshold; `variant.gq`/`variant.titv` are ungated observations;
 # allele-balance/AF are not computed). See docs/data/metric_registry.md "Wiring status".
 
@@ -300,7 +302,9 @@ metrics:
     parser_version: null
     aliases: [sex_concordant]
 
-  # NOT COMPUTED (audit P3-10): registered-only — no parser wired; `parser` names the designed source.
+  # COMPUTED (WS-02): wired via the WS-03 ingest adapter (`ingest.nfcore._extract_verifybamid`
+  # parses the `.selfSM` FREEMIX column) and gated by an OPTIONAL runbook threshold — verifybamid2
+  # is not in the germline base profile, so an absent value is never NA-flagged (required=False).
   contamination.freemix:
     display_name: Contamination (FREEMIX)
     gate: qc
@@ -308,7 +312,8 @@ metrics:
     canonical_unit: fraction
     value_type: float
     direction: lower_is_better
-    # Optional / non-sarek-default: verifybamid2 is not in the sarek default profile.
+    # Optional / non-base-profile: verifybamid2 is not in the germline default profile. The LIVE run
+    # additionally needs an SVD/UD ancestry resource panel (a labelled pipeline input, never fabricated).
     source:
       module: verifybamid2
       source_file: selfSM
