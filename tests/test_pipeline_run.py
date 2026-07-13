@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from scripts.seed_approved_germline import germline_graph_dict
 
@@ -23,6 +24,22 @@ from api.main import app
 client = TestClient(app)
 
 _REVIEWER = {"X-Bayleaf-Role": "reviewer", "X-Bayleaf-Actor": "a.rivera"}
+
+# Fresh-clone skip-guard (path-existence, NOT an env flag): the happy-path / pin / list-inputs tests
+# resolve the germline chain's real GIAB inputs — GB-scale reads + reference under data/real-giab/,
+# which is gitignored (fetched by scripts/fetch_giab_hg002.py, never committed — CLAUDE.md
+# data-handling 1). A maintainer WITH the data on disk still runs and passes these; a fresh clone
+# that lacks it SKIPS them (the input catalog surfaces only present files, so absent inputs would
+# 422 the run / drop the reference option). The tiny panel BED is committed, so it isn't gated on.
+_GIAB_RUN_INPUTS = (
+    pr._DATA / "real-giab" / "fastq" / "HG002.R1.fastq.gz",
+    pr._DATA / "real-giab" / "fastq" / "HG002.R2.fastq.gz",
+    pr._DATA / "real-giab" / "ref" / "chr20.fa",
+)
+_needs_giab_inputs = pytest.mark.skipif(
+    not all(p.exists() for p in _GIAB_RUN_INPUTS),
+    reason="needs GB-scale real-giab reads+reference on disk (gitignored; fetch_giab_hg002.py)",
+)
 
 # The default fixture is a REAL gate-able pipeline — the seeded germline chain (fastp → bwa-mem2 →
 # markdup → mosdepth → bcftools call/norm → MultiQC), reused verbatim from the shared
@@ -100,6 +117,7 @@ def _body(run_id: str = "RUN-TEST-EXEC", name: str = "exec-test", **inputs: str)
     return {"name": name, "run_id": run_id, "sample": "HG002", "inputs": chosen}
 
 
+@_needs_giab_inputs
 def test_list_inputs_surfaces_present_server_side_inputs() -> None:
     cat = client.get("/api/pipelines/run/inputs").json()
     # Only what's on disk is surfaced; the real GIAB fixtures are present in this repo.
@@ -192,6 +210,7 @@ def test_run_rejects_a_non_gateable_approved_pipeline(monkeypatch: Any) -> None:
     assert resp.status_code == 422 and "frozen-five" in resp.json()["detail"]
 
 
+@_needs_giab_inputs
 def test_run_happy_path_compiles_the_approved_graph(tmp_path: Any, monkeypatch: Any) -> None:
     # Monkeypatch the background executor to a no-op so the offline test never runs Nextflow, and
     # redirect the scratch dir into tmp so nothing lands in the repo.
@@ -220,6 +239,7 @@ def test_run_happy_path_compiles_the_approved_graph(tmp_path: Any, monkeypatch: 
     assert status["status"] in {"queued", "running", "complete", "failed"}
 
 
+@_needs_giab_inputs
 def test_run_pins_an_exact_approved_version(tmp_path: Any, monkeypatch: Any) -> None:
     # Two approved versions on file; pinning v2 runs that exact revision (not the latest).
     _seed(

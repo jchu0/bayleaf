@@ -1,0 +1,7 @@
+2026-07-13T02:01:43Z [INFO] intake: registering run RUN-2026-07-08-GIAB-HG002 — sample HG002
+2026-07-13T02:01:43Z [INFO] preflight: reference index OK — all sidecars present for chr20.fa
+2026-07-13T02:01:43Z [INFO] preflight: contig naming OK — panel BED ['chr20'] is a subset of the reference
+2026-07-13T02:01:43Z [INFO] preflight: FASTQ pair OK — 35373 paired reads, ids matched (HG002.R1.fastq.gz/HG002.R2.fastq.gz)
+2026-07-13T02:01:43Z [INFO] nextflow: nextflow run main.nf — sample HG002 · -profile standard
+2026-07-13T02:02:04Z [INFO] nextflow: pipeline completed — parsing published QC outputs
+2026-07-13T02:02:04Z [INFO] gate: handing HG002 to run_gate (Q30 88.2%, reads-PF 99.3%, cov 54.2x, dup 0.006%, 553 variants)

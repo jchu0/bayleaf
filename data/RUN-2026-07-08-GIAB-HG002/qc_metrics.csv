@@ -1,0 +1,2 @@
+sample_id,q30,reads_passing_filter,mean_coverage,dup_rate,cluster_pf,breadth_20x,breadth_30x
+HG002,88.22,99.31,54.2,0.0057,,0.9924,0.9707
