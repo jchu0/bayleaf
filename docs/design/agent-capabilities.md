@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| **Status** | 🚧 §1 archivist DB retrieval **built**; §2 pipeline-repair **docs corpus built** (issues+resolutions half deferred — needs the monitoring tool-agent); §3 node-author **Accept-to-library button built** (doc-upload + schema-delta + scaffolds-as-assets still design) |
-| **Last updated** | 2026-07-13 (MST) — §3 Accept-to-library button wired (`AuthorToolNodeModal` → `POST .../accept`, confirm+role-gated, live-verified). Prior: §2 docs corpus (`load_system_corpus`); §1 `api/archivist_retrieval.py` |
+| **Status** | 🚧 **P3 wrapped (2026-07-13).** Built: §1 archivist DB retrieval · §2 pipeline-repair docs corpus · §3 Accept-to-library button + scaffolds-as-assets. Deferred (honest): §2 issues+resolutions half (needs the monitoring tool-agent, ADR-0023); §3 doc-upload → schema-delta, inline-edit/draft→approve, and persisting scaffolds as versioned assets (ADR-0025) |
+| **Last updated** | 2026-07-13 (MST) — P3 wrap: §3 scaffolds-as-assets built (`node_author/scaffolds.py` + `GET .../scaffolds` + Builder modal). Prior: §3 Accept-to-library button; §2 docs corpus (`load_system_corpus`); §1 `api/archivist_retrieval.py` |
 | **Audience** | software / design / reviewers |
 | **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) (corpora/retrieval), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0023](../adr/ADR-0023-agent-taxonomy-and-action-boundary.md), [ADR-0024](../adr/ADR-0024-scope-by-wiring.md), [ADR-0025](../adr/ADR-0025-versioned-reversible-agent-config.md), [agents.md](agents.md), [agent-authoring-contract.md](agent-authoring-contract.md) |
 
@@ -72,11 +72,14 @@ the **authoring surface** and the **onboarding inputs**.
    consequential — the agent drafts the card + the schema/registry delta + the nextflow wiring as a
    **human-approved proposal**; it never auto-mutates the core data contract. (ADR-0001 + the
    authoring-contract boundary.)
-4. **Scaffolds-as-assets** (generalizes to **all** agents). Ship reusable, versioned templates —
-   a tool-card scaffold, a Nextflow process scaffold (`script:`+`stub:`), a metric-registry-entry
-   scaffold — as agent assets. The agent fills a scaffold rather than free-composing, making card
-   creation **quicker and more reproducible**, and the output conforms by construction. Scaffolds
-   are versioned/reversible like other editable assets (ADR-0025).
+4. **Scaffolds-as-assets** — **Built (P3, 2026-07-13):** `node_author/scaffolds.py`
+   (`render_scaffolds`) renders filled DRAFT artifacts from a proposal — a `ProcessSpec`
+   catalog-entry skeleton + a Nextflow `process` skeleton (+ a metric-registry entry when the tool
+   emits QC), ports/names wired from the corpus, the runnable command left an explicit `TODO` (the
+   agent never authors `script:`/`stub:`). `GET /api/builder/node-proposal/scaffolds` (read-only) +
+   a "Starter scaffolds" collapsible in the Builder modal. Conform-by-construction so a human edits
+   a skeleton rather than free-composing. **Deferred:** persisting scaffolds as versioned library
+   assets (ADR-0025) — they are rendered on demand today, not stored.
 
 ## Cross-cutting invariants
 
