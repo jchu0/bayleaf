@@ -22,8 +22,12 @@ const PER_RUN_PAGES: ReadonlySet<PageId> = new Set(['cards', 'intake', 'provenan
 // were doing exactly that). Admin has no PageId (excluded from the catalog by design), so it's named
 // literally. Order matters — the per-run sub-views live under /runs/:id/… and must be matched before
 // the bare decision-cards route.
-function routePage(pathname: string): PageId | 'admin' | null {
+function routePage(pathname: string): PageId | 'admin' | 'system-agents' | null {
   if (pathname === '/') return 'runs'
+  // /agents and /runs/:id/agent share the PageId 'agent'; the crumb must still name them apart
+  // (the pages themselves already differ). Match the run-independent org view before the generic
+  // /agent branch below, and name it literally like 'admin' (it has no dedicated PageId).
+  if (pathname === '/agents') return 'system-agents'
   if (pathname.startsWith('/accession')) return 'accession'
   if (pathname.startsWith('/submit')) return 'submit'
   if (pathname.startsWith('/inbox')) return 'inbox'
@@ -44,8 +48,10 @@ function useCrumb(): { title: string; run: string | null } {
   const { pathname } = useLocation()
   const { runId } = useParams()
   const page = routePage(pathname)
-  const title = page === 'admin' ? 'Admin' : page ? pageLabel(page) : 'Runs'
-  const run = page && page !== 'admin' && PER_RUN_PAGES.has(page) ? (runId ?? null) : null
+  const title =
+    page === 'admin' ? 'Admin' : page === 'system-agents' ? 'System agents' : page ? pageLabel(page) : 'Runs'
+  const run =
+    page && page !== 'admin' && page !== 'system-agents' && PER_RUN_PAGES.has(page) ? (runId ?? null) : null
   return { title, run }
 }
 
