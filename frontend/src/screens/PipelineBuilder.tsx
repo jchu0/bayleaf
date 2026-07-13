@@ -840,7 +840,14 @@ export function PipelineBuilder() {
   // Deltas divide by `zoom` (content units). Single-node drags snap to alignment guides live; all
   // moved nodes grid-snap + clamp ≥0 on release.
   const nodeDrag = (id: string, e: React.MouseEvent) => {
-    if (connectMode) return
+    if (connectMode) {
+      // Connect mode: a body-click SELECTS the node (its inspector opens) but never drags/wires —
+      // wiring is the ports' own click-arm-click (portTap). Without this, a user card body was inert in
+      // connect mode (only its ports responded), while seeded tool/agent cards still selected via the
+      // canvas onSelect path — an inconsistency. Mirror the tool/agent select here.
+      selectNode(id, false)
+      return
+    }
     if (isView) {
       selectNode(id, false) // View: click selects for inspection, never drags
       return
@@ -1517,7 +1524,6 @@ export function PipelineBuilder() {
               onRemovePort={removePort}
               onSetPortKind={setPortKind}
               onDeleteNode={(id) => void deleteNodes([id])}
-              onClose={clearSelection}
               onCollapse={() => setInspectorCollapsed(true)}
               onSaveCard={onSaveCard}
             />
