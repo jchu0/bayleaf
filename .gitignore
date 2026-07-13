@@ -48,6 +48,14 @@ outputs/
 # the bytes (VCF/BED/BAM/index) live here and stay out of git (CLAUDE.md Data-handling 1).
 data/real-giab/
 
+# Alignment artifacts must NEVER be committed ANYWHERE in the tree (data-handling guardrail):
+# raw reads + indexes are large and often PHI-adjacent. A belt-and-suspenders guard beyond the
+# data/ dirs above (a stray HG002.*.bam.bai has appeared at the repo root before).
+*.bam
+*.bai
+*.cram
+*.crai
+
 # Bulk synthetic volume — dozens of contrived runs generated on demand by
 # `python -m pipeguard.synthetic bulk` for scale testing. Regenerable, never committed;
 # the committed record is the CLI + one representative run (data/mock_run_scale_30/).
