@@ -46,8 +46,17 @@ The human still makes the call; they just no longer reconstruct the context by h
 **Prerequisites:** [`uv`](https://docs.astral.sh/uv/) (Python) and Node 20+ (frontend). No API key
 needed — the app runs fully offline with stub agents by default.
 
+> **Using a conda / mamba env instead of uv's own `.venv`?** `uv` stays the dependency *source*
+> (`pyproject.toml` + `uv.lock`) — you just point it at your env. Activate the env, then
+> **`export UV_PROJECT_ENVIRONMENT="$CONDA_PREFIX"`** (`$CONDA_PREFIX` is the active env's path).
+> Now `uv sync` installs into that env instead of creating a separate `.venv`, and every `uv run …`
+> / `make check` below runs from it. Once synced you can also drop the `uv run` prefix and call the
+> tools directly inside the env: `pytest`, `uvicorn api.main:app --port 8010`, `ruff check`, `mypy`.
+> (Heads-up: `uv sync` manages the target env to match the lockfile, so keep genomics/bioconda tools
+> in a *separate* env — see [Development](#development).)
+
 ```bash
-uv sync --all-extras                          # .venv + deps + dev tools (editable install)
+uv sync --all-extras                          # .venv (or your conda env) + deps + dev tools (editable install)
 
 # Run the full stack (two terminals):
 uv run uvicorn api.main:app --port 8010        # backend  (FastAPI read-API)
@@ -102,7 +111,11 @@ uv run pre-commit install --install-hooks   # ruff/mypy/secret-scan (commit) + p
 ```
 
 Two toolchains are kept separate: **`uv`** for the app, and **bioconda/Nextflow** for the optional
-genomics-tool execution (only needed to run a real pipeline, not for the demo).
+genomics-tool execution (only needed to run a real pipeline, not for the demo). Running the app's
+Python from a conda/mamba env rather than uv's `.venv`? These `uv run` / `make check` commands work
+unchanged once you `export UV_PROJECT_ENVIRONMENT="$CONDA_PREFIX"` — see the
+[Quickstart note](#quickstart). Keep that env distinct from the bioconda one so `uv sync` (which
+prunes to the lockfile) never touches your genomics tools.
 
 ---
 

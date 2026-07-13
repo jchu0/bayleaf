@@ -27,9 +27,17 @@ all `BAYLEAF_*` env vars, `X-Bayleaf-*` wire headers). The historical name was
 
 ## Commands
 
+> **Env note (this machine):** the app's Python deps live in a **conda/mamba env**, not uv's own
+> `.venv`. So either (a) call tools directly in the activated env — `pytest`, `uvicorn …`, `ruff`,
+> `mypy` (drop the `uv run` prefix) — or (b) `export UV_PROJECT_ENVIRONMENT="$CONDA_PREFIX"` and the
+> `uv run` / `uv sync` / `make check` commands below target that env instead of making a `.venv`.
+> `uv` stays the dependency *source*; it just points at the conda env. Keep that env distinct from
+> the bioconda genomics env — `uv sync` prunes the target to the lockfile.
+
 ```bash
-# Setup (uv is the single dependency source: pyproject.toml + uv.lock)
-uv sync --all-extras                        # .venv + deps + dev tools, editable install
+# Setup (uv is the single dependency source: pyproject.toml + uv.lock).
+# Conda/mamba env? `export UV_PROJECT_ENVIRONMENT="$CONDA_PREFIX"` first (see the env note above).
+uv sync --all-extras                        # .venv (or the conda env) + deps + dev tools, editable install
 uv run pre-commit install --install-hooks   # ruff/mypy/secret-scan (commit) + pytest (push)
 
 # Run the full stack (FastAPI read-API + React; Vite proxies /api -> :8010).
