@@ -8,6 +8,7 @@ include { BWA_MEM2_MEM } from './modules/bwa_mem2_mem.nf'
 include { SAMTOOLS_MARKDUP } from './modules/samtools_markdup.nf'
 include { MOSDEPTH } from './modules/mosdepth.nf'
 include { BCFTOOLS_CALL } from './modules/bcftools_call.nf'
+include { VERIFYBAMID2 } from './modules/verifybamid2.nf'
 include { MULTIQC } from './modules/multiqc.nf'
 include { BCFTOOLS_NORM } from './modules/bcftools_norm.nf'
 
@@ -17,12 +18,14 @@ workflow {
         .map { row -> tuple([id: row.sample], file(row.fastq_1), file(row.fastq_2)) }
     ch_panel_bed = Channel.value(file(params.panel_bed))
     ch_reference = Channel.value([file(params.reference), file("${params.reference}.*")])
+    ch_verifybamid_svd = params.verifybamid_svd ? Channel.fromPath(params.verifybamid_svd) : Channel.empty()
 
     FASTP(ch_reads)
     BWA_MEM2_MEM(FASTP.out.fastq, ch_reference)
     SAMTOOLS_MARKDUP(BWA_MEM2_MEM.out.bam)
     MOSDEPTH(SAMTOOLS_MARKDUP.out.bam, ch_panel_bed)
     BCFTOOLS_CALL(SAMTOOLS_MARKDUP.out.bam, ch_reference, ch_panel_bed)
+    VERIFYBAMID2(SAMTOOLS_MARKDUP.out.bam, ch_reference, ch_verifybamid_svd)
     MULTIQC(FASTP.out.fastp_json.map { it[1] }.collect(), SAMTOOLS_MARKDUP.out.markdup_metrics.map { it[1] }.collect(), SAMTOOLS_MARKDUP.out.samtools_stats.map { it[1] }.collect(), MOSDEPTH.out.mosdepth_summary.map { it[1] }.collect(), MOSDEPTH.out.mosdepth_thresholds.map { it[1] }.collect())
     BCFTOOLS_NORM(BCFTOOLS_CALL.out.vcf, ch_reference)
 }

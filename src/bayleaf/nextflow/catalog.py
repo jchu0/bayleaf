@@ -254,6 +254,60 @@ _SPECS: tuple[ProcessSpec, ...] = (
         stub="touch ${meta.id}.norm.vcf.gz ${meta.id}.norm.vcf.gz.csi",
     ),
     ProcessSpec(
+        tool="verifybamid2",
+        process="VERIFYBAMID2",
+        conda="bioconda::verifybamid2=2.0.1",
+        container="quay.io/biocontainers/verifybamid2:2.0.1--h9ee0642_2",
+        label="Contamination (FREEMIX)",
+        # Per-sample contamination on the dedup BAM. Its third input (svd_panel) is the first
+        # OPTIONAL EXTERNAL input (OPTIONAL_INPUT_PARAMS below): when the operator does not supply
+        # `params.verifybamid_svd`, the compiler feeds this process an EMPTY channel and it runs
+        # ZERO tasks (standard Nextflow DSL2 semantics) — so verifybamid2 is DORMANT on the
+        # offline/default demo, and only computes FREEMIX when an ancestry panel is armed. The
+        # `reference_fasta` input is REQUIRED (a shared value channel, the same one bwa/bcftools
+        # use): the genuine verifyBamID2 command needs `--Reference` to pile up the BAM, so it is a
+        # real port, not decoration.
+        inputs=(
+            Port("bam", "path(dedup)"),
+            Port("reference_fasta", "tuple path(reference), path(reference_idx)"),
+            # OPTIONAL external input. Declared `path` to match the design's param-gated
+            # `Channel.fromPath(...)`/`Channel.empty()` source channel; the variable is `svd_prefix`
+            # so the reused verifyBamID2 `--SVDPrefix ${svd_prefix}` command resolves. NOTE (live
+            # seam, ADR-0004): verifyBamID2's `--SVDPrefix` wants a path PREFIX whose sibling files
+            # (.UD/.mu/.bed/.V) sit alongside — a real multi-sample run needs the panel staged as a
+            # prefix (or this switched to `val` + a value channel to broadcast). Irrelevant while
+            # dormant; the maintainer must settle it before a live contamination run.
+            Port("svd_panel", "path svd_prefix"),
+        ),
+        # A per-sample `.selfSM`; verifyBamID2 writes FREEMIX in its 7th column. The published
+        # filename (`${meta.id}.verifybamid2.selfSM`) is exactly what `ingest.nfcore`'s `*selfSM`
+        # glob parses into the `contamination.freemix` metric — the gate side is already wired.
+        outputs=(Port("selfsm", 'path("*.selfSM")', emit="selfsm"),),
+        # The genuine verifyBamID2 invocation, reused VERBATIM from the standalone optional module
+        # (`pipelines/optional_modules/verifybamid2.nf`) — bayleaf never fabricates a command.
+        script=(
+            "verifyBamID2 \\\n"
+            "  --SVDPrefix ${svd_prefix} \\\n"
+            "  --Reference ${reference} \\\n"
+            "  --BamFile ${dedup} \\\n"
+            "  --NumThread ${task.cpus} \\\n"
+            "  --Output ${meta.id}.verifybamid2"
+        ),
+        # OFFLINE stub reused from the standalone module: emits a real-shaped `.selfSM` (real header
+        # + one FREEMIX row) WITHOUT running the tool, so `-stub-run` validates the DAG and the
+        # ingest adapter can parse it. Raw strings keep the `\\t`/`\\n` as two-backslash escapes so
+        # Groovy un-escapes ONE and bash printf receives `\t`/`\n` → a real TSV (compose ≠ execute).
+        stub=(
+            r"printf '#SEQ_ID\\tRG\\tCHIP_ID\\t#SNPS\\t#READS\\tAVG_DP\\tFREEMIX\\tFREELK1\\t"
+            r"FREELK0\\tFREE_RH\\tFREE_RA\\tCHIPMIX\\tCHIPLK1\\tCHIPLK0\\tCHIP_RH\\tCHIP_RA\\t"
+            r"DPREF\\tRDPHET\\tRDPALT\\n' > ${meta.id}.verifybamid2.selfSM"
+            "\n"
+            r"printf '${meta.id}\\tALL\\tNA\\t1000000\\t50000000\\t35.2\\t0.0042\\t1234.5\\t"
+            r"1250.0\\tNA\\tNA\\tNA\\tNA\\tNA\\tNA\\tNA\\t35.0\\t1.0\\t0.5\\n' "
+            r">> ${meta.id}.verifybamid2.selfSM"
+        ),
+    ),
+    ProcessSpec(
         tool="MultiQC",
         process="MULTIQC",
         conda="bioconda::multiqc=1.21",
@@ -301,6 +355,19 @@ REFERENCE_PARAM: dict[str, str] = {
 # file + every `<file>.*` sibling as a tuple, so bwa-mem2/bcftools find the index next to the FASTA
 # (Nextflow otherwise stages only the single declared file). A BED/VCF needs no sidecar.
 INDEXED_REFERENCE_PARAMS: frozenset[str] = frozenset({"reference"})
+
+# Optional EXTERNAL inputs (T-071a): an input port whose source is operator-supplied but NOT
+# required. Maps the artifact-kind → the params key that arms it. When that param is UNSET the
+# compiler feeds the consuming process an EMPTY channel (``params.x ? Channel.fromPath(params.x) :
+# Channel.empty()``), so the process runs ZERO tasks and the tool is DORMANT — the offline/default
+# demo stays byte-green while the tool is fully wired for the operator who arms it. Distinct from
+# REFERENCE_PARAM (a REQUIRED shared value channel) and from an ``extra`` param (a required
+# ``params.<kind>`` file channel): an optional kind is deliberately kept OUT of ``required_inputs``.
+# verifybamid2's SVD/UD ancestry panel is the first and only such input — a LABELLED
+# operator-supplied resource (ADR-0004), never fabricated or committed as bytes.
+OPTIONAL_INPUT_PARAMS: dict[str, str] = {
+    "svd_panel": "verifybamid_svd",
+}
 
 
 def catalog_entry(tool: str) -> ProcessSpec | None:

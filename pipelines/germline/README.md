@@ -23,5 +23,6 @@ nextflow run main.nf -profile conda,standard \
 3. `SAMTOOLS_MARKDUP` — samtools markdup
 4. `MOSDEPTH` — mosdepth
 5. `BCFTOOLS_CALL` — bcftools call
-6. `MULTIQC` — MultiQC
-7. `BCFTOOLS_NORM` — bcftools norm
+6. `VERIFYBAMID2` — verifybamid2
+7. `MULTIQC` — MultiQC
+8. `BCFTOOLS_NORM` — bcftools norm

@@ -7,9 +7,20 @@ committed reference pipeline under ``pipelines/germline/`` — so the "what the 
 "canonical pipeline in the repo" are the SAME artifact by construction, and a drift test pins it.
 
 Node output/input kinds are listed in the catalog's port order (see ``catalog.py``); edges index
-into those orders. Chain: fastp → bwa-mem2 → samtools markdup → {mosdepth, bcftools call → norm};
-fastp/markdup/mosdepth QC feed MultiQC. References (reference_fasta, panel_bed) are unwired inputs,
-so they compile to ``params.reference`` / ``params.panel_bed`` source channels.
+into those orders. Chain: fastp → bwa-mem2 → samtools markdup → {mosdepth, bcftools call → norm,
+verifybamid2}; fastp/markdup/mosdepth QC feed MultiQC. References (reference_fasta, panel_bed) are
+unwired inputs, so they compile to ``params.reference`` / ``params.panel_bed`` source channels.
+
+verifybamid2 (contamination / FREEMIX, T-071a) consumes the dedup BAM + the shared reference and an
+OPTIONAL ``svd_panel`` external input (``OPTIONAL_INPUT_PARAMS`` → ``params.verifybamid_svd``): when
+that param is UNSET — the offline/default demo — the process receives an empty channel and runs ZERO
+tasks, so it is DORMANT and the pinned demo scenario is unchanged. It only computes contamination
+when an operator arms the ancestry panel (a labelled input, ADR-0004; not committed here).
+
+NOTE (frontend parity): this graph historically mirrored the Builder's seeded template one-to-one.
+Adding a dormant verifybamid2 node here (the compiler's canonical reference) slightly outpaces the
+frontend ``BuilderShared`` template, which does not yet ship a verifybamid2 card — a labelled seam
+for the maintainer, not a wiring gap (nothing cross-checks the two by construction).
 """
 
 from __future__ import annotations
@@ -52,6 +63,15 @@ def germline_graph() -> NfGraph:
             ],
             outs=["multiqc_json"],
         ),
+        # Contamination (FREEMIX), DORMANT by default (T-071a). Input order matches the catalog's
+        # verifybamid2 ports: bam (from markdup), reference_fasta (shared, unwired), svd_panel (the
+        # OPTIONAL external input, unwired → params.verifybamid_svd → empty unless armed).
+        NfNode(
+            "n_verifybamid",
+            "verifybamid2",
+            ins=["bam", "reference_fasta", "svd_panel"],
+            outs=["selfsm"],
+        ),
     ]
     edges = [
         NfEdge("n_fastp", 0, "n_bwa", 0),  # trimmed fastq → aligner
@@ -64,5 +84,7 @@ def germline_graph() -> NfGraph:
         NfEdge("n_markdup", 3, "n_multiqc", 2),  # samtools stats → MultiQC
         NfEdge("n_mosdepth", 0, "n_multiqc", 3),  # mosdepth summary → MultiQC
         NfEdge("n_mosdepth", 1, "n_multiqc", 4),  # mosdepth thresholds → MultiQC
+        NfEdge("n_markdup", 0, "n_verifybamid", 0),  # dedup bam → contamination (reference + svd
+        # unwired: reference is the shared value channel, svd_panel is the OPTIONAL dormant input)
     ]
     return NfGraph(name="germline-panel", nodes=nodes, edges=edges)

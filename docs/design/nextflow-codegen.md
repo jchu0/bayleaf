@@ -156,6 +156,24 @@ command (see [Wiring rules](#wiring-rules) point 5).
 8. **A bad edge is rejected.** An edge naming a missing node or an out-of-range port index raises
    `CompileError` immediately — never silently dropped (a dropped edge would be a *worse* bug than
    a loud failure: a graph that looks valid but wires nothing).
+9. **An OPTIONAL external input is param-gated and DORMANT when unset (T-071a).** An input kind in
+   `catalog.OPTIONAL_INPUT_PARAMS` (kind → params key) is operator-supplied but **not required**: it
+   compiles to a conditional source channel
+   `ch_<param> = params.<param> ? Channel.fromPath(params.<param>) : Channel.empty()`, so a process
+   whose optional input is unprovided receives an **empty channel and runs zero tasks** — standard
+   DSL2 semantics: dormant, not an error. Distinct from an unwired *reference* (rule 2, a **required**
+   shared value channel) and from an `extra` param (a required `params.<kind>` file channel): an
+   optional kind is deliberately kept **out of `required_inputs()`** (a runner must not demand it) and
+   is emitted as a labelled `= null` param in `nextflow.config`. verifybamid2's `svd_panel` (→
+   `params.verifybamid_svd`, the VerifyBamID2 SVD/UD ancestry panel) is the first and only such input:
+   the germline reference now carries a `VERIFYBAMID2` contamination stage that is **dormant on the
+   offline/default demo** (no panel supplied → zero tasks → the pinned demo + drift lock stay green)
+   and computes FREEMIX only when an operator arms the panel. Its `.selfSM` output is exactly what
+   `ingest.nfcore`'s `*selfSM` glob already parses into the gated `contamination.freemix` metric — so
+   the gate side is wired end-to-end, tool-dormant until armed. **Live seams (labelled, ADR-0004):**
+   the panel is never committed; and `--SVDPrefix` wants a path *prefix* (sibling `.UD/.mu/.bed`
+   files), so a live *multi-sample* contamination run needs the panel staged as a prefix and the
+   channel broadcast (a `val` + value channel) — settle before a real run.
 
 ### Robustness hardening (`tests/test_nextflow_robustness.py`, 17 cases)
 
