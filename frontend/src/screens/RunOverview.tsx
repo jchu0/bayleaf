@@ -186,22 +186,47 @@ function RunsError({ onRetry }: { onRetry: () => void }) {
   )
 }
 
-function RunsEmpty({ onClear }: { onClear: () => void }) {
+// The empty state branches on WHY the list is empty (mirrors the Monitoring / ReviewQueue idiom): a
+// search miss names the query and offers "Clear search" (drops just the query, keeping the status
+// facet + date range); a filter/date miss offers "Show all runs" (clears everything). Never conflate
+// the two — a search miss telling the operator to "clear the filter to see released runs" is wrong.
+function RunsEmpty({
+  query,
+  onClearSearch,
+  onClearFilters,
+}: {
+  query: string
+  onClearSearch: () => void
+  onClearFilters: () => void
+}) {
+  const searching = query.trim().length > 0
   return (
     <div className="mt-[22px] flex flex-col items-center gap-2.5 rounded-[14px] border border-dashed border-line-strong bg-card p-10 text-center">
       <div className="flex h-[46px] w-[46px] items-center justify-center rounded-xl bg-card-2">
-        <Truck size={23} className="text-text-3" strokeWidth={1.7} />
+        {searching ? (
+          <Search size={22} className="text-text-3" strokeWidth={1.8} />
+        ) : (
+          <Truck size={23} className="text-text-3" strokeWidth={1.7} />
+        )}
       </div>
-      <div className="text-[16px] font-semibold text-text">No runs match this filter</div>
+      <div className="text-[16px] font-semibold text-text">
+        {searching ? 'No runs match your search' : 'No runs match this filter'}
+      </div>
       <div className="max-w-[380px] text-[13px] text-text-2">
-        Nothing is waiting on the gate right now. Clear the filter to see released runs.
+        {searching ? (
+          <>
+            Nothing matches “{query.trim()}”. Clear the search to see the full run index.
+          </>
+        ) : (
+          'Nothing is waiting on the gate right now. Clear the filter to see released runs.'
+        )}
       </div>
       <button
         type="button"
-        onClick={onClear}
+        onClick={searching ? onClearSearch : onClearFilters}
         className="mt-1 rounded-lg bg-accent px-[15px] py-2 text-[13px] font-medium text-white transition-colors hover:bg-accent-strong"
       >
-        Show all runs
+        {searching ? 'Clear search' : 'Show all runs'}
       </button>
     </div>
   )
@@ -349,7 +374,7 @@ export function RunOverview() {
           </div>
 
           {total === 0 ? (
-            <RunsEmpty onClear={clearFilters} />
+            <RunsEmpty query={query} onClearSearch={() => onQuery('')} onClearFilters={clearFilters} />
           ) : (
             <>
               <div className="mt-4 flex flex-col gap-[11px]">
