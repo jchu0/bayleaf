@@ -280,8 +280,7 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    Monitoring's Median-review KPI (no backend field — its signature-level `first_seen`/
    `last_seen`/`trend`/`affected_run_ids` fields ARE shipped, REQ-F-047). (Provenance artifact
    links, once a similar honest gap, are now real — `RunArtifact.url` is populated, REQ-F-070.)
-   *Trace:* [demo_plan.md](../demo/demo_plan.md),
-   [architecture.md](../design/architecture.md),
+   *Trace:* [architecture.md](../design/architecture.md),
    [tasks T-022/T-022b/T-037/T-044/T-062/T-108/T-110](../planning/tasks.md),
    [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md),
    [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md).
@@ -299,7 +298,7 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    [ADR-0016](../adr/ADR-0016-postgres-port.md), [tasks T-042/T-043](../planning/tasks.md).
 5. **REQ-F-043 — Offline-first full stack.** The React + FastAPI stack renders the same
    core fully offline (stub-first agents, $0) as the guaranteed-working demo — no API key or
-   network required. *Trace:* [demo_plan.md](../demo/demo_plan.md), ADR-0014.
+   network required. *Trace:* ADR-0014.
 6. **REQ-F-045 — Pipeline Builder (compose ≠ execute).** An editable node-graph screen
    (the superset of the Provenance canvas) lets an operator configure the germline pipeline
    and **emit `run_layout.yaml`** across profiles. It **composes, never executes** (the
@@ -460,8 +459,7 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    §Swappable seams, [agents.md](../design/agents.md).
 2. **REQ-F-051 — Deterministic fallback on failure.** If an AI call is disabled,
    errors, or is refused by a safety classifier, the system degrades to the stub;
-   the deterministic verdict and findings still stand. *Trace:* ADR-0006,
-   [demo_plan.md](../demo/demo_plan.md) §Fallbacks.
+   the deterministic verdict and findings still stand. *Trace:* ADR-0006.
 
 ## Authoring lifecycle, RBAC & operator surfaces (ADR-0010/0014/0016/0017)
 

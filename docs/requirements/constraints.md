@@ -28,7 +28,7 @@ traced to its source.
 3. **REQ-C-003 — Guaranteed-working offline demo.** Because demo time is fixed and
    unforgiving, the full React + FastAPI stack runs offline (stub-first agents, $0) over the
    same core as the always-green demo path — no separate fallback app is maintained. *Trace:*
-   [demo_plan.md](../demo/demo_plan.md), ADR-0014.
+   ADR-0014.
 
 ## Budget
 

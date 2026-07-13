@@ -220,13 +220,12 @@ links to [evaluation.md](../quality/evaluation.md).
 
 1. **REQ-NF-040 — AI failure degrades gracefully.** Disabled, errored, or
    safety-refused AI calls fall back to the deterministic stub; the demo cannot break
-   on the AI path. *Trace:* [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md),
-   [demo_plan.md](../demo/demo_plan.md).
+   on the AI path. *Trace:* [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md).
 2. **REQ-NF-041 — Tolerant parsing at boundaries.** Parsers treat a missing field as
    a *signal*, not a crash; malformed/partial artifacts are handled without aborting
    the run. *Trace:* CLAUDE.md Data handling, [architecture.md](../design/architecture.md).
 3. **REQ-NF-042 — Layered demo fallback.** Live AI → deterministic stub (default, $0); if the
-   app itself is unavailable → recorded walkthrough. *Trace:* [demo_plan.md](../demo/demo_plan.md) §Fallbacks.
+   app itself is unavailable → recorded walkthrough.
 4. **REQ-NF-043 — Execution jobs survive a backend restart (2026-07-11, T-131, audit P3-2/P3-8).**
    `api/job_store.py` persists each background execution job (intake, Builder-run) so a backend
    restart cannot strand a poller on `running` forever — a restart-recovered job resolves to

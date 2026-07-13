@@ -97,6 +97,7 @@ residual self-inconsistency in `agent-triage-redesign-spec.md` (WS-1c/Slices sti
 | Decision | Distilled to |
 |---|---|
 | Freshness pass run as two background Workflows (7 read-only auditors → 6 file-partitioned appliers); fix current-state docs, leave dated milestone records | 25 fixes across 15 docs; verified by re-grep |
+| Delete `docs/demo/` (all 3, incl. the judge one-pager) at maintainer request; clean the 19-file inbound cascade (§Fallbacks traces repointed to REQ-NF-042), leave `journal/`+`audit/`+`tasks.md` archive links as history | demo/ removed; README/requirements/quality/DOCUMENTATION_HABITS links repointed or dropped |
 | Keep the doc/audit corpus for public release; curate the front door rather than cut | This journal + the README/ToC/`audit/README.md` edits |
 | Frame `audit/` candor as acted-on discipline (banner), never delete | [audit/README.md](../../audit/README.md) |
 | Pin the Vite dev port to `:5173` (`strictPort`) rather than soften the README | `frontend/vite.config.ts` |
