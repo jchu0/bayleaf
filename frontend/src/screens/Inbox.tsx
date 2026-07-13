@@ -336,7 +336,7 @@ function InboxRow({ item }: { item: InboxItem }) {
 }
 
 function InboxTab() {
-  const { items, markAllRead, markAllUnread } = useInbox()
+  const { items, markAllRead, markAllUnread, inboxStats } = useInbox()
   const [filter, setFilter] = useState<InboxFilter>('all')
   // UIC-5: the notification stream paginates (25/50/100) — never an unbounded scroll.
   const [perPage, setPerPage] = useState<PerPage>('25')
@@ -348,7 +348,6 @@ function InboxTab() {
     if (filter === 'flagged') return base.filter((i) => i.flagged)
     return base
   }, [items, filter])
-  const unread = items.filter((i) => !i.read && i.column !== 'done').length
 
   const per = Number(perPage)
   const total = shown.length
@@ -360,10 +359,12 @@ function InboxTab() {
     setPage(1)
   }, [filter, perPage])
 
-  const FILTERS: { key: InboxFilter; label: string; n: number }[] = [
-    { key: 'all', label: 'All', n: items.filter((i) => i.column !== 'done').length },
-    { key: 'unread', label: 'Unread', n: unread },
-    { key: 'flagged', label: 'Flagged', n: items.filter((i) => i.flagged).length },
+  // "All" is the absence of a filter (UX-DUP): Unread/Flagged are attribute TOGGLES, not a partition
+  // with a catch-all peer — clicking the active one clears back to all. Counts come from the one
+  // inboxStats pass, so the chip count always matches what the filter shows.
+  const FILTERS: { key: Exclude<InboxFilter, 'all'>; label: string; n: number }[] = [
+    { key: 'unread', label: 'Unread', n: inboxStats.unread },
+    { key: 'flagged', label: 'Flagged', n: inboxStats.flagged },
   ]
 
   return (
@@ -373,7 +374,8 @@ function InboxTab() {
           {FILTERS.map((f) => (
             <button
               key={f.key}
-              onClick={() => setFilter(f.key)}
+              aria-pressed={filter === f.key}
+              onClick={() => setFilter(filter === f.key ? 'all' : f.key)}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] transition-colors ${
                 filter === f.key ? 'border-accent bg-accent-weak text-accent-strong' : 'border-line bg-card text-text-2 hover:border-line-strong'
               }`}
@@ -385,7 +387,7 @@ function InboxTab() {
         </div>
         {/* IB2: mark everything read OR unread (single-item toggles live on each row's dot). */}
         <div className="flex items-center gap-1.5">
-          {unread > 0 && (
+          {inboxStats.unread > 0 && (
             <button
               onClick={markAllRead}
               className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12px] text-text-2 hover:border-line-strong"
@@ -1503,11 +1505,10 @@ function NotesTab() {
 
 // ── page ───────────────────────────────────────────────────────────────────────
 export function Inbox() {
-  const { items, unreadCount, loading, error, refresh } = useInbox()
+  // KPI tiles + tab badge read the ONE inboxStats pass (UX-DUP Inbox #4) — no re-derivation, so the
+  // tile counts always match the stream chips and the bell.
+  const { inboxStats, unreadCount, loading, error, refresh } = useInbox()
   const [tab, setTab] = useState<Tab>('inbox')
-  const flagged = items.filter((i) => i.flagged).length
-  const overdue = items.filter((i) => dueStatus(i.due) === 'overdue').length
-  const done = items.filter((i) => i.column === 'done').length
 
   const TAB_ICON: Record<Tab, typeof InboxIcon> = {
     inbox: InboxIcon,
@@ -1532,10 +1533,10 @@ export function Inbox() {
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: 'Unread', value: unreadCount, tone: 'text-accent-strong' },
-          { label: 'Flagged', value: flagged, tone: 'text-escalate' },
-          { label: 'Overdue', value: overdue, tone: overdue > 0 ? 'text-escalate' : 'text-text' },
-          { label: 'Done', value: done, tone: 'text-proceed' },
+          { label: 'Unread', value: inboxStats.unread, tone: 'text-accent-strong' },
+          { label: 'Flagged', value: inboxStats.flagged, tone: 'text-escalate' },
+          { label: 'Overdue', value: inboxStats.overdue, tone: inboxStats.overdue > 0 ? 'text-escalate' : 'text-text' },
+          { label: 'Done', value: inboxStats.done, tone: 'text-proceed' },
         ].map((k) => (
           <div key={k.label} className="rounded-[12px] border border-line bg-card px-4 py-3">
             <div className={`text-[22px] font-semibold tabular-nums ${k.tone}`}>{k.value}</div>

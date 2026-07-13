@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { DEMO_ACCOUNTS } from '../auth'
+import { dueStatus } from '../inbox'
 import type { Ticket } from '../types'
 import { useRole } from './RoleContext'
 
@@ -93,6 +94,10 @@ type InboxState = {
   // slices it. `nonDoneCount` = the bell footer's "N items" without a second full-array scan.
   recentActivity: InboxItem[]
   nonDoneCount: number
+  // One canonical stats pass (UX-DUP Inbox #4) — the stream chips, KPI tiles, and tab badge all read
+  // these instead of re-deriving with divergent predicates. unread/flagged/overdue exclude the
+  // archived (done) column; `done` counts it.
+  inboxStats: { unread: number; flagged: number; overdue: number; done: number; nonDone: number }
   folders: string[]
   comments: Record<string, InboxComment[]> // IB14 — keyed by item id
   loading: boolean
@@ -293,6 +298,28 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     [nonDone],
   )
   const nonDoneCount = nonDone.length
+  // UX-DUP (Inbox #4): ONE stats pass so the stream chips, the KPI tiles, the tab badge, and the
+  // bell all read the same numbers — the old code re-derived these ≥7 times with DIVERGENT
+  // predicates (a done-column flagged item made the tile count differ from the chip). Rule decided
+  // once: unread/flagged/overdue count NON-DONE items only (a done item is archived — its flag /
+  // unread isn't actionable, and this matches what the filtered VIEWS actually show); `done` counts
+  // the archive.
+  const inboxStats = useMemo(() => {
+    let unread = 0
+    let flagged = 0
+    let overdue = 0
+    let done = 0
+    for (const i of items) {
+      if (i.column === 'done') {
+        done++
+        continue
+      }
+      if (!i.read) unread++
+      if (i.flagged) flagged++
+      if (dueStatus(i.due) === 'overdue') overdue++
+    }
+    return { unread, flagged, overdue, done, nonDone: items.length - done }
+  }, [items])
 
   const patch = useCallback((id: string, meta: ItemMeta) => {
     setOverlay((prev) => ({ ...prev, [id]: { ...prev[id], ...meta } }))
@@ -453,6 +480,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     unreadCount,
     recentActivity,
     nonDoneCount,
+    inboxStats,
     folders,
     comments,
     loading,
