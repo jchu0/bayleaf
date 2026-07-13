@@ -434,12 +434,14 @@ def test_metric_catalog_lists_registered_metrics_and_gated_flag():
     assert "NOT clinical" in body["disclaimer"]
     assert body["metric_registry_version"] == 1
     # Every registered metric type is listed (the extensibility story lives here).
-    assert body["n_registered"] == 20
-    assert len(body["entries"]) == 20
-    # Ten runbook keys are gated: the five required frozen-CSV metrics + five optional
-    # (non-blocking) checks that score a richer run without NA-flagging a lean one. The rest stay
-    # registered-but-ungated vocabulary the gate can still adopt.
-    assert body["n_gated"] == 10
+    assert body["n_registered"] == 21
+    assert len(body["entries"]) == 21
+    # Thirteen runbook keys are gated: the five required frozen-CSV metrics + eight optional
+    # (non-blocking) checks that score a richer run without NA-flagging a lean one — five one-sided
+    # plus variant.titv (the first BOTH-TAILS target_band gate, WS-06 Gap 2) plus
+    # contamination.freemix (WS-02) plus concordance.snp_f1 (WS-04), both optional ingest-adapter
+    # metrics. The rest stay registered-but-ungated vocabulary the gate can still adopt.
+    assert body["n_gated"] == 13
     gated = {e["our_key"] for e in body["entries"] if e["gated"]}
     assert gated == {
         # required (frozen-CSV)
@@ -454,8 +456,11 @@ def test_metric_catalog_lists_registered_metrics_and_gated_flag():
         "qc.pct_mapped",
         "qc.on_target",
         "variant.dp",
+        "variant.titv",  # WS-06 Gap 2: both-tails target_band gate
+        "contamination.freemix",  # WS-02: optional verifybamid2 contamination gate
+        "concordance.snp_f1",  # WS-04: optional hap.py GIAB SNP-F1 concordance gate
     }
-    assert sum(1 for e in body["entries"] if not e["gated"]) == 10
+    assert sum(1 for e in body["entries"] if not e["gated"]) == 8
     # Each entry carries the flattened vocabulary fields the settings catalog renders.
     q30 = next(e for e in body["entries"] if e["our_key"] == "qc.q30")
     assert q30["gated"] is True and q30["gate"] == "qc"

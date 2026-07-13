@@ -1,6 +1,8 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { DEMO_ACCOUNTS } from '../auth'
+import { dueStatus } from '../inbox'
+import { onTicketsChanged } from '../ticketsBus'
 import type { Ticket } from '../types'
 import { useRole } from './RoleContext'
 
@@ -87,6 +89,16 @@ export type InboxItem = {
 type InboxState = {
   items: InboxItem[]
   unreadCount: number
+  // UX-DUP #6: memoized selectors for the always-mounted top-bar bell, so it stops re-sorting the
+  // whole list on every render (an O(n log n) sort in the top bar on every inbox mutation, on every
+  // page). `recentActivity` = non-done items, unread-first (the bell's exact ordering); the bell
+  // slices it. `nonDoneCount` = the bell footer's "N items" without a second full-array scan.
+  recentActivity: InboxItem[]
+  nonDoneCount: number
+  // One canonical stats pass (UX-DUP Inbox #4) — the stream chips, KPI tiles, and tab badge all read
+  // these instead of re-deriving with divergent predicates. unread/flagged/overdue exclude the
+  // archived (done) column; `done` counts it.
+  inboxStats: { unread: number; flagged: number; overdue: number; done: number; nonDone: number }
   folders: string[]
   comments: Record<string, InboxComment[]> // IB14 — keyed by item id
   loading: boolean
@@ -193,29 +205,46 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     }
   }, [comments, actorId])
 
+  // A monotonic token so overlapping refreshes apply in ISSUE order, not COMPLETION order. The bus
+  // (below) and resolveTicket's own await can fire refresh() concurrently; without this, a staler
+  // fetch resolving last would clobber `tickets` with old data and re-open the very drift this closes
+  // until the next bump/mount. Each call captures its token before awaiting and only commits if it's
+  // still the latest — the most-recently-issued refresh (which read the freshest backend) wins.
+  const refreshSeq = useRef(0)
+
   // Pull the actionable tickets (open + in review) — these ARE the notifications. Resolved tickets
   // drop off the feed. A failed fetch degrades to an empty derived feed; self items still work.
   const refresh = useCallback(async () => {
+    const seq = ++refreshSeq.current
     setError(null)
     try {
       const [open, inReview] = await Promise.all([
         api.listTickets({ status: 'open' }),
         api.listTickets({ status: 'in_review' }),
       ])
+      if (seq !== refreshSeq.current) return // a newer refresh superseded this one — drop the stale result
       // Store the full Ticket objects (not a narrowed projection) so downstream reads like
       // t.assignee (the effective-owner logic below) keep every field the Ticket carries.
       setTickets([...open, ...inReview])
     } catch (e) {
+      if (seq !== refreshSeq.current) return
       setError(String(e))
       setTickets([])
     } finally {
-      setLoading(false)
+      if (seq === refreshSeq.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  // UX-DUP (Review + Inbox #1): re-read the ticket feed whenever another surface — the Review queue —
+  // writes a status change to the backend, so a queue-side resolve/escalate/assign stops leaving this
+  // ALWAYS-MOUNTED context (and the bell + inbox screen that read it) stale until a manual refresh.
+  // Pure invalidation: the backend is the one source of truth; we just re-fetch it. `refresh` is
+  // stable (useCallback []), so this subscribes once; the returned fn unsubscribes on unmount.
+  useEffect(() => onTicketsChanged(() => void refresh()), [refresh])
 
   // Merge base (ticket or self) with its overlay into a render-ready item. Derived defaults:
   // unread, unflagged, priority from the ticket, in the inbox column. Self items start read
@@ -279,6 +308,36 @@ export function InboxProvider({ children }: { children: ReactNode }) {
 
   // Unread = not yet read and not archived (the "done" column is the archive). This drives the bell.
   const unreadCount = useMemo(() => items.filter((i) => !i.read && i.column !== 'done').length, [items])
+  // One non-done pass feeds the bell's count + its unread-first ordering (UX-DUP #6). The sort is
+  // stable, so within read/unread the derivation's newest-first order is preserved.
+  const nonDone = useMemo(() => items.filter((i) => i.column !== 'done'), [items])
+  const recentActivity = useMemo(
+    () => [...nonDone].sort((a, b) => (a.read === b.read ? 0 : a.read ? 1 : -1)),
+    [nonDone],
+  )
+  const nonDoneCount = nonDone.length
+  // UX-DUP (Inbox #4): ONE stats pass so the stream chips, the KPI tiles, the tab badge, and the
+  // bell all read the same numbers — the old code re-derived these ≥7 times with DIVERGENT
+  // predicates (a done-column flagged item made the tile count differ from the chip). Rule decided
+  // once: unread/flagged/overdue count NON-DONE items only (a done item is archived — its flag /
+  // unread isn't actionable, and this matches what the filtered VIEWS actually show); `done` counts
+  // the archive.
+  const inboxStats = useMemo(() => {
+    let unread = 0
+    let flagged = 0
+    let overdue = 0
+    let done = 0
+    for (const i of items) {
+      if (i.column === 'done') {
+        done++
+        continue
+      }
+      if (!i.read) unread++
+      if (i.flagged) flagged++
+      if (dueStatus(i.due) === 'overdue') overdue++
+    }
+    return { unread, flagged, overdue, done, nonDone: items.length - done }
+  }, [items])
 
   const patch = useCallback((id: string, meta: ItemMeta) => {
     setOverlay((prev) => ({ ...prev, [id]: { ...prev[id], ...meta } }))
@@ -437,6 +496,9 @@ export function InboxProvider({ children }: { children: ReactNode }) {
   const value: InboxState = {
     items,
     unreadCount,
+    recentActivity,
+    nonDoneCount,
+    inboxStats,
     folders,
     comments,
     loading,

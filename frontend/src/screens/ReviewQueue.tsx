@@ -27,6 +27,7 @@ import { useConfirm, type ConfirmOpts } from '../components/ConfirmDialog'
 import { useRole } from '../context/RoleContext'
 import { useAccess } from '../context/AccessContext'
 import { useRangeSelect } from '../hooks/useRangeSelect'
+import { bumpTickets } from '../ticketsBus'
 import type {
   AgentProposal,
   DecisionCard,
@@ -40,10 +41,7 @@ import type {
   TicketStatus,
   Verdict,
 } from '../types'
-import { GATE_DOT, GATE_LABEL, VERDICT_BADGE, VERDICT_DOT, VERDICT_LABEL } from '../verdict'
-
-// Most-urgent first, matching the gate's ordering.
-const VERDICT_ORDER: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
+import { GATE_DOT, GATE_LABEL, VERDICT_BADGE, VERDICT_DOT, VERDICT_LABEL, VERDICT_ORDER } from '../verdict'
 
 // Priority is derived from the verdict, not stored — escalations/reruns block a run, holds
 // are judgment calls. `bars` = filled count in the ascending signal glyph.
@@ -68,8 +66,11 @@ const STATUS_META: Record<TicketStatus, { label: string; dot: string; chip: stri
   resolved: { label: 'Resolved', dot: 'bg-proceed', chip: 'border-proceed-bd bg-proceed-bg text-proceed-fg' },
 }
 
+// Status is a partition (a ticket is in exactly one) — no catch-all "All" peer (decision A): the
+// queue defaults to Open (the actionable set), In review / Resolved are their own tabs, and a
+// SEARCH escapes the status facet to span every status (below). "all" survives only as the
+// internal "no status filter" sentinel a search sets — never a tab.
 const STATUS_FILTERS: { key: 'all' | TicketStatus; label: string }[] = [
-  { key: 'all', label: 'All' },
   { key: 'open', label: 'Open' },
   { key: 'in_review', label: 'In review' },
   { key: 'resolved', label: 'Resolved' },
@@ -169,7 +170,10 @@ function errMsg(e: unknown): string {
 // does NOT run a rerun or re-measure a metric (compose != execute), so we never assert a QC
 // outcome that did not occur. The rerun line is a next-step, not a fabricated result.
 function resolutionNote(verdict: Verdict): string {
-  if (verdict === 'rerun') return 'Requeue the sample to clear the rerun.'
+  // A rerun is a manual next-step, not a control here: the sample must be re-submitted under a NEW
+  // run id (both run endpoints 409 on a duplicate id), so we describe the action, never imply a
+  // one-click requeue button that doesn't exist.
+  if (verdict === 'rerun') return 'Re-run the sample under a new run id, then resolve this ticket.'
   if (verdict === 'escalate') return 'Escalation signed off by an approver.'
   return 'Cleared after manual review.'
 }
@@ -330,8 +334,9 @@ export function ReviewQueue() {
     const inResolvedWindow = (t: QueueTicket): boolean =>
       !windowActive || recentResolvedKeys.has(keyOf(t))
     const shown = tickets.filter(
-      (t) =>
-        (filter === 'all' || statusOf(t) === filter) && matchesSearch(t) && inResolvedWindow(t),
+      // A search escapes the status facet (q !== '' spans every status), so dropping the "All" tab
+      // never hides a ticket — you reach any status by searching. Otherwise it's the one active tab.
+      (t) => (q !== '' || statusOf(t) === filter) && matchesSearch(t) && inResolvedWindow(t),
     )
     // Client-side pagination over the visible tickets, mirroring Monitoring's recurring-signature
     // pager. Clamp the current page so a narrowing filter can't strand the pager on an empty page.
@@ -383,13 +388,25 @@ export function ReviewQueue() {
   const patch = (key: string, next: Partial<TicketUi>) =>
     setUi((prev) => ({ ...prev, [key]: { ...prev[key], ...next } }))
 
+  // Restore a key's UI slice to a pre-action snapshot after a rejected wire write, so a 403/409
+  // never strands a ticket in a status the server never accepted. Replaces (not merges) the slice
+  // so the optimistic transition is fully undone; `serverIdRef` still holds any materialized id, so
+  // dropping it from the slice can't re-create the ticket on the next action.
+  const restore = (key: string, prev: TicketUi | undefined) =>
+    setUi((cur) => {
+      const nextMap = { ...cur }
+      if (prev === undefined) delete nextMap[key]
+      else nextMap[key] = prev
+      return nextMap
+    })
+
   // Optimistic local update, then a best-effort wire write (materializing the ticket on first
   // touch). These are off-gate advisory writes — a failed sync keeps the operator's intent
   // on-screen so the demo never stalls, and never touches a rules-decided verdict.
   // Per-key promise chain + the synchronous server-id ref (declared above) so a rapid
   // double-action on a not-yet-persisted ticket materializes exactly ONE server ticket (the
   // second action waits for the first createTicket, then reuses its id) instead of racing two POSTs.
-  const syncAction = (t: QueueTicket, action: ReviewActionName): Promise<void> => {
+  const syncAction = (t: QueueTicket, action: ReviewActionName, prev: TicketUi | undefined): Promise<void> => {
     const key = keyOf(t)
     const run = async () => {
       let id = serverIdRef.current[key] ?? uiRef.current[key]?.serverId
@@ -401,9 +418,17 @@ export function ReviewQueue() {
       }
       const updated = await api.ticketAction(id, action)
       patch(key, { status: updated.status }) // reconcile from the authoritative response
+      // UX-DUP (Review + Inbox #1): announce the backend status change so the always-mounted Inbox
+      // context re-reads the ticket feed — a queue resolve/escalate now reflects in the bell + inbox
+      // instead of drifting until a manual refresh. Only fires on a SUCCESSFUL write (a throw skips to
+      // the rollback in .catch); pure invalidation, so the optimistic overlay/selection are untouched.
+      bumpTickets()
     }
     const next = (pendingRef.current[key] ?? Promise.resolve()).then(run).catch((e) => {
-      // Surface the real backend outcome (403/409/…) instead of silently diverging.
+      // Roll back the optimistic transition (mirrors PipelineBuilder's reconcile-on-catch) so a
+      // rejected write doesn't leave the card reading Resolved/In-review until a manual refetch,
+      // then surface the real backend outcome (403/409/…) instead of silently diverging.
+      restore(key, prev)
       toast(`Couldn't ${action} ticket — ${errMsg(e)}`, 'error')
     })
     pendingRef.current[key] = next
@@ -412,6 +437,8 @@ export function ReviewQueue() {
 
   const act = (t: QueueTicket, action: ReviewActionName) => {
     const key = keyOf(t)
+    // Snapshot the slice BEFORE the optimistic patch so syncAction can revert to it on a rejected write.
+    const prev = uiRef.current[key]
     if (action === 'acknowledge') patch(key, { status: 'in_review' })
     else if (action === 'resolve') patch(key, { status: 'resolved', resolvedBy: actor.id })
     else if (action === 'reopen') patch(key, { status: 'open' })
@@ -421,7 +448,7 @@ export function ReviewQueue() {
       const wasOpen = (uiRef.current[key]?.status ?? 'open') === 'open'
       patch(key, wasOpen ? { escalated: true, status: 'in_review' } : { escalated: true })
     } else if (action === 'suppress') patch(key, { suppressed: true })
-    void syncAction(t, action)
+    void syncAction(t, action, prev)
   }
 
   const toggleSuppress = (t: QueueTicket) => {
@@ -437,6 +464,10 @@ export function ReviewQueue() {
   // confirms. Never a status transition, never a verdict (ADR-0001).
   const assign = (t: QueueTicket, assignee: string | null) => {
     const key = keyOf(t)
+    // Snapshot the slice BEFORE the optimistic patch so a rejected write can revert to it (mirrors
+    // syncAction) — otherwise a failed assignTicket strands the WRONG owner in the queue overlay,
+    // now visibly disagreeing with the Inbox, which re-reads the real backend owner on bumpTickets.
+    const prev = uiRef.current[key]
     patch(key, { assignee }) // optimistic
     const run = async () => {
       let id = serverIdRef.current[key] ?? uiRef.current[key]?.serverId
@@ -448,12 +479,17 @@ export function ReviewQueue() {
       }
       const updated = await api.assignTicket(id, assignee)
       patch(key, { assignee: updated.assignee }) // reconcile from the authoritative response
+      // Announce the backend assignee change so the Inbox's effective-owner read re-syncs (#1).
+      bumpTickets()
       toast(
         assignee ? `Assigned ${t.card.sample_id} to ${assignee}` : `Unassigned ${t.card.sample_id}`,
         'success',
       )
     }
     const next = (pendingRef.current[key] ?? Promise.resolve()).then(run).catch((e) => {
+      // Roll back the optimistic assignee on a rejected write (403/409/…), then surface the error —
+      // don't leave the wrong owner stranded in the overlay (mirrors syncAction's restore-on-catch).
+      restore(key, prev)
       toast(`Couldn't assign ticket — ${errMsg(e)}`, 'error')
     })
     pendingRef.current[key] = next
@@ -501,8 +537,10 @@ export function ReviewQueue() {
     assign(t, approverId)
     act(t, 'escalate')
   }
-  // Suppressing hides an issue class going forward (cascading) — confirm it; un-suppressing merely
-  // restores visibility (low-stakes), so it toggles straight through.
+  // Suppress resolves THIS ticket and marks the issue class handled; un-suppressing merely restores
+  // visibility (low-stakes), so it toggles straight through. Honesty: class-wide muting of *future*
+  // tickets of this rule_id across runs is a documented, not-built seam (review_queue.py) — the copy
+  // must not claim a cross-run mute that doesn't exist.
   const confirmSuppress = async (t: QueueTicket) => {
     if (uiRef.current[keyOf(t)]?.suppressed) {
       toggleSuppress(t)
@@ -510,7 +548,7 @@ export function ReviewQueue() {
     }
     const ok = await confirm({
       title: 'Suppress this issue class?',
-      body: `Future occurrences of ${t.primary.rule_id} across runs are hidden from the queue until un-suppressed. Recorded in the audit log.`,
+      body: `Resolves this ${t.primary.rule_id} ticket and marks the issue class handled here. It does not mute future occurrences on other runs (cross-run suppression is not built). Recorded in the audit log.`,
       confirmLabel: 'Suppress',
       tone: 'danger',
     })
@@ -1028,7 +1066,12 @@ function TicketCard({
               {t.primary.rule_id} · {t.primary.title}
             </span>
             {suppressed && (
-              <span className="text-[11px] italic text-text-3">suppressed — future runs won't re-prompt</span>
+              <span
+                className="text-[11px] italic text-text-3"
+                title="Marks this issue class handled on this ticket. Cross-run muting of future occurrences is not built."
+              >
+                suppressed — issue class marked handled here
+              </span>
             )}
           </div>
 
@@ -1081,7 +1124,13 @@ function TicketCard({
         <div className="flex items-start gap-2.5 border-t border-line bg-proceed-bg px-4 py-3">
           <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-proceed" />
           <p className="flex-1 text-[12.5px] leading-relaxed text-proceed-fg">
-            <strong>Resolved by {ui.resolvedBy ?? 'a.rivera'}.</strong> {resolutionNote(verdict)}
+            <strong>
+              Resolved by{' '}
+              {/* Never fabricate the resolver: show a muted not-captured value, not a real user
+                  name, when the resolve action carried no actor (data-handling: missing = signal). */}
+              {ui.resolvedBy ?? <span className="font-normal text-text-3">unknown</span>}.
+            </strong>{' '}
+            {resolutionNote(verdict)}
           </p>
           {assignee && (
             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-proceed-bd bg-card px-2.5 py-1.5 text-[12px] text-text-2">

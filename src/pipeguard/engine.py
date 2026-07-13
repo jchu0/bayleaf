@@ -24,8 +24,8 @@ from .notify import NotifyPort, NotifyStatus
 from .parsers import load_run
 from .persistence import Repository, project_events
 from .provenance import AnalysisRun, EntityRef, EventLedger, EventType, ProvenanceEvent
-from .rules import evaluate_run
-from .runbook import DEFAULT_RUNBOOK, Runbook
+from .rules import compute_check_coverage, evaluate_run
+from .runbook import DEFAULT_RUNBOOK, Runbook, RunbookSet
 from .synthesis import StubSynthesizer, Synthesizer
 
 _VERDICT_ORDER = {"escalate": 0, "rerun": 1, "hold": 2, "proceed": 3}
@@ -48,7 +48,7 @@ def get_synthesizer() -> Synthesizer:
 
 def run_gate(
     artifacts: RunArtifacts,
-    runbook: Runbook | None = None,
+    runbook: Runbook | RunbookSet | None = None,
     synthesizer: Synthesizer | None = None,
     ledger: EventLedger | None = None,
     repo: Repository | None = None,
@@ -79,12 +79,18 @@ def run_gate(
     synthesizer = synthesizer or get_synthesizer()
     ledger = ledger if ledger is not None else EventLedger()
 
+    # A RunbookSet resolves a profile PER SAMPLE inside evaluate_run (WS-05); a bare Runbook is used
+    # as-is. The run-level provenance line and the coverage telemetry below each need ONE concrete
+    # Runbook — use the set's DEFAULT profile. All shipped profiles share the same qc_thresholds, so
+    # the recorded metric list stays accurate; per-sample gating still happens in evaluate_run.
+    base_runbook = runbook.default if isinstance(runbook, RunbookSet) else runbook
+
     arun = AnalysisRun(
         run_id=artifacts.run_id,
         generated_by=synthesizer.name,
         gate_provenance={
             "rule_pack_version": RULE_PACK_VERSION,
-            "runbook_metrics": [t.metric for t in runbook.qc_thresholds],
+            "runbook_metrics": [t.metric for t in base_runbook.qc_thresholds],
         },
     )
     ledger.emit(
@@ -134,7 +140,11 @@ def run_gate(
                 )
             )
 
-        card = synthesizer.synthesize(sample_id, findings, artifacts)
+        # Deterministic coverage telemetry (WS-01): computed in the trust anchor, passed INTO the
+        # synthesizer so the prose can say "N ran / M not examined" instead of "all checks passed",
+        # and attached to the card below. It narrates coverage; it never sets a verdict (ADR-0001).
+        coverage = compute_check_coverage(sample_id, artifacts, base_runbook, findings)
+        card = synthesizer.synthesize(sample_id, findings, artifacts, coverage)
         card.analysis_run_id = arun.id
         card.run_id = artifacts.run_id
         # Surface the registry-normalized QC metrics (T-025) on the card so they are
@@ -144,6 +154,8 @@ def run_gate(
         qc = qc_by_sample.get(sample_id)
         if qc is not None:
             card.metric_values = metric_values_for(qc, analysis_run_id=arun.id)
+        # Un-hashed contextual metadata (like metric_values); attaching it never moves the hash.
+        card.check_coverage = coverage
         ledger.emit(
             ProvenanceEvent(
                 event_type=EventType.VERDICT_DECIDED,
@@ -225,7 +237,7 @@ def run_gate(
 
 def run_gate_from_dir(
     run_dir: str | Path,
-    runbook: Runbook | None = None,
+    runbook: Runbook | RunbookSet | None = None,
     synthesizer: Synthesizer | None = None,
     ledger: EventLedger | None = None,
     repo: Repository | None = None,

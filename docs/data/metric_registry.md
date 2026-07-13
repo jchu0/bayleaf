@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-13 (MST) — live-genomics pass (`478d579`): `contamination.freemix`/`concordance.snp_f1` parsers proven against REAL, calibrated VerifyBamID2/hap.py tool output (not just a format-mimicking fixture) — see the honesty note below; the "not pipeline-produced" caveat and the 21/13/8 counts are unchanged. Prior: 2026-07-12 (MST) — WS-02/WS-04: `contamination.freemix` (VerifyBamID2) and new key `concordance.snp_f1` (hap.py) gated + parser-wired (not pipeline-produced); registered/gated/ungated counts 20/11/9 → 21/13/8 |
 | **Audience** | bioinformatics / software |
-| **Related** | [schemas.md](schemas.md) (§6 units contract), [provenance.md](provenance.md), [qc_metrics.md](qc_metrics.md), [nf-core-conventions.md](nf-core-conventions.md), [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) |
+| **Related** | [schemas.md](schemas.md) (§6 units contract), [provenance.md](provenance.md), [qc_metrics.md](qc_metrics.md), [nf-core-conventions.md](nf-core-conventions.md), [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) (never fabricate truth), [audit/gap_analysis/ws-02-identity-provenance.md](../../audit/gap_analysis/ws-02-identity-provenance.md), [audit/gap_analysis/ws-04-giab-concordance.md](../../audit/gap_analysis/ws-04-giab-concordance.md), [audit/gap_analysis/ws-06-registry-extensibility-and-metric-bugs.md](../../audit/gap_analysis/ws-06-registry-extensibility-and-metric-bugs.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md) |
 
 ## Overview
 
@@ -63,13 +63,15 @@ metrics:
 | `qc.fold_80` † | qc | uniformity | ratio | lower_is_better | picard_collecthsmetrics | `FOLD_80_BASE_PENALTY` |
 | `identity.ngscheckmate_match` † | qc | identity | bool | higher_is_better | ngscheckmate | `ngscheckmate_matched.txt` |
 | `identity.sex_concordance` † | qc | identity | bool | higher_is_better | ngscheckmate / mosdepth | declared_sex vs coverage |
-| `contamination.freemix` † | qc | contamination | fraction | lower_is_better | verifybamid2 *(optional, non-sarek-default)* | `FREEMIX` |
+| `contamination.freemix` ‡ | qc | contamination | fraction | lower_is_better | verifybamid2 *(optional, non-sarek-default)* | `FREEMIX` |
 | `variant.dp` | variant | depth | x | higher_is_better | vcf | `FORMAT/DP` |
 | `variant.gq` | variant | genotype_quality | phred | higher_is_better | vcf | `GQ` |
 | `variant.allele_balance` † | variant | genotype_quality | fraction | target_band | vcf | `AD` → AB |
 | `variant.titv` | variant | sanity | ratio | target_band | bcftools / picard | `ts/tv` |
+| `concordance.snp_f1` ‡ | variant | concordance | fraction | higher_is_better | hap.py *(optional, GIAB-truth-only)* | `METRIC.F1_Score` (SNP+PASS row) |
 
-**†** = **NOT COMPUTED** (audit P3-10): registered-only, no parser wired yet — the `module`/`source_field` above name the *designed* source, not a value produced today. See **Wiring status** below.
+**†** = **NOT COMPUTED** (audit P3-10): registered-only, no parser wired at all — the `module`/`source_field` above name the *designed* source, not a value produced today.
+**‡** = **PARSER-WIRED, NOT PIPELINE-PRODUCED** (WS-02/WS-04, 2026-07-12): a real parser exists and reads a present output file into a gated `MetricValue` — but no pipeline committed in this repo runs the producing tool today. See **Wiring status** below.
 
 ## Rules
 
@@ -93,18 +95,71 @@ metrics:
 
 `GET /api/metrics/registry` exposes the registered metric vocabulary read-only (every type + whether it is **gated** by the runbook today or **registered-but-not-yet-gated**), reading `default_registry()` / `DEFAULT_RUNBOOK`. Surfaced in the Settings "Metric catalog" panel. It never authors or edits a metric/threshold (ADR-0001).
 
-## Wiring status (T-082, 2026-07-10)
+## Wiring status (T-082, 2026-07-10; counts updated 2026-07-12, WS-02/WS-04 + WS-06 Gap 2)
 
-Of the 20 registered `our_key`s, **10 are gated** by a `runbook.QCThreshold` — the original 5
+Of the 21 registered `our_key`s, **13 are gated** by a `runbook.QCThreshold` — the original 5
 `required=True` (Q30, reads-passing-filter, mean-target-coverage, cluster-PF, duplication) plus
-5 new `required=False` ("optional": `qc.breadth_20x`, `qc.breadth_30x`, `qc.pct_mapped`,
-`qc.on_target`, `variant.dp` — score a value that IS present, never NA-flag one that's absent).
-The other **10 are ungated** (registered, no threshold) — of those, only 3
-(`preflight.phix_aligned`, `variant.gq`, `variant.titv`) are actually wired end-to-end from
-`QCMetrics` → `MetricValue` (`metrics/mapping.py`, T-082) and surfaced as observations in the
-card readout via the registry's `display_name` (not the raw `our_key`, T-082 follow-up); the
-remaining 7 (`qc.zero_cov_targets`, `qc.fold_enrichment`, `qc.fold_80`,
-`identity.ngscheckmate_match`, `identity.sex_concordance`, `contamination.freemix`,
-`variant.allele_balance`) remain registered-only with **no parser yet** — an honest, unchanged
-gap, not newly introduced by T-082. Verified against `src/pipeguard/metrics/mapping.py`
-`_QCMETRICS_MAP` (13 entries) and `src/pipeguard/runbook.py`'s `qc_thresholds` (10 entries).
+8 `required=False` ("optional": `qc.breadth_20x`, `qc.breadth_30x`, `qc.pct_mapped`,
+`qc.on_target`, `variant.dp` — score a value that IS present, never NA-flag one that's absent)
+plus, as of the gap-analysis WS-06 Gap-2 fix (2026-07-12), a sixth `required=False` threshold on
+**`variant.titv`** — the first threshold to use the new `kind="target_band"` shape (a both-tails
+gate: PASS inside `[target_low, target_high]`, WARN/HOLD inside `[hard_low, hard_high]` but
+outside the target band, CRITICAL/RERUN outside the hard band — a `one_sided` gate can only catch
+one tail, so Ts/Tv could never score before this). The band (target `[2.0, 2.1]`, hard
+`[1.8, 2.8]`) is an **illustrative whole-genome heuristic, operator-configurable, NOT clinical**
+(CLAUDE.md life-science guardrail 3). A seventh and eighth `required=False` threshold landed the
+same day: **`contamination.freemix`** (WS-02) and **`concordance.snp_f1`** (WS-04) — see the
+honesty note below before treating either as "computed."
+
+**WS-02/WS-04 honesty (2026-07-12) — gated + parser-wired, NOT pipeline-produced.**
+`contamination.freemix` (VerifyBamID2 FREEMIX, one_sided lower-is-worse, gate 0.02 → WARN/HOLD,
+hard_fail 0.05 → CRITICAL/RERUN) and `concordance.snp_f1` (hap.py SNP-F1 vs GIAB truth, one_sided
+FLOOR, gate 0.99 → WARN/HOLD, hard_fail 0.95 → CRITICAL/RERUN) moved out of the NOT-COMPUTED set:
+`ingest.nfcore._extract_verifybamid`/`_extract_happy` are real parsers that read a present
+`.selfSM` / hap.py `summary.csv` into a genuine `MetricValue`, and each threshold is
+`required=False` because verifybamid2/hap.py are **not in the germline base profile** — an absent
+value is never NA-flagged, only a present one scores. Both are illustrative/operator-configurable,
+not clinical (CLAUDE.md life-science guardrail 3). **But no pipeline committed in this repo
+produces either input today.** `verifybamid2.nf`/`happy.nf` are real, standalone Nextflow modules
+(`pipelines/optional_modules/`, real `script:` + `stub:`) that are **not wired into
+`pipelines/germline/main.nf`** — that reference pipeline is drift-locked byte-for-byte to the
+card-graph compiler's own output (`tests/test_nextflow_compile.py::test_committed_reference_pipeline_matches_the_compiler`),
+and the compiler has no input-gated-conditional concept for an optional add-on tool yet. A live
+FREEMIX or SNP-F1 number therefore requires an operator to run the standalone module by hand
+(verifybamid2 additionally needs an SVD/UD ancestry resource panel; hap.py needs the GIAB truth
+VCF + high-confidence BED — both **labelled pipeline inputs, never fabricated**, ADR-0004) and
+place its output where `ingest_results_dir` looks for it. This is the same "gate-wired but not
+gate-called" honesty pattern already recorded for the WS-03 ingest adapter itself — one layer
+earlier in the pipeline (see [CLAUDE.md](../../CLAUDE.md) code map item 1g).
+
+**Proven on real, calibrated tool output (2026-07-13, `478d579`) — a step up from "parser-wired,
+fixture-tested," the "not pipeline-produced" caveat above unchanged.** The offline WS-02/WS-04
+tests above prove the ingest→gate WIRING against hand-built fixtures that mimic the real file
+*format*; they explicitly deferred "does a real tool's own output parse the same way" to a live
+pass. That pass ran 2026-07-13 (an operator ran the standalone modules by hand, per the gap above):
+VerifyBamID2 2.0.3 **genome-wide** on the full HG002 2×250 BAM produced a FREEMIX that passed the
+marker sanity check **natively** (no `--DisableSanityCheck`, unlike a chromosome-capped heuristic) —
+i.e. a genuinely **calibrated** value, 0.000220096 — and the real germline pipeline (chr20/21/22,
+300,175 variants) produced a hap.py `summary.csv` scored against the GIAB v4.2.1 truth (SNP/PASS
+F1 = 0.989276). The tiny derived outputs (294 B + 893 B) are committed verbatim under
+`tests/fixtures/giab_real/` (origin `real-giab`; the 122 GB BAM stays on the external SSD, never
+committed) and read through the same public `ingest_results_dir → run_gate` path in
+`tests/test_real_giab_calibrated.py` — a permanent, CI-runnable proof, not a one-off manual check.
+This closes the gap between "the parser handles the real *shape*" and "the parser handles a real
+*tool's own* output" — it does **not** close the separate, unrelated gap that no pipeline in this
+repo runs either tool automatically (that gap is exactly as open as before this pass).
+
+The other **8 are ungated** (registered, no threshold) — of those, only 2
+(`preflight.phix_aligned`, `variant.gq`) are actually wired end-to-end from `QCMetrics` →
+`MetricValue` (`metrics/mapping.py`, T-082) and surfaced as observations in the card readout via
+the registry's `display_name` (not the raw `our_key`, T-082 follow-up). The remaining 6
+(`qc.zero_cov_targets`, `qc.fold_enrichment`, `qc.fold_80`, `identity.ngscheckmate_match`,
+`identity.sex_concordance`, `variant.allele_balance`) remain registered-only with **no parser at
+all** — an honest, unchanged gap, not newly introduced by WS-02/WS-04. Verified against
+`src/pipeguard/metrics/mapping.py` `_QCMETRICS_MAP` (13 entries, **unaffected** by WS-02/WS-04 —
+freemix/snp_f1 flow through the WS-03 `ingest.nfcore` adapter, not the flat-CSV
+`_QCMETRICS_MAP` path, so `producible_metric_keys()` is unchanged), `src/pipeguard/runbook.py`'s
+`qc_thresholds` (13 `QCThreshold(...)` entries), and
+`tests/test_api.py::test_metric_catalog_lists_registered_metrics_and_gated_flag` (asserts
+`n_registered == 21`, `n_gated == 13`, and the ungated count `== 8` over
+`GET /api/metrics/registry`).

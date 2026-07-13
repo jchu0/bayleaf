@@ -1,11 +1,14 @@
 import { type ReactNode, useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { Info, Pencil } from 'lucide-react'
 import { SettingsToggle } from './SettingsToggle'
 import { useToast } from './Toast'
 
-// Notifications (dc.html 1225-1244): three channel rows — Slack + Microsoft Teams connected with
-// a live toggle, Discord unconnected with a Connect affordance. Purely presentational demo state;
-// no channel wiring here (the real Slack send is env-armed on the core, off the gate).
+// Notifications (dc.html 1225-1244): three channel rows — Slack + Microsoft Teams + Discord.
+// Honesty: this is a PRESENTATIONAL demo seam. The channel status is NOT a live health check, the
+// Edit→Save toggles persist nothing to a backend, and Connect is not wired — the real Slack send is
+// env-armed on the core, off the gate. Every affordance is labelled as such so nothing reads as a
+// verified/live connection it isn't. (Persisting these settings + a real reachability check are a
+// documented, not-built seam.)
 
 // Design icons are inlined verbatim (currentColor lets the token class drive the stroke) rather
 // than reached for from lucide so the glyphs match the prototype exactly.
@@ -37,11 +40,17 @@ function DiscordGlyph() {
   )
 }
 
-function ConnectedDot() {
+// Honest channel status: the connection is NOT health-checked here, so it must not render as a green
+// "Connected" (which reads as a verified/live link). Show a muted, neutral "Configured · not
+// verified" with the reason in the tooltip — absent/unverified never reads as passed.
+function ConfiguredDot() {
   return (
-    <span className="mt-[2px] flex items-center gap-[5px] text-[11.5px] text-proceed-fg">
-      <span className="inline-block h-[6px] w-[6px] rounded-full bg-proceed" />
-      Connected
+    <span
+      className="mt-[2px] flex items-center gap-[5px] text-[11.5px] text-text-3"
+      title="Configured in this demo — the connection is not health-checked, so this is not a live status."
+    >
+      <span className="inline-block h-[6px] w-[6px] rounded-full border border-line-strong bg-transparent" />
+      Configured · not verified
     </span>
   )
 }
@@ -106,9 +115,15 @@ export function SettingsNotifications() {
     setSlackOn(draftSlack)
     setTeamsOn(draftTeams)
     setEditing(false)
-    // Local demo state (no channel wiring on this seam) — surface the outcome the same way every
-    // off-gate write does, via a toast, rather than diverging silently.
-    toast('Notification settings saved', 'success')
+    // Honesty: nothing persists on this seam — the edit updates local component state only and is
+    // lost on reload. Say so rather than claiming a durable "saved" the backend never recorded.
+    toast('Applied locally — demo seam, not persisted to a backend', 'info')
+  }
+
+  // Discord has no channel wiring — the button must not look like it does something. Surface the
+  // honest "not wired" outcome via a toast (the same way every off-gate affordance reports).
+  const connectDiscord = () => {
+    toast('Discord connect is not wired in this demo', 'info')
   }
 
   // In edit mode the toggles bind to the draft; in view mode they show the committed value and are
@@ -153,6 +168,15 @@ export function SettingsNotifications() {
           </button>
         )}
       </div>
+      {/* Honesty seam banner — this panel is a presentational demo: no channel is health-checked,
+          Save persists nothing, and Connect isn't wired. Say it plainly so nothing reads as live. */}
+      <div className="mt-[13px] flex items-start gap-2 rounded-[10px] border border-dashed border-line-strong bg-card-2 px-[13px] py-[9px]">
+        <Info size={14} className="mt-[1px] shrink-0 text-text-3" />
+        <p className="text-[11.5px] leading-snug text-text-3">
+          Demo seam — channel status is not health-checked, Save applies locally only (not persisted),
+          and Connect is not wired. Live delivery is env-armed on the core, off the gate.
+        </p>
+      </div>
       <div className="mt-[13px] space-y-[9px]">
         <ChannelRow
           tinted
@@ -164,7 +188,7 @@ export function SettingsNotifications() {
               Slack · <span className="font-mono">#pipeguard-ops</span>
             </>
           }
-          status={<ConnectedDot />}
+          status={<ConfiguredDot />}
           control={
             <SettingsToggle
               on={slackView}
@@ -182,7 +206,7 @@ export function SettingsNotifications() {
               Microsoft Teams · <span className="font-mono">Lab Ops</span>
             </>
           }
-          status={<ConnectedDot />}
+          status={<ConfiguredDot />}
           control={
             <SettingsToggle
               on={teamsView}
@@ -200,6 +224,7 @@ export function SettingsNotifications() {
           control={
             <button
               type="button"
+              onClick={connectDiscord}
               className="shrink-0 rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12px] font-medium text-accent"
             >
               Connect

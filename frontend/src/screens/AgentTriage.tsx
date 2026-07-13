@@ -1,42 +1,42 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, Archive, ChevronRight, Wrench } from 'lucide-react'
+import { Archive, ChevronRight, Wrench } from 'lucide-react'
 import { api } from '../api'
 import { Empty, ErrorBox, Loading } from '../components/States'
 import { PageHeader } from '../components/PageHeader'
 import { Pager } from '../components/Pager'
 import { Truncate } from '../components/Truncate'
 import { AgentComposer } from '../components/AgentComposer'
-import { AgentSourceToggle } from '../components/AgentSourceToggle'
 import { AgentSubjectCard } from '../components/AgentSubjectCard'
 import { ArchivistModal, PipelineRepairModal } from '../components/BuilderModals'
-import { GATE_DOT, GATE_LABEL, VERDICT_DOT, VERDICT_LABEL } from '../verdict'
-import type { RunDetail, TriageNote } from '../types'
+import { GATE_DOT, GATE_LABEL, VERDICT_DOT, VERDICT_LABEL, governingGate } from '../verdict'
+import { useRun } from '../hooks/useRun'
+import type { TriageNote } from '../types'
 
 const VERDICT_RANK: Record<string, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
 
 export function AgentTriage() {
   const { runId = '' } = useParams()
+  // Two distinct views share this component: the run-independent /agents route ("System agents" —
+  // the org-wide pipeline-repair/archivist launchers) vs /runs/:id/agent ("Agent triage" — this run's
+  // per-sample triage). Split the content so the two nav items aren't near-duplicate pages.
+  const isSystemView = !runId
   const [params] = useSearchParams()
-  const [detail, setDetail] = useState<RunDetail | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const { detail, error } = useRun(runId)
   const [picked, setPicked] = useState<string | null>(null)
   const [note, setNote] = useState<TriageNote | null>(null)
   const [noteState, setNoteState] = useState<'idle' | 'loading' | 'ready' | 'none'>('idle')
-  // Whether the operator wants live-model narration. Reflects/requests the *narration* source
-  // only — the rule engine owns the verdict regardless of this toggle (INV-c).
-  const [live, setLive] = useState(false)
   const [page, setPage] = useState(1)
   // System advisory agents (Phase 3): repair + archivist act on runs / recurring signatures / the
   // organization — NOT on a single pipeline node — so they launch from here, not the Builder palette.
   const [repairOpen, setRepairOpen] = useState(false)
   const [archivistOpen, setArchivistOpen] = useState(false)
 
+  // Reset the triage-specific UI when the run changes; detail/error now come from the shared useRun
+  // cache (the run-independent /agents route has no runId → the org agents render, triage prompts).
   useEffect(() => {
-    setDetail(null)
     setPicked(null)
     setPage(1)
-    api.run(runId).then(setDetail).catch((e) => setError(String(e)))
   }, [runId])
 
   const flagged = useMemo(
@@ -58,7 +58,7 @@ export function AgentTriage() {
   const pagedFlagged = flagged.slice((curPage - 1) * PER, curPage * PER)
 
   // Fetch the advisory triage note for the active subject. Keyed on sample so switching the
-  // picker re-asks. `live` is re-seeded from whether the note carried a model (armed agent).
+  // picker re-asks.
   useEffect(() => {
     if (!active) {
       setNoteState('idle')
@@ -74,13 +74,11 @@ export function AgentTriage() {
         if (cancelled) return
         setNote(n)
         setNoteState('ready')
-        setLive(!!n.model)
       })
       .catch(() => {
         if (cancelled) return
         setNote(null)
         setNoteState('none')
-        setLive(false)
       })
     return () => {
       cancelled = true
@@ -88,67 +86,60 @@ export function AgentTriage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId, active?.sample_id])
 
+  // Whether the SERVED note carried a model — the honest signal that the live triage agent is
+  // armed (env: PIPEGUARD_TRIAGE_AGENT=claude). It is not operator-toggleable (arming is env-side),
+  // so it is reported as a status, never offered as a switch the UI can't action.
   const hasLiveModel = noteState === 'ready' && !!note?.model
-  // Operator asked for live but the triage agent isn't armed → honest rule-derived fallback.
-  const errorFallback = noteState === 'ready' && live && !note?.model
   const offline = !hasLiveModel
   // A served note that carries a model IS model-generated narration — never relabel it
-  // "rule-derived", regardless of the demo source toggle (rules decide / AI advises: don't
-  // present model prose as deterministic output).
-  const sourceLabel = errorFallback
-    ? 'Live synthesis unavailable — rule-derived fallback'
-    : hasLiveModel
-      ? `Claude · ${note?.model}`
-      : 'Rule-derived triage (offline)'
-
-  if (error) return <ErrorBox message={error} />
-  if (!detail) return <Loading label="Loading triage…" />
+  // "rule-derived" (rules decide / AI advises: don't present model prose as deterministic output).
+  const sourceLabel = hasLiveModel ? `Claude · ${note?.model}` : 'Rule-derived triage (offline)'
 
   return (
     <div className="pg-fade mx-auto max-w-[1080px]">
       <PageHeader
-        title="Agent triage"
-        subtitle="The agent advises; the human decides."
-        actions={
-          active ? (
-            <AgentSourceToggle live={hasLiveModel || live} label={sourceLabel} onToggle={() => setLive((v) => !v)} />
-          ) : undefined
+        title={isSystemView ? 'System agents' : 'Agent triage'}
+        subtitle={
+          isSystemView
+            ? 'Advisory agents that act across runs and the organization — never a single run, never a verdict.'
+            : 'The agent advises; the human decides.'
         }
+        actions={!isSystemView && active ? <AgentStatus armed={hasLiveModel} label={sourceLabel} /> : undefined}
       />
 
       {/* System advisory agents — they act on runs / recurring signatures / the whole organization, not
           on a single pipeline node, so they live on this page (moved out of the Builder palette, Phase 3).
           Each opens a read-only, cited proposal; advisory + off-gate — neither sets a verdict (ADR-0001). */}
-      <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
-        <AgentLauncher
-          icon={<Wrench size={16} strokeWidth={2} />}
-          title="Pipeline-repair"
-          sub="Cited fix proposals for recurring failure signatures"
-          onOpen={() => setRepairOpen(true)}
-        />
-        <AgentLauncher
-          icon={<Archive size={16} strokeWidth={2} />}
-          title="Archivist"
-          sub="Organizes released runs for cold storage"
-          onOpen={() => setArchivistOpen(true)}
-        />
-      </div>
+      {isSystemView && (
+        <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+          <AgentLauncher
+            icon={<Wrench size={16} strokeWidth={2} />}
+            title="Pipeline-repair"
+            sub="Cited fix proposals for recurring failure signatures"
+            onOpen={() => setRepairOpen(true)}
+          />
+          <AgentLauncher
+            icon={<Archive size={16} strokeWidth={2} />}
+            title="Archivist"
+            sub="Organizes released runs for cold storage"
+            onOpen={() => setArchivistOpen(true)}
+          />
+        </div>
+      )}
 
-      {flagged.length === 0 ? (
+      {/* Per-run triage section. It depends on a run in context; the system agents above do not, so
+          when there's no run (the /agents route) or the run fails to load we surface that HERE only —
+          the org-agent launchers stay reachable regardless (a 404'd run must not orphan them). */}
+      {!runId ? (
+        <Empty message="Open a run to triage its flagged samples. The system agents above run across runs — no run needed." />
+      ) : error ? (
+        <ErrorBox message={error} />
+      ) : !detail ? (
+        <Loading label="Loading triage…" />
+      ) : flagged.length === 0 ? (
         <Empty message="No flagged samples in this run — nothing to triage." />
       ) : (
         <>
-          {/* error fallback — live synthesis unavailable; the deterministic verdict is unaffected */}
-          {errorFallback && (
-            <div className="mt-4 flex items-center gap-[11px] rounded-[11px] border border-hold-bd bg-hold-bg px-[15px] py-[12px]">
-              <AlertTriangle size={18} strokeWidth={2} className="shrink-0 text-hold" />
-              <div className="text-[12.5px] leading-[1.5] text-hold-fg">
-                <strong className="font-semibold">Live model synthesis is unavailable.</strong> Showing rule-derived
-                triage instead — the deterministic verdict and findings are unaffected.
-              </div>
-            </div>
-          )}
-
           {/* Flagged-sample selector — a real run has several flagged samples (not in the single-
               subject design). A table (not pills) scales to a full run's worth of rows; the design's
               per-subject header layout governs whichever row is selected. Verdict-rank order (escalate
@@ -170,7 +161,7 @@ export function AgentTriage() {
                 // The gate that drove this card's verdict (else the leading finding's gate) — the
                 // same governing-gate derivation CardHead uses. Rules decide the verdict; this only
                 // labels where it originated.
-                const gate = c.gate_results.find((g) => g.verdict === c.verdict)?.gate ?? c.findings[0]?.gate ?? null
+                const gate = governingGate(c)
                 return (
                   <button
                     key={c.sample_id}
@@ -229,7 +220,12 @@ export function AgentTriage() {
             <>
               <AgentSubjectCard key={`subject-${active.sample_id}`} runId={runId} card={active} note={note} sourceLabel={sourceLabel} />
               {/* Fresh conversation per subject — remount (distinct key) clears the thread. */}
-              <AgentComposer key={`composer-${active.sample_id}`} offline={offline} />
+              <AgentComposer
+                key={`composer-${active.sample_id}`}
+                runId={runId}
+                sampleId={active.sample_id}
+                offline={offline}
+              />
             </>
           )}
         </>
@@ -238,6 +234,22 @@ export function AgentTriage() {
       {repairOpen && <PipelineRepairModal onClose={() => setRepairOpen(false)} />}
       {archivistOpen && <ArchivistModal onClose={() => setArchivistOpen(false)} />}
     </div>
+  )
+}
+
+// The narration-source STATUS indicator (not a switch). Arming the live agent is env-side
+// (PIPEGUARD_TRIAGE_AGENT=claude), so the UI can only report whether the served note came from an
+// armed model — never offer a toggle it can't action. A steady dot + the honest source label; when
+// unarmed it reads "not armed" rather than pretending the operator can flip it on.
+function AgentStatus({ armed, label }: { armed: boolean; label: string }) {
+  return (
+    <span
+      title="Narration source — the live triage agent is armed env-side (PIPEGUARD_TRIAGE_AGENT=claude). Advisory: never changes the verdict."
+      className="inline-flex shrink-0 items-center gap-2 rounded-full border border-line-strong bg-card py-[5px] pl-3 pr-3.5 text-[11.5px] font-medium text-text-2"
+    >
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${armed ? 'bg-accent' : 'bg-card-3'}`} />
+      {armed ? label : 'Live agent: not armed'}
+    </span>
   )
 }
 

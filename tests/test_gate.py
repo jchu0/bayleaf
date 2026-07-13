@@ -11,19 +11,26 @@ import pytest
 from pydantic import ValidationError
 
 from pipeguard import DEFAULT_RUNBOOK, Verdict, evaluate_run, load_run, run_gate
-from pipeguard.metrics import default_registry
+from pipeguard.metrics import default_registry, metric_values_for
 from pipeguard.models import (
     Category,
+    CheckCoverage,
     Evidence,
     Finding,
     Gate,
     QCMetrics,
+    RawObservation,
+    RunArtifacts,
+    Sample,
+    SampleMetrics,
+    SampleSheetEntry,
     Severity,
     SourceKind,
 )
 from pipeguard.parsers import parse_sample_sheet, parse_sample_sheet_header
 from pipeguard.provenance import EventLedger, EventType
-from pipeguard.rules import _evaluate_metric
+from pipeguard.rules import _evaluate_metric, compute_check_coverage, evaluate_sample
+from pipeguard.runbook import QCThreshold, Runbook
 from pipeguard.synthesis import StubSynthesizer, aggregate_verdict
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
@@ -129,6 +136,390 @@ def test_fraction_metric_display_is_not_100x_too_small():
     assert ev.threshold == "hard-fail ≥ 80%"
 
 
+# ── WS-06 Gap 2: target-band (both-tails) QC gate ─────────────────────────────────
+#
+# A registry `direction: target_band` metric (variant.titv, qc.fold_enrichment) is out of spec on
+# EITHER tail — too low OR too high. The one-sided QCThreshold can only gate one side, so before
+# WS-06 Gap 2 a target_band metric parsed + normalized but could never score. These tests pin the
+# new `kind="target_band"` gate: PASS inside the target band, WARN/HOLD inside the hard band but
+# outside target, CRITICAL/RERUN outside the hard band — on BOTH tails. Bands are illustrative /
+# operator-configurable, NOT clinical (CLAUDE.md life-science guardrail 3).
+
+
+def _titv_mv(ratio: float):
+    """A variant.titv MetricValue at a raw ratio (canonical unit is ratio — a passthrough)."""
+    return default_registry().observe(
+        metric_key="variant.titv", raw_value=ratio, raw_unit="ratio", sample_id="SX"
+    )
+
+
+def test_target_band_titv_scores():
+    """The wired variant.titv target_band threshold actually scores: PASS in-band, WARN/HOLD inside
+    the hard band but outside target, CRITICAL/RERUN outside the hard band — with cited band
+    Evidence. The verdict is a pure function of the emitted findings (ADR-0001)."""
+    threshold = DEFAULT_RUNBOOK.threshold_for("variant_titv")
+    assert threshold is not None and threshold.kind == "target_band"
+
+    # In-band → passes (no finding).
+    assert _evaluate_metric("SX", threshold, _titv_mv(2.05)) is None
+
+    # Outside target but inside the hard band → WARN / HOLD, with the band cited on the Evidence.
+    warn = _evaluate_metric("SX", threshold, _titv_mv(2.6))
+    assert warn is not None
+    assert warn.severity is Severity.WARN
+    assert warn.suggested_verdict is Verdict.HOLD
+    ev = warn.evidence[0]
+    assert ev.source_field == "variant_titv" and ev.source_kind is SourceKind.METRIC
+    assert "2.6" in ev.value  # the observed value is cited verbatim
+    # The target band [2, 2.1] and the hard band [1.8, 2.8] are both cited on the finding.
+    assert "2" in ev.expected and "2.1" in ev.expected
+    assert ev.threshold is not None and "1.8" in ev.threshold and "2.8" in ev.threshold
+
+    # Outside the hard band → CRITICAL / RERUN.
+    crit = _evaluate_metric("SX", threshold, _titv_mv(3.5))
+    assert crit is not None
+    assert crit.severity is Severity.CRITICAL
+    assert crit.suggested_verdict is Verdict.RERUN
+
+    # Verdict = f(findings): the rules author the finding, aggregate_verdict maps it (ADR-0001).
+    assert aggregate_verdict([warn]) is Verdict.HOLD
+    assert aggregate_verdict([crit]) is Verdict.RERUN
+
+
+def test_target_band_gates_both_tails():
+    """A target_band gate catches BOTH tails — a one-sided gate can only catch one. titv below the
+    band (1.5) AND above the band (3.5) each emit a finding; a within-hard low miss (1.9) is the
+    low-side WARN a `higher_is_better` one-sided gate would wave straight through."""
+    threshold = DEFAULT_RUNBOOK.threshold_for("variant_titv")
+    assert threshold is not None
+
+    low = _evaluate_metric("SX", threshold, _titv_mv(1.5))  # below hard_low 1.8
+    high = _evaluate_metric("SX", threshold, _titv_mv(3.5))  # above hard_high 2.8
+    assert low is not None and high is not None  # BOTH tails gate
+    assert low.suggested_verdict is Verdict.RERUN and high.suggested_verdict is Verdict.RERUN
+
+    # The low-side WARN (inside the hard band, below target) — the tail a one-sided ≥-gate ignores.
+    low_warn = _evaluate_metric("SX", threshold, _titv_mv(1.9))
+    assert low_warn is not None
+    assert low_warn.severity is Severity.WARN and low_warn.suggested_verdict is Verdict.HOLD
+
+
+def test_target_band_threshold_requires_bands():
+    """Constructing a target_band QCThreshold WITHOUT the four band fields is a config error — the
+    gate can't score a band it wasn't given, so it must fail loud at construction, not silently."""
+    with pytest.raises(ValidationError):
+        QCThreshold(
+            metric="variant_titv",
+            our_key="variant.titv",
+            label="Ts/Tv ratio",
+            gate=2.0,
+            hard_fail=1.8,
+            kind="target_band",
+        )
+
+
+# ── WS-01 · PR1: fail-closed on missing / expected-but-absent QC ──────────────────
+
+
+def test_sheet_without_qc_holds():
+    """Gap A: a sheet-declared sample with NO QC row emits QC-MISSING and fails closed — absence of
+    QC is unverified data, never clean data, so a safety gate cannot PROCEED on it. Exercises the
+    real evaluate_sample → _check_presence → aggregate_verdict path."""
+    art = load_run(DATA)
+    # S1 is on the sheet AND has intake metadata; drop only its QC row → declared-but-not-examined
+    # (metadata present so META-002 can't fire — the HOLD is attributable purely to missing QC).
+    assert any(e.sample_id == "S1" for e in art.sample_sheet)
+    assert any(s.sample_id == "S1" for s in art.samples)
+    art.qc = [q for q in art.qc if q.sample_id != "S1"]
+    findings = evaluate_sample("S1", art, DEFAULT_RUNBOOK)
+    missing = [f for f in findings if f.rule_id == "QC-MISSING"]
+    assert len(missing) == 1
+    f = missing[0]
+    assert f.category is Category.QC and f.severity is Severity.WARN
+    assert f.suggested_verdict is Verdict.HOLD
+    ev = f.evidence[0]  # self-authored, cites the real source
+    assert ev.source == "qc_metrics.csv" and ev.value == "missing" and ev.expected == "present"
+    assert ev.source_kind is SourceKind.METRIC
+    # I1 + I2: the verdict is exactly aggregate_verdict(findings) and fails closed (not PROCEED).
+    assert aggregate_verdict(findings) is Verdict.HOLD
+    assert aggregate_verdict(findings) is not Verdict.PROCEED
+
+
+def test_declared_sample_never_proceeds_without_examined_qc():
+    """Gap A guard (freezes the finding): no sheet-declared, QC-less sample maps to PROCEED — and
+    and the boundary holds: an intake-only sample (no sheet, no QC) is NOT false-HOLDed."""
+    art = load_run(DATA)
+    art.qc = []  # strip ALL QC → every sheet-declared sample is now declared-but-unexamined
+    for sid in art.sample_ids():
+        findings = evaluate_sample(sid, art, DEFAULT_RUNBOOK)
+        assert any(f.rule_id == "QC-MISSING" for f in findings), sid
+        assert aggregate_verdict(findings) is not Verdict.PROCEED, sid
+    # Boundary: a sample ONLY in intake metadata (sheet None, qc None) → no false QC-MISSING.
+    intake_only = RunArtifacts(run_id="r", samples=[Sample(sample_id="INTAKE_ONLY")])
+    findings = evaluate_sample("INTAKE_ONLY", intake_only, DEFAULT_RUNBOOK)
+    assert not any(f.rule_id == "QC-MISSING" for f in findings)
+
+
+def test_expected_metric_absent_holds():
+    """Gap C: a profile that EXPECTS a metric the sample didn't produce emits QC-EXPECTED-* → HOLD,
+    restoring the signal a `required=False` threshold would silently drop."""
+    art = load_run(DATA)
+    book = DEFAULT_RUNBOOK.model_copy(
+        update={"expected_metrics": ("qc.breadth_20x",), "pipeline_profile": "germline-panel"}
+    )
+    # Premise: S1's QC omits breadth_20x (a richer-report metric mock_run_01 doesn't carry).
+    s1_qc = next(q for q in art.qc if q.sample_id == "S1")
+    assert "qc.breadth_20x" not in {mv.metric_key for mv in metric_values_for(s1_qc)}
+    findings = evaluate_sample("S1", art, book)
+    exp = [f for f in findings if f.rule_id == "QC-EXPECTED-QC.BREADTH_20X"]
+    assert len(exp) == 1
+    f = exp[0]
+    assert f.severity is Severity.WARN and f.suggested_verdict is Verdict.HOLD
+    ev = f.evidence[0]
+    assert ev.value == "not examined" and ev.expected == "present"
+    assert ev.source_kind is SourceKind.METRIC
+    assert aggregate_verdict(findings) is Verdict.HOLD  # I1 + I2
+
+
+def test_expected_metric_default_runbook_no_finding():
+    """Gap C negative (the lean-run guarantee): the SAME clean sample under DEFAULT_RUNBOOK
+    (expected_metrics == ()) emits no QC-EXPECTED-* and stays byte-for-byte clean."""
+    findings = evaluate_sample("S1", load_run(DATA), DEFAULT_RUNBOOK)
+    assert not any(f.rule_id.startswith("QC-EXPECTED") for f in findings)
+    assert findings == []  # S1 was clean before this change; still clean
+
+
+def test_expected_metric_set_leaves_no_silent_skip():
+    """Gap C guard: every expected-but-absent key produces exactly one QC-EXPECTED finding (none
+    silently vanishes), and DEFAULT_RUNBOOK.expected_metrics is provably empty (default = no-op)."""
+    art = load_run(DATA)
+    expected = ("qc.breadth_20x", "qc.pct_mapped", "qc.on_target")
+    book = DEFAULT_RUNBOOK.model_copy(update={"expected_metrics": expected})
+    s1_qc = next(q for q in art.qc if q.sample_id == "S1")
+    present = {mv.metric_key for mv in metric_values_for(s1_qc)}
+    absent_expected = {k for k in expected if k not in present}
+    findings = evaluate_sample("S1", art, book)
+    flagged = {
+        f.rule_id.removeprefix("QC-EXPECTED-").lower()
+        for f in findings
+        if f.rule_id.startswith("QC-EXPECTED")
+    }
+    assert flagged == absent_expected  # no expected-absent key skipped, none invented
+    assert DEFAULT_RUNBOOK.expected_metrics == ()  # the default path is provably a no-op
+
+
+def test_qc_missing_holds_through_the_decision_card():
+    """Gap A end-to-end (I1 through the card the product actually serves, not just the reducer
+    helper): dropping S1's QC row makes run_gate's DecisionCard for S1 a HOLD, and the card's
+    verdict equals aggregate_verdict over the card's own findings — never synthesizer-authored."""
+    art = load_run(DATA)
+    art.qc = [q for q in art.qc if q.sample_id != "S1"]
+    cards = {c.sample_id: c for c in run_gate(art, synthesizer=StubSynthesizer())}
+    s1 = cards["S1"]
+    assert any(f.rule_id == "QC-MISSING" for f in s1.findings)
+    assert s1.verdict is Verdict.HOLD
+    assert s1.verdict is aggregate_verdict(s1.findings)  # verdict == reducer over card findings
+
+
+def test_expected_metrics_rejects_unproducible_key():
+    """WS-01 hardening (from adversarial review): a profile that expects a metric the parse layer
+    cannot produce fails LOUD at Runbook construction — never a per-sample, unclearable
+    HOLD. Producible keys are accepted and de-duped. (pydantic validates on construction; note
+    `model_copy(update=)` deliberately skips validation, so profile builders must construct.)"""
+    with pytest.raises(ValidationError):
+        Runbook(expected_metrics=("contamination.freemix",))  # registered but no wired parser
+    with pytest.raises(ValidationError):
+        Runbook(expected_metrics=("qc.brdth_20x",))  # a typo can't become a run-wide HOLD
+    book = Runbook(expected_metrics=("qc.breadth_20x", "qc.breadth_20x", "qc.pct_mapped"))
+    assert book.expected_metrics == ("qc.breadth_20x", "qc.pct_mapped")  # producible + de-duped
+
+
+def test_hg002_committed_run_has_no_spurious_qc_missing():
+    """WS-01 Gap A real-data leg (offline against the committed HG002 fixture): HG002 carries a real
+    QC row, so QC-MISSING must NOT fire — the new rule neither masks nor duplicates HG002's existing
+    honest cluster_pf HOLD (a reads-only path can't produce the run-level %PF metric)."""
+    run_dir = DATA.parent / "RUN-2026-07-08-GIAB-HG002"
+    findings = evaluate_run(load_run(run_dir), DEFAULT_RUNBOOK)["HG002"]
+    assert not any(f.rule_id == "QC-MISSING" for f in findings)  # QC present → no missing-QC HOLD
+    # …the existing structural cluster_pf NA-HOLD is retained, unchanged by WS-01.
+    assert any(f.rule_id == "QC-CLUSTER_PF-NA" for f in findings)
+    assert aggregate_verdict(findings) is Verdict.HOLD
+
+
+# ── WS-01 · PR2: CheckCoverage + honest "N ran / M not examined" prose ─────────────
+
+
+def test_compute_check_coverage_marks_uncovered_categories():
+    """WS-01 Gap D: contamination + identity have no parser → always reported NOT examined (never
+    silently omitted); a clean sample's ran-count is < expected; the labels name them. A clean QC
+    gate that ran finding-less STILL counts as ran (the gateRan fix — ran != produced a finding)."""
+    art = load_run(DATA)
+    findings = evaluate_sample("S1", art, DEFAULT_RUNBOOK)  # S1 is clean (no findings)
+    assert findings == []
+    cov = compute_check_coverage("S1", art, DEFAULT_RUNBOOK, findings)
+    assert {Category.CONTAMINATION, Category.IDENTITY} <= set(cov.categories_not_run)
+    assert cov.checks_ran < cov.checks_expected
+    assert "contamination" in cov.not_examined and "identity" in cov.not_examined
+    assert Category.QC in cov.categories_ran  # a clean gate RAN even with no QC finding
+    assert cov.checks_ran == len(cov.categories_ran)
+    assert cov.checks_expected == len(cov.categories_ran) + len(cov.categories_not_run)
+
+
+def test_check_coverage_flips_contamination_when_freemix_is_examined():
+    """WS-01 sub-gap (audit reconciliation): contamination/identity are NOT unconditionally
+    not-examined. A sample that actually carries a FREEMIX observation (the WS-03 ingest path)
+    marks the contamination category as RAN — present = examined, pass OR fail, so an
+    examined-and-passed FREEMIX no longer reads "contamination not examined". identity, with no such
+    metric on this sample, stays honestly not-examined. Verdict/hash-neutral (narration only)."""
+    unit = default_registry().entry("contamination.freemix").canonical_unit.value
+    art = RunArtifacts(
+        run_id="R",
+        sample_sheet=[SampleSheetEntry(sample_id="S1")],
+        qc=[
+            SampleMetrics(
+                sample_id="S1",
+                raw={
+                    # a PASSING freemix (well below any contamination gate) — examined, no finding
+                    "contamination.freemix": RawObservation(
+                        raw_value=0.005, raw_unit=unit, source_field="FREEMIX"
+                    )
+                },
+            )
+        ],
+    )
+    findings = evaluate_sample("S1", art, DEFAULT_RUNBOOK)
+    cov = compute_check_coverage("S1", art, DEFAULT_RUNBOOK, findings)
+    # contamination was EXAMINED (freemix present) → ran, and NOT reported not-examined…
+    assert Category.CONTAMINATION in cov.categories_ran
+    assert "contamination" not in cov.not_examined
+    # …while identity (no metric on this sample) stays honestly not-examined.
+    assert Category.IDENTITY in cov.categories_not_run
+    assert "identity" in cov.not_examined
+
+
+def test_empty_findings_prose_states_coverage_not_all_passed():
+    """WS-01 Gap B: a clean card's prose states coverage ('N/M categories ran; … not examined'),
+    NEVER 'all checks passed', and carries the real CheckCoverage. The verdict stays PROCEED — a
+    narration change only (I1)."""
+    s1 = {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}["S1"]
+    assert s1.verdict is Verdict.PROCEED
+    blob = (s1.headline + " " + s1.rationale).lower()
+    for banned in ("all checks passed", "cleared every", "no inconsistencies were found"):
+        assert banned not in blob
+    assert s1.check_coverage is not None
+    assert f"{s1.check_coverage.checks_ran}/{s1.check_coverage.checks_expected}" in s1.headline
+    assert "not examined" in s1.rationale.lower() and s1.check_coverage.not_examined
+
+
+def test_no_card_claims_all_checks_passed_when_a_category_not_run():
+    """WS-01 Gap B guard: over the whole demo run, no card's prose asserts blanket clearance while a
+    category was NOT examined, and the denominator is honest (expected == ran + not_run, and
+    contamination/identity are not-run on every card today)."""
+    for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer()):
+        cov = c.check_coverage
+        assert cov is not None
+        assert cov.checks_expected == len(cov.categories_ran) + len(cov.categories_not_run)
+        assert {Category.CONTAMINATION, Category.IDENTITY} <= set(cov.categories_not_run)
+        blob = (c.headline + " " + c.rationale).lower()
+        if cov.not_examined:
+            for banned in ("all checks passed", "cleared every", "no inconsistencies were found"):
+                assert banned not in blob, c.sample_id
+
+
+def test_check_coverage_excluded_from_content_hash():
+    """WS-01 cross-gap invariant (I3): CheckCoverage is contextual metadata (like metric_values) —
+    NOT in content_hash and never changes the verdict. Attaching/detaching leaves the hash
+    byte-identical, and it round-trips through model_dump(mode='json')."""
+    s1 = {c.sample_id: c for c in run_gate(load_run(DATA), synthesizer=StubSynthesizer())}["S1"]
+    assert isinstance(s1.check_coverage, CheckCoverage)
+    detached = s1.model_copy(update={"check_coverage": None})
+    assert s1.content_hash == detached.content_hash  # un-hashed
+    assert s1.verdict is detached.verdict  # verdict-neutral
+    dumped = s1.model_dump(mode="json")  # survives JSON serialization (API/ML, ADR-0007)
+    assert dumped["check_coverage"]["checks_expected"] == s1.check_coverage.checks_expected
+
+
+# ── WS-06·PR2: the gate consumes ingested SampleMetrics (real-run ingestion) ────────
+
+
+def test_run_gate_accepts_sample_metrics_qc():
+    """WS-06·PR2: RunArtifacts.qc holds the registry-keyed SampleMetrics a real-run adapter emits
+    (WS-03), and the gate normalizes + thresholds them exactly like the frozen-CSV QCMetrics —
+    proving the ingested contract gates END-TO-END. A failing q30 as a SampleMetrics observation
+    yields the same QC-Q30 finding + verdict it would as a QCMetrics field."""
+    art = RunArtifacts(
+        run_id="R",
+        sample_sheet=[SampleSheetEntry(sample_id="S1")],
+        samples=[
+            Sample(
+                sample_id="S1", subject_id="X", tissue="blood", library_prep="p", submitted_by="u"
+            )
+        ],
+        qc=[
+            SampleMetrics(
+                sample_id="S1",
+                raw={
+                    "qc.q30": RawObservation(raw_value=60.0, raw_unit="percent", source_field="q30")
+                },
+            )
+        ],
+    )
+    s1 = {c.sample_id: c for c in run_gate(art, synthesizer=StubSynthesizer())}["S1"]
+    # q30 60% → 0.60 < hard_fail 0.75 → QC-Q30 hard-fail → RERUN, from a SampleMetrics observation.
+    assert any(f.rule_id == "QC-Q30" for f in s1.findings)
+    assert s1.verdict is Verdict.RERUN
+    # The registry-normalized metric flowed onto the card, byte-identical to the QCMetrics path.
+    by_key = {mv.metric_key: mv for mv in s1.metric_values}
+    assert by_key["qc.q30"].normalized_value == 0.60
+
+
+# ── WS-06 metric correctness (source/label honesty; Gaps 4 & 5) ────────────────────
+
+
+def test_mean_coverage_source_is_honest():
+    """WS-06 §9b: the mean-coverage metric names the tool the committed germline pipeline actually
+    runs (mosdepth's published summary) — never Picard CollectHsMetrics, which the pipeline never
+    invokes. Borrowing a tool's metric name it doesn't produce is dishonest provenance."""
+    src = default_registry().entry("qc.mean_target_coverage").source
+    assert src.module == "mosdepth" and "picard" not in src.module.lower()
+    assert src.source_file == "mosdepth.summary.txt"
+
+
+def test_driver_computed_metrics_name_their_real_tool():
+    """Guard (WS-06 §9b): every metric the committed germline driver actually WRITES (fastp read QC
+    + mosdepth coverage/breadth) names the tool that computes it, never Picard CollectHsMetrics (the
+    reads-only pipeline never runs Picard). Freezes 'borrowed a metric name from a tool we don't
+    run'. (on_target / fold_* stay Picard-sourced — Picard IS their tool; we just don't run it.)"""
+    reg = default_registry()
+    driver_computed = {
+        "qc.q30": "fastp",
+        "qc.reads_passing_filter": "fastp",
+        "qc.duplication": "fastp",
+        "qc.mean_target_coverage": "mosdepth",
+        "qc.breadth_20x": "mosdepth",
+        "qc.breadth_30x": "mosdepth",
+    }
+    for our_key, tool in driver_computed.items():
+        module = reg.entry(our_key).source.module
+        assert module == tool, f"{our_key} claims {module!r}, driver computes it with {tool}"
+        assert "picard" not in module.lower()
+
+
+def test_reads_passing_filter_label_is_not_a_demux_concept():
+    """WS-06 §9c: the qc.reads_passing_filter threshold renders 'Reads passing filter' (fastp's
+    survival metric, matching the registry display_name), never '% reads identified' (a demux
+    concept it is not). The label flows into finding title/detail/content_hash, so this pins it."""
+    threshold = DEFAULT_RUNBOOK.threshold_for("pct_reads_identified")
+    assert threshold is not None and threshold.label == "Reads passing filter"
+    mv = default_registry().observe(
+        metric_key="qc.reads_passing_filter", raw_value=60.0, raw_unit="percent", sample_id="SX"
+    )
+    finding = _evaluate_metric("SX", threshold, mv)  # 60% < gate 70% -> a WARN finding
+    assert finding is not None and "Reads passing filter" in finding.title
+    blob = (finding.title + finding.detail + " ".join(e.value for e in finding.evidence)).lower()
+    assert "reads identified" not in blob
+
+
 def test_run_gate_orders_urgent_first():
     cards = run_gate(load_run(DATA), synthesizer=StubSynthesizer())
     verdicts = [c.verdict for c in cards]
@@ -145,7 +536,11 @@ def test_stub_card_is_grounded():
     assert s4.generated_by == "stub"
     assert s4.confidence is None  # confidence omitted until grounded (T-019)
     assert s4.findings  # findings carried onto the card
-    assert s4.next_steps
+    # The stub fabricates NO next_steps (WS-07 Q1): the honest AI-off fallback points the operator
+    # at the real QC artifacts (reports + metric readout, surfaced by api/card_readout.py), never
+    # boilerplate advice. Real next_steps only exist on the live Claude path. See
+    # tests/test_stub_next_steps.py for the full anti-boilerplate guard.
+    assert s4.next_steps == []
 
 
 def test_hard_fail_sample_reruns():

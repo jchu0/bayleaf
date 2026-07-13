@@ -1,0 +1,11 @@
+# gitleaks allowlist — scoped false positives only.
+#
+# All fingerprints below point at the SAME genomics QC concordance metric-key NAME
+# (a dotted lowercase identifier, the SNP-F1 our_key). gitleaks' generic-api-key rule
+# fires on its entropy (3.53), but it is a field name, not a credential — verified by
+# reading each line. Everything else is still scanned normally.
+#   - the doc code snippets in audit/gap_analysis/ws-04-giab-concordance.md
+#   - the WS-04 runbook QCThreshold our_key in src/pipeguard/runbook.py
+audit/gap_analysis/ws-04-giab-concordance.md:generic-api-key:33
+audit/gap_analysis/ws-04-giab-concordance.md:generic-api-key:175
+src/pipeguard/runbook.py:generic-api-key:260

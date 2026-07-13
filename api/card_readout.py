@@ -32,7 +32,8 @@ from pydantic import BaseModel, Field
 
 from pipeguard import DecisionCard, Runbook, run_gate_from_dir
 from pipeguard.metrics import default_registry
-from pipeguard.models import CanonicalUnit, Gate, MetricValue, Sample, Verdict
+from pipeguard.models import CanonicalUnit, Gate, MetricValue, Sample, Severity, Verdict
+from pipeguard.rules import _evaluate_metric
 from pipeguard.runbook import DEFAULT_RUNBOOK, QCThreshold
 
 
@@ -64,6 +65,7 @@ class Direction(str, Enum):
 
     AT_LEAST = ">="  # higher_is_better: value must be >= gate
     AT_MOST = "<="  # lower_is_better: value must be <= gate
+    WITHIN = "within"  # target_band: value must be WITHIN a [low, high] band (a both-tails gate)
     UNKNOWN = "?"  # no threshold → direction is not derivable; surfaced, not fabricated
 
 
@@ -187,15 +189,35 @@ class CardHeader(BaseModel):
     )
 
 
+class QcReportLink(BaseModel):
+    """A link to a QC HTML report artifact found on disk for the run (WS-07 Q1).
+
+    The AI-off default fabricates no advice; instead the readout points the operator at the REAL
+    QC reports (``fastp.html`` / ``multiqc_report.html``) the run published, when present. ``url``
+    targets the existing read-only inline artifact-serve endpoint (``GET /api/runs/{id}/artifacts/
+    {name}``) — this model *discovers* the file, it never serves or fabricates one. A run with no
+    HTML report (e.g. the synthetic mock_run_01, CSVs only) yields an empty list — honest absence,
+    not boilerplate.
+    """
+
+    name: str = Field(..., description="Bare artifact filename, e.g. 'multiqc_report.html'")
+    label: str = Field(..., description="Human label, e.g. 'MultiQC report'")
+    url: str = Field(..., description="Inline artifact-serve link (GET /api/runs/{id}/artifacts/…)")
+    scope: str = Field(..., description="'sample' (per-sample report) or 'run' (run-level report)")
+
+
 class CardReadout(BaseModel):
-    """Side-channel view attached to a decision card: its header + its QC readout.
+    """Side-channel view attached to a decision card: its header + its QC readout + QC-report links.
 
     Purely additive and OFF the deterministic gate (ADR-0001). It re-presents metrics the gate
-    already emitted; it carries no verdict-setting power.
+    already emitted and points at the QC report artifacts on disk; it carries no verdict-setting
+    power. ``qc_reports`` is the AI-off suggestion surface: the real reports + this metric readout,
+    never fabricated next_steps (WS-07 Q1). Empty when the run published no HTML report.
     """
 
     header: CardHeader
     readout: QcReadout
+    qc_reports: list[QcReportLink] = Field(default_factory=list)
 
 
 # --- Display helpers ------------------------------------------------------------------------
@@ -264,6 +286,63 @@ def _classify(value: float, threshold: QCThreshold) -> tuple[ReadoutStatus, bool
     return ReadoutStatus.BORDERLINE, within
 
 
+def _band_row(mv: MetricValue, threshold: QCThreshold) -> MetricReadout:
+    """Build a readout row for a BOTH-TAILS (``target_band``) threshold (WS-06 Gap 2).
+
+    Status is PROJECTED from the core rule (``rules._evaluate_metric`` → ``_evaluate_target_band``),
+    never re-decided here (ADR-0001 — the API only re-presents what the gate computed): a None
+    finding is PASS, a WARN is BORDERLINE (out of the target band but inside the hard band, either
+    tail), a CRITICAL is FAIL (outside the hard band). The one-sided ``_classify`` cannot score a
+    band — ``value >= gate`` silently reads every high-tail value as PASS — so the band decision is
+    delegated to the core rather than duplicated. The Threshold column shows the target band
+    ``[low, high]`` and the hard-fail column the hard (acceptable) band, rendered in the operator
+    display unit exactly like the one-sided path — never a single ``>=``/``<=`` comparator, which
+    would misdescribe a two-tailed gate.
+    """
+    # The QCThreshold validator guarantees all four edges for kind=="target_band"; narrow the
+    # float | None fields to float for mypy and document that invariant (mirrors rules.py).
+    assert (
+        threshold.target_low is not None
+        and threshold.target_high is not None
+        and threshold.hard_low is not None
+        and threshold.hard_high is not None
+    )
+    # PROJECT the core's both-tails decision — do NOT re-derive the band scoring in the API.
+    finding = _evaluate_metric(mv.sample_id, threshold, mv)
+    if finding is None:
+        status = ReadoutStatus.PASS
+    elif finding.severity is Severity.CRITICAL:
+        status = ReadoutStatus.FAIL
+    else:  # a WARN finding — out of the target band but still inside the hard band
+        status = ReadoutStatus.BORDERLINE
+
+    obs_num, obs_sym = _to_display(mv.normalized_value, mv.canonical_unit, threshold.unit)
+    # Both bands render in the same display unit as the observed value (symbol is identical).
+    tlo, _ = _to_display(threshold.target_low, mv.canonical_unit, threshold.unit)
+    thi, _ = _to_display(threshold.target_high, mv.canonical_unit, threshold.unit)
+    hlo, _ = _to_display(threshold.hard_low, mv.canonical_unit, threshold.unit)
+    hhi, _ = _to_display(threshold.hard_high, mv.canonical_unit, threshold.unit)
+
+    flagged = status in (ReadoutStatus.FAIL, ReadoutStatus.BORDERLINE)
+    return MetricReadout(
+        metric=mv.metric_key,
+        label=threshold.label,
+        gate=mv.gate,
+        status=status,
+        direction=Direction.WITHIN,
+        observed_value=mv.normalized_value,
+        canonical_unit=mv.canonical_unit,
+        observed_unit=obs_sym,
+        observed_display=f"{_fmt(obs_num)}{obs_sym}",
+        threshold_display=f"[{_fmt(tlo)}, {_fmt(thi)}]{obs_sym}",
+        hard_fail_display=f"[{_fmt(hlo)}, {_fmt(hhi)}]{obs_sym}",
+        # `within_borderline_band` is a one-sided near-miss concept; a band already distinguishes
+        # WARN (in hard band) from CRITICAL (outside it) via `status`, so leave it False.
+        within_borderline_band=False,
+        flagged=flagged,
+    )
+
+
 def _row_for(mv: MetricValue, threshold: QCThreshold | None) -> MetricReadout:
     """Build one readout row by joining a metric value to its runbook threshold (or None)."""
     if threshold is None:
@@ -285,6 +364,12 @@ def _row_for(mv: MetricValue, threshold: QCThreshold | None) -> MetricReadout:
             within_borderline_band=False,
             flagged=False,
         )
+
+    # A both-tails (target_band) gate can't be scored or labelled by the one-sided path below (its
+    # `value >= gate` reads every high-tail value as PASS and its `>=` label misdescribes a band);
+    # delegate to the core rule for the decision and render the band (WS-06 Gap 2).
+    if threshold.kind == "target_band":
+        return _band_row(mv, threshold)
 
     status, within = _classify(mv.normalized_value, threshold)
     direction = Direction.AT_LEAST if threshold.higher_is_better else Direction.AT_MOST
@@ -448,12 +533,67 @@ def _origin_marker(run_dir: Path) -> str | None:
     return None
 
 
+# QC HTML reports the germline pipeline publishes: per-sample `${id}.fastp.html` and the run-level
+# `multiqc_report.html`. A file is a QC report when its stem carries one of these tool tokens; the
+# label is derived from the token (never guessed). Extend this map as new report-emitting tools are
+# cataloged — an unknown `.html` is left unsurfaced rather than mislabelled.
+_QC_REPORT_TOKENS: dict[str, str] = {"fastp": "fastp report", "multiqc": "MultiQC report"}
+
+
+def _report_scope(name: str, sample_id: str, all_ids: list[str]) -> str | None:
+    """Classify a QC-report file for one card: 'sample' (this sample's report), 'run' (run-level),
+    or None (a DIFFERENT sample's per-sample report — excluded so it can't leak onto this card).
+
+    The germline convention is ``${id}.<tool>.html``, so a per-sample report's filename STARTS with
+    its sample id + '.'. A run-level report (``multiqc_report.html``) starts with no sample id.
+    """
+    if name.startswith(f"{sample_id}."):
+        return "sample"
+    for other in all_ids:
+        if other != sample_id and name.startswith(f"{other}."):
+            return None  # belongs to another sample — not this card's report
+    return "run"
+
+
+def _scan_qc_reports(
+    run_dir: Path, run_id: str, sample_id: str, all_ids: list[str]
+) -> list[QcReportLink]:
+    """Discover the QC HTML reports on disk for ``sample_id``'s card (WS-07 Q1).
+
+    Read-only directory scan (no tool runs): every ``*.html`` file in the run dir whose stem carries
+    a known QC-report tool token, scoped so a sibling sample's per-sample report never leaks onto
+    this card. Each link targets the existing inline artifact-serve endpoint. Empty ⇒ the run
+    published no report (honest absence), and the caller falls back to the metric readout alone.
+    """
+    reports: list[QcReportLink] = []
+    for p in sorted(run_dir.glob("*.html")):
+        if not p.is_file():
+            continue
+        stem = p.name.lower()
+        label = next((lbl for tok, lbl in _QC_REPORT_TOKENS.items() if tok in stem), None)
+        if label is None:
+            continue  # an unrelated .html — not a QC report; leave it unsurfaced, never mislabelled
+        scope = _report_scope(p.name, sample_id, all_ids)
+        if scope is None:
+            continue
+        reports.append(
+            QcReportLink(
+                name=p.name,
+                label=label,
+                url=f"/api/runs/{run_id}/artifacts/{p.name}",
+                scope=scope,
+            )
+        )
+    return reports
+
+
 @router.get("/runs/{run_id}/cards/{sample_id}/qc-readout")
 def get_card_readout(run_id: str, sample_id: str) -> CardReadout:
-    """The QC readout + header for one decision card (additive side-channel; off the gate).
+    """The QC readout + header + QC-report links for one decision card (additive side-channel).
 
-    Re-derives the run's cards deterministically (`run_gate_from_dir`) and projects the requested
-    sample's card. Read-only: it sets no verdict and writes nothing.
+    Re-derives the run's cards deterministically (`run_gate_from_dir`), projects the requested
+    sample's card, and scans the run dir for the real QC HTML reports (WS-07 Q1). Read-only: it
+    sets no verdict and writes nothing.
     """
     run_dir = _data_root() / run_id
     if not (run_dir / "SampleSheet.csv").exists():
@@ -466,4 +606,9 @@ def get_card_readout(run_id: str, sample_id: str) -> CardReadout:
 
     sample = next((s for s in artifacts.samples if s.sample_id == sample_id), None)
     header = build_card_header(card, origin=_origin_marker(run_dir), sample=sample)
-    return CardReadout(header=header, readout=build_qc_readout(card, DEFAULT_RUNBOOK))
+    reports = _scan_qc_reports(run_dir, run_id, sample_id, artifacts.sample_ids())
+    return CardReadout(
+        header=header,
+        readout=build_qc_readout(card, DEFAULT_RUNBOOK),
+        qc_reports=reports,
+    )

@@ -212,6 +212,27 @@ class GateResult(BaseModel):
     finding_rule_ids: list[str] = Field(default_factory=list)
 
 
+class CheckCoverage(BaseModel):
+    """Deterministic 'N ran / M not examined' coverage telemetry for one sample (WS-01).
+
+    Computed in the trust anchor (``rules.compute_check_coverage``) as a pure function of
+    ``(artifacts, runbook, findings)``. It exists to make PROCEED honest: a clean card must say
+    "the checks that ran found nothing", NOT "all checks passed" — because contamination/identity
+    have no parser today and are therefore NOT examined. Carried on the card as un-hashed contextual
+    metadata (like ``metric_values``); it NARRATES coverage and never sets or influences the verdict
+    (ADR-0001). ``ran`` means a category's rule/parser executed given the artifacts present — NOT
+    that it produced a finding — so a clean gate that ran is never confused with one that never ran.
+    """
+
+    checks_expected: int = Field(..., description="Size of the fixed expected-category catalog")
+    checks_ran: int = Field(..., description="How many expected categories actually ran")
+    not_examined: list[str] = Field(
+        default_factory=list, description="Labels of the categories that were NOT examined"
+    )
+    categories_ran: list[Category] = Field(default_factory=list)
+    categories_not_run: list[Category] = Field(default_factory=list)
+
+
 class DecisionCard(BaseModel):
     """The synthesized, operator-facing output for one sample.
 
@@ -250,6 +271,11 @@ class DecisionCard(BaseModel):
         default_factory=list,
         description="Registry-normalized QC metrics for this sample (T-025); contextual "
         "ML/audit metadata (ADR-0007) — like run_id, NOT part of content_hash",
+    )
+    check_coverage: CheckCoverage | None = Field(
+        None,
+        description="Deterministic 'N ran / M not examined' coverage telemetry (WS-01); contextual "
+        "metadata like metric_values — NOT hashed, and never sets a verdict (ADR-0001)",
     )
     schema_version: int = SCHEMA_VERSION
     created_at: datetime = Field(default_factory=utc_now)
@@ -344,6 +370,35 @@ class QCMetrics(BaseModel):
     variant_dp: float | None = None
     variant_gq: float | None = None
     variant_titv: float | None = None
+
+
+class RawObservation(BaseModel):
+    """One raw metric observation as INGESTED, before registry normalization — the atom of the
+    registry-keyed ingestion contract (WS-06). ``raw_value`` is on ``raw_unit`` (the scale it was
+    emitted in — DECLARED, never guessed; the pct_* trap the registry defends). ``source_field`` /
+    ``source_locator`` keep provenance to the artifact column it came from.
+    ``metrics.metric_values_for`` normalizes a map of these into canonical ``MetricValue``s.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    raw_value: float
+    raw_unit: str
+    source_field: str | None = None
+    source_locator: str | None = None
+
+
+class SampleMetrics(BaseModel):
+    """One sample's ingested metrics as a REGISTRY-KEYED map (WS-06 ingestion contract) — the
+    inversion of the flat, field-enumerated ``QCMetrics``. ``raw`` maps a registry ``our_key`` to
+    its ``RawObservation``, so an nf-core/MultiQC adapter (WS-03) can emit metrics WITHOUT a new
+    named model field per metric. ``QCMetrics`` lowers into this via
+    ``metrics.sample_metrics_from_qcmetrics`` during the transition (it stays the frozen-CSV parse
+    output for one release; the ``RunArtifacts.qc`` type flip + registry-driven parser are PR2).
+    """
+
+    sample_id: str
+    raw: dict[str, RawObservation] = Field(default_factory=dict)
 
 
 class MetricValue(BaseModel):
@@ -470,7 +525,13 @@ class RunArtifacts(BaseModel):
     samples: list[Sample] = Field(default_factory=list)
     sample_sheet: list[SampleSheetEntry] = Field(default_factory=list)
     demux: list[DemuxRecord] = Field(default_factory=list)
-    qc: list[QCMetrics] = Field(default_factory=list)
+    # WS-06 transition: holds the frozen-CSV `QCMetrics` (the current parser output) OR the
+    # registry-keyed `SampleMetrics` a real-run adapter emits (WS-03). Both normalize through
+    # `metrics.metric_values_for`, and every reader of `.qc` uses only `.sample_id` + that loop, so
+    # the gate is agnostic to which shape a run carries — an ingested `results/` dir gates exactly
+    # like the frozen CSV. The hard flip to SampleMetrics-only (dropping QCMetrics + the frozen-CSV
+    # parser rewrite) is a later cleanup, once nothing constructs QCMetrics.
+    qc: list[QCMetrics | SampleMetrics] = Field(default_factory=list)
     log_lines: list[str] = Field(default_factory=list)
     # Structured Nextflow/nf-core execution trace (`trace.txt`) — READ, never run (EXEC-001).
     execution_trace: list[TraceRecord] = Field(default_factory=list)

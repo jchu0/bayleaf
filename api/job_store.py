@@ -4,7 +4,7 @@ The intake (``routers/intake.py``) and Builder-run (``routers/pipeline_run.py``)
 launch the external Nextflow driver as a background job. Their old in-process ``dict`` registries
 were **non-durable**: a backend restart lost every job's state and orphaned its ``data/<run_id>/`` /
 ``.nf-runs/<run_id>`` scratch, so a poller hung on ``running`` forever. This module makes that job
-state survive a restart, mirroring the other off-gate stores' pluggable shape (ADR-0016):
+state survive a restart, over the shared :mod:`api.base_store` generic (ADR-0016):
 
   - :class:`JsonlJobStore` — default, zero-dep upsertable JSONL file (``PIPEGUARD_JOB_PATH``).
   - :class:`SqliteJobStore` — a ``jobs`` table (stdlib; ``PIPEGUARD_JOB_DB``).
@@ -31,15 +31,16 @@ timeout and one process-group kill for both. Compose ≠ execute still holds at 
 from __future__ import annotations
 
 import json
-import logging
 import os
 import signal
-import sqlite3
 import subprocess
 import threading
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
+
+from api.base_store import JsonlDocStore, SqliteStore, select_backend
 
 # The Protocol has a method named ``list`` (per its contract) which shadows the builtin inside the
 # class bodies, so a ``-> list[...]`` annotation would resolve to the method. Module-level aliases
@@ -83,8 +84,8 @@ DRIVER_TIMEOUT_S = 1800
 # Serialize file/DB writes within a worker so two concurrent upserts can't interleave a JSONL line
 # or race a rewrite. Multi-worker (or two writes to the SAME job) needs a file lock / per-row DB
 # transaction — a documented seam, not built (the same honest limit as ADR-0016 / the other sinks).
+# Shared by both adapters of THIS store.
 _WRITE_LOCK = threading.Lock()
-_log = logging.getLogger(__name__)
 
 _JOB_DDL_SQLITE = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -136,50 +137,33 @@ def job_path() -> Path:
     return Path(raw) if raw else _DEFAULT_JOB_PATH
 
 
-class JsonlJobStore:
+class JsonlJobStore(JsonlDocStore):
     """One job per line in a JSONL file — the zero-dependency default.
 
-    ``upsert`` rewrites the whole file (read → replace-or-append the matching key → atomic
-    ``os.replace`` of a sibling temp file), so a crash mid-write leaves the old file intact rather
-    than a half-written one. At demo scale (a handful of jobs) rewriting is fine. Reads are
+    ``upsert`` rewrites the whole file (the base's read → replace-or-append the matching key →
+    atomic ``os.replace`` of a sibling temp file), so a crash mid-write leaves the old file intact
+    rather than a half-written one. At demo scale (a handful of jobs) rewriting is fine. Reads are
     tolerant: a missing file → ``[]`` and a partial/corrupt line is skipped, not raised.
     """
 
-    def _read_all(self) -> _Records:
-        path = job_path()
-        if not path.exists():
-            return []
-        out: _Records = []
-        for raw in path.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if not line:
-                continue
-            try:
-                out.append(json.loads(line))
-            except ValueError:
-                continue  # tolerate a partial/corrupt line (a crashed append is a signal)
-        return out
+    _lock = _WRITE_LOCK
+    _tolerant = True
 
-    def _rewrite(self, rows: _Records) -> None:
-        path = job_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        with tmp.open("w", encoding="utf-8") as fh:
-            for row in rows:
-                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-        tmp.replace(path)
+    def _resolve_path(self) -> Path:
+        return job_path()
 
     def upsert(self, record: _Record) -> _Record:
         key = _keyed(record)
-        with _WRITE_LOCK:
-            rows = self._read_all()
+
+        def mutate(rows: _Records) -> _Records:
             for i, r in enumerate(rows):
                 if _keyed(r) == key:
                     rows[i] = record
-                    break
-            else:
-                rows.append(record)
-            self._rewrite(rows)
+                    return rows
+            rows.append(record)
+            return rows
+
+        self._rewrite(mutate)
         return record
 
     def get(self, run_id: str, kind: str) -> _Record | None:
@@ -199,20 +183,15 @@ def job_db_path() -> str:
     return os.environ.get(_ENV_JOB_DB, "").strip() or str(_DEFAULT_JOB_DB)
 
 
-class SqliteJobStore:
+class SqliteJobStore(SqliteStore):
     """A ``jobs`` table in SQLite (stdlib). A fresh connection per op keeps it thread-safe under
     FastAPI's sync threadpool without pinning a connection to one thread."""
 
-    def __init__(self, path: str | None = None) -> None:
-        self._path = path or job_db_path()
-        # Fail fast at selection (so get_job_store can degrade) if the dir is unwritable.
-        Path(self._path).parent.mkdir(parents=True, exist_ok=True)
-        self._connect().close()
+    _ddl = _JOB_DDL_SQLITE
+    _mkdir_parent = True  # the default sink lives under a gitignored ``.nf-runs/`` (may not exist)
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path)
-        conn.execute(_JOB_DDL_SQLITE)
-        return conn
+    def __init__(self, path: str | None = None) -> None:
+        super().__init__(path or job_db_path())
 
     def upsert(self, record: _Record) -> _Record:
         with _WRITE_LOCK:
@@ -265,18 +244,12 @@ def get_job_store() -> JobStore:
     """Select the job sink from the environment (default: the offline JSONL file).
 
     ``PIPEGUARD_JOB_STORE=sqlite`` swaps in the SQLite adapter; ANY failure constructing it (an
-    unwritable path) degrades to the JSONL store — logged by exception *type* only. Any other value
-    (incl. the default) is JSONL.
+    unwritable path) degrades to the JSONL store — see :func:`api.base_store.select_backend`. Any
+    other value (incl. the default) is JSONL.
     """
-    choice = os.environ.get(_ENV_JOB_STORE, "jsonl").strip().lower()
-    if choice == "sqlite":
-        try:
-            return SqliteJobStore()
-        except Exception as exc:  # degrade on ANY failure; never break the execution path
-            _log.warning(
-                "PIPEGUARD_JOB_STORE=sqlite unavailable (%s); using JSONL.", type(exc).__name__
-            )
-    return JsonlJobStore()
+    jsonl: Callable[[], JobStore] = JsonlJobStore
+    sqlite: Callable[[], JobStore] = SqliteJobStore
+    return select_backend(_ENV_JOB_STORE, jsonl=jsonl, sqlite=sqlite)
 
 
 # --- Shared driver launch (process-group-aware) ---------------------------------------------

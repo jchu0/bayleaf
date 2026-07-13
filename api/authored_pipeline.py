@@ -25,6 +25,13 @@ from typing import Any
 from fastapi import HTTPException
 from pydantic import ValidationError
 
+# The post-run parse contract lives with the parser (``scripts/run_giab_pipeline.py``) so the
+# submit-time gate and the parser share ONE constant and can't drift. Importing it here (not
+# re-declaring it) is what makes "reject at submit" mean exactly "the parser would have required
+# this" (WS-09). ``scripts`` is a first-class, strictly-typed package (mypy ``files``); this module
+# only reads a frozenset from it — no cycle (scripts imports only the core, never ``api``).
+from scripts.run_giab_pipeline import REQUIRED_OUTPUT_KINDS
+
 from api.pipeline_store import PipelineGraphStore, last_emitted
 from api.routers.nextflow import CompileRequest
 from pipeguard.nextflow import (
@@ -32,7 +39,9 @@ from pipeguard.nextflow import (
     NfEdge,
     NfGraph,
     NfNode,
+    catalog_entry,
     compile_graph,
+    required_inputs,
 )
 from pipeguard.nextflow.compiler import CompileError
 
@@ -116,6 +125,62 @@ def compile_record(record: dict[str, Any], name: str) -> tuple[NfGraph, Nextflow
     if not any(not n.is_source() for n in graph.nodes):
         raise HTTPException(status_code=422, detail="the graph has no tool nodes to run")
     return graph, bundle
+
+
+def check_parse_contract(graph: NfGraph, name: str) -> None:
+    """Reject (422) an approved authored graph whose outputs can't yield a gate-able card.
+
+    The out-of-core driver parses the frozen-five QC by globbing a compiled pipeline's published
+    ``results/`` dir (``scripts/run_giab_pipeline.py::parse_sample``). A graph that can't PRODUCE
+    every :data:`REQUIRED_OUTPUT_KINDS` kind would run to completion in Nextflow and only THEN die
+    at parse with no card — a full compute burn for a ``failed`` run (WS-09 #1). We catch it at
+    SUBMIT instead — a structural check needing no tools/data, so it is offline-verifiable.
+
+    Only a CATALOGUED tool's output counts as parse-findable, and it is credited by its SPEC's
+    published kinds (``catalog_entry(...).output_kinds()``), NOT the node's declared ``outs``: the
+    compiler renders a catalogued process's ``output:``/``publishDir results`` straight from the
+    spec, so a catalogued node always publishes its full spec outputs into ``results/`` no matter
+    which ports the Builder wired. A custom/uncatalogued node is deliberately NOT credited: a custom
+    body publishes to ``results/custom`` (not the ``results/`` the parser globs) and an uncatalogued
+    node has no real command — neither can satisfy the contract, so trusting a claimed kind there
+    would be a false accept the live parse would then reject."""
+    produced: set[str] = set()
+    for node in graph.nodes:
+        spec = catalog_entry(node.tool)
+        if spec is not None and not node.is_custom():
+            produced.update(spec.output_kinds())
+    missing = sorted(REQUIRED_OUTPUT_KINDS - produced)
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"authored pipeline '{name}' does not produce the output kind(s) {missing} the "
+                "post-run QC parse requires (the frozen-five gate contract), so it can't yield a "
+                "gate-able card — it would run to completion then fail at parse. Add the missing "
+                "stage(s) before running."
+            ),
+        )
+
+
+def check_inputs_suppliable(graph: NfGraph, name: str, suppliable: frozenset[str]) -> None:
+    """Reject (422) an approved graph needing an external input kind the caller can't supply.
+
+    The Builder-Run path lets an operator pick inputs by key and validates the graph's
+    ``required_inputs`` against them (``routers/pipeline_run.py``). Intake has no such picker — it
+    always supplies the fixed HG002 germline defaults — so an authored graph that consumes anything
+    else would silently fall back to those defaults and process the WRONG inputs (wrong-but-runs,
+    WS-09 #2). Reject it up front instead, naming the unsupported kind(s)."""
+    unsupported = sorted(required_inputs(graph) - suppliable)
+    if unsupported:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"authored pipeline '{name}' needs external input kind(s) {unsupported} this run "
+                f"can't supply (available: {sorted(suppliable)}) — it would otherwise fall back to "
+                "the HG002 defaults and process the wrong inputs. Run it via the Builder-Run path "
+                "with those inputs chosen, or remove the stage(s) that consume them."
+            ),
+        )
 
 
 def materialize_bundle(bundle: NextflowBundle, dest_dir: Path) -> Path:

@@ -61,6 +61,16 @@ export type MetricValue = {
   content_hash: string
 }
 
+// Deterministic 'N ran / M not examined' coverage telemetry (WS-01). Un-hashed contextual
+// metadata; contamination/identity have no check today, so they are honestly not-examined.
+export type CheckCoverage = {
+  checks_expected: number
+  checks_ran: number
+  not_examined: string[]
+  categories_ran: string[]
+  categories_not_run: string[]
+}
+
 export type DecisionCard = {
   sample_id: string
   verdict: Verdict
@@ -74,6 +84,9 @@ export type DecisionCard = {
   // Registry-normalized QC metrics for this sample (T-025). Always emitted (backend
   // `default_factory=list`): an empty array when a sample has no QC row, never absent.
   metric_values: MetricValue[]
+  // Coverage telemetry (WS-01): null on older/partial cards; when present the UI shows the honest
+  // 'N ran / M not examined' story instead of a blanket "all checks passed".
+  check_coverage: CheckCoverage | null
   gate_results: GateResult[]
   content_hash: string
 }
@@ -467,7 +480,9 @@ export type MonitoringMetrics = {
 // Gate-grouped, flagged-first Metric·Observed·Threshold·Status rows.
 // ─────────────────────────────────────────────────────────────────────────────
 export type ReadoutStatus = 'pass' | 'borderline' | 'fail' | 'not_gated'
-export type ReadoutDirection = '>=' | '<=' | '?'
+// 'within' is a both-tails (target_band) gate: the value must sit WITHIN a [low, high] band, so its
+// threshold_display is a band ('[2, 2.1]'), not a one-sided comparator (WS-06 Gap 2).
+export type ReadoutDirection = '>=' | '<=' | 'within' | '?'
 export type MetricReadout = {
   metric: string
   label: string
@@ -500,7 +515,12 @@ export type CardHeader = {
   origin: string | null
   not_captured: string[]
 }
-export type CardReadout = { header: CardHeader; readout: QcReadout }
+// A link to a QC HTML report artifact the run published (fastp.html / multiqc_report.html), when
+// present on disk. This is the AI-off suggestion surface: the real reports + the metric readout,
+// never fabricated next_steps (WS-07 Q1). `scope` is 'sample' (this sample's report) or 'run'
+// (run-level). `url` targets the read-only inline artifact-serve endpoint. Empty ⇒ honest absence.
+export type QcReportLink = { name: string; label: string; url: string; scope: 'sample' | 'run' }
+export type CardReadout = { header: CardHeader; readout: QcReadout; qc_reports: QcReportLink[] }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Operator-facing runbook policy (GET /api/runbook) — disclaimer-bearing, with `our_key` +

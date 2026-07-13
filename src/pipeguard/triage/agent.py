@@ -22,7 +22,7 @@ from typing import Any, Protocol
 
 from ..models import DecisionCard, Finding, Verdict
 from ..synthesis.base import top_finding
-from .models import TriageCitation, TriageNote
+from .models import AgentReply, TriageCitation, TriageNote
 from .retrieval import KeywordRetriever, RetrievalHit, Retriever
 
 # Public agent identity carried on every note's `agent` field.
@@ -42,6 +42,20 @@ def _finding_query(findings: list[Finding]) -> str:
     return " ".join(parts)
 
 
+def _build_citations(card: DecisionCard, hits: list[RetrievalHit]) -> list[TriageCitation]:
+    """Deterministic citations for an advisory note/reply: retrieved corpus entries + the card's
+    findings — never the LLM. Shared by the auto-triage note and the interactive ask reply so both
+    stay grounded the same way (the model only ever phrases prose, never the provenance)."""
+    citations = [
+        TriageCitation(source_kind="knowledge", ref=h.entry.id, title=h.entry.title, score=h.score)
+        for h in hits
+    ]
+    citations.extend(
+        TriageCitation(source_kind="finding", ref=f.rule_id, title=f.title) for f in card.findings
+    )
+    return citations
+
+
 def _assemble_note(
     card: DecisionCard,
     hits: list[RetrievalHit],
@@ -57,13 +71,7 @@ def _assemble_note(
     retriever — never from the LLM — so provenance stays grounded even on the live
     path (the model only phrases `likely_cause`/`suggested_action`).
     """
-    citations = [
-        TriageCitation(source_kind="knowledge", ref=h.entry.id, title=h.entry.title, score=h.score)
-        for h in hits
-    ]
-    citations.extend(
-        TriageCitation(source_kind="finding", ref=f.rule_id, title=f.title) for f in card.findings
-    )
+    citations = _build_citations(card, hits)
     return TriageNote(
         agent=QC_TRIAGE_AGENT,
         sample_id=card.sample_id,
@@ -77,12 +85,21 @@ def _assemble_note(
     )
 
 
+def _ask_query(question: str, card: DecisionCard) -> str:
+    """The retrieval query for an operator's question: the question itself PLUS the card's findings,
+    so the grounding reflects both what was asked and what the rules actually flagged."""
+    return f"{question} {_finding_query(card.findings)}".strip()
+
+
 class TriageAgent(Protocol):
-    """Turns a flagged DecisionCard into an advisory TriageNote (None if clean)."""
+    """Turns a flagged DecisionCard into an advisory TriageNote (None if clean), and answers an
+    operator's free-text question about a card as an advisory AgentReply (never a verdict)."""
 
     name: str
 
     def triage_card(self, card: DecisionCard) -> TriageNote | None: ...
+
+    def ask(self, card: DecisionCard, question: str) -> AgentReply: ...
 
 
 class StubTriageAgent:
@@ -130,6 +147,35 @@ class StubTriageAgent:
             model=None,
         )
 
+    def ask(self, card: DecisionCard, question: str) -> AgentReply:
+        """A grounded, NON-fabricated answer (AI off): retrieve corpus knowledge for the question +
+        the card's findings and surface it as cited evidence, framed as retrieval — not a generated
+        answer. The honest deterministic fallback the live agent degrades to; unlike triage_card it
+        answers even a clean card (the operator may ask about a PROCEED)."""
+        hits = self._retriever.retrieve(_ask_query(question, card), top_k=3)
+        if hits:
+            lead = "; ".join(f"{h.entry.title} — {h.entry.likely_cause}" for h in hits[:2])
+            answer = (
+                "AI assistance is off, so this is not a generated answer — it surfaces the cited "
+                f"knowledge and findings that bear on your question. Most relevant: {lead}. Enable "
+                "PIPEGUARD_TRIAGE_AGENT=claude for a written answer; see the citations below."
+            )
+        else:
+            answer = (
+                "AI assistance is off and no knowledge-corpus entry matched your question. Review "
+                "the sample's cited findings directly, or enable the assistant "
+                "(PIPEGUARD_TRIAGE_AGENT=claude) for a written answer."
+            )
+        return AgentReply(
+            agent=QC_TRIAGE_AGENT,
+            sample_id=card.sample_id,
+            question=question,
+            answer=answer,
+            citations=_build_citations(card, hits),
+            generated_by=self.name,
+            model=None,
+        )
+
 
 # JSON schema for the advice PROSE only. The verdict, citations, and addressed
 # findings are not the model's to decide, so they are deliberately absent here.
@@ -157,6 +203,27 @@ _SYSTEM = (
     "aid, not a clinical decision system.\n"
     "- Make no diagnostic, therapeutic, or pathogenicity claims.\n"
     "- Be specific and concise, no preamble."
+)
+
+# JSON schema for the interactive ASK answer PROSE only — the verdict, citations, and addressed
+# findings are not the model's to decide, so they are deliberately absent (same as _ADVICE_SCHEMA).
+_ANSWER_SCHEMA = {
+    "type": "object",
+    "properties": {"answer": {"type": "string"}},
+    "required": ["answer"],
+    "additionalProperties": False,
+}
+
+_ASK_SYSTEM = (
+    "You are the QC-triage analyst for an AI-assisted provenance and QC decision gate for a "
+    "genomics sequencing run. A deterministic rule engine has already evaluated a sample and "
+    "decided its verdict. An operator is asking you a QUESTION about it. Answer ADVISORY only:\n"
+    "- You must NOT set, change, or restate a verdict — the verdict is fixed elsewhere.\n"
+    "- Ground every statement in the findings and retrieved knowledge provided; do not invent "
+    "metric values, IDs, thresholds, or causes not present. If unsupported by them, say so.\n"
+    "- Use conservative, hedged language and flag uncertainty; this is a research/demo aid, not "
+    "a clinical decision system.\n"
+    "- Make no diagnostic, therapeutic, or pathogenicity claims. Be specific and concise."
 )
 
 
@@ -259,6 +326,60 @@ class ClaudeTriageAgent:
             # Never let a live-API problem break the advisory path.
             return self._fallback.triage_card(card)
 
+    def ask(self, card: DecisionCard, question: str) -> AgentReply:
+        """Live Claude answer to the operator's question, grounded in the card's findings +
+        retrieved knowledge. Advisory only (no verdict). Any API error / refusal degrades to the
+        stub's grounded retrieval answer — never a crash, never fabricated provenance (citations
+        stay deterministic)."""
+        hits = self._fallback._retriever.retrieve(_ask_query(question, card), top_k=3)
+        try:
+            payload = {
+                "question": question,
+                "findings": [f.model_dump(mode="json") for f in card.findings],
+                "retrieved_knowledge": [
+                    {
+                        "id": h.entry.id,
+                        "title": h.entry.title,
+                        "likely_cause": h.entry.likely_cause,
+                        "suggested_action": h.entry.suggested_action,
+                        "source": h.entry.source,
+                        "score": h.score,
+                    }
+                    for h in hits
+                ],
+            }
+            user_content = (
+                f"Sample {card.sample_id} was evaluated by the rule engine. The operator asks:\n"
+                f"{question}\n\nFindings and retrieved knowledge (JSON):\n"
+                f"{json.dumps(payload, indent=2)}\n\n"
+                "Answer the question as JSON matching the schema. Do not restate a verdict."
+            )
+            client = self._get_client()
+            response = client.messages.create(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                system=_ASK_SYSTEM,
+                messages=[{"role": "user", "content": user_content}],
+                output_config={"format": {"type": "json_schema", "schema": _ANSWER_SCHEMA}},
+            )
+            if response.stop_reason == "refusal":
+                return self._fallback.ask(card, question)
+            text = next((b.text for b in response.content if b.type == "text"), None)
+            if not text:
+                return self._fallback.ask(card, question)
+            answer = json.loads(text)["answer"]
+            return AgentReply(
+                agent=QC_TRIAGE_AGENT,
+                sample_id=card.sample_id,
+                question=question,
+                answer=answer,
+                citations=_build_citations(card, hits),
+                generated_by=self.name,
+                model=self.model,
+            )
+        except Exception:
+            return self._fallback.ask(card, question)
+
 
 def get_triage_agent() -> TriageAgent:
     """Select the triage agent from the environment (default: the zero-cost stub).
@@ -281,6 +402,18 @@ def triage_card(card: DecisionCard, agent: TriageAgent | None = None) -> TriageN
     """
     agent = agent or get_triage_agent()
     return agent.triage_card(card)
+
+
+def ask_agent(card: DecisionCard, question: str, agent: TriageAgent | None = None) -> AgentReply:
+    """Answer an operator's free-text question about a decision card (advisory; never a verdict).
+
+    The interactive sibling of `triage_card` (mirrors its env selection): picks the env-selected
+    agent unless one is injected. Advisory only (ADR-0001) — with AI off (the default) the stub
+    returns a grounded retrieval answer, never fabricated prose. Unlike `triage_card`, it answers a
+    clean PROCEED card too (the operator may ask about any card).
+    """
+    agent = agent or get_triage_agent()
+    return agent.ask(card, question)
 
 
 # Static type check: both agents satisfy the TriageAgent protocol. An empty

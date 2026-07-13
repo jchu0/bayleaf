@@ -9,9 +9,10 @@ survive that cache and a process restart. It never reads, sets, or overrides a v
 input — it only records that data left (ADR-0001 holds).
 
 Three adapters, env-selected via ``PIPEGUARD_SHARE_STORE`` (default ``jsonl``), matching the other
-off-gate sinks (feedback/pipeline/review/settings). The DB adapters mirror the persistence seam and
-**degrade to the offline JSONL** if selection fails (missing extra / no DSN / unreachable server),
-so a misconfigured DB never breaks the egress-audit path — it just falls back to the file.
+off-gate sinks (feedback/pipeline/review/settings). The JSONL + SQLite plumbing is the shared
+:mod:`api.base_store` generic; the DB adapters **degrade to the offline JSONL** if selection fails
+(missing extra / no DSN / unreachable server), so a misconfigured DB never breaks the egress-audit
+path — it just falls back to the file.
 
   - :class:`JsonlShareStore` — default, zero-dep append-only file (``PIPEGUARD_SHARE_PATH``).
   - :class:`SqliteShareStore` — a ``share_events`` table (stdlib; ``PIPEGUARD_SHARE_DB``).
@@ -23,13 +24,13 @@ share events into a run's trail.
 
 from __future__ import annotations
 
-import logging
 import os
-import sqlite3
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
+from api.base_store import JsonlStore, SqliteStore, select_backend
 from pipeguard.provenance import ProvenanceEvent
 
 _ENV_SHARE_STORE = "PIPEGUARD_SHARE_STORE"
@@ -43,9 +44,8 @@ _DEFAULT_SHARE_DB = _REPO_ROOT / "share.sqlite"
 
 # Serialize appends within a worker so concurrent shares can't interleave a JSONL line or race a
 # short-lived connection (same honest single-worker limit as api.feedback_store; a file lock / pool
-# is the multi-worker seam noted in ADR-0016).
+# is the multi-worker seam noted in ADR-0016). Shared by all three adapters of THIS store.
 _WRITE_LOCK = threading.Lock()
-_log = logging.getLogger(__name__)
 
 # Indexed columns lifted out of an event for querying; the full event always rides along as a JSON
 # document, so a read round-trips a ProvenanceEvent exactly (nothing is lost to the columns).
@@ -99,34 +99,27 @@ def share_path() -> Path:
     return Path(raw) if raw else _DEFAULT_SHARE_PATH
 
 
-class JsonlShareStore:
+class JsonlShareStore(JsonlStore[ProvenanceEvent]):
     """Append-only JSONL file — the zero-dependency default. Tolerant reads: a missing file → ``[]``
     and a partial/corrupt line is skipped, not raised (a broken append is a signal, not a crash)."""
 
+    _lock = _WRITE_LOCK
+    _tolerant = True
+
+    def _resolve_path(self) -> Path:
+        return share_path()
+
+    def _encode(self, model: ProvenanceEvent) -> str:
+        return model.model_dump_json()
+
+    def _decode(self, line: str) -> ProvenanceEvent:
+        return ProvenanceEvent.model_validate_json(line)
+
     def append(self, event: ProvenanceEvent) -> None:
-        line = event.model_dump_json() + "\n"
-        path = share_path()
-        with _WRITE_LOCK:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8") as fh:
-                fh.write(line)
+        self._append(event)
 
     def for_run(self, run_id: str) -> list[ProvenanceEvent]:
-        path = share_path()
-        if not path.exists():
-            return []
-        out: list[ProvenanceEvent] = []
-        for raw in path.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if not line:
-                continue
-            try:
-                event = ProvenanceEvent.model_validate_json(line)
-            except ValueError:
-                continue  # tolerate a partial/corrupt line
-            if event.run_id == run_id:
-                out.append(event)
-        return out
+        return [e for e in self._read_all() if e.run_id == run_id]
 
 
 # --- SQLite (a real DB, still offline + zero-dep) -------------------------------------------
@@ -137,19 +130,14 @@ def share_db_path() -> str:
     return os.environ.get(_ENV_SHARE_DB, "").strip() or str(_DEFAULT_SHARE_DB)
 
 
-class SqliteShareStore:
+class SqliteShareStore(SqliteStore):
     """A ``share_events`` table in SQLite (stdlib). A fresh connection per op keeps it thread-safe
     under FastAPI's sync threadpool without pinning a connection to one thread."""
 
-    def __init__(self, path: str | None = None) -> None:
-        self._path = path or share_db_path()
-        # Fail fast at selection (so get_share_store can degrade) if the dir is unwritable.
-        self._connect().close()
+    _ddl = _SHARE_DDL_SQLITE
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path)
-        conn.execute(_SHARE_DDL_SQLITE)
-        return conn
+    def __init__(self, path: str | None = None) -> None:
+        super().__init__(path or share_db_path())
 
     def append(self, event: ProvenanceEvent) -> None:
         with _WRITE_LOCK:
@@ -229,22 +217,10 @@ def get_share_store() -> ShareStore:
     """Select the share-egress-audit sink from the environment (default: the offline JSONL file).
 
     ``PIPEGUARD_SHARE_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing it
-    (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store — logged
-    by exception *type* only, never ``str(exc)`` (which could carry a DSN password).
+    (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store — see
+    :func:`api.base_store.select_backend` (the shared degrade-to-JSONL ladder).
     """
-    choice = os.environ.get(_ENV_SHARE_STORE, "jsonl").strip().lower()
-    if choice == "postgres":
-        try:
-            return PostgresShareStore()
-        except Exception as exc:  # degrade on ANY failure; never leak the DSN
-            _log.warning(
-                "PIPEGUARD_SHARE_STORE=postgres unavailable (%s); using JSONL.", type(exc).__name__
-            )
-    elif choice == "sqlite":
-        try:
-            return SqliteShareStore()
-        except Exception as exc:  # degrade on ANY failure
-            _log.warning(
-                "PIPEGUARD_SHARE_STORE=sqlite unavailable (%s); using JSONL.", type(exc).__name__
-            )
-    return JsonlShareStore()
+    jsonl: Callable[[], ShareStore] = JsonlShareStore
+    sqlite: Callable[[], ShareStore] = SqliteShareStore
+    postgres: Callable[[], ShareStore] = PostgresShareStore
+    return select_backend(_ENV_SHARE_STORE, jsonl=jsonl, sqlite=sqlite, postgres=postgres)

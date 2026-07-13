@@ -8,7 +8,7 @@ metric through the registry and gate on the canonical value.
 
 from __future__ import annotations
 
-from .mapping import metric_values_for
+from .mapping import metric_values_for, producible_metric_keys, sample_metrics_from_qcmetrics
 from .registry import (
     MetricDirection,
     MetricEntry,
@@ -28,4 +28,6 @@ __all__ = [
     "ValueType",
     "default_registry",
     "metric_values_for",
+    "producible_metric_keys",
+    "sample_metrics_from_qcmetrics",
 ]

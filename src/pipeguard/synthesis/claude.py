@@ -25,7 +25,7 @@ import json
 import os
 from typing import Any
 
-from ..models import DecisionCard, Finding, RunArtifacts
+from ..models import CheckCoverage, DecisionCard, Finding, RunArtifacts
 from .base import Synthesizer, aggregate_verdict
 from .stub import StubSynthesizer
 
@@ -133,7 +133,11 @@ class ClaudeSynthesizer:
         }
 
     def synthesize(
-        self, sample_id: str, findings: list[Finding], artifacts: RunArtifacts
+        self,
+        sample_id: str,
+        findings: list[Finding],
+        artifacts: RunArtifacts,
+        coverage: CheckCoverage | None = None,
     ) -> DecisionCard:
         # PROMPT-INJECTION BOUNDARY (audit AS-07, CONFIRMED). This call ingests untrusted text —
         # `log_excerpts` (pipeline-authored) and `finding.detail` (rule-authored, embedded in the
@@ -156,6 +160,9 @@ class ClaudeSynthesizer:
                 "verdict": verdict.value,
                 "findings": [f.model_dump(mode="json") for f in findings],
                 "artifact_context": self._sample_context(sample_id, artifacts),
+                # Coverage is deterministic (rules.compute_check_coverage); the model may narrate it
+                # but the counts are authoritative and never the model's to change (ADR-0001).
+                "check_coverage": coverage.model_dump(mode="json") if coverage else None,
             }
             user_content = (
                 f"Sample {sample_id} — the rule engine returned verdict '{verdict.value}'.\n\n"
@@ -175,11 +182,11 @@ class ClaudeSynthesizer:
             # Guard the refusal path before reading content (Fable 5 classifiers can
             # false-positive on life-sciences work; other models can refuse too).
             if response.stop_reason == "refusal":
-                return self._fallback.synthesize(sample_id, findings, artifacts)
+                return self._fallback.synthesize(sample_id, findings, artifacts, coverage)
 
             text = next((b.text for b in response.content if b.type == "text"), None)
             if not text:
-                return self._fallback.synthesize(sample_id, findings, artifacts)
+                return self._fallback.synthesize(sample_id, findings, artifacts, coverage)
             narration = json.loads(text)
 
             return DecisionCard(
@@ -193,7 +200,7 @@ class ClaudeSynthesizer:
             )
         except Exception:
             # Never let a live-API problem break the gate mid-demo.
-            return self._fallback.synthesize(sample_id, findings, artifacts)
+            return self._fallback.synthesize(sample_id, findings, artifacts, coverage)
 
 
 # Static type check: ClaudeSynthesizer satisfies the Synthesizer protocol.

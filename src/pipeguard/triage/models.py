@@ -130,3 +130,33 @@ class TriageNote(BaseModel):
                 "corpus_version": self.corpus_version,
             }
         )
+
+
+class AgentReply(BaseModel):
+    """An ADVISORY answer to a user's free-text QUESTION about a decision card (ADR-0001).
+
+    The interactive sibling of :class:`TriageNote`: instead of auto-triaging a flagged card, the
+    agent answers a question the operator asked about it. ``advisory`` is pinned ``True`` and there
+    is deliberately no verdict/confidence field — the agent answers, the rules decide. Citations
+    stay deterministic (retriever + the card's findings), so provenance survives even on the live
+    path; the model only writes the ``answer`` prose. With AI OFF, the stub NEVER fabricates an
+    answer — it returns a grounded, retrieval-based response explicitly framed as retrieved
+    knowledge, not generated text (ADR-0006 deterministic fallback).
+    """
+
+    id: str = Field(default_factory=lambda: new_id("ask"))
+    advisory: Literal[True] = True
+    agent: str = Field(..., description="Advisory agent name, e.g. 'qc_triage'")
+    sample_id: str | None = None
+    question: str = Field(..., description="The operator's verbatim question")
+    answer: str = Field(..., description="Advisory answer (stub: retrieval; claude: prose)")
+    citations: list[TriageCitation] = Field(
+        default_factory=list, description="Corpus ids + finding refs grounding the answer"
+    )
+    generated_by: str = Field("stub", description="'stub' or 'claude' — provenance of the answer")
+    model: str | None = Field(
+        None, description="LLM id when generated_by='claude'; None for the deterministic stub"
+    )
+    corpus_version: str = TRIAGE_CORPUS_VERSION
+    schema_version: int = SCHEMA_VERSION
+    created_at: datetime = Field(default_factory=utc_now)

@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
 import { api } from '../api'
@@ -8,8 +8,9 @@ import { Tabs } from '../components/Tabs'
 import { useRole } from '../context/RoleContext'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/ConfirmDialog'
-import type { ProvenanceEvent, RunArtifact, RunDetail } from '../types'
+import type { ProvenanceEvent, RunArtifact } from '../types'
 import { fmtTime, groupArtifacts, readGateProvenance, readNum, readStr } from '../provenance'
+import { useRun } from '../hooks/useRun'
 import { ProvenanceLineage } from '../components/provenance/Lineage'
 import { EventTrail } from '../components/provenance/EventTrail'
 import { ProvenanceArtifacts } from '../components/provenance/Artifacts'
@@ -28,22 +29,14 @@ const VIEWS: ProvView[] = ['lineage', 'events', 'artifacts']
 
 export function Provenance() {
   const { runId = '' } = useParams()
-  const [detail, setDetail] = useState<RunDetail | null>(null)
+  // Run detail + error come from the shared useRun cache (UX-DUP #2); `refresh` re-fetches after a
+  // share records a DATA_EXPORTED event so it appears immediately. Only the artifacts are local.
+  const { detail, error, refresh } = useRun(runId)
   const [artifacts, setArtifacts] = useState<RunArtifact[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [params, setParams] = useSearchParams()
 
-  // Re-fetch the run detail alone (the events trail) — used after a share records a DATA_EXPORTED
-  // event so it appears immediately, without reloading the artifacts.
-  const refetchDetail = useCallback(() => {
-    api.run(runId).then(setDetail).catch((e) => setError(String(e)))
-  }, [runId])
-
   useEffect(() => {
-    setDetail(null)
     setArtifacts(null)
-    setError(null) // clear a prior run's error so switching runs via the top switcher never shows stale text
-    api.run(runId).then(setDetail).catch((e) => setError(String(e)))
     // The artifacts fetch degrades to [] on failure (tolerant boundary) — the empty state renders,
     // never a crash.
     api.artifacts(runId).then(setArtifacts).catch(() => setArtifacts([]))
@@ -75,7 +68,7 @@ export function Provenance() {
           subtitle (pure page chrome), keep only the title. The one action is the de-identified
           share (approver-gated + confirm-gated; ADR-0018 D3), which records an audited DATA_EXPORTED
           event that then surfaces in the Event trail below. */}
-      <PageHeader title="Provenance" actions={<ShareAction runId={detail.run_id} onShared={refetchDetail} />} />
+      <PageHeader title="Provenance" actions={<ShareAction runId={detail.run_id} onShared={refresh} />} />
 
       <ProvenanceHeader events={detail.events} />
 

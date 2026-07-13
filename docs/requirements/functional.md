@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-12 (MST) |
+| **Last updated** | 2026-07-13 (MST) — REQ-F-104 gains the `POST .../ask` `require_role` authz-floor addendum (T-164). Prior: 2026-07-12 (MST) — gap-analysis-remediation: REQ-F-104/105/106 (ask-agent endpoint, fail-closed gate + `CheckCoverage`, authored-pipeline submit-time validation) + Notes/deferred items 10-11 (WS-02/WS-04 metric-count bump + optional-modules honesty) |
 | **Audience** | software / all |
-| **Related** | [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [HISTORY.md](../HISTORY.md) (archived wave/batch narrative), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [journal 2026-07-12 builder-agent-hardening](../journal/2026-07-12-builder-agent-hardening.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
+| **Related** | [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md), [audit/gap_analysis/ws-02-identity-provenance.md](../../audit/gap_analysis/ws-02-identity-provenance.md), [audit/gap_analysis/ws-04-giab-concordance.md](../../audit/gap_analysis/ws-04-giab-concordance.md), [journal 2026-07-12 gap-analysis-remediation-verification](../journal/2026-07-12-gap-analysis-remediation-verification.md), [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [HISTORY.md](../HISTORY.md) (archived wave/batch narrative), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [journal 2026-07-12 builder-agent-hardening](../journal/2026-07-12-builder-agent-hardening.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
 
 ## Overview
 
@@ -706,9 +706,15 @@ had reserved or listed as *not-yet-built*.
     carries the data. The synthetic generator emits all 8 (contrived, comfortably passing, so
     failure-mode coverage stays exactly on the original frozen five); the real GIAB HG002 driver
     additionally writes its own real `breadth_20x`/`breadth_30x` from mosdepth (not contrived) —
-    the metric catalog is now 10 gated / 10 ungated of 20 registered `our_key`s
-    ([metric_registry.md](../data/metric_registry.md) §Wiring status), and 7 registered metrics
-    remain unwired (an honest, pre-existing gap, not introduced by this change). Gate verdict
+    the metric catalog was 10 gated / 10 ungated of 20 registered `our_key`s at the time (then **11
+    gated / 9 ungated** as of 2026-07-12 — `variant.titv` gained a `target_band` threshold,
+    gap-analysis WS-06 Gap 2; now **13 gated / 8 ungated of 21 registered** `our_key`s, same day —
+    WS-02/WS-04 gated `contamination.freemix` (VerifyBamID2) and a new key `concordance.snp_f1`
+    (hap.py), both **parser-wired but not pipeline-produced** (real ingest-adapter parsers exist;
+    the producing tools ship only as standalone Nextflow modules in `pipelines/optional_modules/`,
+    not wired into any runnable pipeline); see [metric_registry.md](../data/metric_registry.md)
+    §Wiring status), and 6 registered metrics remain unwired with no parser at all (an honest,
+    pre-existing gap, not introduced by this change or those two). Gate verdict
     logic and every pinned demo verdict are unchanged. *Trace:* [qc_metrics.md](../data/qc_metrics.md)
     §Implementation status, REQ-F-012/REQ-F-013/REQ-F-064/REQ-F-068,
     [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) (commits `a8fc73b`,
@@ -1496,6 +1502,49 @@ had reserved or listed as *not-yet-built*.
     layout only: `onSaveCard`/`onDeleteNode` behavior and the edit-vs-view gating are unchanged (Delete
     stays `userNode`-only). *Trace:* REQ-F-045,
     [tasks T-143](../planning/tasks.md), [journal 2026-07-12](../journal/2026-07-12-builder-agent-hardening.md).
+45. **REQ-F-104 — Interactive ask-the-agent endpoint (gap-analysis WS-07 Q2, 2026-07-12).**
+    `POST /api/runs/{run_id}/cards/{sample_id}/ask` (`AskRequest{question}` → `AgentReply`,
+    `advisory: Literal[True]`, no verdict/confidence field ever) answers a free-text question about a
+    decision card — even a clean PROCEED one, unlike the existing `GET .../triage`. The stub path
+    (`PIPEGUARD_TRIAGE_AGENT=stub`, the $0 default) retrieves and cites corpus knowledge, explicitly
+    framed as retrieval, never fabricated prose; the Claude path writes only the answer text, with
+    citations staying deterministic (retriever + findings) and any API error/refusal degrading to the
+    stub. **Authz seam closed (2026-07-13, commit `a1aef73`):** this was the only advisory endpoint
+    with no `require_role` dependency at all, bypassing the auth shim entirely while every sibling
+    advisory endpoint was covered; now `Depends(require_role("viewer","reviewer","approver"))` — the
+    read-family floor, not the write/exec reviewer+ floor, since a question is advisory (ADR-0001),
+    not a mutation. Demo behavior is unchanged (the permissive dev-default clears viewer+ under both
+    normal and `PIPEGUARD_AUTH_STRICT` modes); the value is seam coverage for a future real-IdP swap.
+    *Trace:* [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (advisory-only),
+    [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the `require_role` primitive),
+    [design/agents.md](../design/agents.md), [design/architecture.md](../design/architecture.md),
+    [audit/gap_analysis/ws-07-ai-earning-its-place.md](../../audit/gap_analysis/ws-07-ai-earning-its-place.md)
+    Design item 3, [tasks T-144, T-164](../planning/tasks.md),
+    [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md),
+    [journal 2026-07-13](../journal/2026-07-13-audit-fixes-ia.md).
+46. **REQ-F-105 — Fail-closed QC gate + honest check-coverage surfacing (gap-analysis WS-01,
+    2026-07-12).** Two closes on the "PROCEED means 'no rule objected,' not 'examined and clean'" gap:
+    (a) `QC-MISSING` — a sheet-declared sample with no QC row at all now HOLDs instead of silently
+    PROCEEDing; (b) every `DecisionCard` now carries a deterministic `check_coverage`
+    (`models.CheckCoverage`, served by the existing card endpoint) — "N of M check categories ran; X
+    not examined" — and the card readout / RunDetail clean-card panel render that honest count
+    instead of the old hardcoded "all checks passed" / "every runbook check passed with margin"
+    prose. Verdict-neutral (narration + a served field only, ADR-0001). *Trace:*
+    [qc_metrics.md](../data/qc_metrics.md#fail-closed-rules--qc-missing--qc-expected-key-ws-01-2026-07-12),
+    [schemas.md](../data/schemas.md) (`CheckCoverage`), [tasks T-145](../planning/tasks.md),
+    [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md).
+47. **REQ-F-106 — Authored-pipeline submit-time validation (gap-analysis WS-09, 2026-07-12).**
+    `POST /api/runs` now rejects (422, before any compute) an operator-authored pipeline that either
+    (a) can't produce the frozen-five outputs a card needs (`authored_pipeline.check_parse_contract`,
+    credits only catalogued-spec outputs, never a custom node's self-declared kinds) or (b) needs an
+    input intake can't supply (`check_inputs_suppliable`, parity with Builder-Run's `required_inputs`
+    check) — closing two failure modes: a pipeline that ran to completion in Nextflow then died at
+    parse, and one that silently ran against the wrong (HG002-default) inputs. Extends REQ-F-092's
+    "fail loud before launch" principle to the authored-pipeline path.
+    *Trace:* [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md),
+    [audit/gap_analysis/delta-review-2026-07-12.md](../../audit/gap_analysis/delta-review-2026-07-12.md)
+    §WS-09, [tasks T-146](../planning/tasks.md),
+    [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md).
 
 ## Notes / deferred
 
@@ -1550,6 +1599,32 @@ had reserved or listed as *not-yet-built*.
    one sample (HG002) at a time — the driver's post-run PARSE of a publish dir into N run-dir rows
    is now built and offline-verified (REQ-F-095), but a genuinely live multi-sample Nextflow run
    remains deferred/unverified.
+10. **The real nf-core ingestion adapter (`ingest/nfcore.py`, WS-03/06, 2026-07-12) is proven, not
+    production-wired.** `ingest_results_dir()` → `SampleMetrics` → the `RunArtifacts.qc` Union →
+    `run_gate` is verified end-to-end against **genuine** HG002 pipeline output (an env-gated
+    real-path test, gate-matching the driver's own parse), but **no running code path calls it**:
+    `POST /api/runs` still drives `scripts/run_giab_pipeline.py`'s own separate bespoke parser into
+    the flat `QCMetrics` shape. A `POST /api/runs/ingest` endpoint to make the proven adapter the
+    ONE production parser stays deferred — the two paths are proven equivalent, not yet unified.
+    Similarly, WS-08's per-agent observation-binding enforcement (server-side persistence +
+    run→graph linkage), WS-09's dynamic non-germline pipeline parsing, and WS-07's richer
+    agent-context/semantic-retrieval/demo-default items remain open — see
+    [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) for the live tracker.
+11. **WS-02/WS-04 (2026-07-12) — `contamination.freemix` and `concordance.snp_f1` are gated +
+    parser-wired, not pipeline-produced.** Same honest-gap shape as item 10, one layer earlier:
+    `ingest.nfcore._extract_verifybamid`/`_extract_happy` are real, tested parsers, and each metric
+    carries a real `runbook.QCThreshold` (REQ-F-071 above) — but **no pipeline committed in this
+    repo runs the producing tool.** `pipelines/optional_modules/verifybamid2.nf`/`happy.nf` (real
+    `script:` + `stub:`) are standalone Nextflow modules, deliberately **not** wired into
+    `pipelines/germline/main.nf`: that reference pipeline is drift-locked byte-for-byte to the
+    card-graph compiler's own output (a hand-edit breaks
+    `tests/test_nextflow_compile.py::test_committed_reference_pipeline_matches_the_compiler`), and
+    the compiler (REQ-F-085/item 9 above) has no input-gated-conditional concept for an optional
+    add-on tool today. A live FREEMIX or SNP-F1 value therefore requires an operator to run the
+    standalone module by hand and place its output where `ingest_results_dir` looks for it
+    (verifybamid2 additionally needs an SVD/UD ancestry panel; hap.py needs the GIAB truth VCF +
+    confident BED — both labelled pipeline inputs, never fabricated, ADR-0004). See
+    [metric_registry.md](../data/metric_registry.md) §Wiring status.
 
 ---
 

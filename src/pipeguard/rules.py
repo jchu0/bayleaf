@@ -17,12 +17,14 @@ from __future__ import annotations
 from .metrics import MetricRegistry, default_registry, metric_values_for
 from .models import (
     Category,
+    CheckCoverage,
     Evidence,
     Finding,
     MetricValue,
     QCMetrics,
     RunArtifacts,
     Sample,
+    SampleMetrics,
     SampleSheetEntry,
     Severity,
     SourceKind,
@@ -30,7 +32,7 @@ from .models import (
     VariantCall,
     Verdict,
 )
-from .runbook import DEFAULT_RUNBOOK, QCThreshold, Runbook
+from .runbook import DEFAULT_RUNBOOK, QCThreshold, Runbook, RunbookSet
 
 
 def _combine_index(entry: SampleSheetEntry) -> str | None:
@@ -86,7 +88,7 @@ def _check_presence(
     sid: str,
     meta: Sample | None,
     sheet: SampleSheetEntry | None,
-    qc: QCMetrics | None,
+    qc: QCMetrics | SampleMetrics | None,  # presence-only — either ingested shape (WS-06)
 ) -> list[Finding]:
     findings: list[Finding] = []
     # Sequenced/QC'd but never declared on the sample sheet -> provenance gap.
@@ -107,6 +109,35 @@ def _check_presence(
                     Evidence(source="SampleSheet.csv", locator=f"Sample_ID={sid}", value="missing"),
                 ],
                 suggested_verdict=Verdict.ESCALATE,
+            )
+        )
+    # Declared on the sample sheet (submitted for sequencing) but NO QC artifact — the symmetric
+    # partner of PROV-002. Missing QC is unverified DATA, not clean data: without a rule here the
+    # sample emits zero findings and `aggregate_verdict([])` PROCEEDs — the exact case a safety gate
+    # must fail CLOSED on. Guarded on `sheet is not None` so a not-yet-sequenced, intake-only sample
+    # (no sheet, no QC) is never false-HOLDed (WS-01 Gap A).
+    if sheet is not None and qc is None:
+        findings.append(
+            Finding(
+                rule_id="QC-MISSING",
+                sample_id=sid,
+                category=Category.QC,
+                severity=Severity.WARN,
+                title="Declared for sequencing but no QC results",
+                detail=(
+                    f"{sid} is declared on the sample sheet but has no QC row, so it was never "
+                    f"examined. Missing QC is treated as unverified (HOLD), never as passing."
+                ),
+                evidence=[
+                    Evidence(
+                        source="qc_metrics.csv",
+                        locator=f"sample_id={sid}",
+                        value="missing",
+                        expected="present",
+                        source_kind=SourceKind.METRIC,
+                    )
+                ],
+                suggested_verdict=Verdict.HOLD,
             )
         )
     # Declared and sequenced but no intake metadata -> can't confirm what it is.
@@ -216,6 +247,11 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -
             suggested_verdict=Verdict.HOLD,
         )
 
+    # WS-06 Gap 2: a target_band metric (Ts/Tv, fold-enrichment) is out of spec on EITHER tail, so
+    # it is scored by the band branch, not the one-sided gate below (which can only catch one side).
+    if threshold.kind == "target_band":
+        return _evaluate_target_band(sid, threshold, mv)
+
     # DECISION on the CANONICAL (normalized) value vs the canonical threshold — both on the
     # registry's scale, so a change in the source's raw unit can't silently move the gate.
     value = mv.normalized_value
@@ -277,6 +313,116 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -
         ],
         suggested_verdict=verdict,
     )
+
+
+def _evaluate_target_band(sid: str, threshold: QCThreshold, mv: MetricValue) -> Finding | None:
+    """Score a BOTH-TAILS (target_band) metric against its canonical band (WS-06 Gap 2).
+
+    PASS (None) inside ``[target_low, target_high]``; a WARN → HOLD ``Finding`` inside
+    ``[hard_low, hard_high]`` but outside the target band (either tail); a CRITICAL → RERUN
+    ``Finding`` outside the hard band (either tail). Decides on the CANONICAL (normalized) value vs
+    canonical band edges — same scale, so the source's raw unit can't silently move the gate — then
+    renders value + both bands into the operator DISPLAY unit via the same ``_to_display_unit`` path
+    the one-sided branch uses. The rule only AUTHORS the finding; ``aggregate_verdict`` maps it to a
+    verdict (ADR-0001)."""
+    value = mv.normalized_value
+    # The QCThreshold validator guarantees all four edges are present for kind=="target_band"; the
+    # asserts narrow float | None -> float for mypy and document that invariant.
+    assert (
+        threshold.target_low is not None
+        and threshold.target_high is not None
+        and threshold.hard_low is not None
+        and threshold.hard_high is not None
+    )
+    if threshold.target_low <= value <= threshold.target_high:
+        return None  # in the target band — passes
+
+    within_hard = threshold.hard_low <= value <= threshold.hard_high
+    if within_hard:
+        severity = Severity.WARN
+        verdict = Verdict.HOLD
+        qualifier = "is outside the target band"
+    else:
+        severity = Severity.CRITICAL
+        verdict = Verdict.RERUN
+        qualifier = "is outside the acceptable band"
+
+    reg = default_registry()
+    u = threshold.unit
+    disp_value = _to_display_unit(reg, threshold.our_key, value, u)
+    disp_tlo = _to_display_unit(reg, threshold.our_key, threshold.target_low, u)
+    disp_thi = _to_display_unit(reg, threshold.our_key, threshold.target_high, u)
+    disp_hlo = _to_display_unit(reg, threshold.our_key, threshold.hard_low, u)
+    disp_hhi = _to_display_unit(reg, threshold.our_key, threshold.hard_high, u)
+    return Finding(
+        rule_id=f"QC-{threshold.metric.upper()}",
+        sample_id=sid,
+        category=Category.QC,
+        severity=severity,
+        title=f"{threshold.label} {qualifier}",
+        detail=(
+            f"{threshold.label} for {sid} is {disp_value:g}{u}; runbook target band is "
+            f"[{disp_tlo:g}, {disp_thi:g}]{u} (hard band [{disp_hlo:g}, {disp_hhi:g}]{u})."
+        ),
+        evidence=[
+            Evidence(
+                source="qc_metrics.csv",
+                locator=f"{sid}.{threshold.metric}",
+                value=f"{disp_value:g}{u}",
+                expected=f"within [{disp_tlo:g}, {disp_thi:g}]{u}",
+                source_kind=SourceKind.METRIC,
+                source_field=threshold.metric,
+                threshold=f"hard band [{disp_hlo:g}, {disp_hhi:g}]{u}",
+            )
+        ],
+        suggested_verdict=verdict,
+    )
+
+
+def _check_expected_metrics(
+    sid: str, by_key: dict[str, MetricValue], runbook: Runbook
+) -> list[Finding]:
+    """Turn a profile's EXPECTED-but-absent metric into a HOLD (WS-01, fail-closed).
+
+    For each registry ``our_key`` the runbook's ``expected_metrics`` names but the sample produced
+    no ``MetricValue`` for, emit ``QC-EXPECTED-<key>`` (WARN → HOLD). This restores signal for a
+    ``required=False`` safety metric *bound to a named profile* — a pipeline that simply omits it
+    can no longer read "all clear" — WITHOUT NA-flagging a genuinely lean run: an empty
+    ``expected_metrics`` (the DEFAULT) makes this a no-op. The verdict still comes only from
+    ``aggregate_verdict`` over these self-authored findings (ADR-0001); this rule decides that
+    absence is *unverified*, never that the metric failed. An unregistered key is never in
+    ``by_key``, so it surfaces as a HOLD too — a misconfigured profile fails loud, not silent.
+    """
+    findings: list[Finding] = []
+    for our_key in runbook.expected_metrics:
+        if our_key in by_key:
+            continue
+        findings.append(
+            Finding(
+                rule_id=f"QC-EXPECTED-{our_key.upper()}",
+                sample_id=sid,
+                category=Category.QC,
+                severity=Severity.WARN,
+                title=f"Expected metric not examined: {our_key}",
+                detail=(
+                    f"The '{runbook.pipeline_profile}' profile expects {our_key} to be examined, "
+                    f"but no value was reported for {sid}. An expected-but-absent metric is "
+                    f"treated as unverified (HOLD), not as passing."
+                ),
+                evidence=[
+                    Evidence(
+                        source="qc_metrics.csv",
+                        locator=f"{sid}.{our_key}",
+                        value="not examined",
+                        expected="present",
+                        source_kind=SourceKind.METRIC,
+                        source_field=our_key,
+                    )
+                ],
+                suggested_verdict=Verdict.HOLD,
+            )
+        )
+    return findings
 
 
 def _check_log(sid: str, log_lines: list[str], runbook: Runbook) -> Finding | None:
@@ -458,6 +604,9 @@ def evaluate_sample(sid: str, artifacts: RunArtifacts, runbook: Runbook) -> list
             metric_finding = _evaluate_metric(sid, threshold, by_key.get(threshold.our_key))
             if metric_finding:
                 findings.append(metric_finding)
+        # Expected-metric set (WS-01): a profile-bound metric that was NOT examined → HOLD. The
+        # `qc is None` is already covered by QC-MISSING above, so this only runs with QC present.
+        findings.extend(_check_expected_metrics(sid, by_key, runbook))
 
     log_finding = _check_log(sid, artifacts.log_lines, runbook)
     if log_finding:
@@ -478,9 +627,130 @@ def evaluate_sample(sid: str, artifacts: RunArtifacts, runbook: Runbook) -> list
     return findings
 
 
+def _resolve_runbook(rset: RunbookSet, artifacts: RunArtifacts, sid: str) -> Runbook:
+    """Resolve the concrete profile for one sample from its metadata (WS-05).
+
+    Reads the sample's ``(assay via extra/library_prep, tissue, run platform)`` and asks the set
+    for the matching profile — or the default when nothing matches. Kept tiny so ``evaluate_sample``
+    always receives a concrete ``Runbook`` (its signature is deliberately unchanged).
+    """
+    sample = next((s for s in artifacts.samples if s.sample_id == sid), None)
+    return rset.resolve(sample, artifacts.platform)
+
+
 def evaluate_run(
-    artifacts: RunArtifacts, runbook: Runbook | None = None
+    artifacts: RunArtifacts, runbook: Runbook | RunbookSet | None = None
 ) -> dict[str, list[Finding]]:
-    """Run every rule against every sample. Returns findings keyed by sample_id."""
-    runbook = runbook or DEFAULT_RUNBOOK
+    """Run every rule against every sample. Returns findings keyed by sample_id.
+
+    ``runbook`` may be a single :class:`~pipeguard.runbook.Runbook` — used AS-IS for every sample,
+    the back-compat path, byte-identical to before — or a :class:`~pipeguard.runbook.RunbookSet`,
+    which resolves the concrete profile PER SAMPLE from that sample's ``(assay, sample_type,
+    platform)`` metadata (WS-05). ``evaluate_sample``'s signature is deliberately UNCHANGED — it
+    always receives one resolved ``Runbook`` — so every rule-level test/edit keeps composing against
+    a single runbook. The verdict still comes only from ``aggregate_verdict`` over the findings
+    (ADR-0001); the set only SELECTS the profile, it never authors a verdict.
+    """
+    if runbook is None:
+        runbook = DEFAULT_RUNBOOK
+    if isinstance(runbook, RunbookSet):
+        return {
+            sid: evaluate_sample(sid, artifacts, _resolve_runbook(runbook, artifacts, sid))
+            for sid in artifacts.sample_ids()
+        }
     return {sid: evaluate_sample(sid, artifacts, runbook) for sid in artifacts.sample_ids()}
+
+
+# The FIXED catalog of check CATEGORIES a QC decision claims to cover — the denominator for
+# CheckCoverage (WS-01 Gap D). contamination + identity have no STATIC artifact proxy, so they are
+# reported not-examined UNLESS the sample actually carries a metric in that category (FREEMIX /
+# NGSCheckMate, supplied by the WS-03 ingest path) — see `_examined_metric_categories`. The rest run
+# when the artifact they read is present. A FIXED product claim, not runbook-derived — so an
+# unexamined category can't vanish just because the runbook has no threshold for it.
+_EXPECTED_CATEGORIES: tuple[Category, ...] = (
+    Category.PROVENANCE,
+    Category.METADATA,
+    Category.QC,
+    Category.CONTAMINATION,
+    Category.IDENTITY,
+    Category.PIPELINE,
+)
+
+# Registry category string -> the CheckCoverage Category a PRESENT metric in it proves was examined.
+# Only the two coverage categories with no static artifact proxy need this (contamination/identity):
+# their check "ran" the moment the sample carries FREEMIX / NGSCheckMate / sex-concordance, pass OR
+# fail. Every other category (qc/coverage/variant/concordance/…) is proven by its own artifact-
+# presence proxy in `compute_check_coverage`, so it is deliberately absent here.
+_METRIC_CATEGORY_TO_COVERAGE: dict[str, Category] = {
+    "contamination": Category.CONTAMINATION,
+    "identity": Category.IDENTITY,
+}
+
+
+def _examined_metric_categories(
+    qc: QCMetrics | SampleMetrics | None, registry: MetricRegistry
+) -> set[Category]:
+    """Coverage categories a sample's PRESENT metrics prove were examined — present = examined = ran
+    (pass OR fail), the same rule that lets a finding-less clean QC gate count as ran. Maps each
+    present metric's registry category to its CheckCoverage Category for the two categories with no
+    static artifact proxy (contamination/identity). On the frozen-five driver path FREEMIX /
+    NGSCheckMate are absent (not in the flat metric map), so those stay honestly not-examined; the
+    WS-03 ingest path supplies them and flips the category to ran — closing the WS-01 sub-gap where
+    an examined FREEMIX still read "contamination not examined" (ADR-0001: this NARRATES coverage,
+    never a verdict). ``metric_key`` is always a registered ``our_key`` here (it came from
+    ``metric_values_for``'s ``reg.observe``), so ``entry`` cannot raise."""
+    if qc is None:
+        return set()
+    examined: set[Category] = set()
+    for mv in metric_values_for(qc, registry=registry):
+        cov = _METRIC_CATEGORY_TO_COVERAGE.get(registry.entry(mv.metric_key).category)
+        if cov is not None:
+            examined.add(cov)
+    return examined
+
+
+def compute_check_coverage(
+    sid: str, artifacts: RunArtifacts, runbook: Runbook, findings: list[Finding]
+) -> CheckCoverage:
+    """Deterministic coverage telemetry: which of the fixed expected check categories ran for this
+    sample vs. were NOT examined. A pure function of ``(artifacts, findings)`` computed in the trust
+    anchor; it NARRATES coverage and never sets a verdict (ADR-0001).
+
+    A category **ran** when its rule/parser EXECUTED — proxied by "the artifact/metric it reads is
+    present OR it emitted a finding for this sample" — NOT by "produced a finding". So a clean QC
+    gate (finding-less) counts as ran (never confused with a gate that never ran — the review's
+    ``gateRan`` fix), and a qc-only sample's provenance check (which emits PROV-002 on the missing
+    sheet) counts too. contamination/identity have no static artifact proxy → they run iff the
+    sample carries a metric in that category (FREEMIX / NGSCheckMate, supplied by the WS-03 ingest
+    path): present = examined = ran, pass or fail, so an examined-and-passed FREEMIX no longer reads
+    "not examined". On the frozen-five driver path those metrics are absent, so they stay honestly
+    not-examined. ``runbook`` is taken for signature stability so a future ``RunbookSet`` profile
+    can widen the catalog without a signature change.
+    """
+    meta = next((s for s in artifacts.samples if s.sample_id == sid), None)
+    sheet = next((e for e in artifacts.sample_sheet if e.sample_id == sid), None)
+    demux = next((d for d in artifacts.demux if d.sample_id == sid), None)
+    qc = next((q for q in artifacts.qc if q.sample_id == sid), None)
+    found_categories = {f.category for f in findings}
+    # contamination/identity have no static artifact: they RAN iff the sample carries a metric in
+    # that category (FREEMIX / NGSCheckMate), which the WS-03 ingest path supplies and the
+    # frozen-five driver path does not — flips them to examined only when they genuinely were.
+    examined_metric_categories = _examined_metric_categories(qc, default_registry())
+    artifact_present: dict[Category, bool] = {
+        Category.PROVENANCE: sheet is not None or demux is not None,
+        Category.METADATA: meta is not None,
+        Category.QC: qc is not None,
+        Category.CONTAMINATION: Category.CONTAMINATION in examined_metric_categories,
+        Category.IDENTITY: Category.IDENTITY in examined_metric_categories,
+        Category.PIPELINE: bool(artifacts.log_lines) or bool(artifacts.execution_trace),
+    }
+    ran = {c: artifact_present[c] or c in found_categories for c in _EXPECTED_CATEGORIES}
+    categories_ran = [c for c in _EXPECTED_CATEGORIES if ran[c]]
+    categories_not_run = [c for c in _EXPECTED_CATEGORIES if not ran[c]]
+    return CheckCoverage(
+        checks_expected=len(_EXPECTED_CATEGORIES),
+        checks_ran=len(categories_ran),
+        not_examined=[c.value for c in categories_not_run],
+        categories_ran=categories_ran,
+        categories_not_run=categories_not_run,
+    )

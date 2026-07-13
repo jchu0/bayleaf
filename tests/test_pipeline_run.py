@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi.testclient import TestClient
+from scripts.seed_approved_germline import germline_graph_dict
 
 import api.routers.pipeline_run as pr
 from api.main import app
@@ -23,10 +24,19 @@ client = TestClient(app)
 
 _REVIEWER = {"X-PipeGuard-Role": "reviewer", "X-PipeGuard-Actor": "a.rivera"}
 
-# A minimal compilable graph in the saved-envelope shape (fastp → bwa-mem2): needs reads + a
-# reference. Extra envelope keys a real save carries (locators, x/y on nodes, …) are ignored by the
-# compile path (CompileRequest tolerates extras) — the store round-trips them, the compiler skips.
-_GRAPH: dict[str, Any] = {
+# The default fixture is a REAL gate-able pipeline — the seeded germline chain (fastp → bwa-mem2 →
+# markdup → mosdepth → bcftools call/norm → MultiQC), reused verbatim from the shared
+# ``germline_graph_dict()`` so it can never drift from the real chain. Builder-Run now rejects a
+# non-gate-able approved graph at submit (the parse contract), so the happy path must use a chain
+# that actually produces the frozen-five QC — i.e. one that can yield a card. It needs three input
+# kinds: reads + reference + panel_bed.
+_GRAPH: dict[str, Any] = germline_graph_dict()
+
+# A compilable but NON-gate-able graph (fastp → bwa-mem2 only): it produces a BAM but none of the
+# frozen-five QC the post-run parse globs. Builder-Run must reject it at SUBMIT (the parse contract)
+# rather than burn a full compute run that only dies at parse — the gap this suite freezes (WS-09
+# #1 / audit G8), reaching parity with the intake path.
+_NON_GATEABLE_GRAPH: dict[str, Any] = {
     "nodes": [
         {"id": "n_fastp", "name": "fastp", "ins": ["fastq"], "outs": ["fastp_json", "fastq"]},
         {"id": "n_bwa", "name": "bwa-mem2", "ins": ["fastq", "reference_fasta"], "outs": ["bam"]},
@@ -80,7 +90,13 @@ def _seed(monkeypatch: Any, *records: dict[str, Any]) -> None:
 
 
 def _body(run_id: str = "RUN-TEST-EXEC", name: str = "exec-test", **inputs: str) -> dict[str, Any]:
-    chosen = inputs or {"reads": "hg002-panel", "reference": "grch38-chr20"}
+    # The germline chain needs all three input kinds; supply them by default so the happy path
+    # clears input validation. Individual tests override to probe a missing/unknown one.
+    chosen = inputs or {
+        "reads": "hg002-panel",
+        "reference": "grch38-chr20",
+        "panel_bed": "example-panel",
+    }
     return {"name": name, "run_id": run_id, "sample": "HG002", "inputs": chosen}
 
 
@@ -141,20 +157,39 @@ def test_run_409_when_pinned_version_is_not_approved(monkeypatch: Any) -> None:
 
 
 def test_run_requires_every_input_kind_the_approved_graph_consumes(monkeypatch: Any) -> None:
-    # The approved graph needs reads + a reference; supply only reads → 422 naming the missing cat.
+    # The approved germline graph needs reads + reference + panel_bed. Supply reads + panel_bed but
+    # OMIT the reference → 422 naming the one missing category (the other two resolve, so which
+    # category is reported is deterministic regardless of set-iteration order).
     _seed(monkeypatch, _record("exec-test", 1, approved=True))
-    resp = client.post("/api/pipelines/run", json=_body(reads="hg002-panel"), headers=_REVIEWER)
+    resp = client.post(
+        "/api/pipelines/run",
+        json=_body(reads="hg002-panel", panel_bed="example-panel"),
+        headers=_REVIEWER,
+    )
     assert resp.status_code == 422 and "reference" in resp.json()["detail"]
 
 
 def test_run_rejects_an_unknown_input_key(monkeypatch: Any) -> None:
+    # Supply valid reads + panel_bed but a bogus reference KEY → 422 naming the unknown reference
+    # (reads + panel_bed resolve, so the reference is the sole, deterministic failure).
     _seed(monkeypatch, _record("exec-test", 1, approved=True))
     resp = client.post(
         "/api/pipelines/run",
-        json=_body(reads="hg002-panel", reference="does-not-exist"),
+        json=_body(reads="hg002-panel", reference="does-not-exist", panel_bed="example-panel"),
         headers=_REVIEWER,
     )
     assert resp.status_code == 422 and "unknown reference" in resp.json()["detail"]
+
+
+def test_run_rejects_a_non_gateable_approved_pipeline(monkeypatch: Any) -> None:
+    # G8 / WS-09 #1 — parity with the intake path: even an APPROVED pipeline must produce the
+    # frozen-five QC the post-run parse globs, else it runs to completion in Nextflow then dies at
+    # parse with no card — a full compute burn for a `failed` run. Builder-Run catches it at SUBMIT
+    # via the parse contract (a structural check needing no tools), naming the frozen-five. A
+    # fastp → bwa-mem2 graph yields only a BAM, so it is rejected here before any input resolution.
+    _seed(monkeypatch, _record("exec-test", 1, approved=True, graph=_NON_GATEABLE_GRAPH))
+    resp = client.post("/api/pipelines/run", json=_body(), headers=_REVIEWER)
+    assert resp.status_code == 422 and "frozen-five" in resp.json()["detail"]
 
 
 def test_run_happy_path_compiles_the_approved_graph(tmp_path: Any, monkeypatch: Any) -> None:

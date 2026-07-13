@@ -840,7 +840,14 @@ export function PipelineBuilder() {
   // Deltas divide by `zoom` (content units). Single-node drags snap to alignment guides live; all
   // moved nodes grid-snap + clamp ≥0 on release.
   const nodeDrag = (id: string, e: React.MouseEvent) => {
-    if (connectMode) return
+    if (connectMode) {
+      // Connect mode: a body-click SELECTS the node (its inspector opens) but never drags/wires —
+      // wiring is the ports' own click-arm-click (portTap). Without this, a user card body was inert in
+      // connect mode (only its ports responded), while seeded tool/agent cards still selected via the
+      // canvas onSelect path — an inconsistency. Mirror the tool/agent select here.
+      selectNode(id, false)
+      return
+    }
     if (isView) {
       selectNode(id, false) // View: click selects for inspection, never drags
       return
@@ -1140,14 +1147,15 @@ export function PipelineBuilder() {
       ],
     },
     {
-      // Only NODE-scoped advisory agents live in the Builder palette: QC-triage (attach it to a node
-      // to observe that node's outputs) + Node-authoring (proposes a new tool node). The SYSTEM agents
-      // — Pipeline-repair + Archivist — act on runs / recurring signatures / the whole organization,
-      // NOT on a pipeline node, so they moved to the Agent-triage page where those live (Phase 3).
+      // Only a node-ATTACHABLE agent lives here: QC-triage (attach it to a node to observe THAT
+      // node's outputs). Node-authoring is deliberately NOT an agent tile — it neither attaches to a
+      // node (unlike QC-triage) nor acts across runs (unlike the SYSTEM agents Pipeline-repair +
+      // Archivist, which live on the Agent-triage page). It's a compose-time FEATURE — propose a NEW
+      // tool node — surfaced as the "Author a tool node" edit-mode palette action below (backed by
+      // node-authoring agent #6, but not an attachable agent itself).
       heading: 'Agents',
       items: [
         { name: 'QC-triage', sub: 'advisory · attach to a node', icon: 'activity', alwaysEnabled: true, onClick: () => setSelected('a_qc_triage') },
-        { name: 'Node-authoring', sub: 'advisory · authors a node', icon: 'terminal', alwaysEnabled: true, onClick: () => setAuthorOpen(true) },
       ],
     },
     { heading: 'Gate', items: [{ name: 'Decision gate', sub: 'terminal · pinned', icon: 'shield', disabled: true }] },
@@ -1517,7 +1525,6 @@ export function PipelineBuilder() {
               onRemovePort={removePort}
               onSetPortKind={setPortKind}
               onDeleteNode={(id) => void deleteNodes([id])}
-              onClose={clearSelection}
               onCollapse={() => setInspectorCollapsed(true)}
               onSaveCard={onSaveCard}
             />

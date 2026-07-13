@@ -451,16 +451,39 @@ def discover_samples(results: Path) -> list[str]:
     return ids
 
 
+# The post-run parse contract, as ONE constant both the parser and the execution routers share so
+# they can never drift. Each entry maps a Builder output-artifact KIND → the published-file GLOB
+# ``parse_sample`` reads for it (relative to a sample's ``<sample>.`` prefix, via ``_one_for``).
+# This is the frozen-five gate contract: a run dir needs all four to yield a gate-able card (fastp →
+# Q30/reads-PF/dup/total-reads, mosdepth_summary → mean coverage, mosdepth_thresholds → 20x/30x
+# breadth, filtered_vcf → variant count). The API rejects (422) at SUBMIT any authored pipeline that
+# does not PRODUCE all these kinds — so a non-germline-shaped graph fails fast up front instead of
+# running to completion in Nextflow then dying HERE at parse with no card (WS-09). The globs are
+# unchanged from the pre-WS-09 literals, so the germline reference parse is byte-identical.
+_FROZEN_FIVE_OUTPUTS: dict[str, str] = {
+    "fastp_json": "fastp.json",
+    "mosdepth_summary": "*mosdepth.summary.txt",
+    "mosdepth_thresholds": "*thresholds.bed.gz",
+    "filtered_vcf": "norm.vcf.gz",
+}
+# The artifact-kinds an authored graph must PRODUCE to be gate-able (the keys of the map above).
+REQUIRED_OUTPUT_KINDS: frozenset[str] = frozenset(_FROZEN_FIVE_OUTPUTS)
+
+
 def parse_sample(results: Path, sample: str) -> SampleMetrics:
     """Parse ONE sample's published frozen-five inputs into a :class:`SampleMetrics`. Reuses the
-    per-file parsers; every per-sample output is required (``_one_for`` fails loud on a missing
-    one), so a partial publish dir never yields a fabricated or half-populated sample."""
-    q30, reads_pf, dup, total_reads = parse_fastp(_one_for(results, sample, "fastp.json"))
-    coverage, b20, b30 = parse_mosdepth(
-        _one_for(results, sample, "*mosdepth.summary.txt"),
-        _one_for(results, sample, "*thresholds.bed.gz"),
+    per-file parsers over the shared ``_FROZEN_FIVE_OUTPUTS`` globs (the same constant the submit
+    gate validates against, so the two can't drift); every per-sample output is required
+    (``_one_for`` fails loud on a missing one), so a partial publish dir never yields a fabricated
+    or half-populated sample."""
+    q30, reads_pf, dup, total_reads = parse_fastp(
+        _one_for(results, sample, _FROZEN_FIVE_OUTPUTS["fastp_json"])
     )
-    n_variants = count_variants(_one_for(results, sample, "norm.vcf.gz"))
+    coverage, b20, b30 = parse_mosdepth(
+        _one_for(results, sample, _FROZEN_FIVE_OUTPUTS["mosdepth_summary"]),
+        _one_for(results, sample, _FROZEN_FIVE_OUTPUTS["mosdepth_thresholds"]),
+    )
+    n_variants = count_variants(_one_for(results, sample, _FROZEN_FIVE_OUTPUTS["filtered_vcf"]))
     return SampleMetrics(sample, q30, reads_pf, coverage, dup, total_reads, b20, b30, n_variants)
 
 

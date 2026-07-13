@@ -7,6 +7,7 @@ import {
   ICONS,
   ON_CYCLE,
   RUNBOOK_ROWS,
+  TOOLS,
   mergedLoc,
   type IconKey,
   type LocEdits,
@@ -56,7 +57,6 @@ type InspectorProps = {
   onRemovePort: (id: string, dir: 'ins' | 'outs', idx: number) => void
   onSetPortKind: (id: string, dir: 'ins' | 'outs', idx: number, kind: string) => void
   onDeleteNode: (id: string) => void
-  onClose: () => void
   // Hide/collapse the whole panel (mirrors the left palette's collapse) — persists until the user
   // explicitly reopens; selecting another card while hidden must NOT reopen it (see PipelineBuilder).
   onCollapse: () => void
@@ -91,13 +91,12 @@ export function BuilderInspector(props: InspectorProps) {
           <p className="truncate font-mono text-[10.5px] text-text-3">{header.sub}</p>
         </div>
         {/* Hide/collapse — chevron points toward the panel's own (right) edge, mirroring the left
-            palette's collapse. Distinct from Close (X): Close clears the selection; Hide keeps it but
-            collapses the panel to a rail, and stays collapsed across card selections until reopened. */}
+            palette's collapse. Collapses the panel to a rail and stays collapsed across card
+            selections until reopened. Clearing the selection is left to a canvas background-click or
+            Escape — the old X (which silently did that instead of collapsing) was removed so the two
+            affordances aren't confused. */}
         <button onClick={props.onCollapse} title="Hide inspector" className="grid h-7 w-7 place-items-center rounded-lg border border-line text-text-2 hover:bg-page">
           <ChevronRight size={14} />
-        </button>
-        <button onClick={props.onClose} title="Close (clear selection)" className="grid h-7 w-7 place-items-center rounded-lg border border-line text-text-2 hover:bg-page">
-          <X size={14} />
         </button>
       </div>
 
@@ -328,6 +327,53 @@ function UserNodeInspector({
         onToggleRequired={onToggleRequired}
         onCycleOnMultiple={onCycleOnMultiple}
       />
+
+      {/* A composed node that carries a catalogued tool's name is that tool instantiated as an editable
+          card (germlineTemplate seeds the whole chain this way — ADR-0019). Surface the catalog's
+          read-only Params + declared I/O here so the reference data isn't stranded on the seeded-card-
+          only ToolView, which the default (editable) flow never reaches. Read-only + a matched-by-name
+          note: these are the catalog schema defaults, not per-node edits. */}
+      <CatalogRef nodeName={node.name} isView={isView} />
+    </div>
+  )
+}
+
+// Read-only catalog reference for a user node whose name matches a seeded Tool. Mirrors ToolView's
+// Params + I/O panels (same tokens) but never editable — the values are the bundled schema defaults;
+// artifact bytes (sha/size/origin) only exist for a bound run, so they read as absent off a View.
+function CatalogRef({ nodeName, isView }: { nodeName: string; isView: boolean }) {
+  const tool = TOOLS.find((t) => t.tool === nodeName)
+  if (!tool) return null
+  return (
+    <div className="mt-4 border-t border-line pt-4">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">Catalog params</span>
+        <span className="rounded border border-line bg-card-2 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.3px] text-text-3">read-only · {tool.tool} {tool.version}</span>
+      </div>
+      {tool.params.map((p) => (
+        <div key={p.k} className="mb-3">
+          <div className="mb-0.5 font-mono text-[11.5px] font-semibold text-text">{p.k}</div>
+          <div className="mb-1.5 text-[10.5px] text-text-3">{p.help}</div>
+          <div className="truncate rounded-md border border-line bg-card-2 px-2.5 py-1.5 font-mono text-[11.5px] text-text">{p.v}</div>
+        </div>
+      ))}
+
+      <div className="mb-2 mt-1 text-[10px] font-semibold uppercase tracking-[0.4px] text-text-3">I/O</div>
+      {tool.io.map((o) => (
+        <div key={o.name} className="mb-2.5 rounded-[9px] border border-line px-3 py-2.5">
+          <div className="mb-1.5 truncate font-mono text-[11.5px] font-semibold text-text">{o.name}</div>
+          <div className="flex gap-2.5">
+            <span className="font-mono text-[10px] text-text-3">{isView ? o.sha : 'sha256: —'}</span>
+            <span className="font-mono text-[10px] text-text-3">{isView ? o.size : '—'}</span>
+            <span className="ml-auto font-mono text-[10px] text-text-3">{isView ? o.origin : 'unknown'}</span>
+          </div>
+        </div>
+      ))}
+      {!isView && (
+        <p className="border-t border-line pt-3 text-[10.5px] leading-relaxed text-text-3">
+          Declared ports — no bytes yet. Hashes, sizes &amp; origin fill in from the ledger in linked <strong>View</strong>.
+        </p>
+      )}
     </div>
   )
 }

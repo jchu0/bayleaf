@@ -1,9 +1,17 @@
 """PHASE 4 — an attached advisory agent's SCOPED READ of a bound node's published outputs.
 
-This is the payoff for the Wave-2 agent-binding model (``frontend/src/types.ts`` ``AgentBinding
-{agent, node, grants:('outputs'|'logs')[]}``, persisted in ``graph.agent_bindings``). A binding
-grants an ADVISORY agent (e.g. QC-triage) read access to ONE graph node's results for a run — a
-**narrowing** of what agents already observe (the whole analysis-output tree), not a widening:
+This is the read mechanism behind the Wave-2 agent-binding model (``frontend/src/types.ts``
+``AgentBinding {agent, node, grants:('outputs'|'logs')[]}``, carried CLIENT-SIDE in the Builder
+graph envelope ``graph.agent_bindings``). The binding expresses INTENT — an advisory agent (e.g.
+QC-triage) should observe ONE graph node's results, a **narrowing** of what agents already see (the
+whole analysis-output tree). **Honest scope (WS-08):** the server does NOT persist or enforce that
+per-agent binding — there is no server-side ``AgentBinding`` model, and no run records which graph
+it executed. So access here is NOT gated by the binding; it is gated by (1) the node SCOPE (outputs
+matched to the node's own catalogued output globs — never a sibling's files, enforced below) and
+(2) the WIRE ROLE (``outputs``: viewer+; the PII-adjacent ``logs``: reviewer+). Real per-agent
+enforcement (load the run's bindings, match the requesting agent, intersect grants) is a documented
+deferral: it needs server-side binding persistence **and** a run→executed-graph linkage, neither of
+which exists today. The binding is an advisory client-side hint, not an access-control boundary:
 
   ``GET /api/runs/{run_id}/nodes/{node_id}/observations?grants=outputs[,logs]``
 
@@ -18,7 +26,10 @@ returns the agent's granted VIEW of that node's outputs for the run:
      line, so the raw stream is never emitted.
 
 **Guardrails.** Read-only, post-hoc, OFF the deterministic gate (ADR-0001 — no verdict/confidence
-is read or written). Least-privilege (ADR-0012 — scoped to the node; logs are opt-in AND scrubbed).
+is read or written). Node-scoped data + role-gated access (ADR-0012): outputs are confined to the
+node's own output globs; the opt-in ``logs`` grant is de-identified AND restricted to reviewer+
+(PII-adjacent even after scrubbing). Least-privilege is by node-scope + wire-role today — NOT by the
+(unpersisted, unenforced) binding; per-agent binding enforcement is the deferral noted above.
 Compose ≠ execute (it reads already-published artifacts and runs nothing). Traversal-hardened like
 the artifact download (``run_id`` must be a bare name; every resolved path is re-checked to be
 inside the run's scratch/data dir). Honest-empty: a node/run that produced nothing on disk (a
@@ -373,8 +384,22 @@ def node_observations(
 
     ``grants=outputs`` (default) lists the node's published artifacts; ``grants=logs`` additionally
     returns the DE-IDENTIFIED tail of the node's task logs (opt-in — a raw log can carry subject-id
-    PII). Read-only, node-scoped (ADR-0012), traversal-hardened, honest-empty. Requires viewer+.
+    PII). Read-only, node-scoped (ADR-0012), traversal-hardened, honest-empty. Role gate:
+    ``outputs`` viewer+; ``logs`` reviewer+ (PII-adjacent even after de-id).
     """
     _guard_run_id(run_id)
     parsed = _parse_grants(grants or [])
+    # WS-08: 'logs' returns DE-IDENTIFIED task logs — still PII-adjacent (a tool can echo a
+    # subject id into a path/line the scrub's known-literal set misses). Server-enforce a higher bar
+    # than plain viewer for it. This is REAL access control (the wire role), unlike the client-side
+    # AgentBinding, which the server does not persist or enforce (see the module docstring). Outputs
+    # (a published-file listing) stay viewer+.
+    if "logs" in parsed and actor.role not in ("reviewer", "approver"):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "the 'logs' grant returns de-identified task logs and requires reviewer+ — "
+                "a viewer may read 'outputs' only"
+            ),
+        )
     return gather_node_observations(run_id, node_id, parsed)

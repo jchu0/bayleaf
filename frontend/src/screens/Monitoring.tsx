@@ -1,4 +1,4 @@
-import { EyeOff, RotateCw } from 'lucide-react'
+import { RotateCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bar, CartesianGrid, ComposedChart, Line, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api'
@@ -23,14 +23,8 @@ const WINDOW_OPTIONS: SegmentOption<MonitoringWindow>[] = [
 ]
 const WINDOW_LABEL: Record<string, string> = { '7d': '7 days', '14d': '14 days', '30d': '30 days', all: 'all time' }
 
-// Per-page options for the signatures pager, mirroring the Runs list (RunOverview). NOTE: the
-// Verdict-over-time chart no longer has a per-page control (it scrolls sideways instead, M5).
-type PerPage = '25' | '50' | '100'
-const PER_PAGE_OPTIONS: SegmentOption<PerPage>[] = [
-  { value: '25', label: '25' },
-  { value: '50', label: '50' },
-  { value: '100', label: '100' },
-]
+// NOTE: the Verdict-over-time chart no longer has a per-page control (it scrolls sideways, M5); the
+// signatures list uses the shared <Pager> (PER_PAGE_25 = 25/50/100), UX-DUP #10.
 
 // Verdict base colors — theme-INVARIANT (the dark theme overrides only the -bg/-bd/-fg variants,
 // not these bases), so they're safe to hand to Recharts as literal fills in both light and dark.
@@ -128,7 +122,7 @@ export function Monitoring() {
   const [dateStart, setDateStart] = useState<string | null>(null)
   const [dateEnd, setDateEnd] = useState<string | null>(null)
   const [openSigs, setOpenSigs] = useState<Set<string>>(new Set())
-  const [sigPerPage, setSigPerPage] = useState<PerPage>('25')
+  const [sigPerPage, setSigPerPage] = useState<PagerPerPage>('25')
   const [sigPage, setSigPage] = useState(1)
   // Server-side pagination of the per-run throughput array (`runs[]`), the payload-size guard at
   // volume (T-072). Only the throughput chart is sliced; the KPIs, gate rates, and signatures
@@ -148,7 +142,7 @@ export function Monitoring() {
       return new Set<string>()
     }
   })
-  const [showCleared, setShowCleared] = useState(false)
+  const [sigView, setSigView] = useState<'active' | 'cleared'>('active')
   // Which of the 5 trend lines are drawn (M7). Default: flagged on (the prior behavior), the four
   // verdict lines off — they overlay the bars, so on-by-default would clutter.
   const [trendOn, setTrendOn] = useState<Record<string, boolean>>({
@@ -213,18 +207,23 @@ export function Monitoring() {
   const visibleSigs = useMemo(() => filteredSigs.filter((s) => !cleared.has(s.signature)), [filteredSigs, cleared])
   const clearedSigs = useMemo(() => filteredSigs.filter((s) => cleared.has(s.signature)), [filteredSigs, cleared])
 
-  // Client-side pagination over the visible signatures (the payload is uncapped, F21).
+  // UX-DUP (Monitoring #1): "cleared" is a FACET on the one signatures list, not a second rendered
+  // (and previously unpaginated) section. The pager pages whichever side is active.
+  const sourceSigs = sigView === 'cleared' ? clearedSigs : visibleSigs
   const sigPer = Number(sigPerPage)
-  const sigTotal = visibleSigs.length
+  const sigTotal = sourceSigs.length
   const sigPages = Math.max(1, Math.ceil(sigTotal / sigPer))
   const sigCurPage = Math.min(sigPage, sigPages) // clamp so a narrowing filter can't strand the pager
-  const sigFrom = sigTotal === 0 ? 0 : (sigCurPage - 1) * sigPer + 1
-  const sigTo = Math.min(sigCurPage * sigPer, sigTotal)
-  const pagedSigs = visibleSigs.slice((sigCurPage - 1) * sigPer, sigCurPage * sigPer)
-  // Reset to page 1 when the window, search, or per-page changes.
+  const pagedSigs = sourceSigs.slice((sigCurPage - 1) * sigPer, sigCurPage * sigPer)
+  // Reset to page 1 when the window, search, per-page, or active facet changes.
   useEffect(() => {
     setSigPage(1)
-  }, [window, query, sigPerPage])
+  }, [window, query, sigPerPage, sigView])
+  // If the last cleared signature is restored while viewing the Cleared facet, fall back to Active
+  // so the operator is never stranded on an empty facet whose toggle has vanished.
+  useEffect(() => {
+    if (sigView === 'cleared' && clearedSigs.length === 0) setSigView('active')
+  }, [sigView, clearedSigs.length])
 
   const control = (
     <div className="flex items-center gap-2">
@@ -456,20 +455,18 @@ export function Monitoring() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {/* Cleared-view toggle (M4) — shows the reversibly-hidden signatures; count keeps them
-                discoverable so a cleared item is never silently lost. */}
-            {cleared.size > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowCleared((v) => !v)}
-                className={`inline-flex items-center gap-1.5 rounded-[9px] border px-[10px] py-[6px] text-[11.5px] transition-colors ${
-                  showCleared ? 'border-accent bg-accent-weak text-accent-strong' : 'border-line bg-card-2 text-text-2 hover:border-line-strong'
-                }`}
-                title="Show signatures you've cleared from the main view (reversible)"
-              >
-                <EyeOff size={13} />
-                Cleared · {cleared.size}
-              </button>
+            {/* Active|Cleared FACET (M4 / UX-DUP): one list, one pager — the cleared set is a facet
+                value, not a second section. Count keeps cleared items discoverable so one is never
+                silently lost. Only shown once something has been cleared. */}
+            {clearedSigs.length > 0 && (
+              <SegmentedControl<'active' | 'cleared'>
+                options={[
+                  { value: 'active', label: `Active ${visibleSigs.length}` },
+                  { value: 'cleared', label: `Cleared ${clearedSigs.length}` },
+                ]}
+                value={sigView}
+                onChange={setSigView}
+              />
             )}
             <div className="flex min-w-[230px] items-center gap-[7px] rounded-[9px] border border-line bg-card-2 px-[10px] py-[6px]">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-text-3">
@@ -502,102 +499,36 @@ export function Monitoring() {
               }
               windowShort={windowShort}
               windowLabel={windowLabel}
-              cleared={false}
+              cleared={sigView === 'cleared'}
               onToggleClear={() => toggleClear(s.signature)}
             />
           ))}
 
-          {visibleSigs.length === 0 &&
+          {sourceSigs.length === 0 &&
             (query.trim() ? (
               <div className="rounded-[10px] border border-dashed border-line-strong px-6 py-6 text-center text-[12.5px] text-text-2">
-                No historic issues match “{query.trim()}”{cleared.size > 0 ? ' in the main view' : ''}.
+                No historic issues match “{query.trim()}”{sigView === 'active' && cleared.size > 0 ? ' in the active view' : ''}.
               </div>
-            ) : cleared.size > 0 ? (
+            ) : sigView === 'active' && cleared.size > 0 ? (
               <div className="rounded-[10px] border border-dashed border-line-strong px-6 py-6 text-center text-[12.5px] text-text-2">
-                All recurring signatures are cleared from view. Use “Cleared · {cleared.size}” to review or restore them.
+                All recurring signatures are cleared from view. Switch to “Cleared {clearedSigs.length}” to review or restore them.
               </div>
             ) : (
               <Empty message={`No recurring issue signatures in the last ${windowLabel}.`} />
             ))}
         </div>
 
-        {sigTotal > 0 && (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-[11.5px] text-text-2">
-            <span>
-              Showing {sigFrom}–{sigTo} of {sigTotal} signatures
-            </span>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11.5px] text-text-3">Per page</span>
-                <SegmentedControl<PerPage> options={PER_PAGE_OPTIONS} value={sigPerPage} onChange={setSigPerPage} />
-              </div>
-              {sigPages > 1 && (
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setSigPage(Math.max(1, sigCurPage - 1))}
-                    className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
-                    aria-label="Previous page"
-                  >
-                    ‹
-                  </button>
-                  {Array.from({ length: sigPages }, (_, i) => i + 1).map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setSigPage(n)}
-                      className={`h-7 min-w-[28px] rounded-[7px] px-2 text-[12px] transition-colors ${
-                        n === sigCurPage
-                          ? 'bg-accent font-semibold text-white'
-                          : 'border border-line bg-card text-text-2 hover:border-line-strong'
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setSigPage(Math.min(sigPages, sigCurPage + 1))}
-                    className="h-7 min-w-[28px] rounded-[7px] border border-line bg-card text-[13px] text-text-2 transition-colors hover:border-line-strong"
-                    aria-label="Next page"
-                  >
-                    ›
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Cleared signatures (M4) — reversibly hidden; still fully rendered + searchable + escalatable. */}
-        {showCleared && clearedSigs.length > 0 && (
-          <div className="mt-4 border-t border-line pt-3">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.4px] text-text-3">
-              Cleared from view · {clearedSigs.length}
-            </div>
-            <div className="flex flex-col gap-[9px] opacity-90">
-              {clearedSigs.map((s) => (
-                <MonitoringSignatureRow
-                  key={s.signature}
-                  sig={s}
-                  open={openSigs.has(s.signature)}
-                  onToggle={() =>
-                    setOpenSigs((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(s.signature)) next.delete(s.signature)
-                      else next.add(s.signature)
-                      return next
-                    })
-                  }
-                  windowShort={windowShort}
-                  windowLabel={windowLabel}
-                  cleared={true}
-                  onToggleClear={() => toggleClear(s.signature)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+        {/* UX-DUP #10: the canonical shared <Pager> (ellipsis-windowed) replaces the hand-rolled
+            per-page + all-page-buttons footer that rendered one button per page. */}
+        <Pager
+          total={sigTotal}
+          page={sigCurPage}
+          perPage={sigPerPage}
+          onPage={setSigPage}
+          onPerPage={setSigPerPage}
+          perPageOptions={PER_PAGE_25}
+          noun="signatures"
+        />
       </div>
     </div>
   )

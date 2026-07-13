@@ -9,6 +9,10 @@ mounted, so nothing here depends on api/main.py.
 
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -22,7 +26,7 @@ from api.card_readout import (
     router,
 )
 from pipeguard import DEFAULT_RUNBOOK, DecisionCard, run_gate_from_dir
-from pipeguard.models import CanonicalUnit, Gate, MetricValue, Verdict
+from pipeguard.models import CanonicalUnit, Gate, MetricValue, Severity, Verdict
 from pipeguard.rules import _evaluate_metric
 
 _RUN_DIR = "data/mock_run_01"
@@ -155,6 +159,94 @@ def test_hard_fail_status() -> None:
     assert row.observed_display == "60%"
 
 
+# --- target_band (BOTH-TAILS) thresholds — WS-06 Gap 2 API wiring ---------------------------
+#
+# The default runbook's `variant.titv` threshold is a `target_band` gate: PASS inside
+# [target_low, target_high] = [2.0, 2.1], WARN/HOLD inside the hard band [1.8, 2.8] but outside
+# the target (either tail), CRITICAL/RERUN outside the hard band (either tail). The readout must
+# PROJECT that both-tails decision — a one-sided `value >= gate` formatter silently reads every
+# high-tail value as PASS and renders the Threshold column as a single `>=` comparator.
+
+
+def _titv_metric(value: float) -> MetricValue:
+    """A Ts/Tv ratio MetricValue (canonical `ratio`) for exercising the target_band branch.
+
+    normalized_value is set directly (no registry round-trip), so raw_unit is cosmetic; the
+    readout renders from normalized_value + canonical_unit, matching a real observed Ts/Tv."""
+    return MetricValue(
+        sample_id="SYN",
+        metric_key="variant.titv",
+        gate=Gate.VARIANT,
+        raw_value=value,
+        raw_unit="ratio",
+        normalized_value=value,
+        canonical_unit=CanonicalUnit.RATIO,
+        metric_registry_version=1,
+    )
+
+
+def test_target_band_in_band_value_passes_and_shows_the_band() -> None:
+    """An in-band Ts/Tv (2.05 ∈ [2.0, 2.1]) is PASS, and the Threshold column shows the BAND
+    [2, 2.1] / hard band [1.8, 2.8] — never a single one-sided `>= 2` comparator."""
+    row = build_qc_readout(_synthetic_card(_titv_metric(2.05)), DEFAULT_RUNBOOK).gates[0].rows[0]
+    assert row.metric == "variant.titv"
+    assert row.status is ReadoutStatus.PASS
+    assert row.flagged is False
+    assert row.observed_display == "2.05"
+    assert row.threshold_display == "[2, 2.1]"
+    assert row.hard_fail_display == "[1.8, 2.8]"
+    assert ">=" not in (row.threshold_display or "") and "<=" not in (row.threshold_display or "")
+    # A both-tails gate is neither at-least nor at-most — the direction says WITHIN, not a lie.
+    assert row.direction.value == "within"
+
+
+def test_target_band_out_of_target_high_tail_is_flagged_not_pass() -> None:
+    """The bug: a Ts/Tv above the target band (2.5, outside [2.0, 2.1] but inside the hard band)
+    is a HOLD in the core, so the readout MUST flag it BORDERLINE. A one-sided formatter reads
+    2.5 >= gate 2.0 as PASS — the high tail slips through as 'all clear'."""
+    row = build_qc_readout(_synthetic_card(_titv_metric(2.5)), DEFAULT_RUNBOOK).gates[0].rows[0]
+    assert row.status is ReadoutStatus.BORDERLINE
+    assert row.flagged is True
+    assert row.threshold_display == "[2, 2.1]"
+
+
+def test_target_band_outside_hard_high_tail_is_fail() -> None:
+    """A Ts/Tv outside the hard band (3.0 > hard_high 2.8) is CRITICAL/RERUN in the core → the
+    readout must be FAIL. The one-sided formatter reads 3.0 >= 2.0 as PASS."""
+    row = build_qc_readout(_synthetic_card(_titv_metric(3.0)), DEFAULT_RUNBOOK).gates[0].rows[0]
+    assert row.status is ReadoutStatus.FAIL
+    assert row.flagged is True
+
+
+def test_target_band_status_projects_the_core_rule_never_re_decides() -> None:
+    """Anti-drift guard: for a target_band threshold the readout status is a pure PROJECTION of the
+    core rule (`rules._evaluate_metric`), never re-decided in the API (ADR-0001). Sweep the in-band
+    value, both out-of-target tails, and both out-of-hard tails; the readout status must equal the
+    finding severity mapped None→PASS / WARN→BORDERLINE / CRITICAL→FAIL for every point."""
+    threshold = DEFAULT_RUNBOOK.threshold_for("variant_titv")
+    assert threshold is not None and threshold.kind == "target_band"
+    expected = {
+        2.05: ReadoutStatus.PASS,  # inside the target band
+        1.85: ReadoutStatus.BORDERLINE,  # out of target, in hard band (low tail)
+        2.5: ReadoutStatus.BORDERLINE,  # out of target, in hard band (high tail)
+        1.5: ReadoutStatus.FAIL,  # outside the hard band (low tail)
+        3.0: ReadoutStatus.FAIL,  # outside the hard band (high tail)
+    }
+    for value, want in expected.items():
+        mv = _titv_metric(value)
+        row = build_qc_readout(_synthetic_card(mv), DEFAULT_RUNBOOK).gates[0].rows[0]
+        assert row.status is want, f"titv={value}: readout {row.status}, want {want}"
+        finding = _evaluate_metric("SYN", threshold, mv)
+        core_status = (
+            ReadoutStatus.PASS
+            if finding is None
+            else ReadoutStatus.FAIL
+            if finding.severity is Severity.CRITICAL
+            else ReadoutStatus.BORDERLINE
+        )
+        assert row.status is core_status, f"titv={value}: readout must mirror the core rule"
+
+
 def test_fraction_metric_agrees_with_rules_finding_display() -> None:
     """SCI-01 regression: the QC-readout side-channel and the rules.py finding text must render a
     fraction-raw metric (breadth_20x, raw_unit 'fraction', display '%') the SAME way — as percent,
@@ -276,3 +368,59 @@ def test_qc_hold_blocks_the_downstream_variant_gate() -> None:
 
     clear = next(c for c in cards if not c.gate_results)  # no findings ⇒ every gate clear
     assert all(g.blocked_by is None for g in build_qc_readout(clear).gates)
+
+
+# --- QC-report artifact surfacing (WS-07 Q1) ------------------------------------------------
+#
+# The AI-off default (the stub) fabricates no next_steps; instead the readout points the operator
+# at the REAL QC artifacts — the run's fastp.html / multiqc_report.html reports if present on disk,
+# always alongside the metric readout. A run with no HTML report (mock_run_01, CSVs only) reports
+# that absence honestly (empty ``qc_reports``) — never boilerplate advice.
+
+
+def _run_dir_with_reports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *names: str) -> None:
+    """Copy the pinned mock_run_01 into a tmp data root and drop the named HTML reports beside its
+    CSVs, then repoint ``PIPEGUARD_DATA_ROOT`` at it. The endpoint re-derives the card from this
+    copy and scans it for QC reports — nothing runs Nextflow."""
+    dst = tmp_path / "mock_run_01"
+    shutil.copytree(_RUN_DIR, dst)
+    for name in names:
+        (dst / name).write_text("<html>fake QC report</html>", encoding="utf-8")
+    monkeypatch.setenv("PIPEGUARD_DATA_ROOT", str(tmp_path))
+
+
+def test_qc_reports_surfaced_when_present(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the run dir carries QC HTML reports, the readout links each one to the read-only
+    artifact-serve endpoint — the sample-scoped fastp report AND the run-level MultiQC report,
+    while the metric readout is still fully populated (the fallback is reports + readout)."""
+    _run_dir_with_reports(tmp_path, monkeypatch, "S5.fastp.html", "multiqc_report.html")
+    body = _client().get("/api/runs/mock_run_01/cards/S5/qc-readout").json()
+
+    reports = body["qc_reports"]
+    by_name = {r["name"]: r for r in reports}
+    assert set(by_name) == {"S5.fastp.html", "multiqc_report.html"}
+    # Links resolve to the existing inline artifact-serve endpoint (real, followable).
+    assert by_name["S5.fastp.html"]["url"] == "/api/runs/mock_run_01/artifacts/S5.fastp.html"
+    assert by_name["S5.fastp.html"]["scope"] == "sample"
+    assert by_name["multiqc_report.html"]["scope"] == "run"
+    # The metric readout is still there — reports AUGMENT it, never replace it.
+    assert body["readout"]["flagged_count"] == 2
+
+
+def test_qc_reports_exclude_a_different_samples_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A per-sample report belonging to ANOTHER sample must not leak onto this card; the run-level
+    report still surfaces."""
+    _run_dir_with_reports(tmp_path, monkeypatch, "S4.fastp.html", "multiqc_report.html")
+    body = _client().get("/api/runs/mock_run_01/cards/S5/qc-readout").json()
+    names = {r["name"] for r in body["qc_reports"]}
+    assert names == {"multiqc_report.html"}  # S4's fastp report is excluded from S5's card
+
+
+def test_qc_reports_absent_is_honest_for_mock_run_01() -> None:
+    """The pinned mock_run_01 has only CSVs — no HTML report. The endpoint reports that absence
+    honestly (empty ``qc_reports``) and the metric readout still stands (never boilerplate)."""
+    body = _client().get("/api/runs/mock_run_01/cards/S5/qc-readout").json()
+    assert body["qc_reports"] == []
+    assert body["readout"]["flagged_count"] == 2  # the real fallback: the metric readout

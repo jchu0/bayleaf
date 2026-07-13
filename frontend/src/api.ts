@@ -48,10 +48,28 @@ import type {
   TicketIn,
   TicketStatus,
   TransitionResult,
+  TriageCitation,
   TriageNote,
   VariantCall,
   Verdict,
 } from './types'
+
+// The advisory answer POST .../ask returns (mirrors pipeguard.triage.AgentReply). Defined here (not
+// types.ts) so the client owns the ask request/response shape — like RunPipelineArgs/TicketsQuery.
+// `advisory` is pinned true and there is deliberately no verdict/confidence: the agent answers, the
+// rules decide (ADR-0001). `generated_by`/`model` carry the honest provenance — 'stub' is a real
+// retrieval-grounded reply, never a fabricated constant.
+export type AgentReply = {
+  id: string
+  advisory: true
+  agent: string
+  sample_id: string | null
+  question: string
+  answer: string
+  citations: TriageCitation[]
+  generated_by: 'stub' | 'claude'
+  model: string | null
+}
 
 // ── RBAC actor holder ────────────────────────────────────────────────────────
 // Set by RoleContext at the app root; read on every write. Kept as a module-level holder so
@@ -260,6 +278,12 @@ export const api = {
     ),
   triage: (runId: string, sampleId: string) =>
     get<TriageNote>(`/api/runs/${enc(runId)}/cards/${enc(sampleId)}/triage`),
+  // Interactive sibling of `triage`: a free-text question about a card → an advisory AgentReply
+  // (ADR-0001 — never sets/overrides a verdict). Off the deterministic path; the offline stub
+  // returns a real retrieval-grounded answer (never a fabricated constant), the armed agent prose.
+  // Even a CLEAN card can be asked about. A POST (stateless server), header-blind reads notwithstanding.
+  askAgent: (runId: string, sampleId: string, question: string) =>
+    write<AgentReply>(`/api/runs/${enc(runId)}/cards/${enc(sampleId)}/ask`, 'POST', { question }),
 
   // ── policy / catalog (reads) ──
   config: () => get<Runbook>('/api/config'),

@@ -2,6 +2,7 @@ import { FileText, GitBranch, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { CardHeader, Verdict } from '../types'
+import { Missing } from './Missing'
 
 // The 288px context rail on a split decision card (dc 759-787): Sample / Run provenance, the
 // narration source, and the two rail actions. Every value is honest — a field the intake never
@@ -11,8 +12,10 @@ import type { CardHeader, Verdict } from '../types'
 
 const LABEL = 'text-[11px] font-semibold uppercase tracking-[0.5px] text-text-3'
 
+// The rail's absent-field token, now the shared Missing primitive (which generalizes this file's
+// former local NotCaptured idiom) so every "not captured" reads identically + carries the tooltip.
 function NotCaptured() {
-  return <span className="text-text-3">not captured</span>
+  return <Missing variant="not-captured" />
 }
 
 function Row({ k, children }: { k: string; children: ReactNode }) {

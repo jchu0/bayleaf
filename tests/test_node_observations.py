@@ -4,10 +4,11 @@ Covers ``GET /api/runs/{run_id}/nodes/{node_id}/observations``:
 
   1. outputs are SCOPED to the node — fastp's publish globs surface fastp's files, never a sibling
      process's BAM in the same publish dir; node resolves by germline node id AND by tool key.
-  2. 'logs' is OPT-IN (absent from a default outputs-only request) AND de-identified — a planted
-     subject id + email + MRN-shaped digits are scrubbed from the returned log tail.
+  2. 'logs' is OPT-IN (absent from a default outputs-only request), reviewer+-gated (WS-08), AND
+     de-identified — a planted subject id + email + MRN-shaped digits are scrubbed from the tail.
   3. a node with nothing on disk → honest-empty (source='none' + a note), never a crash.
-  4. auth — viewer is allowed (viewer+); an unknown/invalid principal role is rejected (400).
+  4. auth — viewer reads outputs (viewer+) but is 403'd on the 'logs' grant (reviewer+); an
+     unknown/invalid principal role is rejected (400).
   5. a traversal-crafted run id is rejected (404) before any path is touched.
 
 Offline + deterministic: the module's ``_NF_RUNS``/``_DATA`` roots are monkeypatched to a tmp dir
@@ -29,6 +30,7 @@ client = TestClient(app)
 
 _RUN = "RUN-TEST-OBS"
 _VIEWER = {"X-PipeGuard-Role": "viewer", "X-PipeGuard-Actor": "v"}
+_REVIEWER = {"X-PipeGuard-Role": "reviewer", "X-PipeGuard-Actor": "r"}
 
 # Planted PII that MUST NOT survive the de-id scrub in a returned log tail.
 _SUBJECT = "SUBJ-00042-JohnDoe"
@@ -78,11 +80,11 @@ def run_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-def _get(node: str, grants: str | None = None) -> dict:
+def _get(node: str, grants: str | None = None, headers: dict[str, str] = _VIEWER) -> dict:
     url = f"/api/runs/{_RUN}/nodes/{node}/observations"
     if grants is not None:
         url += f"?grants={grants}"
-    resp = client.get(url, headers=_VIEWER)
+    resp = client.get(url, headers=headers)
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -119,7 +121,7 @@ def test_outputs_scoped_by_tool_key(run_tree: Path) -> None:
 
 
 def test_logs_opt_in_and_deidentified(run_tree: Path) -> None:
-    body = _get("n_fastp", grants="outputs,logs")
+    body = _get("n_fastp", grants="outputs,logs", headers=_REVIEWER)  # logs is reviewer+ (WS-08)
     assert "logs" in body["grants"]
     assert body["logs"], "the fastp task's log streams should be attributed + returned"
     blob = "\n".join(line for tail in body["logs"] for line in tail["lines"])
@@ -131,6 +133,24 @@ def test_logs_opt_in_and_deidentified(run_tree: Path) -> None:
     assert "coverage" in blob or "fastp done" in blob
     for tail in body["logs"]:
         assert tail["deid_policy"]  # the policy id is stamped on every tail
+
+
+def test_logs_grant_denied_to_viewer(run_tree: Path) -> None:
+    """WS-08: the PII-adjacent 'logs' grant is reviewer+ — a plain viewer requesting it is 403'd,
+    closing 'any viewer can read any node's de-identified task logs'. Outputs stay viewer+."""
+    denied = client.get(f"/api/runs/{_RUN}/nodes/n_fastp/observations?grants=logs", headers=_VIEWER)
+    assert denied.status_code == 403
+    # …the same viewer can still read outputs (the low-sensitivity published-file listing).
+    ok = client.get(f"/api/runs/{_RUN}/nodes/n_fastp/observations", headers=_VIEWER)
+    assert ok.status_code == 200 and ok.json()["grants"] == ["outputs"]
+
+
+def test_logs_grant_allowed_to_reviewer(run_tree: Path) -> None:
+    """WS-08: reviewer+ may read the de-identified logs — available, just role-gated."""
+    resp = client.get(
+        f"/api/runs/{_RUN}/nodes/n_fastp/observations?grants=outputs,logs", headers=_REVIEWER
+    )
+    assert resp.status_code == 200 and "logs" in resp.json()["grants"]
 
 
 def test_node_with_no_outputs_is_honest_empty(run_tree: Path) -> None:

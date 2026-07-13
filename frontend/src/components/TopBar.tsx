@@ -1,10 +1,10 @@
-import { ArrowLeft, ChevronDown, Search } from 'lucide-react'
-import { useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { pageLabel, type PageId } from '../access'
 import { useApiHealth, type Health } from '../hooks/useApiHealth'
 import type { RunSummary } from '../types'
-import { RUN_STATUS_META } from '../verdict'
 import { NotificationBell } from './NotificationBell'
+import { RunSelector } from './RunSelector'
 
 // Top-bar reachability pill labels, driven by the shared real health poll (useApiHealth). Ready =
 // API answered ok; Offline = it didn't; Checking = first poll in flight.
@@ -14,59 +14,58 @@ const HEALTH_META: Record<Health, { label: string; dot: string; tip: string }> =
   offline: { label: 'Offline', dot: 'bg-escalate', tip: 'The read-API is not reachable.' },
 }
 
-// The run switcher shows at most this many rows; search narrows the full set, and a footer links
-// to the full Runs list. A flat dropdown of every run does not scale (the prototype's pattern).
-const MAX_RUN_ROWS = 8
+// The per-run sub-views (they carry a :runId in the path) — these show the run pill after the title.
+const PER_RUN_PAGES: ReadonlySet<PageId> = new Set(['cards', 'intake', 'provenance', 'agent'])
+
+// Route → PageId, so the crumb title comes from the SAME catalog that labels the nav (access.ts):
+// one owner for each page's name, and no route silently falls through to "Runs" (accession / inbox
+// were doing exactly that). Admin has no PageId (excluded from the catalog by design), so it's named
+// literally. Order matters — the per-run sub-views live under /runs/:id/… and must be matched before
+// the bare decision-cards route.
+function routePage(pathname: string): PageId | 'admin' | 'system-agents' | null {
+  if (pathname === '/') return 'runs'
+  // /agents and /runs/:id/agent share the PageId 'agent'; the crumb must still name them apart
+  // (the pages themselves already differ). Match the run-independent org view before the generic
+  // /agent branch below, and name it literally like 'admin' (it has no dedicated PageId).
+  if (pathname === '/agents') return 'system-agents'
+  if (pathname.startsWith('/accession')) return 'accession'
+  if (pathname.startsWith('/submit')) return 'submit'
+  if (pathname.startsWith('/inbox')) return 'inbox'
+  if (pathname.startsWith('/queue')) return 'queue'
+  if (pathname.startsWith('/monitoring')) return 'monitoring'
+  if (pathname.startsWith('/builder')) return 'builder'
+  if (pathname.startsWith('/settings')) return 'settings'
+  if (pathname.startsWith('/admin')) return 'admin'
+  if (pathname.includes('/intake')) return 'intake'
+  if (pathname.includes('/provenance') || pathname.includes('/canvas')) return 'provenance'
+  if (pathname.includes('/agent')) return 'agent'
+  if (pathname.startsWith('/runs/')) return 'cards'
+  return null
+}
 
 // Contextual page title + run pill, derived from the route (mirrors the prototype top bar).
 function useCrumb(): { title: string; run: string | null } {
   const { pathname } = useLocation()
   const { runId } = useParams()
-  if (pathname === '/') return { title: 'Runs', run: null }
-  if (pathname.startsWith('/submit')) return { title: 'Submit samplesheet', run: null }
-  if (pathname.includes('/intake')) return { title: 'Intake gate', run: runId ?? null }
-  if (pathname.startsWith('/queue')) return { title: 'Review queue', run: null }
-  if (pathname.startsWith('/monitoring')) return { title: 'Monitoring', run: null }
-  if (pathname.startsWith('/builder')) return { title: 'Pipeline builder', run: null }
-  if (pathname.startsWith('/settings')) return { title: 'Settings', run: null }
-  if (pathname.includes('/provenance') || pathname.includes('/canvas'))
-    return { title: 'Provenance', run: runId ?? null }
-  if (pathname.includes('/agent')) return { title: 'Agent triage', run: runId ?? null }
-  if (runId) return { title: 'Decision cards', run: runId }
-  return { title: 'Runs', run: null }
+  const page = routePage(pathname)
+  const title =
+    page === 'admin' ? 'Admin' : page === 'system-agents' ? 'System agents' : page ? pageLabel(page) : 'Runs'
+  const run =
+    page && page !== 'admin' && page !== 'system-agents' && PER_RUN_PAGES.has(page) ? (runId ?? null) : null
+  return { title, run }
 }
 
 export function TopBar({ runs = [] }: { runs?: RunSummary[] }) {
   const { title, run } = useCrumb()
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [query, setQuery] = useState('')
   const health = useApiHealth()
 
   // Switch the run in context while keeping the same view (e.g. decision cards → decision
   // cards, provenance → provenance) by swapping the run id in the current path.
   function switchRun(id: string) {
-    setMenuOpen(false)
-    setQuery('')
     navigate(pathname.replace(/\/runs\/[^/]+/, `/runs/${id}`))
   }
-  function closeMenu() {
-    setMenuOpen(false)
-    setQuery('')
-  }
-
-  // F17: the pill dot reflects the run's REAL status (needs_review/running/released), never
-  // inferred from n_attention. Search filters the full set by run id or platform; the list is
-  // capped and a footer links to the full Runs list, so the switcher scales past a handful.
-  const current = runs.find((r) => r.run_id === run)
-  const q = query.trim().toLowerCase()
-  const matches = q
-    ? runs.filter(
-        (r) => r.run_id.toLowerCase().includes(q) || (r.platform ?? '').toLowerCase().includes(q),
-      )
-    : runs
-  const shownRuns = matches.slice(0, MAX_RUN_ROWS)
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-card px-5">
@@ -83,70 +82,10 @@ export function TopBar({ runs = [] }: { runs?: RunSummary[] }) {
 
       {run && <span className="text-[13px] text-text-3">/</span>}
       {run && (
-        <div className="relative">
-          <button
-            onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
-            className="flex items-center gap-1.5 rounded-lg border border-line bg-card-2 px-2.5 py-1 font-mono text-[12px] text-text hover:border-line-strong"
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${current ? RUN_STATUS_META[current.status].dot : 'bg-line-strong'}`}
-            />
-            {run}
-            <ChevronDown size={13} className="text-text-3" />
-          </button>
-          {menuOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={closeMenu} />
-              <div className="absolute left-0 top-full z-20 mt-1 w-[360px] overflow-hidden rounded-xl border border-line-strong bg-card shadow-pop">
-                <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
-                  <Search size={14} className="text-text-3" />
-                  {/* eslint-disable-next-line jsx-a11y/no-autofocus -- opening the switcher is an explicit user action; focusing search is expected */}
-                  <input
-                    autoFocus
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search runs by id or platform…"
-                    className="min-w-0 flex-1 bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-3"
-                  />
-                </div>
-                <div className="max-h-[300px] overflow-y-auto p-1.5">
-                  {shownRuns.map((r) => {
-                    const meta = RUN_STATUS_META[r.status]
-                    return (
-                      <button
-                        key={r.run_id}
-                        onClick={() => switchRun(r.run_id)}
-                        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-card-2 ${
-                          r.run_id === run ? 'bg-card-2' : ''
-                        }`}
-                      >
-                        <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${meta.dot}`} />
-                        <span className="font-mono text-[12.5px] font-medium text-text">{r.run_id}</span>
-                        {r.platform && <span className="text-[11px] text-text-3">· {r.platform}</span>}
-                        <span className="ml-auto shrink-0 text-[11px] text-text-3">{meta.label}</span>
-                      </button>
-                    )
-                  })}
-                  {matches.length === 0 && (
-                    <div className="px-3 py-5 text-center text-[12px] text-text-2">
-                      No runs match “{query}”.
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => {
-                    closeMenu()
-                    navigate('/')
-                  }}
-                  className="flex w-full items-center justify-between border-t border-line bg-card px-3 py-2.5 hover:bg-card-2"
-                >
-                  <span className="text-[12px] font-semibold text-accent-strong">View all runs</span>
-                  <span className="text-[11px] text-text-3">{runs.length} runs →</span>
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        // The shared, keyboard-navigable, loading/error-aware run picker (RunSelector) instead of a
+        // bespoke switcher — one idiom everywhere. Runs are injected from Layout, so it never needs
+        // to self-fetch; the footer jumps to the full Runs index.
+        <RunSelector value={run} onChange={switchRun} runs={runs} onViewAll={() => navigate('/')} />
       )}
 
       <div className="ml-auto flex items-center gap-2.5">

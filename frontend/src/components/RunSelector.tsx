@@ -1,11 +1,11 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { ChevronDown, Loader2, Search } from 'lucide-react'
-import { api } from '../api'
+import { useRuns } from '../hooks/useRuns'
 import { RUN_STATUS_META } from '../verdict'
 import type { RunStatus, RunSummary } from '../types'
 
 // Stable empty fallback so `runs` keeps a referential identity across renders when neither an
-// injected nor a self-fetched list is present (otherwise the memo below recomputes every render).
+// injected nor a store-backed list is present (otherwise the memo below recomputes every render).
 const NO_RUNS: RunSummary[] = []
 
 // A reusable, searchable, keyboard-friendly run picker (T-070) sharing the top-bar switcher idiom
@@ -15,8 +15,8 @@ const NO_RUNS: RunSummary[] = []
 export type RunSelectorProps = {
   value: string | null // selected run_id (controlled)
   onChange: (runId: string) => void
-  runs?: RunSummary[] // optional pre-fetched list; if omitted, self-fetches lazily on first open
-  status?: RunStatus // optional filter (e.g. 'released'); threaded to api.runs({ status }) on self-fetch
+  runs?: RunSummary[] // optional pre-fetched list; if omitted, reads the shared useRuns store (UX-DUP Runs #6)
+  status?: RunStatus // optional filter (e.g. 'released'); applied client-side over the store's list (no injected list)
   placeholder?: string // trigger text when value is null
   disabled?: boolean
   maxRows?: number // capped visible rows (mirrors the top-bar switcher)
@@ -37,49 +37,46 @@ export function RunSelector({
 }: RunSelectorProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [fetched, setFetched] = useState<RunSummary[] | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(false)
   // Keyboard active-descendant: the highlighted option index within `matches` (arrow keys move it).
   const [active, setActive] = useState(0)
   const listboxId = useId()
   const optionId = (i: number) => `${listboxId}-opt-${i}`
 
-  // Lazy self-fetch on first open (only when no list is injected). Honest on failure: no rows.
-  // `error` is in the guard AND deps so a failed fetch settles into a STABLE "Couldn't load runs"
-  // state instead of an infinite refetch loop (the loading true→false transition re-runs the effect;
-  // without the error guard it would re-fire the request forever). `close()` clears error so
-  // reopening the picker retries.
-  useEffect(() => {
-    if (injected || !open || fetched || loading || error) return
-    setLoading(true)
-    setError(false)
-    api
-      .runs(status ? { status } : undefined)
-      .then((r) => setFetched(r))
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
-  }, [open, injected, status, fetched, loading, error])
+  // Fallback source (no injected list) = the shared useRuns store (UX-DUP Runs #6): the picker reads
+  // the ONE app-wide runs fetch instead of self-fetching a parallel copy. An injected list still
+  // wins outright and the store is ignored. Honest on failure: the store's error surfaces as no rows,
+  // and (mirroring the old reopen-retries behavior) opening a failed fallback picker retries the
+  // shared fetch — the store's error is otherwise sticky (it never auto-refetches).
+  const { runs: storeRuns, error: storeError, refresh } = useRuns()
+  const usingStore = !injected
+  const loading = usingStore && storeRuns === null && !storeError
+  const error = usingStore && !!storeError
 
-  const runs = injected ?? fetched ?? NO_RUNS
+  const runs = injected ?? storeRuns ?? NO_RUNS
   const current = runs.find((r) => r.run_id === value)
   const q = query.trim().toLowerCase()
   const matches = useMemo(() => {
+    // Preserve the optional `status` filter (it used to scope the self-fetch) by applying it
+    // client-side over the shared full-set list; an injected list is treated as already-scoped.
+    const scoped = usingStore && status ? runs.filter((r) => r.status === status) : runs
     const filtered = q
-      ? runs.filter(
+      ? scoped.filter(
           (r) => r.run_id.toLowerCase().includes(q) || (r.platform ?? '').toLowerCase().includes(q),
         )
-      : runs
+      : scoped
     return filtered.slice(0, maxRows)
-  }, [runs, q, maxRows])
+  }, [runs, usingStore, status, q, maxRows])
   // Clamp the highlight into the current match range (a filter can shrink the list under `active`).
   const activeIdx = matches.length ? Math.min(active, matches.length - 1) : 0
 
+  function openPicker() {
+    if (error) refresh() // a settled-error fallback picker retries the shared fetch on open
+    setOpen(true)
+  }
   function close() {
     setOpen(false)
     setQuery('')
     setActive(0)
-    setError(false) // clear a prior fetch failure so reopening the picker retries
   }
   function pick(id: string) {
     onChange(id)
@@ -91,7 +88,7 @@ export function RunSelector({
       <button
         type="button"
         disabled={disabled}
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={() => (open ? close() : openPicker())}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}

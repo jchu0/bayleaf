@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-12 (MST) |
+| **Last updated** | 2026-07-13 (MST) — the System-agents/Agent-triage IA split (taxonomy section) + the `ask` endpoint's `require_role` floor (QC-triage roster row) |
 | **Audience** | all (contributors and Claude Code) |
-| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) · [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the human-authoring surface roster agent #5's contract presupposes) · [ADR-0022](../adr/ADR-0022-agent-observation-binding.md) (the agent-attachment observation-binding model + taxonomy) · [architecture.md](architecture.md) · [agent-authoring-contract.md](agent-authoring-contract.md) (how an authoring agent is built + constrained) · [planning/tasks.md](../planning/tasks.md) |
+| **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md) · [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) · [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) · [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the `require_role` primitive the `ask` floor uses) · [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (the human-authoring surface roster agent #5's contract presupposes) · [ADR-0022](../adr/ADR-0022-agent-observation-binding.md) (the agent-attachment observation-binding model + taxonomy) · [architecture.md](architecture.md) · [agent-authoring-contract.md](agent-authoring-contract.md) (how an authoring agent is built + constrained) · [frontend/agent-triage-redesign-spec.md](frontend/agent-triage-redesign-spec.md) (the fuller IA/floating-window spec this session's split partially, more cheaply, realizes) · [planning/tasks.md](../planning/tasks.md) |
 
 ## Overview
 
@@ -54,7 +54,7 @@ of them is a bug, not a variant.
 
 | # | Agent | Scope (the one job) | Status | Design | Model tier |
 |---|---|---|---|---|---|
-| 1 | **QC-triage** | On a flagged card, suggest a likely cause + next action, cited | **done** (T-015) | [`triage/`](../../src/pipeguard/triage/), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) | mid |
+| 1 | **QC-triage** | On a flagged card, suggest a likely cause + next action, cited | **done** (T-015); interactive **`ask`** sibling **done** (WS-07 Q2, T-144) — `POST /api/runs/{run_id}/cards/{sample_id}/ask` answers a free-text question about any card, even a clean PROCEED one, `advisory: Literal[True]`, no verdict/confidence. **Authz seam closed (2026-07-13, T-164, commit `a1aef73`):** this was the only advisory endpoint with no `require_role` dependency at all; now gated `viewer`+ (the read-family floor — advisory, not a mutation, so it does not take the reviewer+ write floor) | [`triage/`](../../src/pipeguard/triage/), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) | mid |
 | 2 | **Pipeline-repair** | On a recurring issue signature, propose a concrete, human-reviewed remediation | **done** (T-058) — advisory, **off the gate**; consumes a `RecurringSignature` from the monitoring rollup (now incl. **structured pipeline-executor failures** via EXEC-001 / execution-trace ingestion, T-061 — not only PipeGuard's own gate findings) → a cited `RepairProposal{summary, attach_to, scope}` grounded in a curated remediation corpus; on-demand (`GET /api/monitoring/signatures/{signature}/repair`), NOT the deferred ~3× auto-escalation | [`pipeline_repair/`](../../src/pipeguard/pipeline_repair/), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md)/[0012](../adr/ADR-0012-agent-scoping-model-tiering.md) | high / Opus (cross-run failure reasoning, ADR-0012 §3a) |
 | 3 | **Archivist** | Index / organize / summarize / prepare exports across runs (the "librarian" over the data platform) | **done** (T-059) — advisory, **off the gate**; indexes/summarizes already-decided runs → `ArchiveDigest` (digest + export manifest + cross-run index); organizational not diagnostic; least-privilege input (no PII); never opens/moves/deletes a file or relabels an origin | [`api/archivist.py`](../../api/archivist.py), [data-platform-and-archivist.md](data-platform-and-archivist.md) §5 | low / Haiku (organizational, not diagnostic) |
 | 4 | **Feedback-triage** | Categorize the off-gate in-app feedback corpus (category / area / sentiment / priority + recurring themes) to guide product iteration | **done** (T-043) — advisory, **off the gate** (never touches a verdict); PII-safe (aggregate-only Claude path) | [`api/feedback_agent.py`](../../api/feedback_agent.py), [ADR-0016](../adr/ADR-0016-postgres-port.md) | low / Haiku (categorization) |
@@ -108,6 +108,20 @@ the same thing. The roster splits by *what an agent scopes over*:
    node: **Pipeline-repair** (#2) and **Archivist** (#3). As of 2026-07-12 they **moved OUT of the
    Builder palette to Agent-triage launchers** (`frontend/src/screens/AgentTriage.tsx`) — putting
    them on the canvas implied a node attachment they never had.
+   **IA split, 2026-07-13 (commits `b4a06c0`, `a499691`, `f230f7e`).** That single `AgentTriage.tsx`
+   component originally hosted the org-launcher tiles unconditionally, so a run-independent
+   `/agents` route (added to reach them without a run in context) rendered them alongside the
+   SAME per-run `/runs/:id/agent` route — the maintainer's own report: "system agents and agent
+   triage look like duplicate pages." Fixed by splitting the component's content on
+   `isSystemView = !runId`: the launchers now render **only** on `/agents` ("System agents"); the
+   per-run route shows only the flagged-samples triage table + advisory composer. A route-aware
+   `'system-agents'` sentinel in `TopBar.tsx`'s `routePage()` (mirroring the existing `'admin'`
+   pattern) names the crumb correctly, since both routes still share one `PageId: 'agent'` — a
+   **lighter-weight implementation than the design spec** drafted the same week
+   ([agent-triage-redesign-spec.md](frontend/agent-triage-redesign-spec.md) `WS-1`, which called for
+   a dedicated `system-agents` `PageId`/nav item/promoted panel). The tradeoff, named not hidden: an
+   Admin page-access grant still cannot distinguish "can see Agent triage" from "can see System
+   agents" — both gate on the one shared `PageId`.
 3. **Off-gate corpus agents** — **Feedback-triage** (#4) is neither; it categorizes the in-app
    feedback corpus and has no canvas presence.
 

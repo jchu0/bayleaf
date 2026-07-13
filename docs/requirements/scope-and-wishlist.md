@@ -47,7 +47,11 @@ The MVP core is standing; these in-scope pieces are now built and verified (see
    bwa-mem2 → samtools markdup → {mosdepth, bcftools call}`), landing in the operator UI exactly
    like a mock run (`RUN-2026-07-08-GIAB-HG002`, `origin=real-giab`) — HOLD on the honest
    cluster-PF-missing signal (a run-level SAV metric a fastq→BAM path can't produce). Contamination
-   (verifybamid2) still not computed (see [tasks.md](../planning/tasks.md) T-071).
+   (verifybamid2) is now **gated + parser-wired** (WS-02, 2026-07-12, `contamination.freemix`) but
+   still **not pipeline-produced** on this or any run — `verifybamid2.nf` is a standalone Nextflow
+   module (`pipelines/optional_modules/`) not wired into the germline reference pipeline, so a live
+   FREEMIX value needs an operator to run it by hand (see [metric_registry.md](../data/metric_registry.md)
+   Wiring status; [tasks.md](../planning/tasks.md) T-153).
 5. **Dashboard — now 11 operator screens** (was documented as "9," a stale count this edit
    corrects: 8 trace to T-022b's 1:1 fidelity pass, Pipeline Builder to T-044, Submit was new in
    the T-062 rebuild, and **Inbox is new as of this batch** — see below), rebuilt to the refreshed

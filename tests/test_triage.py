@@ -14,9 +14,11 @@ from api.main import app
 from pipeguard import Verdict, load_run, run_gate, triage_card
 from pipeguard.synthesis import StubSynthesizer
 from pipeguard.triage import (
+    AgentReply,
     KeywordRetriever,
     StubTriageAgent,
     TriageNote,
+    ask_agent,
     load_knowledge_corpus,
 )
 
@@ -215,6 +217,46 @@ def test_claude_path_falls_back_to_stub_on_error(cards, monkeypatch):
     assert note is not None and note.generated_by == "stub"  # error degrades to stub
 
 
+# --- interactive ask (Q2): user asks the agent a free-text question -----------
+
+
+def test_stub_ask_is_grounded_not_fabricated(cards):
+    """AI off: ask returns a grounded, retrieval-based answer EXPLICITLY framed as not generated,
+    with deterministic citations — never fabricated prose, never a verdict (ADR-0001/0006)."""
+    reply = StubTriageAgent().ask(cards["S4"], "why was this escalated?")
+    assert isinstance(reply, AgentReply)
+    assert reply.advisory is True and reply.agent == "qc_triage"
+    assert reply.generated_by == "stub" and reply.model is None
+    assert reply.question == "why was this escalated?"
+    assert "AI assistance is off" in reply.answer  # honest: retrieval, not a generated answer
+    assert reply.citations  # grounded in corpus/findings
+    assert "verdict" not in reply.model_dump()  # advisory only
+
+
+def test_ask_answers_even_a_clean_card(cards):
+    """Unlike triage_card (None on a clean card), ask answers ANY card — the operator may ask about
+    a PROCEED — and the stub stays honest (grounded retrieval, no fabrication)."""
+    assert triage_card(cards["S1"]) is None  # clean → no auto-triage note
+    reply = ask_agent(cards["S1"], "is the coverage adequate?", agent=StubTriageAgent())
+    assert reply.answer and reply.generated_by == "stub" and reply.advisory is True
+
+
+def test_claude_ask_answer_is_llm_but_citations_stay_deterministic(cards, monkeypatch):
+    """On the live path the model writes ONLY the answer prose; provenance (citations) stays
+    deterministic — identical to the stub's for the same card + question."""
+    client = _FakeClient(_FakeResponse('{"answer": "MODEL answer"}'))
+    reply = _claude_agent(monkeypatch, client).ask(cards["S4"], "cause?")
+    assert reply.generated_by == "claude" and reply.answer == "MODEL answer"
+    stub = StubTriageAgent().ask(cards["S4"], "cause?")
+    assert [c.ref for c in reply.citations] == [c.ref for c in stub.citations]
+    assert reply.advisory is True and "verdict" not in reply.model_dump()
+
+
+def test_claude_ask_falls_back_to_stub_on_error(cards, monkeypatch):
+    reply = _claude_agent(monkeypatch, _FakeClient(raises=True)).ask(cards["S4"], "cause?")
+    assert reply.generated_by == "stub"  # error degrades to the grounded stub, not a crash
+
+
 # --- API endpoint -----------------------------------------------------------
 
 client = TestClient(app)
@@ -235,3 +277,30 @@ def test_triage_endpoint_404s_for_clean_and_unknown_samples():
     assert client.get("/api/runs/mock_run_01/cards/S1/triage").status_code == 404  # clean
     assert client.get("/api/runs/mock_run_01/cards/NOPE/triage").status_code == 404  # unknown
     assert client.get("/api/runs/NOPE/cards/S4/triage").status_code == 404  # unknown run
+
+
+def test_ask_endpoint_returns_advisory_reply():
+    resp = client.post("/api/runs/mock_run_01/cards/S4/ask", json={"question": "why escalated?"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["advisory"] is True and body["agent"] == "qc_triage"
+    assert body["generated_by"] == "stub"  # AI off by default
+    assert "verdict" not in body  # never decides
+    assert body["question"] == "why escalated?" and body["answer"]
+
+
+def test_ask_endpoint_answers_a_clean_card_and_404s_for_unknown():
+    # a clean card has no triage note but CAN be asked about (200, not 404)
+    ok = client.post("/api/runs/mock_run_01/cards/S1/ask", json={"question": "ok?"})
+    assert ok.status_code == 200
+    bad_sample = client.post("/api/runs/mock_run_01/cards/NOPE/ask", json={"question": "x"})
+    assert bad_sample.status_code == 404
+    bad_run = client.post("/api/runs/NOPE/cards/S4/ask", json={"question": "x"})
+    assert bad_run.status_code == 404
+
+
+def test_ask_endpoint_rejects_empty_or_extra_fields():
+    empty = client.post("/api/runs/mock_run_01/cards/S4/ask", json={"question": ""})
+    assert empty.status_code == 422  # min_length=1
+    bad = client.post("/api/runs/mock_run_01/cards/S4/ask", json={"question": "x", "role": "admin"})
+    assert bad.status_code == 422  # extra="forbid"

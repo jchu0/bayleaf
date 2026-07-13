@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDownToLine, ArrowUpFromLine, ChevronRight, ExternalLink } from 'lucide-react'
 import type { Gate, PipelineStage, RunArtifact, RunDetail, Verdict } from '../../types'
-import { GATE_DOT, VERDICT_LABEL } from '../../verdict'
+import { GATE_DOT, GATE_TAG, VERDICT_LABEL, VERDICT_ORDER as VERDICT_RANK } from '../../verdict'
 import { artifactNameTitle, fmtSize } from '../../provenance'
 import { Fingerprint } from './Fingerprint'
 
@@ -15,7 +15,13 @@ import { Fingerprint } from './Fingerprint'
 // (VAR-RTH-001) — so a fired ESCALATE surfaces there instead of the DAG lying "skipped" while the
 // decision escalated (the CLINVAR-RTH honesty fix). Variant *calling* stays "not run" (no VCF),
 // which is the honest read — the route-to-human check ran over externally-annotated calls.
-const STAGES: { key: PipelineStage; n: number; title: string; tool: string; gate?: Gate }[] = [
+type StageDef = { key: PipelineStage; n: number; title: string; tool: string; gate?: Gate }
+
+// The numbered PROCESS chain (left→right DAG). The decision gate is deliberately NOT in here:
+// it is an aggregate verdict over every stage below, not "step N of the pipeline", so it renders
+// as a terminal full-width banner (see GATE_STAGE) instead of a numbered node that would misread
+// as one-more-step. Share is the terminal export node (n8) after the aggregate decision.
+const STAGES: StageDef[] = [
   { key: 'intake', n: 1, title: 'Sample intake', tool: 'Sample sheet + metadata' },
   { key: 'demux', n: 2, title: 'Demultiplex', tool: 'demux stats', gate: 'preflight' },
   { key: 'qc', n: 3, title: 'Quality control', tool: 'fastp · mosdepth', gate: 'qc' },
@@ -23,9 +29,17 @@ const STAGES: { key: PipelineStage; n: number; title: string; tool: string; gate
   { key: 'variant', n: 5, title: 'Variant calling', tool: 'not run in this build' },
   { key: 'filter', n: 6, title: 'Filter / normalize', tool: 'not run in this build' },
   { key: 'review', n: 7, title: 'Route to human', tool: 'route-to-human · VAR-RTH-001', gate: 'variant' },
-  { key: 'gate', n: 8, title: 'Decision gate', tool: 'bayleaf rules' },
-  { key: 'share', n: 9, title: 'De-identified share', tool: 'Safe-Harbor-style scrub' },
+  { key: 'share', n: 8, title: 'De-identified share', tool: 'Safe-Harbor-style scrub' },
 ]
+
+// The decision gate — an AGGREGATE verdict over every stage above, pulled OUT of the numbered
+// chain and rendered as a terminal full-width verdict banner (n:0 → shown as an aggregate glyph,
+// never a step number). It still drives the drill-in when clicked (looked up via ALL_STAGES).
+const GATE_STAGE: StageDef = { key: 'gate', n: 0, title: 'Decision gate', tool: 'bayleaf rules' }
+
+// Union used for status/note/drill-in lookups — the chain renders STAGES only; the gate banner
+// and drill-in resolve against this so a click on the banner still opens the gate detail.
+const ALL_STAGES: StageDef[] = [...STAGES, GATE_STAGE]
 
 // Downstream stages that only "run" when THIS build produced their artifact OR fired their gate/
 // event; absent that signal they read "not run in this build" instead of a fabricated green. The
@@ -33,8 +47,7 @@ const STAGES: { key: PipelineStage; n: number; title: string; tool: string; gate
 const CONDITIONAL_STAGES = new Set<PipelineStage>(['align', 'variant', 'filter', 'review', 'share'])
 
 type Status = 'ok' | 'warn' | 'blocked' | 'skipped' | 'partial'
-type Stage = (typeof STAGES)[number]
-const VERDICT_RANK: Record<Verdict, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
+type Stage = StageDef
 
 // Nodes color by STAGE STATUS ONLY (§5.6). The number badge is the primary signal: a solid
 // status fill; the detail badge/pill use the tinted treatment (bg + solid border + solid text).
@@ -81,9 +94,6 @@ const STATUS_STYLE: Record<
     label: 'Decided on partial lineage',
   },
 }
-
-// Gate pill tags per the handoff (note the asymmetry — preflight has no "gate" suffix).
-const GATE_TAG: Record<Gate, string> = { preflight: 'Preflight', qc: 'QC gate', variant: 'Variant gate' }
 
 export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; artifacts: RunArtifact[] }) {
   const [selected, setSelected] = useState<PipelineStage | null>(null)
@@ -140,18 +150,30 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
   // Worst (most-urgent) verdict each gate produced across the run's samples, and overall —
   // the canvas colors a stage by the gate checkpoint that sits on it. The rules already
   // decided these (ADR-0001); the canvas only visualizes them.
-  const { gateWorst, runWorst } = useMemo(() => {
+  const { gateWorst, runWorst, gatePresent } = useMemo(() => {
     const gateWorst: Record<Gate, Verdict | null> = { preflight: null, qc: null, variant: null }
+    // Whether a gate CHECKPOINT actually ran (any card carried a result for it) — POSITIVE
+    // evidence, independent of its verdict. A "proceed" is still evidence the check ran; the
+    // fail-closed rule below needs "did it run?", not "was it clean?" (absence ≠ passed).
+    const gatePresent: Record<Gate, boolean> = { preflight: false, qc: false, variant: false }
     let runWorst: Verdict = 'proceed'
     for (const c of detail.cards) {
       if (VERDICT_RANK[c.verdict] < VERDICT_RANK[runWorst]) runWorst = c.verdict
       for (const g of c.gate_results) {
+        gatePresent[g.gate] = true
         const cur = gateWorst[g.gate]
         if (cur === null || VERDICT_RANK[g.verdict] < VERDICT_RANK[cur]) gateWorst[g.gate] = g.verdict
       }
     }
-    return { gateWorst, runWorst }
+    return { gateWorst, runWorst, gatePresent }
   }, [detail])
+
+  // The run actually started (an append-only ledger event proves intake happened). Positive
+  // evidence for the ungated intake node — never inferred from the mere absence of a bad verdict.
+  const startedExists = useMemo(
+    () => detail.events.some((e) => e.event_type === 'analysis_run.started'),
+    [detail],
+  )
 
   // Whether a de-identified share left the boundary for this run (ADR-0018 D3): the presence of a
   // DATA_EXPORTED event is the "share ran" signal — a share writes no on-disk artifact, so the
@@ -173,12 +195,47 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
     return arts.length === 0 && !gateFired
   }
 
+  // POSITIVE evidence that a non-conditional stage (intake / demux / qc / gate) actually ran —
+  // the fail-CLOSED substrate for finding (2). A stage lights up ONLY from something we can point
+  // at: an artifact it produced, a gate checkpoint that ran on it, or (intake/gate) the run's own
+  // cards/started event. It is NEVER inferred from "no bad verdict showed up" — absence ≠ passed.
+  const hasEvidence = (stage: Stage): boolean => {
+    if (artifacts.some((a) => a.stage === stage.key)) return true
+    if (stage.gate && gatePresent[stage.gate]) return true
+    if (stage.key === 'intake') return detail.cards.length > 0 || startedExists
+    if (stage.key === 'gate') return detail.cards.length > 0
+    return false
+  }
+
+  // A processing stage upstream of the terminal nodes never ran in this build (align/variant/
+  // filter always, plus anything else without evidence). Drives both the gate's "partial lineage"
+  // read AND the terminal Share node's progression key (finding 1) — a downstream node must never
+  // render more-complete (green "Completed") than a gray upstream one.
+  const hasUpstreamGap = (): boolean =>
+    STAGES.some((s) => {
+      if (s.key === 'share') return false
+      return CONDITIONAL_STAGES.has(s.key) ? isNotRun(s) : !hasEvidence(s)
+    })
+
   const statusFor = (stage: Stage): Status => {
-    if (isNotRun(stage)) return 'skipped'
+    // Fail-closed: a conditional stage needs its artifact/gate to have fired; every other stage
+    // needs positive evidence it ran. Absent either, it stays neutral — not a green "Completed".
+    if (CONDITIONAL_STAGES.has(stage.key)) {
+      if (isNotRun(stage)) return 'skipped'
+    } else if (!hasEvidence(stage)) {
+      return 'skipped'
+    }
     if (stage.gate) {
       const w = gateWorst[stage.gate]
       if (w === 'escalate') return 'blocked'
       if (w === 'hold' || w === 'rerun') return 'warn'
+    }
+    // Terminal share (finding 1): it ran (a DATA_EXPORTED event exists — isNotRun already returned
+    // 'skipped' otherwise), but it must not light green while an upstream stage is gray. Propagate
+    // the partial/neutral state downstream so the terminus never reads more-complete than its
+    // lineage — a share off an incomplete pipeline reads "on partial lineage", never "Completed".
+    if (stage.key === 'share') {
+      return hasUpstreamGap() ? 'partial' : 'ok'
     }
     if (stage.key === 'gate') {
       if (runWorst === 'escalate') return 'blocked'
@@ -186,11 +243,16 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
       // Proceed — but the DAG shows sequence, so a terminal green while upstream stages are gray
       // (skipped, not run in this build) is misleading (P3). Read "partial lineage" instead of a
       // clean green "Completed" whenever a processing stage upstream of the gate never ran.
-      const upstreamSkipped = STAGES.some((s) => s.key !== 'gate' && s.key !== 'share' && isNotRun(s))
-      if (upstreamSkipped) return 'partial'
+      if (hasUpstreamGap()) return 'partial'
     }
     return 'ok'
   }
+
+  // Pill/dot label per stage — the 'partial' style's wording ("Decided on partial lineage") is
+  // gate-specific, so the terminal Share node borrows the muted treatment but reads honestly as a
+  // share (it never "decided" anything). Every other status keeps the shared STATUS_STYLE label.
+  const labelFor = (stage: Stage, status: Status): string =>
+    status === 'partial' && stage.key === 'share' ? 'Shared on partial lineage' : STATUS_STYLE[status].label
 
   // Per-stage note for the drill-in band — every stage gets a real note, never an empty bar.
   // Gate stages prefer the worst gate result's rationale (rules-authored); when that's missing
@@ -229,10 +291,20 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
 
     switch (stage.key) {
       case 'intake':
+        // Fail-closed: only claim registration when we have positive evidence (cards / a started
+        // event). Absent it, read honestly as not-run rather than "0 samples registered".
+        if (!hasEvidence(stage))
+          return 'Not run in this build — no sample intake is recorded for this run (no cards or run-started event).'
         return `${n} sample${plural} registered from the sample sheet.`
       case 'demux':
+        // Fail-closed: the preflight checkpoint must have run (or a demux artifact exist). Suppress
+        // a "Demultiplexed 0 samples" note — an absent demux is not a zero-count demux.
+        if (!hasEvidence(stage))
+          return 'Not run in this build — no demultiplex step is recorded (no preflight gate result or demux artifact for this build).'
         return `Demultiplexed ${n} sample${plural} from the sample sheet.`
       case 'qc': {
+        if (!hasEvidence(stage))
+          return 'Not run in this build — no QC checkpoint ran (no QC gate result or QC artifact for this build).'
         // Honest fallback when the QC gate carried no rationale: report how many samples the
         // QC gate flagged (verdict below proceed), derived from the rules' own gate results.
         const flagged = detail.cards.filter((c) =>
@@ -243,9 +315,10 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
           : `Per-sample QC ran across ${n} sample${plural}; ${flagged} flagged.`
       }
       case 'gate': {
-        const upstreamSkipped = STAGES.some((s) => s.key !== 'gate' && s.key !== 'share' && isNotRun(s))
+        if (!hasEvidence(stage))
+          return 'Not run in this build — the decision gate aggregated no cards for this run.'
         const base = `Aggregates the gates that ran → overall verdict ${VERDICT_LABEL[runWorst]}.`
-        return upstreamSkipped
+        return hasUpstreamGap()
           ? `${base} Decided on partial lineage — one or more processing stages (alignment / variant calling / filter) didn't run in this build, so this isn't an end-to-end pass.`
           : base
       }
@@ -257,7 +330,8 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
   // Default the drill-in to the first stage that flagged (most interesting), else the gate.
   const firstFlagged = STAGES.find((s) => statusFor(s) === 'blocked' || statusFor(s) === 'warn')
   const active = selected ?? firstFlagged?.key ?? 'gate'
-  const activeStage = STAGES.find((s) => s.key === active) ?? STAGES[STAGES.length - 1]
+  // Resolve against ALL_STAGES so a click on the terminal gate banner still opens the gate detail.
+  const activeStage = ALL_STAGES.find((s) => s.key === active) ?? GATE_STAGE
   const activeStatus = statusFor(activeStage)
   const sc = STATUS_STYLE[activeStatus]
   const stageArts = artifacts.filter((a) => a.stage === activeStage.key)
@@ -291,10 +365,11 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
         )}
       </div>
 
-      {/* Left→right stage DAG — nodes stretch equally with auto-width chevrons between. Now 9
-          stages (the 3 post-variant nodes added in W3), so the column template is derived from
-          STAGES.length and the row scrolls sideways (wider min node width so each card reads well)
-          instead of crushing every card. `measure` runs on scroll to keep the indicator above in sync. */}
+      {/* Left→right PROCESS DAG — nodes stretch equally with auto-width chevrons between. 8 numbered
+          process stages (the decision gate is pulled OUT into the aggregate banner below, not a node
+          here), so the column template is derived from STAGES.length and the row scrolls sideways
+          (wider min node width so each card reads well) instead of crushing every card. `measure`
+          runs on scroll to keep the indicator above in sync. */}
       <div
         ref={scrollRef}
         onScroll={measure}
@@ -322,7 +397,7 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
                 </span>
                 <span
                   className={`h-[9px] w-[9px] rounded-full shadow-[0_0_0_3px_var(--color-page)] ${s.dot}`}
-                  title={s.label}
+                  title={labelFor(stage, status)}
                 />
               </div>
               <div className="text-left text-[12.5px] font-semibold leading-[1.25] text-text">{stage.title}</div>
@@ -346,13 +421,53 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
         })}
       </div>
 
+      {/* Terminal aggregate-verdict banner (finding 3): the decision gate is an aggregate verdict
+          over EVERY stage above — not "step N of the chain". It renders full-width below the DAG,
+          colored by its own status (partial when the lineage had gaps, so an incomplete sequence
+          never terminates in a confident green). Clickable to open the gate drill-in below. */}
+      {(() => {
+        const gateStatus = statusFor(GATE_STAGE)
+        const gsc = STATUS_STYLE[gateStatus]
+        const isActive = active === 'gate'
+        return (
+          <button
+            onClick={() => setSelected('gate')}
+            className={`mt-3 flex w-full items-center gap-3 rounded-xl border bg-card p-3.5 text-left transition-shadow ${
+              isActive ? 'border-accent shadow-card ring-[3px] ring-accent-weak' : 'border-line'
+            }`}
+          >
+            <span
+              className={`h-[11px] w-[11px] shrink-0 rounded-full shadow-[0_0_0_3px_var(--color-page)] ${gsc.dot}`}
+              title={labelFor(GATE_STAGE, gateStatus)}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-[13px] font-semibold text-text">Decision gate</span>
+                <span className="font-mono text-[9.5px] uppercase tracking-[0.4px] text-text-3">
+                  bayleaf rules · aggregate verdict
+                </span>
+              </div>
+              <div className="mt-0.5 text-[11.5px] leading-[1.4] text-text-2">
+                Aggregate verdict across every stage: <b className="text-text">{VERDICT_LABEL[runWorst]}</b>
+              </div>
+            </div>
+            <span
+              className={`shrink-0 rounded-full border px-[11px] py-1 text-[11px] font-semibold uppercase tracking-[0.3px] ${gsc.pill}`}
+            >
+              {labelFor(GATE_STAGE, gateStatus)}
+            </span>
+          </button>
+        )
+      })()}
+
       {/* Drill-in: header · note bar · I/O grid */}
       <div className="mt-[14px] overflow-hidden rounded-[14px] border border-line bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
         <div className="flex items-center gap-[13px] border-b border-line px-5 py-4">
           <span
             className={`grid h-9 w-9 shrink-0 place-items-center rounded-[9px] border font-mono text-[15px] font-semibold ${sc.headBadge}`}
           >
-            {activeStage.n}
+            {/* The gate is an aggregate, not a numbered step — show a Σ glyph, never "0". */}
+            {activeStage.key === 'gate' ? 'Σ' : activeStage.n}
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-base font-semibold text-text">{activeStage.title}</div>
@@ -361,7 +476,7 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
           <span
             className={`shrink-0 rounded-full border px-[11px] py-1 text-[11px] font-semibold uppercase tracking-[0.3px] ${sc.pill}`}
           >
-            {sc.label}
+            {labelFor(activeStage, activeStatus)}
           </span>
         </div>
 
