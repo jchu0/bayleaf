@@ -135,7 +135,7 @@ ingest/gate/agent canvas positions were never part of that payload before this s
   node + ingest band — treated as a maintainer design deliverable (like `briefs/`/`handoffs/`), not
   updated in this sweep; the *living* docs (`design/frontend/README.md`, `design/builder-cards/README.md`,
   `design/ui-conventions.md`) now carry the current, shipped state and note the divergence.
-- No backend/API/`src/pipeguard/` change in this session — confirmed via `git show --stat` on all six
+- No backend/API/`src/bayleaf/` change in this session — confirmed via `git show --stat` on all six
   commits (every diff scoped to `frontend/src/components/BuilderCanvas.tsx`,
   `frontend/src/components/BuilderShared.tsx`, `frontend/src/screens/PipelineBuilder.tsx`, and the new
   `frontend/src/components/DecisionBoundaryModal.tsx`).

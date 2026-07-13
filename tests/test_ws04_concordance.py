@@ -1,7 +1,7 @@
 """WS-04 — hap.py GIAB SNP-F1 concordance as a gated QC metric (offline, fixture-driven).
 
 Proves the WIRING, not a tool run: a small REAL-FORMAT hap.py ``summary.csv`` fixture is parsed by
-the live ingest adapter (``pipeguard.ingest.nfcore``) into the registry-keyed ``SampleMetrics``
+the live ingest adapter (``bayleaf.ingest.nfcore``) into the registry-keyed ``SampleMetrics``
 contract, lowered to a canonical ``MetricValue`` (``concordance.snp_f1``), and run through the
 deterministic gate (``run_gate``) — asserting the verdict/finding the runbook threshold produces.
 
@@ -24,17 +24,17 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard import run_gate
-from pipeguard.ingest.nfcore import ingest_results_dir
-from pipeguard.metrics import metric_values_for
-from pipeguard.models import (
+from bayleaf import run_gate
+from bayleaf.ingest.nfcore import ingest_results_dir
+from bayleaf.metrics import metric_values_for
+from bayleaf.models import (
     RunArtifacts,
     Sample,
     SampleSheetEntry,
     Severity,
     Verdict,
 )
-from pipeguard.synthesis import StubSynthesizer
+from bayleaf.synthesis import StubSynthesizer
 
 # --------------------------------------------------------------------- real-format fixture builders
 

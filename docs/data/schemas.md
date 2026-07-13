@@ -122,7 +122,7 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > field-access anywhere in `src/`/`api/`. `metrics.sample_metrics_from_qcmetrics` is the transition
 > bridge that lowers a `QCMetrics` into the SAME `SampleMetrics` shape internally (byte-identical
 > normalized values either way). The intended producer of a real `SampleMetrics` is
-> [`ingest/nfcore.py`](../../src/pipeguard/ingest/nfcore.py)'s `ingest_results_dir()` (a published
+> [`ingest/nfcore.py`](../../src/bayleaf/ingest/nfcore.py)'s `ingest_results_dir()` (a published
 > nf-core `results/` dir → `SampleMetrics`, WS-03) — proven end-to-end against real HG002 output
 > (`tests/test_ingest.py::test_real_nextflow_results_ingest_and_gate`) but **not yet called from any
 > production code path**; see [nf-core-conventions.md §4](nf-core-conventions.md) and `CLAUDE.md`
@@ -266,7 +266,7 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
        SDK to build)* · sample_id · run_id · **verdict** · headline — **display only**, copies
        the gate's verdict and never sets one (ADR-0001). **NotifyResult**: status
        (`skipped|prepared|sent`) · adapter (`stub|slack`) · payload? · detail. Only *actionable*
-       (non-PROCEED) cards notify; live Slack send is opt-in (`PIPEGUARD_SLACK_LIVE`) and
+       (non-PROCEED) cards notify; live Slack send is opt-in (`BAYLEAF_SLACK_LIVE`) and
        degrades to the offline stub on any error. Each real notification emits a
        `notification.emitted` event (below). See [provenance.md](provenance.md).
 
@@ -310,7 +310,7 @@ gitignored `share.events.jsonl` rather than the gate's own `EventLedger`)*.
    index now; **pgvector** when Postgres lands (also the wishlist vector-QC home). Embeddings
    are **derived index records**, never stored on the canonical record.
 6. **Execution-job bookkeeping (`api/job_store.py`, 2026-07-11) is API-layer, not a core record.**
-   Unlike items 1–5 above (which mirror `src/pipeguard/models.py`), a job (`kind`, `run_id`,
+   Unlike items 1–5 above (which mirror `src/bayleaf/models.py`), a job (`kind`, `run_id`,
    `status: queued|running|held|scheduled|complete|failed|lost`, `error`) tracks a background
    driver launch that `api/routers/intake.py`/`pipeline_run.py` triggers — it never enters
    `RunArtifacts`, `MetricValue`, or the JSONL ledger, and it is mutable (not content-hashed /
@@ -342,7 +342,7 @@ gitignored `share.events.jsonl` rather than the gate's own `EventLedger`)*.
    `"draft"` (no code path yet sets `"approved"`). Each accept **appends** a fresh, immutable entry
    (`add`/`get`/`list`, no in-place update) — mint-per-accept, not upsert-per-tool. Persisted via
    the same pluggable-store shape as items above (`LibraryStore` Protocol,
-   `JsonlLibraryStore`/`SqliteLibraryStore`, `PIPEGUARD_LIBRARY_STORE=jsonl|sqlite`,
+   `JsonlLibraryStore`/`SqliteLibraryStore`, `BAYLEAF_LIBRARY_STORE=jsonl|sqlite`,
    degrade-to-JSONL), but — like the job store — **deliberately with no Postgres backend**: a small,
    node-local corpus of accepted drafts, not shared product state
    ([ADR-0016 item 9](../adr/ADR-0016-postgres-port.md)). Never enters `RunArtifacts`,

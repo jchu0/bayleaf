@@ -14,9 +14,9 @@ ADR-0001 invariant: narration never moves the verdict.
 
 from __future__ import annotations
 
-from pipeguard.models import Category, Finding, RunArtifacts, Severity, Verdict
-from pipeguard.synthesis.base import aggregate_verdict
-from pipeguard.synthesis.stub import StubSynthesizer
+from bayleaf.models import Category, Finding, RunArtifacts, Severity, Verdict
+from bayleaf.synthesis.base import aggregate_verdict
+from bayleaf.synthesis.stub import StubSynthesizer
 
 # The exact boilerplate strings the retired ``_NEXT_STEPS`` table emitted. If ANY of these
 # reappears on a stub card, the fabricated-advice regression has reopened.

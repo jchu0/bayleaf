@@ -72,10 +72,10 @@ Ranked Blockers first.
 
 ---
 
-### T-TRU-06 · SettingsModelTier "Live" status badge flips green on a local-only Save, not wired to `PIPEGUARD_*_MODEL`
+### T-TRU-06 · SettingsModelTier "Live" status badge flips green on a local-only Save, not wired to `BAYLEAF_*_MODEL`
 - **Severity:** Medium · **Confidence:** Probable · **Category:** incomplete integration
 - **Area / journey:** Configure — Settings, Agents & model tiering
-- **Evidence:** `frontend/src/components/SettingsModelTier.tsx:487-495` renders a green `border-proceed-bd bg-proceed-bg text-proceed-fg … {row.live ? 'Live' : 'Stub · $0'}` badge driven purely by local `rows` state set in `applyPanel` (`:149-175`), which ends in `toast('Updated N agents', 'success')` — no PATCH. The file comment (`:16-17`) states "nothing here is wired to the real PIPEGUARD_*_MODEL env vars yet." The only honesty disclaimer ("nothing here persists to the backend yet") lives inside the turn-live confirm dialog body (`:166`) — the persistent roster badge just reads green "Live."
+- **Evidence:** `frontend/src/components/SettingsModelTier.tsx:487-495` renders a green `border-proceed-bd bg-proceed-bg text-proceed-fg … {row.live ? 'Live' : 'Stub · $0'}` badge driven purely by local `rows` state set in `applyPanel` (`:149-175`), which ends in `toast('Updated N agents', 'success')` — no PATCH. The file comment (`:16-17`) states "nothing here is wired to the real BAYLEAF_*_MODEL env vars yet." The only honesty disclaimer ("nothing here persists to the backend yet") lives inside the turn-live confirm dialog body (`:166`) — the persistent roster badge just reads green "Live."
 - **Expected (Demo-readiness §4 / T-045):** Flipping the roster toggle must never imply an agent is armed; the "Live" state should carry a persistent "local demo, not applied" indicator.
 - **Actual:** After Save, a roster row shows a green "Live" badge with no on-badge indication that it changed nothing on the backend.
 - **Minimum viable fix:** Suffix the Live badge with "(local)" or add a persistent card-level "changes are local demo state — not applied to the backend" note.
@@ -94,10 +94,10 @@ Ranked Blockers first.
 
 ---
 
-### T-TRU-08 · Metrics-expansion roster row advertises `PIPEGUARD_METRICS_AGENT`, an env var with no backend module and absent from `.env.example`
+### T-TRU-08 · Metrics-expansion roster row advertises `BAYLEAF_METRICS_AGENT`, an env var with no backend module and absent from `.env.example`
 - **Severity:** Low · **Confidence:** Confirmed · **Category:** incomplete integration
 - **Area / journey:** Configure — Settings, Available agents
-- **Evidence:** `frontend/src/components/SettingsModelTier.tsx:54` — `{ key: 'metrics_expand', … env: 'PIPEGUARD_METRICS_AGENT', wired: false, phase2: true }`, rendered as an "Add"-able row in the Available section (`:525-547`) showing the env var in mono. But `grep -rln "PIPEGUARD_METRICS_AGENT\|metrics_expand\|metrics_agent" api/ src/` → empty (no backend module), and `.env.example` has no `PIPEGUARD_METRICS_AGENT` line (its agent selectors stop at `PIPEGUARD_NODE_AUTHOR_AGENT`).
+- **Evidence:** `frontend/src/components/SettingsModelTier.tsx:54` — `{ key: 'metrics_expand', … env: 'BAYLEAF_METRICS_AGENT', wired: false, phase2: true }`, rendered as an "Add"-able row in the Available section (`:525-547`) showing the env var in mono. But `grep -rln "BAYLEAF_METRICS_AGENT\|metrics_expand\|metrics_agent" api/ src/` → empty (no backend module), and `.env.example` has no `BAYLEAF_METRICS_AGENT` line (its agent selectors stop at `BAYLEAF_NODE_AUTHOR_AGENT`).
 - **Expected:** A roster row that names a real env selector, or is visibly marked "design-only (no backend)."
 - **Actual:** An addable agent row advertises a config knob that does not exist anywhere in the backend or `.env.example`.
 - **Minimum viable fix:** Mark the row "design-only" (distinct from the wired-but-stub node-author), or remove the env-var mono until a module exists.

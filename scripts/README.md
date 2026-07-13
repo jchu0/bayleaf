@@ -1,6 +1,6 @@
 # scripts/
 
-Operational scripts for PipeGuard. These run *outside* the app's normal flow —
+Operational scripts for bayleaf. These run *outside* the app's normal flow —
 some need the separate genomics toolchain (bioconda/containers), which is kept
 apart from the app's `uv` environment on purpose (CLAUDE.md coding standard 4).
 

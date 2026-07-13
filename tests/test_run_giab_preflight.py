@@ -204,7 +204,7 @@ def test_capture_versions_writes_a_run_versions_file(tmp_path: Path) -> None:
 
 
 def test_sample_metadata_is_marked_fixture_authored_and_stays_parseable(tmp_path: Path) -> None:
-    from pipeguard.parsers import parse_sample_metadata
+    from bayleaf.parsers import parse_sample_metadata
 
     cfg = RunConfig(
         run_id="RUN-TEST",

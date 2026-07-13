@@ -3,7 +3,7 @@
 # WS-03 — Real Ingestion Adapter (nf-core/MultiQC `results/` → `RunArtifacts`)
 
 ## Problem
-The only writer of the gate's input contract is our own driver: `parse_qc_metrics` reads a bespoke fixed-column `qc_metrics.csv` (`parsers.py:210-237`) that only `scripts/run_giab_pipeline.py::write_run_dir_multi` (`:518-589`) emits. No fastp/mosdepth/MultiQC parser exists in the core; the registry's anti-drift `aliases[]` are dead because `resolve_alias` (`registry.py:204`) is never called on any live path (grep confirms: docstrings only) — ingestion maps *named `QCMetrics` fields*, not raw tool keys (`mapping.py:23-40`, consumed at `rules.py:456`). Ingress hardcodes `_FIXTURE_SAMPLES={"HG002"}` (`intake.py:61,289`) and run discovery is import-time hardcoded to `data/` (`main.py:65`, `intake.py:56`, `pipeline_run.py:55`, `pipelines_lifecycle.py:58`, `files.py:43`), while `card_readout.py:432` already honors `PIPEGUARD_DATA_ROOT` — so the roots are inconsistent and a real NovaSeq/nf-core `results/` has no door in.
+The only writer of the gate's input contract is our own driver: `parse_qc_metrics` reads a bespoke fixed-column `qc_metrics.csv` (`parsers.py:210-237`) that only `scripts/run_giab_pipeline.py::write_run_dir_multi` (`:518-589`) emits. No fastp/mosdepth/MultiQC parser exists in the core; the registry's anti-drift `aliases[]` are dead because `resolve_alias` (`registry.py:204`) is never called on any live path (grep confirms: docstrings only) — ingestion maps *named `QCMetrics` fields*, not raw tool keys (`mapping.py:23-40`, consumed at `rules.py:456`). Ingress hardcodes `_FIXTURE_SAMPLES={"HG002"}` (`intake.py:61,289`) and run discovery is import-time hardcoded to `data/` (`main.py:65`, `intake.py:56`, `pipeline_run.py:55`, `pipelines_lifecycle.py:58`, `files.py:43`), while `card_readout.py:432` already honors `BAYLEAF_DATA_ROOT` — so the roots are inconsistent and a real NovaSeq/nf-core `results/` has no door in.
 
 ## Design
 A boundary-only ingestion adapter (sibling of `artifacts/`, upstream of the deterministic gate, no verdict logic — ADR-0001) that reads the artifacts the germline pipeline **already publishes** (`nextflow/catalog.py` emits `${id}.fastp.json`, `${id}.mosdepth.summary.txt`, `multiqc_data/multiqc_data.json`) and produces a `RunArtifacts`. Three moves:
@@ -15,7 +15,7 @@ A boundary-only ingestion adapter (sibling of `artifacts/`, upstream of the dete
 `load_run` auto-detects: if nf-core markers are present (`multiqc_data/` or a `*.fastp.json`), use the adapter; else fall back to the bespoke `qc_metrics.csv` (pinned demo byte-identical). A real ingress accepts an existing `results/` dir (no toolchain run), materializes a discoverable run dir under a **single configurable run-store root**.
 
 ## Exact changes
-- **NEW `src/pipeguard/ingest/nfcore.py`**
+- **NEW `src/bayleaf/ingest/nfcore.py`**
   - `ObservedMetric` (frozen dataclass/NamedTuple) — the WS-06 seam.
   - `extract_fastp(path) -> list[ObservedMetric]` (q30_rate=fraction, pct passed-filter=fraction, duplication.rate=fraction; from `fastp.json` structure per `run_giab_pipeline.py:508-515`).
   - `extract_mosdepth(summary, thresholds) -> list[ObservedMetric]` (mean coverage=x, breadth_20x/30x=fraction; logic ported from `run_giab_pipeline.py:478-495`).
@@ -23,9 +23,9 @@ A boundary-only ingestion adapter (sibling of `artifacts/`, upstream of the dete
   - `extract_samtools_flagstat(path)` — `qc.pct_mapped` (fills a WS-01/09 gap).
   - `reconcile(raw_leaf_keys, registry) -> (dict[our_key, ObservedMetric], list[str] unknowns)` — the single `resolve_alias` call site.
   - `ingest_results_dir(results: Path, run_id, registry=default_registry()) -> RunArtifacts` — discover per-sample `${id}.fastp.json` (reuse the `${id}.` dot-anchor discipline from `run_giab_pipeline.py:424-451`), build one `QCMetrics` per sample, assemble `RunArtifacts` (samples/sample_sheet from `SampleSheet.csv` if present, else synthesized from discovered ids).
-- **NEW `src/pipeguard/metrics/mapping.py::qcmetrics_from_observed(observed: dict[str,ObservedMetric], sample_id) -> QCMetrics`** — inverse projection of `_QCMETRICS_MAP` (`mapping.py:23-40`). Keeps the field-table single-sourced.
-- **`src/pipeguard/parsers.py::load_run` (`:333-374`)** — add nf-core detection before the `qc_metrics.csv` branch (`:355`): if `(_maybe("multiqc_data").exists() or any *.fastp.json)`, `qc = ingest_results_dir(...).qc`; else keep `parse_qc_metrics`. No signature change.
-- **API run-store root (WS-03d):** add `api/runs_root.py::runs_root()` (reads `PIPEGUARD_DATA_ROOT`, else repo `data/`) — one resolver. Replace the module-constant hardcodes: `main.py:65`, `main.py:_run_dir/_run_ids (:204-216)`, `intake.py:56`, `pipeline_run.py:55`, `pipelines_lifecycle.py:58`, `files.py:43`, aligning `card_readout.py:432` onto it. Resolve per-call (not import-time) so tests/deploys can repoint.
+- **NEW `src/bayleaf/metrics/mapping.py::qcmetrics_from_observed(observed: dict[str,ObservedMetric], sample_id) -> QCMetrics`** — inverse projection of `_QCMETRICS_MAP` (`mapping.py:23-40`). Keeps the field-table single-sourced.
+- **`src/bayleaf/parsers.py::load_run` (`:333-374`)** — add nf-core detection before the `qc_metrics.csv` branch (`:355`): if `(_maybe("multiqc_data").exists() or any *.fastp.json)`, `qc = ingest_results_dir(...).qc`; else keep `parse_qc_metrics`. No signature change.
+- **API run-store root (WS-03d):** add `api/runs_root.py::runs_root()` (reads `BAYLEAF_DATA_ROOT`, else repo `data/`) — one resolver. Replace the module-constant hardcodes: `main.py:65`, `main.py:_run_dir/_run_ids (:204-216)`, `intake.py:56`, `pipeline_run.py:55`, `pipelines_lifecycle.py:58`, `files.py:43`, aligning `card_readout.py:432` onto it. Resolve per-call (not import-time) so tests/deploys can repoint.
 - **Real ingress (WS-03b):** `api/routers/intake.py` — new `POST /api/runs/ingest {results_dir}` (reviewer/approver) that runs `ingest_results_dir`, writes a discoverable run dir under `runs_root()`, returns the same `SubmitRunAck`. Replace the `_FIXTURE_SAMPLES` allowlist (`:61,289-295`) with a real check: a sample is processable if it has reads/results on disk, not because it equals `"HG002"`.
 
 ## Data-contract / model changes
@@ -46,13 +46,13 @@ Shared-core files touched: **`parsers.py`** (`load_run` detection), **`metrics/m
 - **Unit-scale test:** fastp `q30_rate=0.95` (fraction) normalizes to the same canonical value the driver's ×100 path produces — no silent 100× (registry `normalize`).
 - **Unknown-key test:** an unregistered column is skipped + reported in diagnostics, never fabricated, no crash.
 - `load_run` detection test: nf-core dir → adapter; legacy `qc_metrics.csv` dir → bespoke parser (both green).
-- API: `POST /api/runs/ingest` from a results dir produces a discoverable run + gate cards; `runs_root()` honors `PIPEGUARD_DATA_ROOT`.
+- API: `POST /api/runs/ingest` from a results dir produces a discoverable run + gate cards; `runs_root()` honors `BAYLEAF_DATA_ROOT`.
 - Regression: full existing suite green (mock_run_01 + pinned GIAB unchanged).
 
 ## Back-compat / migration
 - `load_run` falls back to `parse_qc_metrics` when no nf-core markers exist → `data/mock_run_01`, the pinned GIAB run dir, and every fixture stay byte-identical; `parse_qc_metrics` is retained, not deleted.
 - `_FIXTURE_SAMPLES` removal is behavior-widening (more samples processable), not breaking; keep the honest "skipped (no reads/results on disk)" path for samples that genuinely lack inputs.
-- Run-store root defaults to repo `data/` when `PIPEGUARD_DATA_ROOT` unset → no deploy change required.
+- Run-store root defaults to repo `data/` when `BAYLEAF_DATA_ROOT` unset → no deploy change required.
 - The driver's `write_run_dir_multi` flatten step becomes redundant once the adapter reads `results/` directly; leave it in place initially (dual-write) and retire it in a later PR to avoid coupling.
 
 ## Sequencing (PR-sized)
@@ -66,14 +66,14 @@ Shared-core files touched: **`parsers.py`** (`load_run` detection), **`metrics/m
 - **MultiQC key extraction is best-effort:** MultiQC namespaces general-stats headers (`<module>_mqc-generalstats-<module>-<key>`); the namespace-strip heuristic can mis-key an unseen module. Mitigation: prefer structured `fastp.json`/`mosdepth.summary.txt` (deterministic) and treat general-stats as the alias-fed secondary; report unknowns loudly.
 - **WS-03-minimal still can't gate the 7 `# NOT COMPUTED` metrics** (FREEMIX, NGSCheckMate, sex-concordance, fold_80, titv two-sided, etc.) because they have no `QCMetrics` field — that is explicitly WS-06's contract widening + WS-02's rules. WS-03 makes fold_80/titv *observable* (ingested) but they stay ungated until WS-06 adds the target-band gate type — label honestly, don't imply they gate.
 - **Fail-closed caveat:** the adapter must never turn a *missing* real metric into a passing default (it emits `None`/omits) — but making "expected metric absent → HOLD" is WS-01's job; until it lands, a lean real run can still under-gate. Flag this dependency rather than paper over it.
-- Two roots exist (`PIPEGUARD_ARTIFACT_LOCAL_ROOT` for the core staging store vs `PIPEGUARD_DATA_ROOT` for API discovery); consolidate discovery under `PIPEGUARD_DATA_ROOT` and document the relationship to avoid a third divergent knob.
+- Two roots exist (`BAYLEAF_ARTIFACT_LOCAL_ROOT` for the core staging store vs `BAYLEAF_DATA_ROOT` for API discovery); consolidate discovery under `BAYLEAF_DATA_ROOT` and document the relationship to avoid a third divergent knob.
 
 ### Critical Files for Implementation
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/parsers.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/metrics/mapping.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/metrics/registry.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/parsers.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/metrics/mapping.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/metrics/registry.py
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/api/routers/intake.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/scripts/run_giab_pipeline.py (reference extractor logic to port into `src/pipeguard/ingest/nfcore.py`)
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/scripts/run_giab_pipeline.py (reference extractor logic to port into `src/bayleaf/ingest/nfcore.py`)
 
 ---
 
@@ -166,7 +166,7 @@ default). New adapter units land in **`tests/test_ingest_nfcore.py`** (a sibling
   owed here.
 - **Definition of Done:** `test_renamed_multiqc_key_still_resolves_on_the_live_path` and
   `test_no_leaf_key_reaches_qcmetrics_without_alias_resolution` green, and a repo-wide check that
-  `resolve_alias` now has ≥1 non-test call site under `src/pipeguard/ingest/`.
+  `resolve_alias` now has ≥1 non-test call site under `src/bayleaf/ingest/`.
 
 ### Gap C — real, non-fixture ingress (`POST /api/runs/ingest`, drop the `HG002` allowlist)
 
@@ -199,10 +199,10 @@ default). New adapter units land in **`tests/test_ingest_nfcore.py`** (a sibling
   `test_processability_is_on_disk_presence_not_a_sample_name_allowlist` green offline **and**
   `test_ingest_real_giab_results_end_to_end` green in the `hackathon` env.
 
-### Gap D — configurable run-store root (`runs_root()` honors `PIPEGUARD_DATA_ROOT`)
+### Gap D — configurable run-store root (`runs_root()` honors `BAYLEAF_DATA_ROOT`)
 
-- **Red acceptance test** — `tests/test_intake_scheduling.py::test_run_discovery_honors_pipeguard_data_root`.
-  `monkeypatch.setenv("PIPEGUARD_DATA_ROOT", str(tmp_path))`, write a minimal gate-able run dir
+- **Red acceptance test** — `tests/test_intake_scheduling.py::test_run_discovery_honors_bayleaf_data_root`.
+  `monkeypatch.setenv("BAYLEAF_DATA_ROOT", str(tmp_path))`, write a minimal gate-able run dir
   under `tmp_path/<run_id>/`, and assert the API discovers **and gates** it (`GET /api/runs` lists
   it; `GET /api/runs/{id}` returns its cards) while the repo's committed `data/` runs are **not**
   present — proving discovery repointed. **A stub cannot pass it:** run discovery is import-time
@@ -214,19 +214,19 @@ default). New adapter units land in **`tests/test_ingest_nfcore.py`** (a sibling
 - **Anti-scaffold guard** — `test_no_router_pins_data_root_at_import_time`: assert `runs_root()`
   returns the env value on a second call after a mid-process `setenv` (i.e. resolution is
   call-time, not cached at import), and that `card_readout._data_root()` and the intake/pipeline
-  routers resolve to the **same** root under one `PIPEGUARD_DATA_ROOT` — freezing §3d and the
+  routers resolve to the **same** root under one `BAYLEAF_DATA_ROOT` — freezing §3d and the
   plan's "avoid a third divergent knob" risk so a new router can't reintroduce a hardcoded `data/`.
 - **Real-data acceptance:** **omitted — a `tmp_path` fixture genuinely suffices.** This is a
   path-resolution/infrastructure gap with no science or tool-output ingestion; the behavior is
   identical for a synthetic run dir and a real one, so there is nothing a real GIAB run would
   exercise that the tmp-dir test does not.
-- **Definition of Done:** `test_run_discovery_honors_pipeguard_data_root` and
+- **Definition of Done:** `test_run_discovery_honors_bayleaf_data_root` and
   `test_no_router_pins_data_root_at_import_time` green offline (no real-data test owed).
 
 ## Definition of Done (workstream)
 
 - [ ] **Gap A — adapter:** `tests/test_ingest_nfcore.py::test_adapter_qcmetrics_equal_bespoke_csv_for_one_sample` + `::test_adapter_emits_native_source_units_not_prescaled` green; guard `::test_adapter_never_fabricates_or_defaults_an_absent_metric` green; real-GIAB `::test_adapter_matches_driver_on_real_giab_results` green in the `hackathon` env.
-- [ ] **Gap B — live aliases:** `tests/test_ingest_nfcore.py::test_renamed_multiqc_key_still_resolves_on_the_live_path` green; guard `::test_no_leaf_key_reaches_qcmetrics_without_alias_resolution` green; `resolve_alias` now has ≥1 call site under `src/pipeguard/ingest/`.
+- [ ] **Gap B — live aliases:** `tests/test_ingest_nfcore.py::test_renamed_multiqc_key_still_resolves_on_the_live_path` green; guard `::test_no_leaf_key_reaches_qcmetrics_without_alias_resolution` green; `resolve_alias` now has ≥1 call site under `src/bayleaf/ingest/`.
 - [ ] **Gap C — real ingress:** `tests/test_intake_scheduling.py::test_ingest_endpoint_gates_a_non_fixture_results_dir` green; guard `::test_processability_is_on_disk_presence_not_a_sample_name_allowlist` green (no `_FIXTURE_SAMPLES` name-allowlist gates processing); real-GIAB `::test_ingest_real_giab_results_end_to_end` green in the `hackathon` env.
-- [ ] **Gap D — run-store root:** `tests/test_intake_scheduling.py::test_run_discovery_honors_pipeguard_data_root` green; guard `::test_no_router_pins_data_root_at_import_time` green (call-time resolution, one shared root; no real-data test owed).
+- [ ] **Gap D — run-store root:** `tests/test_intake_scheduling.py::test_run_discovery_honors_bayleaf_data_root` green; guard `::test_no_router_pins_data_root_at_import_time` green (call-time resolution, one shared root; no real-data test owed).
 - [ ] **Invariants intact:** the full offline suite stays green (`data/mock_run_01` + pinned GIAB byte-identical); every new test asserts the verdict remains a deterministic function of `Finding`s, the adapter/ingress emit no verdict, and no missing/unknown metric becomes a passing default (fail-closed).

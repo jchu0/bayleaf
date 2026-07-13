@@ -3,14 +3,14 @@
 A saved builder graph is product state, a **separate concern** from the decision projection
 (the ``Repository`` port): its rows never mix with runs/cards/events and never re-enter the
 gate. This mirrors ``api/feedback_store.py`` over the shared :mod:`api.base_store` generic — three
-adapters, env-selected via ``PIPEGUARD_PIPELINE_STORE`` (default ``jsonl``); the DB adapters
+adapters, env-selected via ``BAYLEAF_PIPELINE_STORE`` (default ``jsonl``); the DB adapters
 **degrade to the offline JSONL** if selection fails (missing extra / no DSN / unreachable server),
 so a misconfigured DB never breaks the save path — it just falls back to the file.
 
   - :class:`JsonlPipelineGraphStore` — default, zero-dep append-only file
-    (``PIPEGUARD_PIPELINE_PATH``).
+    (``BAYLEAF_PIPELINE_PATH``).
   - :class:`SqlitePipelineGraphStore` — a ``pipeline_graphs`` table
-    (stdlib; ``PIPEGUARD_PIPELINE_DB``).
+    (stdlib; ``BAYLEAF_PIPELINE_DB``).
   - :class:`PostgresPipelineGraphStore` — a ``pipeline_graphs`` table
     (``[postgres]`` extra; ``DATABASE_URL``).
 
@@ -38,9 +38,9 @@ from api.base_store import JsonlDocStore, SqliteStore, select_backend
 _Record = dict[str, Any]
 _Records = list[dict[str, Any]]
 
-_ENV_PIPELINE_STORE = "PIPEGUARD_PIPELINE_STORE"
-_ENV_PIPELINE_PATH = "PIPEGUARD_PIPELINE_PATH"
-_ENV_PIPELINE_DB = "PIPEGUARD_PIPELINE_DB"
+_ENV_PIPELINE_STORE = "BAYLEAF_PIPELINE_STORE"
+_ENV_PIPELINE_PATH = "BAYLEAF_PIPELINE_PATH"
+_ENV_PIPELINE_DB = "BAYLEAF_PIPELINE_DB"
 _ENV_DATABASE_URL = "DATABASE_URL"
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -156,7 +156,7 @@ class JsonlPipelineGraphStore(JsonlDocStore):
 
 
 def pipeline_db_path() -> str:
-    """The SQLite pipeline-DB path (``PIPEGUARD_PIPELINE_DB`` or the repo-root default)."""
+    """The SQLite pipeline-DB path (``BAYLEAF_PIPELINE_DB`` or the repo-root default)."""
     return os.environ.get(_ENV_PIPELINE_DB, "").strip() or str(_DEFAULT_PIPELINE_DB)
 
 
@@ -282,7 +282,7 @@ class PostgresPipelineGraphStore:
 def get_pipeline_store() -> PipelineGraphStore:
     """Select the pipeline sink from the environment (default: the offline JSONL file).
 
-    ``PIPEGUARD_PIPELINE_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing
+    ``BAYLEAF_PIPELINE_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing
     it (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store — see
     :func:`api.base_store.select_backend` (the shared degrade-to-JSONL ladder).
     """

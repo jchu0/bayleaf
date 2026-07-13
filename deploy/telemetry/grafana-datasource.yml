@@ -4,10 +4,10 @@
 apiVersion: 1
 
 datasources:
-  - name: PipeGuard-Prometheus
+  - name: bayleaf-Prometheus
     type: prometheus
     # Stable uid so the provisioned dashboard (grafana-dashboard.json) binds to it deterministically.
-    uid: pipeguard-prometheus
+    uid: bayleaf-prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true

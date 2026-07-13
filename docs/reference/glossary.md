@@ -65,7 +65,7 @@ thresholds. For fuller context see the [domain primer](domain-primer.md).
 22. **NGSCheckMate** — sample-identity / swap detector comparing genotype
     fingerprints across a run; the QC-gate identity check.
 23. **nf-core/sarek** — the nf-core germline/somatic variant-calling Nextflow
-    pipeline whose output conventions PipeGuard's schema mirrors
+    pipeline whose output conventions bayleaf's schema mirrors
     ([nf-core-conventions.md](../data/nf-core-conventions.md)).
 24. **Panel (targeted assay)** — sequencing only a curated set of disease-relevant
     genes, versus whole exome (WES) or whole genome (WGS).
@@ -127,7 +127,7 @@ thresholds. For fuller context see the [domain primer](domain-primer.md).
     never sets a verdict (ADR-0001).
 14. **Triage agent** — the advisory retrieval-grounded agent that suggests likely
     cause / next action; off the deterministic critical path (ADR-0009/0012).
-15. **Metric registry (`pipeguard.metrics`)** — the versioned canonical metric vocabulary
+15. **Metric registry (`bayleaf.metrics`)** — the versioned canonical metric vocabulary
     layered above drifting MultiQC/tool keys; on the QC critical path (rules gate on
     registered metrics) ([metric_registry.md](../data/metric_registry.md)).
 16. **`our_key`** — a metric's canonical, controlled-vocabulary key (e.g. `qc.q30`,

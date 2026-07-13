@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pipeguard"
+name = "bayleaf"
 version = "0.1.0"
 description = "AI-assisted provenance and QC decision gate for genomics runs"
 readme = "README.md"
@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.6",
     "pandas>=2.1",
-    # Loads the versioned metric_registry.yaml (pipeguard.metrics). Already present
+    # Loads the versioned metric_registry.yaml (bayleaf.metrics). Already present
     # transitively via the toolchain; declared directly so the core's dependency on
     # it is explicit and pinned for a reproducible demo rather than incidental.
     "pyyaml>=6.0",
@@ -19,22 +19,22 @@ dependencies = [
 
 [project.optional-dependencies]
 # Feature extras, installed on demand. app = the Streamlit demo view;
-# claude = live synthesis (OFF by default — see pipeguard.synthesis).
+# claude = live synthesis (OFF by default — see bayleaf.synthesis).
 app = ["streamlit>=1.31"]
 api = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
 claude = ["anthropic>=0.40", "python-dotenv>=1.0"]
-# slack = the live outbound notify path (OFF by default — see pipeguard.notify; needs
-# PIPEGUARD_SLACK_LIVE armed + a bot token/channel). Absent -> the stub fallback.
+# slack = the live outbound notify path (OFF by default — see bayleaf.notify; needs
+# BAYLEAF_SLACK_LIVE armed + a bot token/channel). Absent -> the stub fallback.
 slack = ["slack-sdk>=3.27", "python-dotenv>=1.0"]
 # parquet = columnar ML export for GET /api/export?format=parquet (pandas/polars/DuckDB read
 # it). Optional + lazily imported; absent -> a clear 501 pointing here. CSV/JSONL always work.
 parquet = ["pyarrow>=16"]
-# s3 = the S3 artifact-store adapter (OFF by default — see pipeguard.artifacts; needs
-# PIPEGUARD_S3_LIVE armed + a bucket + AWS creds). boto3 is lazily imported and absent ->
+# s3 = the S3 artifact-store adapter (OFF by default — see bayleaf.artifacts; needs
+# BAYLEAF_S3_LIVE armed + a bucket + AWS creds). boto3 is lazily imported and absent ->
 # the store degrades to the local adapter. Same optional-extra shape as slack/parquet.
 s3 = ["boto3>=1.34"]
-# postgres = the Postgres persistence adapter (OFF by default — see pipeguard.persistence;
-# needs PIPEGUARD_REPOSITORY=postgres + DATABASE_URL). psycopg is lazily imported and absent ->
+# postgres = the Postgres persistence adapter (OFF by default — see bayleaf.persistence;
+# needs BAYLEAF_REPOSITORY=postgres + DATABASE_URL). psycopg is lazily imported and absent ->
 # the repository degrades to the offline SQLite adapter. Same optional-extra shape as s3 (ADR-0016).
 postgres = ["psycopg[binary]>=3.1"]
 
@@ -59,7 +59,7 @@ where = ["src"]
 # Ship the curated triage + pipeline-repair knowledge corpora (ADR-0009) and the versioned
 # metric registry inside the wheel so importlib.resources can load them in a non-editable
 # install.
-pipeguard = [
+bayleaf = [
     "triage/knowledge/*.jsonl",
     "pipeline_repair/knowledge/*.jsonl",
     "node_author/knowledge/*.jsonl",
@@ -67,7 +67,7 @@ pipeguard = [
 ]
 
 [tool.pytest.ini_options]
-# `pipeguard` is imported from the editable install (no src shim). "." puts the
+# `bayleaf` is imported from the editable install (no src shim). "." puts the
 # repo root on the path so tests can import the top-level app-layer packages
 # (api/, app/), which are deliberately not part of the installable library.
 pythonpath = ["."]
@@ -89,7 +89,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
 extend-immutable-calls = ["fastapi.Depends", "api.auth.require_role"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pipeguard", "api"]
+known-first-party = ["bayleaf", "api"]
 
 [tool.mypy]
 python_version = "3.10"
@@ -121,14 +121,14 @@ module = ["slack_sdk.*"]
 ignore_missing_imports = true
 
 # boto3 is an OPTIONAL [s3] extra, lazy-imported inside S3ArtifactStore and off by default
-# (PIPEGUARD_S3_LIVE). It ships its own stubs only via the separate boto3-stubs package, which
+# (BAYLEAF_S3_LIVE). It ships its own stubs only via the separate boto3-stubs package, which
 # we don't pull for a single deferred boundary — treat it as opaque here, mirroring slack_sdk.
 [[tool.mypy.overrides]]
 module = ["boto3", "boto3.*"]
 ignore_missing_imports = true
 
 # psycopg is the OPTIONAL [postgres] extra, lazy-imported inside PostgresRepository and off by
-# default (PIPEGUARD_REPOSITORY=sqlite). Same deferred-boundary treatment as boto3/slack_sdk —
+# default (BAYLEAF_REPOSITORY=sqlite). Same deferred-boundary treatment as boto3/slack_sdk —
 # the DB adapter is opaque at type-check time; the connection is typed Any.
 [[tool.mypy.overrides]]
 module = ["psycopg", "psycopg.*"]

@@ -25,10 +25,10 @@ So the port must be **real but guarded** — present as a production seam, invis
 1. **`PostgresRepository` implements the `Repository` port** over Postgres, behaviourally
    identical to `SqliteRepository`: the same five projection tables, **idempotent upserts**
    (`INSERT … ON CONFLICT (pk) DO UPDATE`) so a ledger replay stays a no-op (ADR-0002),
-   `JSONB` + `TIMESTAMPTZ` columns, and a `pipeguard_meta` row for the table-layout version
+   `JSONB` + `TIMESTAMPTZ` columns, and a `bayleaf_meta` row for the table-layout version
    (Postgres has no `PRAGMA user_version`). It is a projection of the authoritative ledger,
    never a source of truth (ADR-0002), so it is disposable + rebuildable regardless of backend.
-2. **Off by default, degrade never crash.** `get_repository()` reads `PIPEGUARD_REPOSITORY`
+2. **Off by default, degrade never crash.** `get_repository()` reads `BAYLEAF_REPOSITORY`
    (`sqlite` default | `postgres`) and, on **any** failure constructing the Postgres adapter
    (missing extra, no DSN, unreachable server), **degrades to SQLite** — the single line that
    flips the seam, mirroring `get_artifact_store()` (S3, [ADR-0003](ADR-0003-deployment-agnostic-ports.md)).
@@ -36,8 +36,8 @@ So the port must be **real but guarded** — present as a production seam, invis
    and the demo runs with no Postgres dependency and no socket.
 3. **Feedback is a separate concern from the decision projection.** Its store is a pluggable
    `FeedbackStore` (`jsonl` default | `sqlite` | `postgres`) with its **own `feedback` table**,
-   never the `Repository`, and its writer **never imports the `pipeguard` core** — feedback
-   stays off the deterministic gate (ADR-0001). `PIPEGUARD_FEEDBACK_STORE` selects the adapter;
+   never the `Repository`, and its writer **never imports the `bayleaf` core** — feedback
+   stays off the deterministic gate (ADR-0001). `BAYLEAF_FEEDBACK_STORE` selects the adapter;
    the DB options degrade to JSONL. `SqliteFeedbackStore` is exercised end-to-end in tests, so
    "feedback in a database" is proven without a live Postgres.
 4. **Never leak the DSN.** `DATABASE_URL` carries a password; degradation logs the exception
@@ -51,7 +51,7 @@ So the port must be **real but guarded** — present as a production seam, invis
    Claude path is sent only the anonymous aggregate rollup, never raw messages.
 6. **The pluggable-store pattern generalizes to a second product domain (T-049).** Saved
    Pipeline Builder graphs use the same seam: a `PipelineGraphStore` (`jsonl` default | `sqlite` |
-   `postgres` via `PIPEGUARD_PIPELINE_STORE`, degrade-to-JSONL, its own `pipeline_graphs` table,
+   `postgres` via `BAYLEAF_PIPELINE_STORE`, degrade-to-JSONL, its own `pipeline_graphs` table,
    never the `Repository`, never imports the core) with the identical DSN-safety discipline (item
    4). It stores a **tolerant versioned envelope** — the graph payload is arbitrary JSON kept
    as-is, so the builder's shape can churn without a migration — with a server-authored monotonic
@@ -64,7 +64,7 @@ So the port must be **real but guarded** — present as a production seam, invis
    `api/auth.require_role` ([ADR-0017](ADR-0017-identity-rbac-authoring-lifecycle.md)).
 7. **A fourth instance: the `data.exported` share-egress-audit sink (2026-07-11, ADR-0018 D3).**
    `api/share_store.py` (`ShareStore` Protocol + `JsonlShareStore`/`SqliteShareStore`/
-   `PostgresShareStore`, `PIPEGUARD_SHARE_STORE=jsonl|sqlite|postgres`, degrade-to-JSONL,
+   `PostgresShareStore`, `BAYLEAF_SHARE_STORE=jsonl|sqlite|postgres`, degrade-to-JSONL,
    never-leak-the-DSN) records a `DATA_EXPORTED` `ProvenanceEvent` per de-identified share — audit
    telemetry, not product state, and deliberately **not** the `Repository` (a share never becomes
    a run/sample/finding/card, ADR-0001). It shipped JSONL-only at first (with D3's initial
@@ -75,7 +75,7 @@ So the port must be **real but guarded** — present as a production seam, invis
 8. **A fifth instance, and the first that deliberately stays TWO-backend, not three: the durable
    job store (2026-07-11, T-131, `595815e`, audit finding P3-2, `audit/SYNTHESIS.md` S5 `F5-R5`/`F5-R2`).**
    `api/job_store.py` (`JobStore` Protocol + `JsonlJobStore`/`SqliteJobStore`,
-   `PIPEGUARD_JOB_STORE=jsonl|sqlite`, default `jsonl`, degrade-to-JSONL on any construction
+   `BAYLEAF_JOB_STORE=jsonl|sqlite`, default `jsonl`, degrade-to-JSONL on any construction
    failure — the same discipline as items 3/6/7) replaces the `intake.py`/`pipeline_run.py`
    routers' in-memory `_jobs: dict[...]` job registries. Those dicts made a submitted-run job
    **non-durable**: a backend restart lost every job's status, so a poller kept hitting `running`
@@ -100,7 +100,7 @@ So the port must be **real but guarded** — present as a production seam, invis
    [architecture.md §Swappable seams](../design/architecture.md#swappable-seams-the-flex-points).
 9. **A sixth instance, and the second that deliberately stays TWO-backend: the tool-card library
    store (2026-07-11, T-135, "W2 backend").** `api/library_store.py` (`LibraryStore` Protocol +
-   `JsonlLibraryStore`/`SqliteLibraryStore`, `PIPEGUARD_LIBRARY_STORE=jsonl|sqlite`, default
+   `JsonlLibraryStore`/`SqliteLibraryStore`, `BAYLEAF_LIBRARY_STORE=jsonl|sqlite`, default
    `jsonl`, degrade-to-JSONL on any construction failure — the same discipline as every store
    above) holds `LibraryEntry` records: a node-authoring `NodeProposal`
    ([agent-authoring-contract.md](../design/agent-authoring-contract.md)) a human has **accepted**
@@ -111,7 +111,7 @@ So the port must be **real but guarded** — present as a production seam, invis
    `script:`/`stub:` command body), not high-volume shared product state, so the two local backends
    suffice. The accept endpoint **re-derives** the proposal server-side from the request (never
    trusts a client-supplied proposal) and runs it through a new deterministic
-   [`src/pipeguard/node_author/conformance.py`](../../src/pipeguard/node_author/conformance.py)
+   [`src/bayleaf/node_author/conformance.py`](../../src/bayleaf/node_author/conformance.py)
    `check_conformance()` — the mechanical enforcement of
    `agent-authoring-contract.md`'s capability pins (advisory-True, no verdict/confidence anywhere,
    no `script`/`stub` command-body key, closed port vocabulary with unknown→reserved, versioned four
@@ -119,7 +119,7 @@ So the port must be **real but guarded** — present as a production seam, invis
    landing in the library. Each accept mints a fresh, immutable `draft` entry (`add`/`get`/`list`
    only, no in-place update); the `draft`→`approved` transition riding the `pipelines_lifecycle` RBAC
    pattern is a labelled deferred slice. `.env.example` also gained the previously-undocumented
-   `PIPEGUARD_JOB_STORE`/`_PATH`/`_DB` vars in the same commit (a hygiene fix — those vars were
+   `BAYLEAF_JOB_STORE`/`_PATH`/`_DB` vars in the same commit (a hygiene fix — those vars were
    already read by `api/job_store.py` since T-131, item 8, just never listed). See
    [data/schemas.md §Persistence](../data/schemas.md#persistence-databases),
    [design/agent-authoring-contract.md](../design/agent-authoring-contract.md), and

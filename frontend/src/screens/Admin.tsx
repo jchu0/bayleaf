@@ -61,7 +61,7 @@ function DemoBanner({ text }: { text: string }) {
 // build records this server-side in a tamper-evident audit store, and re-auth is an IdP step-up
 // (OAuth/OIDC) or a credential-request tool — never the plaintext demo password compared below.
 type ActAsEntry = { at: string; actor: string; targetUser: string; targetRole: Role }
-const ACTAS_KEY = 'pipeguard.actas-audit'
+const ACTAS_KEY = 'bayleaf.actas-audit'
 
 function loadActAsAudit(): ActAsEntry[] {
   try {
@@ -725,7 +725,7 @@ function SystemTab() {
           value={registry ? `v${registry.metric_registry_version}` : '…'}
           sub={registry ? `${registry.n_gated}/${registry.n_registered} gated` : undefined}
         />
-        <StatCard label="Artifact store" value="local" sub="PIPEGUARD_ARTIFACT_STORE · s3 seam" />
+        <StatCard label="Artifact store" value="local" sub="BAYLEAF_ARTIFACT_STORE · s3 seam" />
       </div>
 
       {/* Observability — the telemetry stack views (Prometheus/Grafana) surfaced from here. */}

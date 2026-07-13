@@ -5,7 +5,7 @@ import type { AgentProposal, MonitoringSignature } from '../types'
 import { GATE_LABEL } from '../verdict'
 
 // Month-abbreviated ISO date for the first→last-seen range, matching the prototype's "Jun 26 →
-// Jul 8" (PipeGuard.dc.html:1383/2286). Parses the YYYY-MM-DD parts directly — no Date object, so
+// Jul 8" (bayleaf.dc.html:1383/2286). Parses the YYYY-MM-DD parts directly — no Date object, so
 // there's no timezone off-by-one — and falls back to the raw string if it isn't a plain date.
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 function shortSeen(iso: string): string {

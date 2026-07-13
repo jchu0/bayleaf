@@ -19,7 +19,7 @@ from api.share_store import (
     SqliteShareStore,
     get_share_store,
 )
-from pipeguard.provenance import EntityRef, EventType, ProvenanceEvent
+from bayleaf.provenance import EntityRef, EventType, ProvenanceEvent
 
 _T0 = datetime(2026, 7, 11, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -38,8 +38,8 @@ def _event(run_id: str, *, n: int = 0, actor: str = "human:b.chen") -> Provenanc
 
 
 def _use_jsonl(monkeypatch: Any, tmp_path: Path) -> None:
-    monkeypatch.delenv("PIPEGUARD_SHARE_STORE", raising=False)
-    monkeypatch.setenv("PIPEGUARD_SHARE_PATH", str(tmp_path / "share.events.jsonl"))
+    monkeypatch.delenv("BAYLEAF_SHARE_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_SHARE_PATH", str(tmp_path / "share.events.jsonl"))
 
 
 def test_jsonl_is_the_default_and_round_trips(monkeypatch: Any, tmp_path: Path) -> None:
@@ -95,8 +95,8 @@ def test_sqlite_reappend_of_same_id_is_idempotent(tmp_path: Path) -> None:
 def test_postgres_selection_degrades_to_jsonl_without_dsn(monkeypatch: Any, tmp_path: Path) -> None:
     # =postgres with no DATABASE_URL must NOT crash the egress path — it degrades to JSONL.
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.setenv("PIPEGUARD_SHARE_STORE", "postgres")
-    monkeypatch.setenv("PIPEGUARD_SHARE_PATH", str(tmp_path / "share.events.jsonl"))
+    monkeypatch.setenv("BAYLEAF_SHARE_STORE", "postgres")
+    monkeypatch.setenv("BAYLEAF_SHARE_PATH", str(tmp_path / "share.events.jsonl"))
     store = get_share_store()
     assert isinstance(store, JsonlShareStore)
     store.append(_event("RUN-A", n=1))  # still writes, via the fallback

@@ -12,7 +12,7 @@
 
 Per the doc-keeper contract ("ground every claim in code"), I read both commits' full diffs
 (`git show 71d4ff9`, `git show 6b571a4`) before touching any doc, plus the actual source:
-`src/pipeguard/node_author/{__init__,agent,models,retrieval}.py`,
+`src/bayleaf/node_author/{__init__,agent,models,retrieval}.py`,
 `knowledge/tool_cards.jsonl`, and `tests/test_node_author.py` for the agent; and
 `docs/design/ui-conventions.md` (already committed, 6b99196) plus spot-checked diffs of
 `Submit.tsx` and `Admin.tsx` for the two highest-stakes UIC items (UIC-11's identity join, UIC-13's
@@ -27,7 +27,7 @@ own tools" unlock, with a deterministic nf-core-schema importer as its $0 core (
 described as *sharing a stub core with wishlist #9*) and Claude only for the fuzzy
 `ArtifactKind`-mapping step.
 
-What actually shipped (`src/pipeguard/node_author/`) is a **different, simpler mechanism**:
+What actually shipped (`src/bayleaf/node_author/`) is a **different, simpler mechanism**:
 retrieval over a small, fixed, hand-curated corpus of 11 tool cards (this pipeline's own 7
 germline tools + NGSCheckMate + 3 reference nodes), triggered by a **natural-language request**,
 not a dropped document. There is no `nextflow_schema.json` parser, no `--help` parser, no README
@@ -66,9 +66,9 @@ I found three different "which number is this agent" framings and had to pick an
 one: (a) `design/agents.md`'s roster table (excludes the synthesizer) numbers node-authoring **#5**
 — pre-existing, reserved for it before this build; (b) the shipped code's own docstring
 (`node_author/agent.py`, `node_author/__init__.py`) says "**Agent #6** in the roster," inconsistent
-with (a) — a code comment I cannot fix (out of scope: no `src/pipeguard` edits) but can avoid
+with (a) — a code comment I cannot fix (out of scope: no `src/bayleaf` edits) but can avoid
 propagating; (c) the orchestrating task's framing called it "the 7th advisory agent." I grounded
-this by grepping every `PIPEGUARD_*_AGENT` env var plus `PIPEGUARD_SYNTHESIZER` in the actual
+this by grepping every `BAYLEAF_*_AGENT` env var plus `BAYLEAF_SYNTHESIZER` in the actual
 code: exactly **six** stub|claude seams exist today (synthesizer, triage, feedback, pipeline-repair,
 archivist, node-author). I used **design/agents.md's own numbering (#5, excluding the
 synthesizer, its own stated convention)** as authoritative for the roster table, and "six" for

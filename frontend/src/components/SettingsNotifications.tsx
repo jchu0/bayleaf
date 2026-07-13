@@ -185,7 +185,7 @@ export function SettingsNotifications() {
           icon={<SlackGlyph />}
           name={
             <>
-              Slack · <span className="font-mono">#pipeguard-ops</span>
+              Slack · <span className="font-mono">#bayleaf-ops</span>
             </>
           }
           status={<ConfiguredDot />}

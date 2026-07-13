@@ -22,8 +22,8 @@ client = TestClient(app)
 
 
 def _use_tmp_library(monkeypatch: Any, tmp_path: Path) -> None:
-    monkeypatch.delenv("PIPEGUARD_LIBRARY_STORE", raising=False)
-    monkeypatch.setenv("PIPEGUARD_LIBRARY_PATH", str(tmp_path / "library_entries.jsonl"))
+    monkeypatch.delenv("BAYLEAF_LIBRARY_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_LIBRARY_PATH", str(tmp_path / "library_entries.jsonl"))
 
 
 def test_accept_stores_a_draft_entry_and_it_lists_back(monkeypatch: Any, tmp_path: Path) -> None:
@@ -53,7 +53,7 @@ def test_accept_captures_submitted_by_from_the_authenticated_actor(
     resp = client.post(
         "/api/builder/node-proposal/accept",
         json={"request": "mosdepth coverage"},
-        headers={"X-PipeGuard-Actor": "a.rivera", "X-PipeGuard-Role": "reviewer"},
+        headers={"X-Bayleaf-Actor": "a.rivera", "X-Bayleaf-Role": "reviewer"},
     )
     assert resp.status_code == 201
     assert resp.json()["submitted_by"] == "a.rivera"  # stamped from the actor, not the client body
@@ -64,7 +64,7 @@ def test_accept_requires_reviewer_or_approver(monkeypatch: Any, tmp_path: Path) 
     resp = client.post(
         "/api/builder/node-proposal/accept",
         json={"request": "fastp"},
-        headers={"X-PipeGuard-Role": "viewer"},
+        headers={"X-Bayleaf-Role": "viewer"},
     )
     assert resp.status_code == 403  # a viewer may not author a library entry
     # ...and nothing was written.

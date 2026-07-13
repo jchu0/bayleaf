@@ -107,10 +107,10 @@
 
 **(a) Deterministic demo setup checklist (pre-clock):**
 1. `uv sync --all-extras --extra slack`.
-2. Backend **stub default**: `uv run uvicorn api.main:app --port 8010` (no `PIPEGUARD_*_AGENT` flags).
+2. Backend **stub default**: `uv run uvicorn api.main:app --port 8010` (no `BAYLEAF_*_AGENT` flags).
 3. Frontend: `npm --prefix frontend run dev`; open the Vite URL.
 4. `rm -f run.events.jsonl pg.sqlite` (append-only ledger — a stale file doubles Step-5 counts, `run-of-show.md:36-38`).
-5. Sanity gate (green-room check): `uv run python -c "from pipeguard import run_gate_from_dir; _, c = run_gate_from_dir('data/mock_run_01'); print([(x.sample_id, x.verdict.value) for x in c])"` → `[('S4','escalate'), ('S5','hold'), ('S1','proceed'), ('S2','proceed'), ('S3','proceed')]`.
+5. Sanity gate (green-room check): `uv run python -c "from bayleaf import run_gate_from_dir; _, c = run_gate_from_dir('data/mock_run_01'); print([(x.sample_id, x.verdict.value) for x in c])"` → `[('S4','escalate'), ('S5','hold'), ('S1','proceed'), ('S2','proceed'), ('S3','proceed')]`.
 6. Pre-type (don't run) the armed AI + Slack one-liners so each ★ beat is one Enter.
 7. Arm Streamlit fallback: `uv run streamlit run app/streamlit_app.py`.
 8. **Do NOT** navigate to Submit/Builder/BaseSpace on camera (unlabelled-seed surfaces DEMO-06/07/08); **do NOT** run live Nextflow intake on the clock.
@@ -119,9 +119,9 @@
 - Fixture: `data/mock_run_01` (5 samples). Run Overview `/` → point at `mock_run_01` "N need attention".
 - `mock_run_01`/S4 Decision card → verdict **escalate**; cited i5 `AGGCGAAG` ≠ declared `GGCTCTGA` + missing `subject_id`.
 - Ask triage on S4 → Advisory note; **say "Advisory / Rule-derived triage (offline)"**, not "ADVISORY·STUB" (DEMO-02).
-- Live flip: `PIPEGUARD_TRIAGE_AGENT=claude PIPEGUARD_SYNTHESIZER=claude uv run uvicorn api.main:app --port 8010` → same panel, Claude prose, citations/verdict unchanged; degrades to stub on refusal.
+- Live flip: `BAYLEAF_TRIAGE_AGENT=claude BAYLEAF_SYNTHESIZER=claude uv run uvicorn api.main:app --port 8010` → same panel, Claude prose, citations/verdict unchanged; degrades to stub on refusal.
 - Reproduce: `make emit-ledger && make rebuild-db` → `… 16 event(s) -> 1 run(s), 5 decision card(s).`
-- Slack: `PIPEGUARD_NOTIFIER=slack PIPEGUARD_SLACK_LIVE=1 uv run python -m pipeguard.notify data/mock_run_01` (or the $0 no-`_LIVE` variant that sends nothing).
+- Slack: `BAYLEAF_NOTIFIER=slack BAYLEAF_SLACK_LIVE=1 uv run python -m bayleaf.notify data/mock_run_01` (or the $0 no-`_LIVE` variant that sends nothing).
 
 **(c) Fallback footage plan:** rung 1 = each step's row Fallback; rung 2 = **stay on stub** (default, $0); rung 3 = **Streamlit** (`streamlit run app/streamlit_app.py`, `streamlit_app.py:119-125` shows an honest synthesizer status, always green); rung 4 = recorded walkthrough.
 

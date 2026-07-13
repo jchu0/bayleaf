@@ -31,7 +31,7 @@ type AccessState = {
   setEnforce: (on: boolean) => void
 }
 
-const KEY = 'pipeguard.access'
+const KEY = 'bayleaf.access'
 
 function freshMap(): AccessMap {
   return structuredClone(DEFAULT_ACCESS)

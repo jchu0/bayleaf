@@ -29,7 +29,7 @@ is skipped under pressure.
 3. **[ ] Frontend up (Terminal B):** `npm --prefix frontend run dev` — open the URL Vite
    prints (default `http://localhost:5173`; Vite proxies `/api` → `:8010`).
 4. **[ ] `.env` filled (Terminal C, a spare shell at repo root):** `ANTHROPIC_API_KEY`
-   for the AI flip; `PIPEGUARD_SLACK_BOT_TOKEN` + `PIPEGUARD_SLACK_CHANNEL` for the Slack
+   for the AI flip; `BAYLEAF_SLACK_BOT_TOKEN` + `BAYLEAF_SLACK_CHANNEL` for the Slack
    beat (see [`.env.example`](../../.env.example)). Never read these on screen.
 5. **[ ] Pre-type (don't run) the two "armed" commands** so a wow beat is one Enter, not
    live typing — see the pre-typed commands below.
@@ -37,7 +37,7 @@ is skipped under pressure.
    The ledger is **append-only** — a leftover file makes Step 5 print doubled event
    counts.
 7. **[ ] Sanity-check the pinned scenario** (proves the room is green before you talk):
-   `uv run python -c "from pipeguard import run_gate_from_dir; _, c = run_gate_from_dir('data/mock_run_01'); print([(x.sample_id, x.verdict.value) for x in c])"`
+   `uv run python -c "from bayleaf import run_gate_from_dir; _, c = run_gate_from_dir('data/mock_run_01'); print([(x.sample_id, x.verdict.value) for x in c])"`
    → expect `[('S4','escalate'), ('S5','hold'), ('S1','proceed'), ('S2','proceed'), ('S3','proceed')]`.
 8. **[ ] Streamlit fallback armed** in a 4th terminal, ready to launch if React/API dies:
    `uv run streamlit run app/streamlit_app.py` (see Fallback ladder).
@@ -59,7 +59,7 @@ driver. Each step's **Fallback** is the local recovery; the global ladder is bel
 | 3 | 1:50 | **Ask the triage agent** | On S4, click **"Ask the triage agent"** | "An advisory agent suggests a likely cause and next action, with **corpus citations** — note the **Advisory** badge and the **Rule-derived triage (offline)** source label. It never sets the verdict." | If panel errors → say the note is advisory-only and move on; the verdict is untouched either way |
 | 4 ★ | 2:40 | **★ Flip the AI on, live** | In **Terminal A**, `Ctrl-C`, then run the pre-typed armed command (below); wait for "Uvicorn running"; **refresh browser**, re-open S4, click triage again | "Same panel — now the prose is **Claude-written**, while the citations and the verdict stay deterministic. If the API errors or the safety classifier refuses, it silently degrades to the stub." | If live Claude is flaky/slow → **don't flip** (or re-launch backend with the stub); the stub is the default and identical in structure. The demo cannot break here. |
 | 5 ★ | 3:30 | **★ Reproduce from the log** | In **Terminal C**, run the pre-typed one-liner (below) | "The database is disposable. This rebuilds the entire relational projection from the **authoritative event log** — same run, samples, findings, cards. `16 event(s) → 1 run, 5 decision cards`. The log is truth." | If the emit/rebuild errors → show the committed provenance screen instead (Step 7 target) and narrate the same "event log is authoritative" point |
-| 6 ★ | 4:15 | **★ An escalation lands in Slack, live** | In **Terminal C**, run the pre-typed Slack command (below); cut to the Slack channel | "Same gate, wired to a real outbound port: the S4 escalation and S5 hold post to Slack as **cited cards** — one `notification.emitted` provenance event per send. Off by default; the live post is armed only by an explicit flag." | If Slack is down / not armed → run it **without** `PIPEGUARD_SLACK_LIVE`; it builds and records the payload with **$0, nothing sent**, and prints the actionable set. Same seam, no network. |
+| 6 ★ | 4:15 | **★ An escalation lands in Slack, live** | In **Terminal C**, run the pre-typed Slack command (below); cut to the Slack channel | "Same gate, wired to a real outbound port: the S4 escalation and S5 hold post to Slack as **cited cards** — one `notification.emitted` provenance event per send. Off by default; the live post is armed only by an explicit flag." | If Slack is down / not armed → run it **without** `BAYLEAF_SLACK_LIVE`; it builds and records the payload with **$0, nothing sent**, and prints the actionable set. Same seam, no network. |
 | 7 | 4:40 | **Close** — Provenance + guardrails | Click into S4's **Provenance** trail (`/runs/:runId/provenance`); glance the **Review queue** | "Every I/O is on an append-only trail. And the honest part: this is a **research/demo tool, not a clinical system** — rules decide, AI is advisory and off by default, thresholds are illustrative, confidence is a heuristic omitted until grounded." | Skip the click, deliver the guardrail line verbatim — it's the most important sentence in the demo |
 
 Buffer to 5:00 for one judge question or a slow step.
@@ -69,7 +69,7 @@ Buffer to 5:00 for one judge question or a slow step.
 **Step 4 — armed AI backend** (paste into Terminal A after `Ctrl-C`):
 
 ```bash
-PIPEGUARD_TRIAGE_AGENT=claude PIPEGUARD_SYNTHESIZER=claude \
+BAYLEAF_TRIAGE_AGENT=claude BAYLEAF_SYNTHESIZER=claude \
   uv run uvicorn api.main:app --port 8010
 ```
 
@@ -85,21 +85,21 @@ make emit-ledger && make rebuild-db
 ```
 
 (`emit-ledger` deletes any stale `run.events.jsonl` and writes a fresh 16-event ledger from
-`mock_run_01`; `rebuild-db` replays it into `pipeguard.sqlite`. Both artifacts are gitignored.)
+`mock_run_01`; `rebuild-db` replays it into `bayleaf.sqlite`. Both artifacts are gitignored.)
 
 Expected tail: `... 16 event(s) -> 1 run(s), 5 decision card(s).`
 
 **Step 6 — live Slack escalation** (paste in Terminal C):
 
 ```bash
-PIPEGUARD_NOTIFIER=slack PIPEGUARD_SLACK_LIVE=1 \
-  uv run python -m pipeguard.notify data/mock_run_01
+BAYLEAF_NOTIFIER=slack BAYLEAF_SLACK_LIVE=1 \
+  uv run python -m bayleaf.notify data/mock_run_01
 ```
 
 Safe variant if Slack is unavailable (builds + records, **sends nothing, $0**):
 
 ```bash
-uv run python -m pipeguard.notify data/mock_run_01
+uv run python -m bayleaf.notify data/mock_run_01
 ```
 
 ### Optional beat — Builder: compose → Save → Approve → Run (W1 approval gate)

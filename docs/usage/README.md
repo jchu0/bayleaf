@@ -1,4 +1,4 @@
-# PipeGuard — Usage & Documentation
+# bayleaf — Usage & Documentation
 
 | Field | Value |
 |---|---|
@@ -14,9 +14,9 @@
 > site, the same markdown compiles under **Quarto** (`quarto render docs/usage`) or MkDocs with no
 > rewrite — the content is tool-agnostic on purpose.
 
-## What PipeGuard is (one paragraph)
+## What bayleaf is (one paragraph)
 
-PipeGuard is an **AI-assisted provenance & QC decision gate** for genomics runs. Deterministic
+bayleaf is an **AI-assisted provenance & QC decision gate** for genomics runs. Deterministic
 **rules decide** a per-sample verdict (proceed / hold / rerun / escalate) from cited evidence; an
 LLM only **narrates and advises** and is off the critical path ([ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)).
 It is a research/demo tool with production intent — **not** a clinical decision system, and it makes

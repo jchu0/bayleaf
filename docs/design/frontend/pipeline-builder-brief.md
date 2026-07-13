@@ -1,4 +1,4 @@
-# Handoff: PipeGuard Pipeline Builder (wishlist #11) → design tool
+# Handoff: bayleaf Pipeline Builder (wishlist #11) → design tool
 
 > *Design handoff for wishlist #11, produced by a multi-perspective design workflow and
 > fact-checked against the repo's architecture + the operator-UI handoff. Paste-and-go:
@@ -8,7 +8,7 @@
 
 ## Overview
 
-The Pipeline Builder is the **editable face of the operations layer**: a node-graph editor where an operator composes a germline-panel pipeline from typed tool nodes, snaps in PipeGuard's advisory QC-triage agent, and — as the machine-readable output — **emits the run-layout config PipeGuard reads to locate a run's artifacts** (the artifact-kind → path/glob map, `run_layout.yaml`). It is the hackathon's "pipeline translator" idea made visual, and it is the **editable superset of the read-only Provenance canvas (#10)**: the same horizontal left→right stage DAG and the same click-to-open per-node I/O drawer, plus authoring affordances on top.
+The Pipeline Builder is the **editable face of the operations layer**: a node-graph editor where an operator composes a germline-panel pipeline from typed tool nodes, snaps in bayleaf's advisory QC-triage agent, and — as the machine-readable output — **emits the run-layout config bayleaf reads to locate a run's artifacts** (the artifact-kind → path/glob map, `run_layout.yaml`). It is the hackathon's "pipeline translator" idea made visual, and it is the **editable superset of the read-only Provenance canvas (#10)**: the same horizontal left→right stage DAG and the same click-to-open per-node I/O drawer, plus authoring affordances on top.
 
 This document is the design target for one new screen (`view: 'builder'`). It extends — and must stay visually continuous with — [`docs/design/frontend/README.md`](README.md) (the operator-UI handoff). **Reuse that handoff's app shell, tokens, and primitives verbatim.** Only the surfaces below are net-new.
 
@@ -52,7 +52,7 @@ demux → read_qc(trim) → align → markdup → coverage → variant_call(call
 
 ### New to the builder
 
-1. **Tool node** — one genomics stage (fastp, bwa, mosdepth, bcftools, MultiQC, …) as a card with typed artifact-kind I/O ports, params, tool + version, a `pipeguardStatus` badge, and — the load-bearing part — a **run-layout locator per output port** describing where that artifact-kind lands on disk.
+1. **Tool node** — one genomics stage (fastp, bwa, mosdepth, bcftools, MultiQC, …) as a card with typed artifact-kind I/O ports, params, tool + version, a `bayleafStatus` badge, and — the load-bearing part — a **run-layout locator per output port** describing where that artifact-kind lands on disk.
 2. **Typed edge** — a data flow. An output port of kind X connects only to an input port of kind X. No coercion.
 3. **Agent node** — an advisory snap-in (QC-triage MVP). Structurally different from a tool node: **it has no data ports**, so it can never sit on a data path to the gate.
 4. **Gate node** — the terminal, singular, non-removable sink that owns the three checkpoints. It has no editable verdict/threshold field and **no incoming data edge from tool outputs** — it reads the frozen five `run/` CSVs (see the ingest boundary).
@@ -105,8 +105,8 @@ The builder is **one screen** (`view: 'builder'`) composed of regions, not sever
 
 1. **Purpose.** Compose and inspect the pipeline as a left→right DAG. This is the spine every other region hangs off.
 2. **What ships (deliberately narrow MVP).** The germline-panel default chain ships **pre-laid-out** from a bundled template (seeded coordinates given below). The operator **selects nodes, edits params/locators, re-points the fixed stage inputs, and toggles the QC-triage agent + gate on/off.** It is a **configure-a-known-pipeline** experience — **not** free composition. Drag-arbitrary-node-from-palette, free edge-drawing, and auto-layout are Phase 2.
-3. **Node treatment (extends the Provenance stage/node card).** Each node is a 208px card (radius 12px, shadow `0 1px 2px rgba(16,24,40,.05)`, 3px left-rail status tint) showing: (i) tool name (Plex Sans) + version (Plex Mono, e.g. `fastp 0.23.4`); (ii) typed I/O ports on left (in) / right (out); (iii) a `pipeguardStatus` badge (see below); (iv) a status dot.
-4. **`pipeguardStatus` badge.** Whether PipeGuard **runs** the stage (`ours` — read_qc, coverage), **consumes** its artifacts (`full` — demux, markdup, annotate, qc_aggregate), or provides a **demo substitute** (`partial` — align slice, bcftools caller, region-subset filter). Field values are `ours | full | partial`; the badge *labels* render `ours` / `consumes` / `substitute` for operator legibility.
+3. **Node treatment (extends the Provenance stage/node card).** Each node is a 208px card (radius 12px, shadow `0 1px 2px rgba(16,24,40,.05)`, 3px left-rail status tint) showing: (i) tool name (Plex Sans) + version (Plex Mono, e.g. `fastp 0.23.4`); (ii) typed I/O ports on left (in) / right (out); (iii) a `bayleafStatus` badge (see below); (iv) a status dot.
+4. **`bayleafStatus` badge.** Whether bayleaf **runs** the stage (`ours` — read_qc, coverage), **consumes** its artifacts (`full` — demux, markdup, annotate, qc_aggregate), or provides a **demo substitute** (`partial` — align slice, bcftools caller, region-subset filter). Field values are `ours | full | partial`; the badge *labels* render `ours` / `consumes` / `substitute` for operator legibility.
 5. **Draft status (the one semantic shift from Provenance).** In the editor, before anything runs, tool nodes are in a single neutral state — label **`draft`**, background `--surface-3 #e6eaef`, dashed border `--border-strong #d2d9e0`, text `--text-3 #8b95a1`. **No verdict/quality color, because nothing executed.** The Provenance `ok / warn / blocked` coloring only lights up in linked VIEW (region e). The gate's draft state is labelled **`pending — no verdict`**.
 6. **The gate node.** A distinct **non-deletable, non-duplicable** terminal node at the right end, min-height 96px, carrying three stacked checkpoint chips (preflight `#1f6feb` · qc `#1f5fd0` · variant `#0e8f7e`) and a **lock glyph**. It exposes **no data ports fed by tool edges** and **no threshold/verdict control**. It sits *after* the ingest band. Selecting it opens a threshold-read-only inspector linking to Settings → runbook.
 7. **The ingest band.** A slim, greyed, non-composable system element (`--surface-3`, dashed border) between the last tool column and the gate, captioned `deterministic ingest · write_run_dir → run/ (5 CSVs)`. Metric-bearing tool outputs (`fastp_json`, `mosdepth_summary`, `vcf`/`filtered_vcf`, `ngscheckmate`) draw a thin neutral "located-by-config" connector *into* the band; the band draws one connector into the gate. This makes G1 legible: **no composition choice rewires what the gate reads.**
@@ -134,7 +134,7 @@ The builder is **one screen** (`view: 'builder'`) composed of regions, not sever
 
 1. **Purpose.** Check the composition is well-typed and complete (statically, zero filesystem I/O), then produce the `run_layout.yaml`.
 2. **Validation list** — grouped most-severe-first (reuse finding-severity `critical #cf3238 · warn #c1560f · info #1f6feb`). MVP checks are **all static** (see the validation rules): typed-port mismatches (in practice prevented at connect-time), missing required config, gate-reachability (are the metric-bearing artifacts the ingest needs produced?), DAG/cycle, agent-off-path, locator well-formedness, origin=unknown. Each row is click-to-focus → selects the offending node and opens its inspector. Copy is declarative ("expects/received"), never prescriptive, e.g. `mosdepth_summary required — no locator defined`.
-3. **Config preview** — a live, read-only **`run_layout.yaml` preview** (mono) with the **profile switcher** (`default` / `giab_panel` / `sarek`). Actions: **Copy** and **Download**. The `PIPEGUARD_RUN_LAYOUT` env value is shown as a mono hint.
+3. **Config preview** — a live, read-only **`run_layout.yaml` preview** (mono) with the **profile switcher** (`default` / `giab_panel` / `sarek`). Actions: **Copy** and **Download**. The `BAYLEAF_RUN_LAYOUT` env value is shown as a mono hint.
 4. **The primary action of the whole builder: `Emit config`** — not "Run." Emit writes/exports the config only; it triggers no execution. Copy states: schema is design-now; the running system's *consumption* of an arbitrary emitted layout (the loader + selector) is Phase 2, so the live gate does not yet auto-consume this file.
 5. **States.** clean (green "Typed I/O connects · config ready to emit"), issues (the list), empty (nothing composed yet).
 
@@ -144,7 +144,7 @@ The builder is **one screen** (`view: 'builder'`) composed of regions, not sever
 2. **No linked run (MVP default / EDIT mode).** A neutral strip: *"This composition emits a config. Compute runs in Nextflow."* Emitting offers **Copy config** / **Download**. No in-app execution in MVP.
 3. **Linked run present (VIEW mode).** The strip shows the run's **segmented verdict bar** + counts and **deep-links: "Open Provenance"** and **"Open Decision cards."** This is where the canvas node status dots light up draft → real `ok/warn/blocked` from the ledger projection, the I/O drawers fill with real `name · sha256 · size · origin`, and the gate node shows the run's verdict summary. **Authoring is locked** here; a **"Fork to new draft"** action clones the layout back into an editable draft (the only VIEW→EDIT bridge; it never mutates the run).
 4. **Provenance obligation (made legible).** When a run executes against the emitted layout, every resolved absolute path is recorded as a provenance-ledger event, and the gate ingests **through** the config — but the verdict is still a pure function of parsed values through rules + runbook. The strip should make the causal chain obvious: *builder emits config → Nextflow runs → deterministic ingest writes run/ (5 CSVs) → `run_gate` gates + records the ledger trail → decision cards.*
-5. **Run is a Phase-2 hand-off stub, not an MVP verb.** When the job-runner port (wishlist, ADR-0003) exists, the strip gains a "Run" affordance that hands the emitted config to Nextflow/bioconda; the builder never reimplements an engine/scheduler. Copy: *"Run executes in Nextflow. PipeGuard reads the results and gates them."*
+5. **Run is a Phase-2 hand-off stub, not an MVP verb.** When the job-runner port (wishlist, ADR-0003) exists, the strip gains a "Run" affordance that hands the emitted config to Nextflow/bioconda; the builder never reimplements an engine/scheduler. Copy: *"Run executes in Nextflow. bayleaf reads the results and gates them."*
 6. **States.** unlinked (MVP default), linking (spinner ~1s), linked (the strip + colored canvas), error (run/ledger unreachable → Retry; rule-derived cards still linkable).
 
 ---
@@ -184,7 +184,7 @@ A connection is a typed data flow: an *output* port of kind X connects to an *in
 1. **Structurally port-less.** An `AgentNode` has **no `outputs` / data ports**. It therefore cannot be the `from` of any edge, which makes "an agent on the path to the gate" *unrepresentable*. This is the structural enforcement of "off the critical path" — not a lint rule.
 2. **It attaches to what it OBSERVES.** `attachTo` names the host node it reads; `scope` names the checkpoint. An agent attached to the gate observes the gate's **emitted decision card (output), never an input** — the advisory connector originates from the gate's *output* boundary, so a mockup can never render the pill on the gate's input edge as though it were feeding the decision.
 3. **What it may read:** the per-tool output tree, decision cards (the gate's output, after the fact), and the read-side `Repository.list_*(filters)` projection — **never** the authoritative ledger. **What it must not do:** set/change/restate/influence a verdict/finding/confidence; sit on the critical path; mutate the ledger or source records; fabricate/re-derive QC numbers; be required for a run to complete. Least-privilege: only de-identified aggregates enter any prompt.
-4. **OFF by default.** `mode` defaults to `stub` ($0, nothing leaves the machine); `PIPEGUARD_<AGENT>_AGENT=stub|claude` flips it. Any error (including a safety refusal) degrades to the stub. Toggling to `claude` never changes graph validity or the verdict.
+4. **OFF by default.** `mode` defaults to `stub` ($0, nothing leaves the machine); `BAYLEAF_<AGENT>_AGENT=stub|claude` flips it. Any error (including a safety refusal) degrades to the stub. Toggling to `claude` never changes graph validity or the verdict.
 5. **Roster (fixed).** `qc_triage` (#1, DONE, sonnet-mid) is MVP. `pipeline_repair` (#2, blocked on `execution_trace` capture — the agent most relevant to a builder, but it only *proposes* remediation, never auto-applies/re-runs/gates) and `archivist` (#3, spec-only) are greyed palette items. A new agent must pass the agents.md intake checklist before it can exist.
 6. **Visual treatment.** A rounded pill (chip radius 20px, height 28px), dashed 1.5px `--accent #1f5fd0` border, `--accent-weak #eaf0fc` fill, an "ADVISORY" eyebrow (~10.5px uppercase), a `stub | claude` state dot, side-attached above the spine, connected by a **dashed** advisory line (no port glyphs). No confidence meter.
 
@@ -203,7 +203,7 @@ Structural consequences — each is a validation rule:
 
 ### Graph → config serialization
 
-The graph is **non-authoritative authoring state**. Its **sole emitted, grounded deliverable is `run_layout.yaml`** (the artifact-kind → path map). There is **no second committed/versioned/content-hashed "pipeline definition" artifact** — that would be a workflow-definition authority PipeGuard does not own (Nextflow's job). Persist the graph for reload if you like (a draft/session blob), but not as a durable PipeGuard-owned contract.
+The graph is **non-authoritative authoring state**. Its **sole emitted, grounded deliverable is `run_layout.yaml`** (the artifact-kind → path map). There is **no second committed/versioned/content-hashed "pipeline definition" artifact** — that would be a workflow-definition authority bayleaf does not own (Nextflow's job). Persist the graph for reload if you like (a draft/session blob), but not as a durable bayleaf-owned contract.
 
 Derivation (graph element → config element):
 
@@ -332,7 +332,7 @@ interface ToolNode {
   tool: string;                      // 'fastp'
   version: string;                   // '0.23.4' (pinned; surfaces in versions_yml)
   stage: StageKind;                  // 'read_qc'
-  pipeguardStatus: RunStatus;        // 'ours' | 'full' | 'partial'
+  bayleafStatus: RunStatus;        // 'ours' | 'full' | 'partial'
   inputs: Port[];
   outputs: Port[];
   params: Record<string, string | number | boolean | object>;
@@ -348,7 +348,7 @@ interface AgentNode {
   attachTo: string;                  // host node it OBSERVES (for the gate: its decision-card OUTPUT)
   scope?: 'preflight' | 'qc' | 'variant';
   advisoryOnly: true;                // literal — mirrors triage/models.py advisory:Literal[True]
-  enabledBy: string;                 // 'PIPEGUARD_TRIAGE_AGENT'
+  enabledBy: string;                 // 'BAYLEAF_TRIAGE_AGENT'
   mode: 'stub' | 'claude';           // default 'stub'
   tier?: string;                     // 'sonnet-mid'
   ui: { x: number; y: number };
@@ -373,7 +373,7 @@ interface GateNode {
 // ---- the graph (non-authoritative authoring state) ----
 interface PipelineGraph {
   id: string;                        // 'PIPE-2026-07-08-GERMLINE-PANEL'
-  schemaVersion: 'builder/0.1';      // draft-format tag, NOT a durable PipeGuard contract
+  schemaVersion: 'builder/0.1';      // draft-format tag, NOT a durable bayleaf contract
   template?: string;                 // 'nf-core/sarek:germline-panel'
   runbookProfile: string;
   nodes: (ToolNode | AgentNode | GateNode)[];
@@ -395,7 +395,7 @@ interface LayoutLocator {
 interface RunLayoutConfig {
   schemaVersion: 'run_layout/1';
   profile: 'default' | 'giab_panel' | 'sarek' | string;  // custom -> /path/to.yaml
-  locators: Record<string, LayoutLocator>;               // selected via PIPEGUARD_RUN_LAYOUT
+  locators: Record<string, LayoutLocator>;               // selected via BAYLEAF_RUN_LAYOUT
 }
 ```
 
@@ -499,7 +499,7 @@ Reference edges (dashed `#8b95a1`): `reference_fasta → {n_bwa, n_call, n_norm}
 ```json
 { "id": "a_qc_triage", "type": "agent", "agent": "qc_triage",
   "attachTo": "g_gate", "scope": "qc", "advisoryOnly": true,
-  "enabledBy": "PIPEGUARD_TRIAGE_AGENT", "mode": "stub", "tier": "sonnet-mid" }
+  "enabledBy": "BAYLEAF_TRIAGE_AGENT", "mode": "stub", "tier": "sonnet-mid" }
 ```
 A dashed advisory side-pill anchored above the gate. It observes the gate's **`qc` decision-card output** (never an input) and suggests likely-cause + next-action, cited. Off the critical path; `mode:'stub'` by default ($0); it has no ports and cannot connect to the verdict.
 
@@ -516,7 +516,7 @@ The gate reads the **frozen five flat `run/` CSVs** produced by deterministic in
 **e. The emitted `run_layout.yaml` (the deliverable — every `origin` is `unknown`).**
 ```yaml
 schema_version: run_layout/1
-profile: giab_panel                 # PIPEGUARD_RUN_LAYOUT=giab_panel
+profile: giab_panel                 # BAYLEAF_RUN_LAYOUT=giab_panel
 locators:
   # origin is 'unknown' for EVERY locator at emit time: compose != execute, no per-run
   # marker exists yet. Guarded origins (real-giab/synthetic/contrived) are stamped ONLY at
@@ -550,17 +550,17 @@ This exercises the states the draft alone never reaches (real node colors, real 
 
 ## Phasing
 
-**Phase 1 — MVP: "a GUI that writes the file."** One editor screen; the germline-panel default chain **pre-laid-out** (seeded coordinates) that you **configure, re-point, and toggle** (not free composition); node inspector with the **run-layout locator editor** + a schema-driven params form from a **bundled** `nextflow_schema.json`; **static typed validation only (zero filesystem I/O)**; **Emit `run_layout.yaml`** across the three profiles (the sole grounded deliverable; schema is design-now at `src/pipeguard/layout/run_layout.yaml`); the **QC-triage agent** as an advisory side-pill (rendered + serialized, not executed); the terminal gate reached via the ingest band; **linked-run VIEW as read-only link-out** to Provenance + Decision cards; all states off the real query layer. **MVP verbs are Validate + Emit only.**
+**Phase 1 — MVP: "a GUI that writes the file."** One editor screen; the germline-panel default chain **pre-laid-out** (seeded coordinates) that you **configure, re-point, and toggle** (not free composition); node inspector with the **run-layout locator editor** + a schema-driven params form from a **bundled** `nextflow_schema.json`; **static typed validation only (zero filesystem I/O)**; **Emit `run_layout.yaml`** across the three profiles (the sole grounded deliverable; schema is design-now at `src/bayleaf/layout/run_layout.yaml`); the **QC-triage agent** as an advisory side-pill (rendered + serialized, not executed); the terminal gate reached via the ingest band; **linked-run VIEW as read-only link-out** to Provenance + Decision cards; all states off the real query layer. **MVP verbs are Validate + Emit only.**
 
-**Phase 2+ — design the seam, don't build now.** Free composition (drag arbitrary nodes, free edge-drawing, add/remove/reorder), **auto-layout/Tidy**, pan/zoom-as-authoring, and the minimap; **Dry-run** (locator resolution against a real run dir) — depends on the loader; the **config loader + `load_run` refactor + `PIPEGUARD_RUN_LAYOUT` selector** (first `pydantic-settings` use in `src/`) so the running system consumes an emitted layout; **in-app Run** as a job-runner hand-off to Nextflow/bioconda (+ Slurm/cloud adapters + Terraform, all wishlist under ADR-0003 — the builder never reimplements an engine); **round-trip import** (reconstruct a graph from an existing `run_layout.yaml`) and **live `nextflow_schema.json` fetch** (need a command API + network; break offline-first); **Pipeline-repair (#2)** (blocked on `execution_trace` capture) and **Archivist (#3)** once each clears agent intake; the **RNA-seq modality (#7)** (additive stages/kinds — STAR/salmon `salmon_quant` — + a new port lane); **RBAC** (Viewer/Composer/Publisher), a #9 no-code **form mode**, and an **NL→structured-input** layer.
+**Phase 2+ — design the seam, don't build now.** Free composition (drag arbitrary nodes, free edge-drawing, add/remove/reorder), **auto-layout/Tidy**, pan/zoom-as-authoring, and the minimap; **Dry-run** (locator resolution against a real run dir) — depends on the loader; the **config loader + `load_run` refactor + `BAYLEAF_RUN_LAYOUT` selector** (first `pydantic-settings` use in `src/`) so the running system consumes an emitted layout; **in-app Run** as a job-runner hand-off to Nextflow/bioconda (+ Slurm/cloud adapters + Terraform, all wishlist under ADR-0003 — the builder never reimplements an engine); **round-trip import** (reconstruct a graph from an existing `run_layout.yaml`) and **live `nextflow_schema.json` fetch** (need a command API + network; break offline-first); **Pipeline-repair (#2)** (blocked on `execution_trace` capture) and **Archivist (#3)** once each clears agent intake; the **RNA-seq modality (#7)** (additive stages/kinds — STAR/salmon `salmon_quant` — + a new port lane); **RBAC** (Viewer/Composer/Publisher), a #9 no-code **form mode**, and an **NL→structured-input** layer.
 
-**Hard out-of-scope — invariants the builder must never cross.** Nothing composed may set/override/restate/route a verdict/confidence (agents have no ports); no agent on the critical path (a failure never drops/delays/alters a verdict; stub fully produces the output); a run reaches the verdict **only through `run_gate`** (never a side path that skips provenance); **never** inject a file-backed `EventLedger` into the `@lru_cache`'d `_evaluate`; the config **locates, never judges** (no path triggers tool execution); **origin never relabels up** (guarded values stamped at ingest, never authored); reuse existing event vocab (invent no new event type; no agent writes the authoritative ledger); no compute/engine/scheduler logic and no Streamlit/FastAPI imports in `src/pipeguard/`; **no confidence meter**; no clinical/diagnostic/therapeutic claims.
+**Hard out-of-scope — invariants the builder must never cross.** Nothing composed may set/override/restate/route a verdict/confidence (agents have no ports); no agent on the critical path (a failure never drops/delays/alters a verdict; stub fully produces the output); a run reaches the verdict **only through `run_gate`** (never a side path that skips provenance); **never** inject a file-backed `EventLedger` into the `@lru_cache`'d `_evaluate`; the config **locates, never judges** (no path triggers tool execution); **origin never relabels up** (guarded values stamped at ingest, never authored); reuse existing event vocab (invent no new event type; no agent writes the authoritative ledger); no compute/engine/scheduler logic and no Streamlit/FastAPI imports in `src/bayleaf/`; **no confidence meter**; no clinical/diagnostic/therapeutic claims.
 
 ---
 
 ## Out-of-scope + reader footnote
 
-The literal ticket id "T-032" does not appear in the repo. The run-layout config seam this spec relies on lives at **Appendix D §5** of `docs/design/data-platform-and-archivist.md` (lines 671–686) and is confirmed by the D7/D8 decision (line 71). The gate's three checkpoints and the read-only stage DAG come from the frontend README §5 (Provenance canvas), which #11 extends. Structural enforcements referenced: `advisory:Literal[True]` (`src/pipeguard/triage/models.py`), `aggregate_verdict` as the sole verdict writer (`src/pipeguard/synthesis/base.py`), the five gate-ingested CSVs (`parsers.py:187-217`), the append-only trail (`engine.py` / `provenance.py`, ADR-0002).
+The literal ticket id "T-032" does not appear in the repo. The run-layout config seam this spec relies on lives at **Appendix D §5** of `docs/design/data-platform-and-archivist.md` (lines 671–686) and is confirmed by the D7/D8 decision (line 71). The gate's three checkpoints and the read-only stage DAG come from the frontend README §5 (Provenance canvas), which #11 extends. Structural enforcements referenced: `advisory:Literal[True]` (`src/bayleaf/triage/models.py`), `aggregate_verdict` as the sole verdict writer (`src/bayleaf/synthesis/base.py`), the five gate-ingested CSVs (`parsers.py:187-217`), the append-only trail (`engine.py` / `provenance.py`, ADR-0002).
 
 ---
 
@@ -572,7 +572,7 @@ The literal ticket id "T-032" does not appear in the repo. The run-layout config
 4. Ingest band: confirm the explicit non-composable "deterministic ingest · write_run_dir → run/ (5 CSVs)" band between the pipeline and the gate is the right way to render G1 (the gate reads flattened CSVs, not raw tool edges), vs. leaving ingest implicit with just a gate caption.
 5. Edge routing: orthogonal elbow chosen over bezier — confirm.
 6. Kind color: artifact-kind is intentionally NOT color-coded (mono label only; reference = hollow ring), which supersedes the earlier kind→color table that collided with the gate/severity tokens. Confirm dropping kind-color entirely.
-7. pipeguardStatus: field values are ours|full|partial with badge display labels ours/consumes/substitute. Confirm the display mapping (or collapse field values to the display strings).
+7. bayleafStatus: field values are ours|full|partial with badge display labels ours/consumes/substitute. Confirm the display mapping (or collapse field values to the display strings).
 8. bam vs recal_cram: bam/bai are promoted to first-class kinds and the giab_panel anchor uses them (it slices a pre-aligned BAM); default/sarek profiles keep recal_cram and the two are never coerced. Confirm.
 9. Emitted references' origin: set to unknown at emit (chosen, for strict non-launderability) even though references point at fixed files. Confirm the conservative choice vs allowing a fixed reference origin in the config.
 10. sarek profile emit: since sarek is "illustrative/not wired," should Emit for that profile be allowed, or shown read-only/clearly labelled as target-state?

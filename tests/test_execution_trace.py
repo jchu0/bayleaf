@@ -8,13 +8,13 @@ runs (which have no ``trace.txt``) are unaffected — asserted in ``test_no_trac
 
 from pathlib import Path
 
-from pipeguard import propose_repair, run_gate_from_dir
-from pipeguard.models import TraceRecord, Verdict
-from pipeguard.parsers import parse_execution_trace
-from pipeguard.pipeline_repair import recurring_signature
-from pipeguard.rules import _check_execution_trace
-from pipeguard.runbook import DEFAULT_RUNBOOK
-from pipeguard.synthetic.generator import FailureMode, RunSpec, SampleSpec, generate_run
+from bayleaf import propose_repair, run_gate_from_dir
+from bayleaf.models import TraceRecord, Verdict
+from bayleaf.parsers import parse_execution_trace
+from bayleaf.pipeline_repair import recurring_signature
+from bayleaf.rules import _check_execution_trace
+from bayleaf.runbook import DEFAULT_RUNBOOK
+from bayleaf.synthetic.generator import FailureMode, RunSpec, SampleSpec, generate_run
 
 # A realistic Nextflow trace: S02 FAILED (exit 1), S03 a nonzero exit despite a non-FAILED
 # status (an OOM/time-kill), S01 clean.

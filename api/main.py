@@ -1,6 +1,6 @@
-"""FastAPI read-API over the pipeguard core — the production seam (ADR-0010).
+"""FastAPI read-API over the bayleaf core — the production seam (ADR-0010).
 
-Framework boundary: this wraps `pipeguard`; the core has no FastAPI import (CLAUDE.md
+Framework boundary: this wraps `bayleaf`; the core has no FastAPI import (CLAUDE.md
 architecture guardrail 1). The React frontend consumes these endpoints.
 
 Read-only over the DECISION domain: no endpoint mutates a verdict, finding, provenance
@@ -34,14 +34,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from pipeguard import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
-from pipeguard.metrics import default_registry
-from pipeguard.models import DecisionCard, Gate, Sample, VariantCall, Verdict
-from pipeguard.parsers import parse_variant_calls
-from pipeguard.pipeline_repair import RepairProposal, propose_repair, recurring_signature
-from pipeguard.provenance import EntityRef, EventType, ProvenanceEvent
-from pipeguard.runbook import RouteToHumanPolicy, Runbook
-from pipeguard.triage import AgentReply, TriageNote, ask_agent
+from bayleaf import DEFAULT_RUNBOOK, EventLedger, load_run, run_gate, triage_card
+from bayleaf.metrics import default_registry
+from bayleaf.models import DecisionCard, Gate, Sample, VariantCall, Verdict
+from bayleaf.parsers import parse_variant_calls
+from bayleaf.pipeline_repair import RepairProposal, propose_repair, recurring_signature
+from bayleaf.provenance import EntityRef, EventType, ProvenanceEvent
+from bayleaf.runbook import RouteToHumanPolicy, Runbook
+from bayleaf.triage import AgentReply, TriageNote, ask_agent
 
 from .archivist import ArchiveDigest, ArtifactRef, RunArchiveInput, _classify_kind, archive_digest
 from .auth import Actor, require_role
@@ -78,13 +78,13 @@ app.add_middleware(
     # The run-list keeps its JSON body a plain list (backward-compat) and carries pagination
     # metadata on headers; a browser fetch can only read those cross-origin if they're exposed.
     expose_headers=[
-        "X-PipeGuard-Total-Count",
-        "X-PipeGuard-Page",
-        "X-PipeGuard-Limit",
-        "X-PipeGuard-Status-Counts",
+        "X-Bayleaf-Total-Count",
+        "X-Bayleaf-Page",
+        "X-Bayleaf-Limit",
+        "X-Bayleaf-Status-Counts",
         # Review-queue total (resolved count while only a recent window is loaded) — a browser fetch
         # can only read it cross-origin if it's exposed (same reason as the run-list headers above).
-        "X-PipeGuard-Ticket-Total",
+        "X-Bayleaf-Ticket-Total",
     ],
 )
 
@@ -241,7 +241,7 @@ def _active_runbook(run_id: str) -> Runbook:
     human-review escalation while every real/other run stays disarmed. Empty/absent → disarmed.
 
     DEFERRED (WS-05 safe stop — authoring only, NOT applied to the gate here): the core now supports
-    a per-``(assay, sample_type, platform)`` ``RunbookSet`` (``pipeguard.runbook.RunbookSet`` /
+    a per-``(assay, sample_type, platform)`` ``RunbookSet`` (``bayleaf.runbook.RunbookSet`` /
     ``DEFAULT_RUNBOOK_SET``) and ``run_gate`` accepts one, but this endpoint still returns a single
     run-level ``Runbook``; and the Settings typed-override apply loop is not wired. Resolving a
     ``RunbookSet`` per sample and folding approved Settings overrides into it is a labelled
@@ -479,7 +479,7 @@ def list_runs(
     # Per-status facet counts over the FULL set (before any filter) so the UI's All/Needs
     # review/Sequencing/Released chips can show totals independent of the active filter + page.
     facets = Counter(s.status for s in summaries)
-    response.headers["X-PipeGuard-Status-Counts"] = json.dumps(
+    response.headers["X-Bayleaf-Status-Counts"] = json.dumps(
         {st: facets.get(st, 0) for st in sorted(_RUN_STATUSES)}
     )
 
@@ -500,12 +500,12 @@ def list_runs(
         summaries = sorted(summaries, key=key, reverse=reverse)
 
     # Total is the filtered count BEFORE the page slice, so a client can size its pager.
-    response.headers["X-PipeGuard-Total-Count"] = str(len(summaries))
+    response.headers["X-Bayleaf-Total-Count"] = str(len(summaries))
     if limit is not None:
         start = (page - 1) * limit
         summaries = summaries[start : start + limit]
-        response.headers["X-PipeGuard-Page"] = str(page)
-        response.headers["X-PipeGuard-Limit"] = str(limit)
+        response.headers["X-Bayleaf-Page"] = str(page)
+        response.headers["X-Bayleaf-Limit"] = str(limit)
     return summaries
 
 
@@ -541,7 +541,7 @@ def get_card_triage(run_id: str, sample_id: str) -> TriageNote:
 
     Read-only and OFF the deterministic critical path (ADR-0001): the note suggests a
     likely cause + next action and cites the corpus, but never sets a verdict. Uses the
-    offline stub agent by default (set PIPEGUARD_TRIAGE_AGENT=claude to go live).
+    offline stub agent by default (set BAYLEAF_TRIAGE_AGENT=claude to go live).
     """
     card = next((c for c in _evaluate(run_id).cards if c.sample_id == sample_id), None)
     if card is None:
@@ -571,7 +571,7 @@ def ask_card_agent(
     """Ask the advisory QC-triage agent a free-text question about a sample's card (ADR-0009).
 
     The interactive sibling of GET .../triage: advisory only (ADR-0001 — never sets or overrides a
-    verdict), OFF the deterministic path, offline stub by default (PIPEGUARD_TRIAGE_AGENT=claude to
+    verdict), OFF the deterministic path, offline stub by default (BAYLEAF_TRIAGE_AGENT=claude to
     go live). Unlike triage, a CLEAN card can also be asked about. 404 for an unknown sample.
 
     Unlike the read-only GET .../triage, this POST can incur a live API call, so it requires an
@@ -589,8 +589,8 @@ def ask_card_agent(
 def get_run_variants(run_id: str) -> list[VariantCall]:
     """Every annotated candidate variant for a run, parsed from its `variants.csv` (W3).
 
-    A read-only projection of an externally-produced annotated VCF/table (ADR-0018): PipeGuard
-    READS these rows via the SAME `pipeguard.parsers.parse_variant_calls` the gate uses — it never
+    A read-only projection of an externally-produced annotated VCF/table (ADR-0018): bayleaf
+    READS these rows via the SAME `bayleaf.parsers.parse_variant_calls` the gate uses — it never
     runs an annotator (composes ≠ executes, ADR-0003) and never authors pathogenicity. Every
     ClinVar significance is preserved VERBATIM from the source (ADR-0004); no verdict or confidence
     is set here (ADR-0001) — this feeds the RunReport's full per-variant table beneath the
@@ -739,7 +739,7 @@ def get_config() -> dict[str, Any]:
 # Honesty label (design doc G-EXPORT-SOURCE): the export is a LIVE deterministic re-derivation
 # of the gate over each run's artifacts at request time — reproducible and version-stamped, but
 # NOT a read of a recorded/ledger-anchored decision. Audit-grade (projection-read) export is
-# target-state. Surfaced in the `X-PipeGuard-Export-Source` header so a consumer can't mistake
+# target-state. Surfaced in the `X-Bayleaf-Export-Source` header so a consumer can't mistake
 # the demo export for audit provenance.
 _EXPORT_SOURCE = "live-recompute"
 
@@ -932,14 +932,14 @@ def export(
     `format=csv|jsonl|parquet` (Parquet needs the optional `parquet` extra; pandas/polars/DuckDB
     read it). Filter by `run_id`, `verdict`, or `q` (run-id substring). Every row carries its
     `origin`; operator PII is never emitted (D10). This is a LIVE recompute, not audit
-    provenance (`X-PipeGuard-Export-Source`).
+    provenance (`X-Bayleaf-Export-Source`).
 
     Every row is shaped by the config-driven de-id policy (`api/deid.py`, T-040) — a **demo
     de-id seam, NOT HIPAA de-identification**: operator PII (`submitted_by`) is dropped, and
     the opt-in `include=identity` mode joins intake cohort keys (`subject_id`/`tissue`) that
     are **origin-gated** (withheld for `real-giab` / untagged `unknown`) and **pseudonymized**
     (salted, non-reversible) for non-real origins. The active policy id rides
-    `X-PipeGuard-Deid-Policy` (no compliance claim).
+    `X-Bayleaf-Deid-Policy` (no compliance claim).
     """
     if fmt not in ("csv", "jsonl", "parquet"):
         raise HTTPException(status_code=400, detail="format must be 'csv', 'jsonl', or 'parquet'")
@@ -966,16 +966,16 @@ def export(
 
     scope = run_id or (f"q-{q}" if q else "all")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    filename = f"pipeguard-{scope}-{grain}-{stamp}.{ext}"
+    filename = f"bayleaf-{scope}-{grain}-{stamp}.{ext}"
     return Response(
         content=body,
         media_type=media,
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
-            "X-PipeGuard-Export-Source": _EXPORT_SOURCE,
-            "X-PipeGuard-Exported-At": stamp,
-            "X-PipeGuard-Row-Count": str(len(rows)),
-            "X-PipeGuard-Deid-Policy": policy.policy_id,
+            "X-Bayleaf-Export-Source": _EXPORT_SOURCE,
+            "X-Bayleaf-Exported-At": stamp,
+            "X-Bayleaf-Row-Count": str(len(rows)),
+            "X-Bayleaf-Deid-Policy": policy.policy_id,
         },
     )
 
@@ -1218,7 +1218,7 @@ def _aggregate_metrics(
     """Roll up run / sample / verdict / per-gate counts across a set of runs.
 
     Pure aggregation over the gate's own outputs (the `_evaluate` cards) — no metrics code
-    leaks into `src/pipeguard/` (CLAUDE.md architecture guardrail 1). A sample counts as
+    leaks into `src/bayleaf/` (CLAUDE.md architecture guardrail 1). A sample counts as
     "flagged" at a gate when that gate's rollup verdict is actionable (non-proceed).
 
     `run_ids` defaults to every served run (the Prometheus `/metrics` seam's fleet-wide view);
@@ -1504,12 +1504,12 @@ def get_monitoring(
 
     # Paginate the throughput array only (the aggregates above already cover the whole window).
     # Total is the pre-slice run count so a client can size its pager; mirrors GET /api/runs.
-    response.headers["X-PipeGuard-Total-Count"] = str(len(rows))
+    response.headers["X-Bayleaf-Total-Count"] = str(len(rows))
     if limit is not None:
         start = (page - 1) * limit
         rows = rows[start : start + limit]
-        response.headers["X-PipeGuard-Page"] = str(page)
-        response.headers["X-PipeGuard-Limit"] = str(limit)
+        response.headers["X-Bayleaf-Page"] = str(page)
+        response.headers["X-Bayleaf-Limit"] = str(limit)
 
     return MonitoringMetrics(
         window=window,
@@ -1525,7 +1525,7 @@ def get_monitoring(
 # --- Advisory agents over the read-API (roster #2 pipeline-repair, #3 archivist) -------------
 # On-demand, read-only, OFF the deterministic gate (ADR-0001): each invokes an advisory agent
 # that narrates/organizes over already-decided artifacts; neither sets/routes a verdict, and both
-# use the offline stub by default (PIPEGUARD_PIPELINE_REPAIR_AGENT / PIPEGUARD_ARCHIVIST_AGENT
+# use the offline stub by default (BAYLEAF_PIPELINE_REPAIR_AGENT / BAYLEAF_ARCHIVIST_AGENT
 # = claude to go live). They mirror the GET .../triage surface.
 
 
@@ -1604,23 +1604,23 @@ def _render_prometheus() -> str:
     """
     n_runs, n_cards, verdict_counts, gate_flagged = _aggregate_metrics()
     lines = [
-        "# HELP pipeguard_runs_total Analysis runs discoverable by the API.",
-        "# TYPE pipeguard_runs_total counter",
-        f"pipeguard_runs_total {n_runs}",
-        "# HELP pipeguard_samples_total Decision cards (samples) across all served runs.",
-        "# TYPE pipeguard_samples_total counter",
-        f"pipeguard_samples_total {n_cards}",
-        "# HELP pipeguard_cards_total Decision cards by final gate verdict.",
-        "# TYPE pipeguard_cards_total counter",
+        "# HELP bayleaf_runs_total Analysis runs discoverable by the API.",
+        "# TYPE bayleaf_runs_total counter",
+        f"bayleaf_runs_total {n_runs}",
+        "# HELP bayleaf_samples_total Decision cards (samples) across all served runs.",
+        "# TYPE bayleaf_samples_total counter",
+        f"bayleaf_samples_total {n_cards}",
+        "# HELP bayleaf_cards_total Decision cards by final gate verdict.",
+        "# TYPE bayleaf_cards_total counter",
     ]
-    lines += [f'pipeguard_cards_total{{verdict="{v}"}} {verdict_counts[v]}' for v in _VERDICT_ORDER]
+    lines += [f'bayleaf_cards_total{{verdict="{v}"}} {verdict_counts[v]}' for v in _VERDICT_ORDER]
     lines += [
-        "# HELP pipeguard_gate_flagged_samples_total Samples with an actionable "
+        "# HELP bayleaf_gate_flagged_samples_total Samples with an actionable "
         "(non-proceed) verdict at each gate.",
-        "# TYPE pipeguard_gate_flagged_samples_total counter",
+        "# TYPE bayleaf_gate_flagged_samples_total counter",
     ]
     lines += [
-        f'pipeguard_gate_flagged_samples_total{{gate="{g.value}"}} {gate_flagged[g.value]}'
+        f'bayleaf_gate_flagged_samples_total{{gate="{g.value}"}} {gate_flagged[g.value]}'
         for g in _GATE_ORDER
     ]
     return "\n".join(lines) + "\n"

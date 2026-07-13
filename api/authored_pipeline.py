@@ -12,7 +12,7 @@ Factored out of ``routers/pipeline_run.py`` (where :func:`resolve_approved` and 
 originally lived, privately) so intake can reuse the exact same resolve+compile without importing a
 sibling router's privates or duplicating the gate.
 
-**compose ≠ execute holds at the CORE:** ``src/pipeguard/`` (including ``pipeguard.nextflow``) only
+**compose ≠ execute holds at the CORE:** ``src/bayleaf/`` (including ``bayleaf.nextflow``) only
 emits TEXT — it never runs a tool. Only the routers that call this module then shell out to the
 driver. This module itself produces files on disk; it never launches a subprocess.
 """
@@ -34,7 +34,7 @@ from scripts.run_giab_pipeline import REQUIRED_OUTPUT_KINDS
 
 from api.pipeline_store import PipelineGraphStore, last_emitted
 from api.routers.nextflow import CompileRequest
-from pipeguard.nextflow import (
+from bayleaf.nextflow import (
     NextflowBundle,
     NfEdge,
     NfGraph,
@@ -43,7 +43,7 @@ from pipeguard.nextflow import (
     compile_graph,
     required_inputs,
 )
-from pipeguard.nextflow.compiler import CompileError
+from bayleaf.nextflow.compiler import CompileError
 
 
 def resolve_approved(store: PipelineGraphStore, name: str, version: int | None) -> dict[str, Any]:

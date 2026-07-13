@@ -1,4 +1,4 @@
-# PipeGuard — Release-Hardening Audit Plan (Fable)
+# bayleaf — Release-Hardening Audit Plan (Fable)
 
 > **This plan has two fenced tracks, both run on Fable 5 over the same repo grounding.**
 > **Track A — Release-hardening audit** (§ below through "Critical framing"): what exists → P0–P3 fixes; mandate = *do not expand scope*.
@@ -7,7 +7,7 @@
 
 ## Purpose
 
-Release-harden **PipeGuard**'s working golden path before the hackathon demo. The objective is to **reduce uncertainty** around the existing Operate flow and Builder flow — make the shipped system coherent, integrated, reliable, scientifically credible, and demo-truthful. This is **not** a scoping exercise: do **not** propose new features, redesigns, or speculative agents. A finding is valuable only if it de-risks the golden path or corrects a claim the UI makes about itself. PipeGuard is an AI-assisted **provenance & QC decision gate** for genomics runs; its hero output is a per-sample `DecisionCard` (proceed / hold / rerun / escalate). Every conclusion must respect that **rules decide and AI only advises**.
+Release-harden **bayleaf**'s working golden path before the hackathon demo. The objective is to **reduce uncertainty** around the existing Operate flow and Builder flow — make the shipped system coherent, integrated, reliable, scientifically credible, and demo-truthful. This is **not** a scoping exercise: do **not** propose new features, redesigns, or speculative agents. A finding is valuable only if it de-risks the golden path or corrects a claim the UI makes about itself. bayleaf is an AI-assisted **provenance & QC decision gate** for genomics runs; its hero output is a per-sample `DecisionCard` (proceed / hold / rerun / escalate). Every conclusion must respect that **rules decide and AI only advises**.
 
 ---
 
@@ -27,15 +27,15 @@ This block exists so the maintainer can reconcile the plan with Fable's real cap
 
 ---
 
-## PipeGuard guardrails every agent MUST honor
+## bayleaf guardrails every agent MUST honor
 
 These are non-negotiable and take precedence over any "improvement" instinct:
 
-**G1 — ADR-0001 (rules decide / AI advises).** The verdict and confidence are computed by the deterministic rule engine (`src/pipeguard/rules.py` → `synthesis/base.py::aggregate_verdict`), never by an LLM. Every advisory agent's JSON schema exposes **prose only**. **An auditor recommendation to let any agent set, edit, or override a verdict/confidence is itself a Blocker finding**, not a fix.
+**G1 — ADR-0001 (rules decide / AI advises).** The verdict and confidence are computed by the deterministic rule engine (`src/bayleaf/rules.py` → `synthesis/base.py::aggregate_verdict`), never by an LLM. Every advisory agent's JSON schema exposes **prose only**. **An auditor recommendation to let any agent set, edit, or override a verdict/confidence is itself a Blocker finding**, not a fix.
 
-**G2 — Offline-first, conserve API credits.** All six advisory LLM seams are **OFF/stub by default** (`PIPEGUARD_*_AGENT=stub`, ADR-0006). The demo baseline runs with **no API key** at **$0**. Auditors must **record stub-vs-live status**, never assume a live agent, and never turn one on to "test" it without saying so. The demo recording default is the stub.
+**G2 — Offline-first, conserve API credits.** All six advisory LLM seams are **OFF/stub by default** (`BAYLEAF_*_AGENT=stub`, ADR-0006). The demo baseline runs with **no API key** at **$0**. Auditors must **record stub-vs-live status**, never assume a live agent, and never turn one on to "test" it without saying so. The demo recording default is the stub.
 
-**G3 — Not a clinical system.** No diagnostic, therapeutic, or safety claim. ClinVar significance is quoted **verbatim** as cited evidence (VAR-RTH-001); PipeGuard authors no pathogenicity. Flag any UI text that reads as a clinical call.
+**G3 — Not a clinical system.** No diagnostic, therapeutic, or safety claim. ClinVar significance is quoted **verbatim** as cited evidence (VAR-RTH-001); bayleaf authors no pathogenicity. Flag any UI text that reads as a clinical call.
 
 **G4 — "Confidence" values are heuristics.** Any per-citation score is a heuristic keyword-overlap number, surfaced as `N% (heuristic)`, **never** "confidence." `DecisionCard.confidence` is intentionally `null` until grounded (T-019). Flag any surface that renders a confidence meter or calls a heuristic "confidence."
 
@@ -94,7 +94,7 @@ These are non-negotiable and take precedence over any "improvement" instinct:
 
 **Role.** Trace each object end-to-end: UI input → frontend state → API request → validation → filesystem/store → Nextflow execution → agent/tool read → persisted output → UI render. Surface duplicated sources of truth, schema drift, stale state after mutations, and data that never crosses a boundary.
 
-**Owns.** `frontend/src/types.ts` (hand-kept TS mirror — top of the contract chain), `frontend/src/api.ts` (typed client, RBAC actor headers, `httpError()`, header-borne totals); `src/pipeguard/models.py` (authoritative pydantic contract), `src/pipeguard/provenance.py` (11 `EventType`s, `EventLedger`), `src/pipeguard/parsers.py::load_run`; `api/main.py` (`RunSummary`/`RunDetail`/`RunArtifact`, `@lru_cache`'d `_evaluate`, `get_run` share-merge L508-512, `_ARTIFACT_STAGE`), `api/card_readout.py` (metric_values ⋈ QCThreshold), `api/routers/intake.py` (`SubmitRunIn`/`SampleIn` `extra='forbid'`), `api/pipeline.py` (`PipelineGraph` envelope), `api/routers/nextflow.py` (`CompileEdge` `from`→`src`), `api/routers/review_queue.py` (`Ticket` snapshot), the five stores (`review_store.py`/`share_store.py`/`pipeline_store.py`/`settings_store.py`/`feedback` store).
+**Owns.** `frontend/src/types.ts` (hand-kept TS mirror — top of the contract chain), `frontend/src/api.ts` (typed client, RBAC actor headers, `httpError()`, header-borne totals); `src/bayleaf/models.py` (authoritative pydantic contract), `src/bayleaf/provenance.py` (11 `EventType`s, `EventLedger`), `src/bayleaf/parsers.py::load_run`; `api/main.py` (`RunSummary`/`RunDetail`/`RunArtifact`, `@lru_cache`'d `_evaluate`, `get_run` share-merge L508-512, `_ARTIFACT_STAGE`), `api/card_readout.py` (metric_values ⋈ QCThreshold), `api/routers/intake.py` (`SubmitRunIn`/`SampleIn` `extra='forbid'`), `api/pipeline.py` (`PipelineGraph` envelope), `api/routers/nextflow.py` (`CompileEdge` `from`→`src`), `api/routers/review_queue.py` (`Ticket` snapshot), the five stores (`review_store.py`/`share_store.py`/`pipeline_store.py`/`settings_store.py`/`feedback` store).
 
 **Inspection checklist:**
 1. **`types.ts` drift, field by field.** It is hand-kept (`types.ts` L1). Confirm `RunStatus`/`PipelineStage`/`ArtifactKind`(18 kinds)/`Verdict`/`Gate`/`Severity` unions still match backend bare-str values.
@@ -130,7 +130,7 @@ These are non-negotiable and take precedence over any "improvement" instinct:
 2. **Submit identity-join gate cannot be bypassed.** `canSubmit` requires `join.metadataPresent && joinApproved`; `approvedSig` is bound to the join signature so any edit re-opens approval; a "conflict" row (`join.blocking>0`) truly blocks. `sample_metadata.csv` is **required** (UIC-11).
 3. **`subject_id`/`tissue` never sent** — parsed + shown, but `SampleIn` `extra='forbid'` (T-117 seam). Confirm no 422 surprises an operator and the localStorage courier (`lib/accession.ts`) is labelled.
 4. **Intake "Admit (override)"** in `Intake.tsx` is local-only annotation — never a POST, never a verdict/gate mutation (G1), never persisted across refetch.
-5. **CREATE-A-TOOL IS A DEAD END — CONFIRM, DON'T ASSUME.** `AuthorToolNodeModal` (`BuilderModals.tsx` ~L186) is a **static STAR `--help` mock**; its "Review kinds & add to palette" button is a **no-op** (`onClose` only) — it registers/surfaces **nothing**. The real `src/pipeguard/node_author` agent (`propose_node`, T-046) is **core-only**. **Run `grep -rn node_author api/` and `grep -rn propose_node frontend/src` and confirm BOTH are empty.** Report the missing endpoint + missing wiring as a key finding; confirm nothing in the Builder claims a proposed node was registered.
+5. **CREATE-A-TOOL IS A DEAD END — CONFIRM, DON'T ASSUME.** `AuthorToolNodeModal` (`BuilderModals.tsx` ~L186) is a **static STAR `--help` mock**; its "Review kinds & add to palette" button is a **no-op** (`onClose` only) — it registers/surfaces **nothing**. The real `src/bayleaf/node_author` agent (`propose_node`, T-046) is **core-only**. **Run `grep -rn node_author api/` and `grep -rn propose_node frontend/src` and confirm BOTH are empty.** Report the missing endpoint + missing wiring as a key finding; confirm nothing in the Builder claims a proposed node was registered.
 6. **"rerun" is a dead journey step.** No in-place requeue/re-execution is wired from a ticket or decision card; `resolutionNote('rerun')` is copy only; both Submit and Builder-Run **409 on a duplicate `run_id`**, so a "rerun" means a fresh `run_id`. Flag the missing loop.
 7. **Repair "Send to review queue" fabricates no ticket** — it only `navigate('/queue')`. Confirm no orphaned/implied linkage between a signature-level `RepairProposal` and a sample-scoped ticket.
 8. **Builder Run vs approval mismatch.** `POST /api/pipelines/run` executes the **live** graph **without checking approved status** — an unsaved/unapproved draft runs directly (only RBAC + input-kind validation gate it), sitting *beside* the Save→Submit→Approve lifecycle that governs only locators/dry-run/diff. Assess whether this is an intended demo affordance or a missing gate.
@@ -148,7 +148,7 @@ These are non-negotiable and take precedence over any "improvement" instinct:
 
 **Role.** Find everything that *appears* implemented but isn't fully connected. Search `TODO/FIXME/placeholder/stub/mock/sample/temporary/hardcoded`, endpoints with no callers, UI actions with no endpoint, backend capability with no UI, stores/models unused by services, agents not wired.
 
-**Owns.** The full wiring surface: `api/routers/` (`intake.py`, `pipeline_run.py`, `nextflow.py`, `pipelines_lifecycle.py`, `review_queue.py`, `settings.py`), `api/main.py` routes, `api/*_store.py`, all six agent modules (`src/pipeguard/{triage,pipeline_repair,node_author,synthesis}`, `api/{feedback_agent,archivist}.py`), `frontend/src/api.ts` call sites, `BuilderModals.tsx`, `SettingsModelTier.tsx`, `Streamlit app/streamlit_app.py`.
+**Owns.** The full wiring surface: `api/routers/` (`intake.py`, `pipeline_run.py`, `nextflow.py`, `pipelines_lifecycle.py`, `review_queue.py`, `settings.py`), `api/main.py` routes, `api/*_store.py`, all six agent modules (`src/bayleaf/{triage,pipeline_repair,node_author,synthesis}`, `api/{feedback_agent,archivist}.py`), `frontend/src/api.ts` call sites, `BuilderModals.tsx`, `SettingsModelTier.tsx`, `Streamlit app/streamlit_app.py`.
 
 **Required deliverable — the capability matrix** (one row per capability):
 
@@ -157,8 +157,8 @@ These are non-negotiable and take precedence over any "improvement" instinct:
 Populate at minimum these rows and **verify each cell against the repo, not the doc:**
 1. Submit → run execution (**second execution path also exists** — `POST /api/pipelines/run`, Builder Run, `pipeline_run.py:173`; **not in CLAUDE.md's code map** — reconcile the doc drift).
 2. Node-authoring agent — **core Agent ✔, API ✗, UI ✗** (T-046; grep-confirm empty).
-3. `metrics-expansion` agent — **vaporware**: only a `SettingsModelTier.tsx:54` roster row (`phase2:true`, env `PIPEGUARD_METRICS_AGENT`), **no backend module, env var absent from `.env.example`**. Confirm it can never read as "Live."
-4. `SettingsModelTier` Save (T-045) — **UI-only local React state, no PATCH, not bound to `PIPEGUARD_*_MODEL`**. Confirm no false "applied" impression.
+3. `metrics-expansion` agent — **vaporware**: only a `SettingsModelTier.tsx:54` roster row (`phase2:true`, env `BAYLEAF_METRICS_AGENT`), **no backend module, env var absent from `.env.example`**. Confirm it can never read as "Live."
+4. `SettingsModelTier` Save (T-045) — **UI-only local React state, no PATCH, not bound to `BAYLEAF_*_MODEL`**. Confirm no false "applied" impression.
 5. `RunHandoffModal` (`BuilderModals.tsx:79`) — **orphaned dead code**: exported, **zero call sites** (superseded by `RunPipelineModal`). CLAUDE.md still describes it as the hand-off surface. Decide remove vs re-wire.
 6. `PipelineRepairModal` / `ArchivistModal` — **read-wired, write-inert** ("Send to review queue" navigates only; "Queue archive" is `onClose`). No write endpoint exists.
 7. Repair proposal → ticket — **no write bridge** (broken triage→queue handoff).
@@ -178,14 +178,14 @@ Populate at minimum these rows and **verify each cell against the repo, not the 
 
 **Role.** Actively try to break the system and confirm every failure yields an understandable state, a recoverable action, and an auditable record. Focus on the Nextflow execution seams and the in-process job registries.
 
-**Owns.** `scripts/run_giab_pipeline.py` (`run_nextflow`, `_one`, parse_*), `api/routers/intake.py` (`_jobs` registry, `_bioconda_env`, timeout 900 s), `api/routers/pipeline_run.py` (`_jobs`, timeout 1800 s, `_catalog`), `src/pipeguard/nextflow/{compiler.py,catalog.py}` (`CompileError`, `_render_placeholder`), `pipelines/germline/`, `api/routers/nextflow.py` (compile 422s), `Toast.tsx`/`httpError()`, `States.tsx`.
+**Owns.** `scripts/run_giab_pipeline.py` (`run_nextflow`, `_one`, parse_*), `api/routers/intake.py` (`_jobs` registry, `_bioconda_env`, timeout 900 s), `api/routers/pipeline_run.py` (`_jobs`, timeout 1800 s, `_catalog`), `src/bayleaf/nextflow/{compiler.py,catalog.py}` (`CompileError`, `_render_placeholder`), `pipelines/germline/`, `api/routers/nextflow.py` (compile 422s), `Toast.tsx`/`httpError()`, `States.tsx`.
 
 **Inspection checklist (each failure → observed state + recoverability + audit trail):**
 1. **Invalid/cyclic graph** through `POST /api/pipelines/compile` **and** `POST /api/pipelines/run` → both must return **422 with the compiler's reason** (not 500): `_topo_order` "cycle," bad-edge "unknown node"/"out of range," empty "no tool nodes."
 2. **Uncatalogued tool node** → renders as a **placeholder** (`exit 1`, fails loudly on a real run) yet has a working `stub:` so `-stub-run` validates. No fabricated command.
 3. **Missing reference index.** `INDEXED_REFERENCE_PARAMS={'reference'}` glob-stages `file('${params.reference}.*')`; if `.fai`/`.bwt.2bit.64` absent, the glob is empty and bwa-mem2/bcftools fail **at runtime, not compile** (no pre-flight index check). Confirm the failure is loud.
 4. **Mismatched/swapped R1/R2.** Compiler/driver take reads as independent params with **no pairing/length/format validation** — force a swap and confirm a loud process crash (`check=True` → `CalledProcessError` → job `failed`), never a silent wrong result.
-5. **nextflow not on PATH.** `run_nextflow()` `sys.exit`s with a PATH hint; confirm the background job flips to `failed` with the stderr tail surfaced via intake-status, and that a `uvicorn` started **without `PIPEGUARD_BIOCONDA_BIN`** fails every submit at the driver — surfaced as a real toast, not a silent stall.
+5. **nextflow not on PATH.** `run_nextflow()` `sys.exit`s with a PATH hint; confirm the background job flips to `failed` with the stderr tail surfaced via intake-status, and that a `uvicorn` started **without `BAYLEAF_BIOCONDA_BIN`** fails every submit at the driver — surfaced as a real toast, not a silent stall.
 6. **Failed Nextflow process / partial publish.** `_one()` `sys.exit`s if any of `*.fastp.json`/`*.mosdepth.summary.txt`/`*.thresholds.bed.gz`/`*.norm.vcf.gz` is missing — a partial run is a **hard failure**, not a degraded gate. Confirm the ok-check requires returncode==0 **and** `data/<run_id>/SampleSheet.csv` exists.
 7. **Duplicate run id.** 409 in both routers, guarded by `(_DATA/run_id).exists()` — flag the **race window** for two concurrent submits of the same id before either writes its dir.
 8. **Backend restart mid-run.** `_jobs` is an in-memory dict + `threading.Lock` + daemon threads (non-durable). Confirm a restart loses job state, orphans `.nf-runs/<run_id>` scratch, and intake-status can only recover `complete` from disk — a `running` job becomes 404/unobservable. Verify the polling UIs degrade honestly.
@@ -204,7 +204,7 @@ Populate at minimum these rows and **verify each cell against the repo, not the 
 
 **Role.** The six advisory agents read logs/metadata/findings and can *propose* pipelines/tools/shares. Audit prompt-injection surfaces, verdict-boundary integrity, least privilege, egress de-identification, and the one tool-executing surface. **G1 is the spine: an agent that could set a verdict/confidence is a Blocker.**
 
-**Owns.** `src/pipeguard/triage/agent.py`, `src/pipeguard/pipeline_repair/agent.py`, `src/pipeguard/node_author/agent.py`, `api/feedback_agent.py`, `api/archivist.py`, `src/pipeguard/synthesis/claude.py` + `synthesis/base.py::aggregate_verdict`; `src/pipeguard/rules.py` (`_check_route_to_human`/VAR-RTH-001), `src/pipeguard/runbook.py` (`RouteToHumanPolicy`), `api/main.py::_active_runbook`, `data/RUN-2026-07-11-CLINVAR-RTH/`; `api/safe_harbor.py` + `api/deid.py`, `POST /api/runs/{id}/share`, `api/share_store.py`; `api/routers/pipelines_lifecycle.py` (dry-run resolver), `api/routers/intake.py`, `api/auth.py`, `.env.example`.
+**Owns.** `src/bayleaf/triage/agent.py`, `src/bayleaf/pipeline_repair/agent.py`, `src/bayleaf/node_author/agent.py`, `api/feedback_agent.py`, `api/archivist.py`, `src/bayleaf/synthesis/claude.py` + `synthesis/base.py::aggregate_verdict`; `src/bayleaf/rules.py` (`_check_route_to_human`/VAR-RTH-001), `src/bayleaf/runbook.py` (`RouteToHumanPolicy`), `api/main.py::_active_runbook`, `data/RUN-2026-07-11-CLINVAR-RTH/`; `api/safe_harbor.py` + `api/deid.py`, `POST /api/runs/{id}/share`, `api/share_store.py`; `api/routers/pipelines_lifecycle.py` (dry-run resolver), `api/routers/intake.py`, `api/auth.py`, `.env.example`.
 
 **Inspection checklist:**
 1. **Prose-only schemas.** Confirm `_ADVICE_SCHEMA`, `_PROSE_SCHEMA`×2, `_NARRATION_SCHEMA`, `_THEMES_SCHEMA` expose **no** verdict/confidence/finding/citation property the model could set (G1).
@@ -217,7 +217,7 @@ Populate at minimum these rows and **verify each cell against the repo, not the 
 8. **Share endpoint hardening.** `require_role('approver')` + frontend `ConfirmDialog`; records a tamper-evident `DATA_EXPORTED` event (sha256 of exact bytes). Note the **absence** of a diff-preview, the append-only (no-rollback) posture, and the missing Admin Activity audit case.
 9. **Node-author is core-only.** grep-confirm no api endpoint, no `propose_node` in frontend; `AuthorToolNodeModal` is a static phase-2 mock; Settings row is `wired:false/phase2:true`.
 10. **Dry-run resolver is READ-ONLY** and flags `invalid` (not merely `missing`) for absolute/`..`-escaping locator patterns — a path-traversal guard on a client-authored graph.
-11. **Only tool-executing surface.** `POST /api/runs` (intake) is RBAC-gated, regex-sanitizes `run_id`, `extra='forbid'` rejects unexpected PII fields; confirm `src/pipeguard/` core still executes nothing (grep for `subprocess`/`os.system`/`shutil.which` in `src/pipeguard/` — only `scripts/` + `api/routers/{intake,pipeline_run}.py` may shell out).
+11. **Only tool-executing surface.** `POST /api/runs` (intake) is RBAC-gated, regex-sanitizes `run_id`, `extra='forbid'` rejects unexpected PII fields; confirm `src/bayleaf/` core still executes nothing (grep for `subprocess`/`os.system`/`shutil.which` in `src/bayleaf/` — only `scripts/` + `api/routers/{intake,pipeline_run}.py` may shell out).
 12. **Env selectors fail safe.** `get_*_agent()` must default to stub on any value other than exactly `'claude'` (stripped/lowered) — a typo can't silently enable a live agent.
 
 **Evidence format.** `file:line` for every schema field, guard, and privilege claim; the grep + empty result for every "absent" claim.
@@ -230,7 +230,7 @@ Populate at minimum these rows and **verify each cell against the repo, not the 
 
 **Role.** Review as an NGS platform. Audit metric units/thresholds, reference/chrom compatibility, tool-version/container pinning, provenance/reproducibility, and every UI scientific claim. Require each conclusion to distinguish **observed evidence / inference / uncertainty / recommended verification**. Respect G3/G4.
 
-**Owns.** `src/pipeguard/metrics/{metric_registry.yaml,registry.py,mapping.py}`, `src/pipeguard/runbook.py` (`DEFAULT_RUNBOOK`, 5 required + 5 optional), `src/pipeguard/rules.py`, `src/pipeguard/models.py` (`Gate`/`_CATEGORY_GATE`, `MetricValue`, `RULE_PACK_VERSION`), `src/pipeguard/parsers.py`; `pipelines/germline/main.nf` + `nextflow.config`, `src/pipeguard/nextflow/catalog.py` (conda + container pins); data: `data/RUN-2026-07-08-GIAB-HG002/` (the **one** real run), `data/RUN-2026-07-11-CLINVAR-RTH/`, `scripts/{fetch_giab_hg002.py,giab_hg002_manifest.json,gate_giab.py,panel_regions.example.bed}`; docs `docs/data/{qc_metrics.md,metric_registry.md}`, `docs/adr/ADR-0004`, `ADR-0018`, `docs/quality/evaluation.md`.
+**Owns.** `src/bayleaf/metrics/{metric_registry.yaml,registry.py,mapping.py}`, `src/bayleaf/runbook.py` (`DEFAULT_RUNBOOK`, 5 required + 5 optional), `src/bayleaf/rules.py`, `src/bayleaf/models.py` (`Gate`/`_CATEGORY_GATE`, `MetricValue`, `RULE_PACK_VERSION`), `src/bayleaf/parsers.py`; `pipelines/germline/main.nf` + `nextflow.config`, `src/bayleaf/nextflow/catalog.py` (conda + container pins); data: `data/RUN-2026-07-08-GIAB-HG002/` (the **one** real run), `data/RUN-2026-07-11-CLINVAR-RTH/`, `scripts/{fetch_giab_hg002.py,giab_hg002_manifest.json,gate_giab.py,panel_regions.example.bed}`; docs `docs/data/{qc_metrics.md,metric_registry.md}`, `docs/adr/ADR-0004`, `ADR-0018`, `docs/quality/evaluation.md`.
 
 **Inspection checklist:**
 1. **Paired-end identity/ordering.** `main.nf` passes reads as `Channel.value([file(read1), file(read2)])` with **no check** that R1/R2 are matched or have equal read counts; no gate rule validates FASTQ sync. Confirm this is an accepted seam, not silently assumed correct.
@@ -282,7 +282,7 @@ Populate at minimum these rows and **verify each cell against the repo, not the 
 
 **Role.** A cross-boundary agreement audit across **frontend types / API schemas / core pydantic / agent structured outputs / tool manifests / execution artifacts**. Mismatched agreements across subsystem boundaries are a bigger release risk than individual bugs.
 
-**Owns the seams:** `types.ts` ↔ `api/main.py` + `api/routers/*` + `src/pipeguard/models.py`; agent output models (`{triage,pipeline_repair,node_author}/models.py`, `NodeProposal`/`RepairProposal`/`TriageNote`/`ArchiveDigest`) ↔ their frontend renderers; `catalog.py` `PortSpec.kind` ↔ frontend `ArtifactKind`; `PipelineGraph` envelope ↔ `NfGraph`/`CompileEdge`; store record shapes ↔ readers.
+**Owns the seams:** `types.ts` ↔ `api/main.py` + `api/routers/*` + `src/bayleaf/models.py`; agent output models (`{triage,pipeline_repair,node_author}/models.py`, `NodeProposal`/`RepairProposal`/`TriageNote`/`ArchiveDigest`) ↔ their frontend renderers; `catalog.py` `PortSpec.kind` ↔ frontend `ArtifactKind`; `PipelineGraph` envelope ↔ `NfGraph`/`CompileEdge`; store record shapes ↔ readers.
 
 **Inspection checklist:**
 1. **`MonitoringSignature` stale drift** (backend serves `first_seen/last_seen/trend/affected_run_ids`; frontend says "NOT yet served," omits `affected_run_ids`, mistypes `trend`) — the single highest-value known contract break.
@@ -324,7 +324,7 @@ Populate at minimum these rows and **verify each cell against the repo, not the 
 
 ## MASTER instruction (prepended to all 11 agents)
 
-You are one agent in a **release-hardening audit of PipeGuard** under a hackathon deadline. The objective is **NOT** to expand scope, redesign, or propose speculative features — it is to make the **existing** golden path coherent, integrated, reliable, scientifically credible, and demo-truthful. **Do not modify production code** (a maintainer may be concurrently editing Builder files). Inspect the complete repo — frontend, API routers, core (`src/pipeguard/`), pydantic models, stores, Nextflow codegen + committed pipeline, agent prompts + schemas, fixtures (`data/`), tests, docs, `.env.example`, config. **Do not infer a feature works because files exist — trace it and, where possible, drive it.** Where a ground-truth map marks something stub / phase-2 / absent, **verify reality; do not assume it works.** Honor guardrails **G1–G7** above (rules decide / AI advises; offline-first stub-default; not clinical; heuristics ≠ confidence; read-only; scale-aware; explicit-edit+audit).
+You are one agent in a **release-hardening audit of bayleaf** under a hackathon deadline. The objective is **NOT** to expand scope, redesign, or propose speculative features — it is to make the **existing** golden path coherent, integrated, reliable, scientifically credible, and demo-truthful. **Do not modify production code** (a maintainer may be concurrently editing Builder files). Inspect the complete repo — frontend, API routers, core (`src/bayleaf/`), pydantic models, stores, Nextflow codegen + committed pipeline, agent prompts + schemas, fixtures (`data/`), tests, docs, `.env.example`, config. **Do not infer a feature works because files exist — trace it and, where possible, drive it.** Where a ground-truth map marks something stub / phase-2 / absent, **verify reality; do not assume it works.** Honor guardrails **G1–G7** above (rules decide / AI advises; offline-first stub-default; not clinical; heuristics ≠ confidence; read-only; scale-aware; explicit-edit+audit).
 
 **Every finding uses this exact schema:**
 > Finding ID · Title · Severity (Blocker/High/Medium/Low) · Confidence (Confirmed/Probable/Possible) · Area + affected journey · exact evidence (file paths + line numbers) · reproduction steps · expected behavior · actual behavior · likely root cause · minimum viable fix · larger architectural fix (only when materially useful) · Demo-critical (Y/N) · risk of fixing immediately · suggested regression test.
@@ -340,7 +340,7 @@ You are one agent in a **release-hardening audit of PipeGuard** under a hackatho
 
 **No vague findings.** Never write "improve error handling" or "make the UI consistent." Name the exact component, the exact inconsistency or failure condition, and the smallest concrete remediation. **Prioritize preserving the working golden path over refactoring.**
 
-**The PipeGuard golden path (anything that breaks it is Blocker/High):**
+**The bayleaf golden path (anything that breaks it is Blocker/High):**
 
 *Operate flow (recording default uses pre-gated `data/mock_run_01`; live intake is off-recording):*
 1. **Accession** (`/accession`, client-side CRM, `lib/accession.ts` courier) → **Submit** (`/submit`, real Illumina-v2/plain-CSV parse, **required** `sample_metadata.csv` human-approved identity join) → **`POST /api/runs`** (`api/routers/intake.py`, RBAC reviewer/approver, `SampleIn extra='forbid'`).
@@ -370,7 +370,7 @@ You receive all 10 specialist reports. **Do not concatenate.** Produce a decisio
 7. **Avoid risky refactors before submission** — never recommend a broad refactor that endangers the working golden path; prefer the minimum viable fix.
 8. **Produce a release checklist** (pre-recording go/no-go items, each tied to a P0/P1).
 
-**Final output is ONLY these four prioritized sections (PipeGuard-specific):**
+**Final output is ONLY these four prioritized sections (bayleaf-specific):**
 - **P0 — must-fix before recording:** breaks the Operate or Builder golden path, corrupts/mislabels data, is scientifically misleading, an obvious security/agent-autonomy failure, or a hero-screen status that lies (e.g. hardcoded "Gate online" reading green while offline).
 - **P1 — fix before submission if possible:** visible inconsistency, incomplete integration on a path a viewer might touch, confusing failure, or a high-probability demo issue (e.g. stale phase-2 badge that understates a wired modal; a live-agent beat that could 500 without the stub fallback).
 - **P2 — hide or document:** incomplete features that are fine **outside** the demo when clearly disabled/labelled (BaseSpace mock, `AuthorToolNodeModal`, Inbox connectors, Median-review KPI, Settings model-tier Save, node-author agent).
@@ -394,13 +394,13 @@ For each maintainer wishlist item, uncover **the best way to implement it in *th
 
 ## Track-B master instruction (prepended to every Track-B agent)
 
-You are a **grounded implementation-design** agent for a PipeGuard wishlist feature. Your job is **not** to audit and **not** to code — it is to find the **best way to build this feature in the existing codebase**, grounded in real files, patterns, and seams. Read the repo the way an architect would before writing an ADR. Honor guardrails **G1–G7** as **non-negotiable design constraints**, not suggestions:
+You are a **grounded implementation-design** agent for a bayleaf wishlist feature. Your job is **not** to audit and **not** to code — it is to find the **best way to build this feature in the existing codebase**, grounded in real files, patterns, and seams. Read the repo the way an architect would before writing an ADR. Honor guardrails **G1–G7** as **non-negotiable design constraints**, not suggestions:
 - **G1/ADR-0001:** rules decide the verdict/confidence; any new feature keeps AI advisory and off the deterministic critical path. A design that lets a feature set/override a verdict is disqualified — say so.
-- **G2:** offline-first, stub-by-default, $0 baseline — a new LLM seam must ship stub-first with a deterministic fallback and a `PIPEGUARD_*` selector.
+- **G2:** offline-first, stub-by-default, $0 baseline — a new LLM seam must ship stub-first with a deterministic fallback and a `BAYLEAF_*` selector.
 - **Ports & adapters / ADR-0016:** reuse the existing pluggable-store shape (jsonl|sqlite|postgres, degrade-to-jsonl), the RBAC dev-shim (`api/auth.py::require_role`), the event ledger, the shared frontend primitives (`Tabs`/`Bar`/`Toast`/`ConfirmDialog`/`Pager`), and the six-agent seam pattern **before** inventing a new abstraction. Name the existing thing you'd reuse.
 - **G3/G4:** no clinical claims; heuristics ≠ confidence.
 - **G6/G7:** scale-aware (dropdowns + pagination, never infinite rows / pill-per-item); every mutation explicitly selected + saved + audited + confirm-gated.
-- **compose ≠ execute** stays: the core (`src/pipeguard/`) never shells out; only `scripts/` + `api/routers/{intake,pipeline_run}` may.
+- **compose ≠ execute** stays: the core (`src/bayleaf/`) never shells out; only `scripts/` + `api/routers/{intake,pipeline_run}` may.
 
 **Method — a design panel per item.** Produce (or, in the fan-out, three agents each produce) **2–3 genuinely distinct approaches**, then recommend one. Each approach must name the **real files/seams** it touches and the **existing pattern** it extends. Prefer the **smallest MVP slice with production-ready seams** over a big-bang build.
 
@@ -445,9 +445,9 @@ Four items, each a **"clean implementation" of already-roadmapped work** — gro
 
 **Refinement (2026-07-11) — the PRIMARY thing to uncover is the scaffold + constraint contract.** Less "wire the existing modal," more: *what exact scaffolds and constraints must exist for such an authoring agent to operate safely and repeatably.* This resolves the earlier tools-vs-agents fork: it is a **card/tool-authoring agent**, plus the **general convention for how any agent is made and incorporated**. The design panel's headline output is that contract (a real MD), enumerated next.
 
-**Resolved (2026-07-11):** the scaffold governs **both** — authoring pipeline **cards/tools** *and* authoring **new advisory agents** — and the **"accessible agent library" IS the existing six-agent roster** (synthesizer / QC-triage / pipeline-repair / feedback / archivist / node-author, surfaced in Settings), which we want to make **cleanly expandable** to a 7th/8th agent. So the "library/registry" work targets the roster + its `PIPEGUARD_*_AGENT` seams + the Settings roster UI, governed by the scaffold MD — not a greenfield store.
+**Resolved (2026-07-11):** the scaffold governs **both** — authoring pipeline **cards/tools** *and* authoring **new advisory agents** — and the **"accessible agent library" IS the existing six-agent roster** (synthesizer / QC-triage / pipeline-repair / feedback / archivist / node-author, surfaced in Settings), which we want to make **cleanly expandable** to a 7th/8th agent. So the "library/registry" work targets the roster + its `BAYLEAF_*_AGENT` seams + the Settings roster UI, governed by the scaffold MD — not a greenfield store.
 
-**Grounded interpretation:** productionize the existing node-authoring agent (`src/pipeguard/node_author/`, T-046) — today **core-only**, **corpus-bound to a fixed 11-card table** (`knowledge/tool_cards.jsonl`), **advisory/prose-only**, with **no doc-drop parser** (narrower than its own design note) — into a wired capability whose proposals become **scoped, versioned, human-approved library entries**. The Builder's `AuthorToolNodeModal` (`BuilderModals.tsx:186`) is a **static STAR mock** with no accept handler and no endpoint (`grep node_author api/` + `grep propose_node frontend/src` both empty).
+**Grounded interpretation:** productionize the existing node-authoring agent (`src/bayleaf/node_author/`, T-046) — today **core-only**, **corpus-bound to a fixed 11-card table** (`knowledge/tool_cards.jsonl`), **advisory/prose-only**, with **no doc-drop parser** (narrower than its own design note) — into a wired capability whose proposals become **scoped, versioned, human-approved library entries**. The Builder's `AuthorToolNodeModal` (`BuilderModals.tsx:186`) is a **static STAR mock** with no accept handler and no endpoint (`grep node_author api/` + `grep propose_node frontend/src` both empty).
 
 **The gap (four sub-goals):** (a) **scoped incorporation** — nothing consumes `NodeProposal`; no `NodeProposal → Builder card → ProcessSpec` path; "which pipeline/stage a node may join" is unmodeled. (b) **versioned to platform version** — proposals pin tool + corpus (`NODE_AUTHOR_CORPUS_VERSION`) + schema versions, but **nothing binds to a platform version** (only unreferenced `pyproject.toml:7` `0.1.0`). (c) **accessible library/registry (= the six-agent roster, to be made expandable)** — today adding an agent means editing code + `.env.example` + the client-only Settings roster (T-045); there is **no governed "add an agent/tool to the library" path**, and the tool-card corpus is a hand-curated flat JSONL. (d) **boundaries MD** — no per-agent capability contract exists.
 
@@ -459,7 +459,7 @@ Four items, each a **"clean implementation" of already-roadmapped work** — gro
 1. **The templates it authors *into* (never around).** The `ToolCardEntry` corpus schema (`knowledge/tool_cards.jsonl`), the `NodeProposal`/`PortSpec` output model (`node_author/models.py`), and the *target* `ProcessSpec`/`Port` card template (`catalog.py:22-59`). The agent fills these shapes — it **never** authors a `script:`/`stub:` body.
 2. **Rules for interacting with the Nextflow integration.** How a proposal maps `NodeProposal → ProcessSpec → compile_graph → nextflow run`; the hard rule that it emits **ports/version/locators only** (a human authors the runnable `script:`/`stub:`); uncatalogued → **placeholder `exit 1`, never a fabricated command** (`compiler.py:237-245`); the typed-port/`ArtifactKind` vocabulary (unknown → `reserved`/unwired via the structural `PortSpec.known`); and the **drift-guard + live `-stub-run` gate** any new tool must pass before it is "runnable."
 3. **UI do's and don'ts.** Proposals surface as **advisory**, **never auto-added** (a human accepts); no false "Live"/overstated phase-2 labels (cf. the Track-A truthfulness findings); reserved-kind chips are **shown, not wired**; the accept action is **confirm-gated + audited** (explicit-edit house rule); scale-aware.
-4. **Conventions for how any agent is made + incorporated.** The six-agent `stub|claude` seam: env selector `PIPEGUARD_*_AGENT`/`_MODEL`, lazy `anthropic` import, **degrade-to-stub on any error incl. refusal**, **prose-only schema**, `advisory: Literal[True]`, **off the deterministic critical path** (ADR-0009/0012, G1); required tests + a `.env.example` entry; and where it registers in the library/roster. Seed doc to extend: `docs/design/agents.md`.
+4. **Conventions for how any agent is made + incorporated.** The six-agent `stub|claude` seam: env selector `BAYLEAF_*_AGENT`/`_MODEL`, lazy `anthropic` import, **degrade-to-stub on any error incl. refusal**, **prose-only schema**, `advisory: Literal[True]`, **off the deterministic critical path** (ADR-0009/0012, G1); required tests + a `.env.example` entry; and where it registers in the library/roster. Seed doc to extend: `docs/design/agents.md`.
 
 Plus the pins the MD must fix: capability limits (**metadata not commands**; only `ARTIFACT_KINDS`; **no verdict/confidence** — G1); review/approval (draft→pending_review→approved; inert until a human accepts *and* authors the ProcessSpec); versioning (tool version **and** platform version **and** corpus/schema); reserved-vs-known kinds = a **governed registry change, never a fabrication**.
 

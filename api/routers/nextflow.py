@@ -4,7 +4,7 @@ A stateless, off-gate transform: it takes the Builder's live ``{nodes, edges}`` 
 saves) and returns the generated pipeline — either as JSON (for the Builder's preview) or a ``.zip``
 (a downloadable ``main.nf`` + ``modules/*.nf`` + ``nextflow.config`` the user runs with
 ``nextflow run``). It never persists anything, never runs Nextflow or a tool, and never touches a
-verdict — compose ≠ execute holds (the pure codegen lives in ``pipeguard.nextflow``).
+verdict — compose ≠ execute holds (the pure codegen lives in ``bayleaf.nextflow``).
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 
-from pipeguard.nextflow import CompileError, NfEdge, NfGraph, NfNode, compile_graph
-from pipeguard.nextflow.compiler import KIND_PATTERN, NODE_ID_PATTERN, TOOL_PATTERN
+from bayleaf.nextflow import CompileError, NfEdge, NfGraph, NfNode, compile_graph
+from bayleaf.nextflow.compiler import KIND_PATTERN, NODE_ID_PATTERN, TOOL_PATTERN
 
 router = APIRouter(prefix="/api", tags=["nextflow"])
 

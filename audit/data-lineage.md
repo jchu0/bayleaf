@@ -1,7 +1,7 @@
-## PipeGuard Release-Hardening Audit — Specialist 2: Data-movement / lineage
+## bayleaf Release-Hardening Audit — Specialist 2: Data-movement / lineage
 
 **Run mode:** Fable 5, **code-only / headless** (route + `file:line` + quoted string; no browser this pass, per the resolved evidence block in `AUDIT_PLAN.md:26`).
-**Scope traced:** `types.ts` ⇄ `api/main.py` + routers + `src/pipeguard/models.py`; the Submit→`POST /api/runs`→driver→`data/<run_id>/`→cards→qc-readout→provenance→share chain; the five off-gate stores; the compile/run graph envelope.
+**Scope traced:** `types.ts` ⇄ `api/main.py` + routers + `src/bayleaf/models.py`; the Submit→`POST /api/runs`→driver→`data/<run_id>/`→cards→qc-readout→provenance→share chain; the five off-gate stores; the compile/run graph envelope.
 **Headline:** no Blockers. The gate-decision lineage (content_hash purity, metric join keys, share-merge cache purity, origin tagging) is **honest and correct**. The real signal is a cluster of **hand-kept `types.ts` drift** (one named, high-value) plus a **live-intake metadata-fabrication seam** where operator-entered sample metadata never reaches disk and is replaced by a hardcoded value. Every claim below was re-opened and the quoted string re-confirmed.
 
 Guardrail note (G1): nothing here recommends letting any agent or projection set a verdict/confidence — all findings are contract/lineage integrity only.
@@ -36,7 +36,7 @@ Guardrail note (G1): nothing here recommends letting any agent or projection set
 - **Demo-critical:** N. **Regression test:** submit a run with `type != blood`, assert the resulting `sample_metadata.csv` (or card header) does not report `blood`.
 
 #### DL-04 · `GET /api/config` frontend `Runbook`/`QCThreshold` types omit fields the backend now serves · **Low** · Confirmed · design-inconsistency
-- **Evidence (producer):** `GET /api/config` returns `DEFAULT_RUNBOOK.model_dump()` (`api/main.py:662`); the backend `QCThreshold` now carries `our_key` (`src/pipeguard/runbook.py:26`) and `required` (`runbook.py:42`), and `Runbook` carries `trace_failure_statuses` (`runbook.py:174`) and `route_to_human` (`runbook.py:178`).
+- **Evidence (producer):** `GET /api/config` returns `DEFAULT_RUNBOOK.model_dump()` (`api/main.py:662`); the backend `QCThreshold` now carries `our_key` (`src/bayleaf/runbook.py:26`) and `required` (`runbook.py:42`), and `Runbook` carries `trace_failure_statuses` (`runbook.py:174`) and `route_to_human` (`runbook.py:178`).
 - **Evidence (consumer):** `frontend/src/types.ts:223-231` `QCThreshold` declares only `metric/label/gate/hard_fail/higher_is_better/borderline_band/unit` (no `our_key`, no `required`); `types.ts:233-238` `Runbook` omits `trace_failure_statuses` and `route_to_human`.
 - **Actual:** **Benign at runtime** — the sole `api.config()` consumer (`frontend/src/screens/Intake.tsx:72,79`) joins by the `metric` field via a hardcoded `RUN_TILES` map (`Intake.tsx:29-35`) and never reads the missing fields; TS structural typing ignores the extra JSON keys. Still a real drift that could mislead the next consumer (e.g. one reaching for `our_key` off `/api/config`).
 - **Min fix:** mirror the four fields onto the `types.ts` `Runbook`/`QCThreshold`, or add a comment that `/api/config` is the raw core shape. **~15 min.** **Demo-critical:** N.
@@ -47,7 +47,7 @@ Guardrail note (G1): nothing here recommends letting any agent or projection set
 - **Min fix:** none required for the demo; document that "save" and "compile/run" are independent shapes. **Demo-critical:** N.
 
 #### DL-06 · `ticket.actioned` / `notification.emitted` events never reach a run's Provenance trail · **Low** · Confirmed · incomplete-integration
-- **Evidence:** `get_run` merges only the gate ledger (`api/main.py:507` `_evaluate`) plus `DATA_EXPORTED` share events from the separate share store (`api/main.py:508-512`). The `EventType` vocabulary includes `NOTIFICATION_EMITTED`/`TICKET_ACTIONED`/`RESOLUTION_RECORDED` (`src/pipeguard/provenance.py:36-38`), but those live in the review/inbox stores and are **not** merged into `RunDetail.events`.
+- **Evidence:** `get_run` merges only the gate ledger (`api/main.py:507` `_evaluate`) plus `DATA_EXPORTED` share events from the separate share store (`api/main.py:508-512`). The `EventType` vocabulary includes `NOTIFICATION_EMITTED`/`TICKET_ACTIONED`/`RESOLUTION_RECORDED` (`src/bayleaf/provenance.py:36-38`), but those live in the review/inbox stores and are **not** merged into `RunDetail.events`.
 - **Actual:** the frontend renderer *would* show them generically (`frontend/src/provenance.ts:111-112` `default: return e.event_type`; `EventTrail.tsx:101` `EVENT_META[t]?.label ?? t`), so nothing is dropped *if present* — but they never arrive on the run trail, so the "every data-out auditable in the same append-only trail" framing (`provenance.py:39-41`) is partial for ticket/notification events. Likely by-design separation, flagged so the synthesis doesn't over-claim a unified trail.
 - **Min fix:** none for the demo; note the trail scope. **Demo-critical:** N.
 
@@ -56,7 +56,7 @@ Guardrail note (G1): nothing here recommends letting any agent or projection set
 - **Actual:** subject_id crosses the parser boundary then dead-ends. Arguably intentional de-identification (no PII on the card), but it is an untracked lineage terminus worth an explicit note rather than a silent drop. **Min fix:** none if de-id is intended; document the intent. **Demo-critical:** N.
 
 #### DL-08 · `DecisionCard.metric_values` typed optional in `types.ts` but always emitted by the backend · **Low** · Confirmed · design-inconsistency
-- **Evidence:** backend `metric_values: list[MetricValue] = Field(default_factory=list)` — always present, possibly empty (`src/pipeguard/models.py:249-253`); frontend types it `metric_values?: MetricValue[]` "Optional: absent on samples with no QC row" (`types.ts:74-76`).
+- **Evidence:** backend `metric_values: list[MetricValue] = Field(default_factory=list)` — always present, possibly empty (`src/bayleaf/models.py:249-253`); frontend types it `metric_values?: MetricValue[]` "Optional: absent on samples with no QC row" (`types.ts:74-76`).
 - **Actual:** micro-drift — the field is never *absent* on the wire (it is `[]`), so a consumer branching on `undefined` vs `[]` reads a false distinction. Benign today (`Intake.tsx:57` uses `?.find`). **Min fix:** drop the `?` or the misleading comment. **Demo-critical:** N.
 
 ---
@@ -108,7 +108,7 @@ flowchart TD
 | `DecisionCard.confidence` | `number|null` | `models.py:231` `None` (T-019) | **Y** | uniformly null |
 | `content_hash` exclusions (`run_id`,`metric_values`) | n/a | `models.py:296-306` excluded | **Y** | correct |
 | `MetricValue.metric_key` ⋈ `QCThreshold.our_key` | n/a | `card_readout.py:326,335` + `runbook.py`/`mapping.py` keys equal | **Y** | germline five join |
-| `X-PipeGuard-Status-Counts` header | read `api.ts:133` | set `main.py:468`, CORS-exposed `main.py:80` | **Y** | correct |
+| `X-Bayleaf-Status-Counts` header | read `api.ts:133` | set `main.py:468`, CORS-exposed `main.py:80` | **Y** | correct |
 | `RunArtifact.stage`/`RunStatus`/`PipelineStatus`/`TicketStatus` enums | `types.ts:103,127,435,516` | `main.py:139`,`runbook`/`review_queue`/`pipeline.py` | **Y** | wire values match (`needs_review`,`pending_review`,`in_review`) |
 
 ---
@@ -122,4 +122,4 @@ flowchart TD
 5. **Generic event rendering.** Unknown event types render verbatim, never dropped (`provenance.ts:111-112`, `EventTrail.tsx:101`); `DATA_EXPORTED` has real meta (`provenance.ts:35`). (Scope caveat: see DL-06.)
 6. **Envelope round-trip.** `PipelineGraph.graph` stored/returned byte-for-byte via `json.dumps`/`json.loads` (`pipeline_store.py:127-147`); `PipelineGraphIn` is `extra="forbid"` so no server-authored field is client-settable (`pipeline.py:47-57`).
 7. **Two runbook shapes stay distinct.** `QCThreshold.gate` (numeric value, `/api/config`) vs `RunbookThreshold.gate` (numeric) + `pipeline_gate` (enum, `/api/runbook`) — explicitly separated with a `pipeline_gate` field and a comment guarding against conflation (`main.py:169-172`, `types.ts:416,420`).
-8. **RBAC actor plumbing.** `api.ts` injects `X-PipeGuard-Actor/-Role` on writes only (`api.ts:59-62`); `POST /api/runs` is `require_role("reviewer","approver")` (`intake.py:128`). No verdict-setting header exists (G1 intact).
+8. **RBAC actor plumbing.** `api.ts` injects `X-Bayleaf-Actor/-Role` on writes only (`api.ts:59-62`); `POST /api/runs` is `require_role("reviewer","approver")` (`intake.py:128`). No verdict-setting header exists (G1 intact).

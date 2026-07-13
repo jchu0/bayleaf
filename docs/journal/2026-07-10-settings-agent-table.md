@@ -21,17 +21,17 @@ data-contract/test trigger fires this sweep (waives the whole 🔴 `models.py`/`
 `+189/-40`.
 
 1. **The roster (`AGENTS` array).** Now 7 entries, each `{ key, label, desc, def, env, where?,
-   phase2? }`: `synthesizer` (`PIPEGUARD_SYNTHESIZER`), `qc_triage` (`PIPEGUARD_TRIAGE_AGENT`),
-   `pipeline_repair` (`PIPEGUARD_PIPELINE_REPAIR_AGENT`), `archivist`
-   (`PIPEGUARD_ARCHIVIST_AGENT`), `feedback` (`PIPEGUARD_FEEDBACK_AGENT`), `node_author`
-   (`PIPEGUARD_NODE_AUTHOR`, `where: 'builder'`), `metrics_expand`
-   (`PIPEGUARD_METRICS_AGENT`, `phase2: true`). Cross-checked the first five env-var strings
-   against the real backend: `grep -rn "PIPEGUARD_SYNTHESIZER\|PIPEGUARD_TRIAGE_AGENT\|
-   PIPEGUARD_PIPELINE_REPAIR_AGENT\|PIPEGUARD_ARCHIVIST_AGENT\|PIPEGUARD_FEEDBACK_AGENT" src/
-   api/` — all five are real, live env switches (`src/pipeguard/engine.py`,
-   `src/pipeguard/triage/agent.py`, `src/pipeguard/pipeline_repair/agent.py`,
+   phase2? }`: `synthesizer` (`BAYLEAF_SYNTHESIZER`), `qc_triage` (`BAYLEAF_TRIAGE_AGENT`),
+   `pipeline_repair` (`BAYLEAF_PIPELINE_REPAIR_AGENT`), `archivist`
+   (`BAYLEAF_ARCHIVIST_AGENT`), `feedback` (`BAYLEAF_FEEDBACK_AGENT`), `node_author`
+   (`BAYLEAF_NODE_AUTHOR`, `where: 'builder'`), `metrics_expand`
+   (`BAYLEAF_METRICS_AGENT`, `phase2: true`). Cross-checked the first five env-var strings
+   against the real backend: `grep -rn "BAYLEAF_SYNTHESIZER\|BAYLEAF_TRIAGE_AGENT\|
+   BAYLEAF_PIPELINE_REPAIR_AGENT\|BAYLEAF_ARCHIVIST_AGENT\|BAYLEAF_FEEDBACK_AGENT" src/
+   api/` — all five are real, live env switches (`src/bayleaf/engine.py`,
+   `src/bayleaf/triage/agent.py`, `src/bayleaf/pipeline_repair/agent.py`,
    `api/feedback_agent.py`, `api/archivist.py`). Then checked the other two:
-   `grep -rn "PIPEGUARD_NODE_AUTHOR\|PIPEGUARD_METRICS_AGENT" src/ api/` — **zero hits**. Neither
+   `grep -rn "BAYLEAF_NODE_AUTHOR\|BAYLEAF_METRICS_AGENT" src/ api/` — **zero hits**. Neither
    env var exists server-side. This is expected for `node_author` (roster #5 in
    [agents.md](../design/agents.md) is explicitly "proposed — design note for review," T-046, not
    built) but is a real honesty point to carry into the docs for `metrics_expand`, which has
@@ -46,7 +46,7 @@ data-contract/test trigger fires this sweep (waives the whole 🔴 `models.py`/`
    SettingsModelTier.tsx` (post-commit) finds nothing. So "Save" here means "commit the draft to
    local React state," full stop — a page refresh loses it, same as before this commit. This
    matters for the doc claim: T-045 already flagged "per-agent model tiering (Settings screen,
-   UI-only, not wired to `PIPEGUARD_*_MODEL`)" as an open, honestly-labelled gap; this commit
+   UI-only, not wired to `BAYLEAF_*_MODEL`)" as an open, honestly-labelled gap; this commit
    does **not** close that gap, it only makes the UI that sits on top of it scale better and
    apply more deliberately. Every doc edit below says this explicitly rather than let "Save"
    read as if it now persists.
@@ -92,13 +92,13 @@ frontend-only diff:
    — no module was added or moved, but the code map's item 4 (`frontend/`) already narrates the
    Settings screen's history in detail (Batch 5's Sample-type dropdown, T-095), so a change to
    what that screen does belongs in the same running paragraph for discoverability. New
-   paragraph added just before the closing `src/pipeguard/synthetic/` sentence.
+   paragraph added just before the closing `src/bayleaf/synthetic/` sentence.
 5. **🟠 A new advisory agent anywhere (`synthesis/`, `triage/`, or an off-gate one) / a model
    tier / a corpus** → owed `design/agents.md` + the relevant ADR. **Deliberately NOT fired** —
    checked carefully per the task's explicit instruction. The trigger's own wording is "a new
    advisory agent **anywhere**" — read narrowly as *anywhere in the codebase* (i.e., an
    implementation), not "anywhere it's mentioned in a UI label." Grounded this reading against
-   the grounding-pass finding above: `PIPEGUARD_METRICS_AGENT` has zero hits in `src/`/`api/` —
+   the grounding-pass finding above: `BAYLEAF_METRICS_AGENT` has zero hits in `src/`/`api/` —
    there is no module, no agent class, no corpus, no ADR-0009 retrieval seam, nothing that could
    be "added to the roster" in the sense [agents.md](../design/agents.md)'s roster table means it
    (each existing row links to a real module: `triage/`, `pipeline_repair/`, `api/archivist.py`,
@@ -114,7 +114,7 @@ frontend-only diff:
    a pointer back to `agents.md` so a reader who goes looking finds the real roster, not a
    dangling reference. `ADR-0012` (agent scoping/model tiering): read in full — its Decision and
    "Realized" sections are about which agents get built and their model-tier defaults; this
-   commit changes neither (no new agent shipped, no `PIPEGUARD_*_MODEL` default changed) — waived.
+   commit changes neither (no new agent shipped, no `BAYLEAF_*_MODEL` default changed) — waived.
 6. **⚪ A load-bearing decision made/realized/superseded** → a new ADR or an existing ADR's
    Decision/Status + a journal Decisions row. Considered: is "the metrics-expansion agent is a
    phase-2 idea, not built" itself a decision worth an ADR? No — it is the **absence** of a
@@ -151,16 +151,16 @@ work, not a run-of-show step).
 | Decision | Distilled to |
 |---|---|
 | The metrics-expansion agent (ST2) stays a UI-only label, not a roster addition — no row in [design/agents.md](../design/agents.md), no ADR, because no backend module/env var/design doc exists for it; every doc that mentions it (README.md, functional.md, architecture.md, tasks.md, CLAUDE.md) labels it phase-2/proposed and points back to the real roster | [design/frontend/README.md](../design/frontend/README.md) §5.10, [functional.md REQ-F-076](../requirements/functional.md), [tasks.md T-103](../planning/tasks.md) |
-| The Settings agent table's explicit Save/Cancel does not close the T-045 "UI-only, not wired to `PIPEGUARD_*_MODEL`" gap — it is a presentation rebuild only (verified: `saveEdit()` only calls `setRows`, no `api.ts` write exists) — every doc touched says this explicitly rather than implying persistence | [CLAUDE.md](../../CLAUDE.md) code map §4, [architecture.md](../design/architecture.md), [data-platform-and-archivist.md §4.10](../design/data-platform-and-archivist.md) |
+| The Settings agent table's explicit Save/Cancel does not close the T-045 "UI-only, not wired to `BAYLEAF_*_MODEL`" gap — it is a presentation rebuild only (verified: `saveEdit()` only calls `setRows`, no `api.ts` write exists) — every doc touched says this explicitly rather than implying persistence | [CLAUDE.md](../../CLAUDE.md) code map §4, [architecture.md](../design/architecture.md), [data-platform-and-archivist.md §4.10](../design/data-platform-and-archivist.md) |
 
 ## Open questions & TODO
 
 - If/when the metrics-expansion agent idea graduates past a UI label (a design doc, then a
-  `src/pipeguard/`/`api/` module + `PIPEGUARD_METRICS_AGENT` env var), it needs a real roster row
+  `src/bayleaf/`/`api/` module + `BAYLEAF_METRICS_AGENT` env var), it needs a real roster row
   in [design/agents.md](../design/agents.md) (roster #6) following the intake checklist there —
   this session deliberately did not pre-create that row.
 - The Settings model-tiering table (this commit and its T-045 predecessor) has never been wired
-  to the backend `PIPEGUARD_*_MODEL` env vars — an open item for whenever Settings authoring
+  to the backend `BAYLEAF_*_MODEL` env vars — an open item for whenever Settings authoring
   (REQ-F-062) grows a real "apply model tier" write path; not scoped to this sweep.
 - `docs/design/frontend/README.md` still has no metadata table (Status/Last updated/Audience/
   Related) — a pre-existing gap already flagged in the Wave-3/Wave-4/Batch-8 journals, still out

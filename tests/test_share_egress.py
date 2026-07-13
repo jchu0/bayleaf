@@ -21,19 +21,19 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from pipeguard.provenance import EventType
+from bayleaf.provenance import EventType
 
 # A committed run that carries intake identity (sample_metadata.csv → subject_id/submitted_by),
 # so the scrub is demonstrably removing something rather than passing an already-clean row.
 _RUN = "RUN-2026-07-11-CLINVAR-RTH"
-_APPROVER = {"X-PipeGuard-Role": "approver", "X-PipeGuard-Actor": "b.chen"}
+_APPROVER = {"X-Bayleaf-Role": "approver", "X-Bayleaf-Actor": "b.chen"}
 
 
 @pytest.fixture
 def client(tmp_path: Any, monkeypatch: Any) -> TestClient:
     # Isolate the append-only share store to a tmp JSONL so tests never touch the repo default.
-    monkeypatch.delenv("PIPEGUARD_SHARE_STORE", raising=False)  # default (jsonl), whatever the env
-    monkeypatch.setenv("PIPEGUARD_SHARE_PATH", str(tmp_path / "share.events.jsonl"))
+    monkeypatch.delenv("BAYLEAF_SHARE_STORE", raising=False)  # default (jsonl), whatever the env
+    monkeypatch.setenv("BAYLEAF_SHARE_PATH", str(tmp_path / "share.events.jsonl"))
     return TestClient(app)
 
 
@@ -42,7 +42,7 @@ def test_share_requires_approver(client: TestClient) -> None:
     for role in ("viewer", "reviewer"):
         denied = client.post(
             f"/api/runs/{_RUN}/share",
-            headers={"X-PipeGuard-Role": role, "X-PipeGuard-Actor": "a.rivera"},
+            headers={"X-Bayleaf-Role": role, "X-Bayleaf-Actor": "a.rivera"},
         )
         assert denied.status_code == 403, role
 

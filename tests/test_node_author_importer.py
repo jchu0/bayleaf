@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 
-from pipeguard.node_author import (
+from bayleaf.node_author import (
     ARTIFACT_KINDS,
     check_conformance,
     import_from_nextflow_schema,

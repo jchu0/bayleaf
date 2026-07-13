@@ -5,7 +5,7 @@
 | **Status** | Draft |
 | **Date** | 2026-07-10 (MST) · corrected 2026-07-11 (MST, `samtools_stats`/`mosdepth_thresholds` are now wired not reserved, W4; NGSCheckMate retired, Branch A) · corrected 2026-07-12 (MST, reserved-port honesty pass — `multiqc_html` promoted to a real optional output; the reserved top-bay input ports [`fastqc_zip`/`bcftools_stats`/`picard_hsmetrics`/`ngscheckmate`] removed) |
 | **Audience** | design / frontend / bioinformatics |
-| **Related** | [builder-cards/README.md](README.md) (card-set index, §7) · [design/frontend/README.md §6](../frontend/README.md) (builder node model) · [data/nf-core-conventions.md §4](../../data/nf-core-conventions.md) (MultiQC → `MetricValue` + registry) · [data/qc_metrics-sources.md](../../data/qc_metrics-sources.md) (module keys) · [frontend `BuilderShared.tsx`](../../../frontend/src/components/BuilderShared.tsx) (`TOOLS` n_multiqc, `BTOOLSPEC['MultiQC']`, `GIAB_LOC`) · [`src/pipeguard/nextflow/catalog.py`](../../../src/pipeguard/nextflow/catalog.py) (the compiler's `MultiQC` `ProcessSpec`, the ground truth for the 5 wired inputs) · [`scripts/run_giab_pipeline.py`](../../../scripts/run_giab_pipeline.py) (producers of the inputs) · [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md) (custom-script successor to the retired NGSCheckMate node) |
+| **Related** | [builder-cards/README.md](README.md) (card-set index, §7) · [design/frontend/README.md §6](../frontend/README.md) (builder node model) · [data/nf-core-conventions.md §4](../../data/nf-core-conventions.md) (MultiQC → `MetricValue` + registry) · [data/qc_metrics-sources.md](../../data/qc_metrics-sources.md) (module keys) · [frontend `BuilderShared.tsx`](../../../frontend/src/components/BuilderShared.tsx) (`TOOLS` n_multiqc, `BTOOLSPEC['MultiQC']`, `GIAB_LOC`) · [`src/bayleaf/nextflow/catalog.py`](../../../src/bayleaf/nextflow/catalog.py) (the compiler's `MultiQC` `ProcessSpec`, the ground truth for the 5 wired inputs) · [`scripts/run_giab_pipeline.py`](../../../scripts/run_giab_pipeline.py) (producers of the inputs) · [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md) (custom-script successor to the retired NGSCheckMate node) |
 
 ## 1. Tool overview + role in the chain
 
@@ -31,7 +31,7 @@ Primary QC fan-in enters from the **left** (flows left→right from upstream sta
 
 **Corrected 2026-07-11 (W4):** `samtools_stats` and `mosdepth_thresholds` are REAL wired inputs
 (not the reserved user-defined ports this table once listed) — verified against
-`src/pipeguard/nextflow/catalog.py`'s `MultiQC` `ProcessSpec` + `BuilderShared.tsx`'s
+`src/bayleaf/nextflow/catalog.py`'s `MultiQC` `ProcessSpec` + `BuilderShared.tsx`'s
 `germlineTemplate()`. MultiQC ingests **5** QC streams (was 3).
 
 **Corrected 2026-07-12 (reserved-port honesty pass, `1621e3f`) — the top-bay reserved input ports
@@ -41,7 +41,7 @@ inputs are **fixed by its `ProcessSpec`** (the compiler's input-drift guard is e
 top port could never have carried a real wire — a superficial slot, so it was removed rather than
 left dangling. The design aspiration (an operator adds a QC producer) is unchanged but is now
 realized differently: the operator authors that producer as an [ADR-0020](../../adr/ADR-0020-operator-authored-custom-processes.md)
-custom-script card emitting a registered kind, rather than PipeGuard pre-reserving speculative
+custom-script card emitting a registered kind, rather than bayleaf pre-reserving speculative
 MultiQC top ports (`ngscheckmate` stays a valid `ARTIFACT_KINDS` member for exactly this).
 
 ## 3. OUTPUT PORTS
@@ -51,7 +51,7 @@ MultiQC top ports (`ngscheckmate` stays a valid `ARTIFACT_KINDS` member for exac
 | `multiqc_json` | `multiqc_data/multiqc_data.json` (`GIAB_LOC` multiqc_json, `required: false`, parser `null`) | deterministic **ingest** → `MetricValue`/`MetricRegistry` → terminal **Gate** (nf-core §4; not a direct on-canvas edge) | right |
 | `multiqc_html` *(optional, real)* | `multiqc_report.html` | **none downstream** — human-facing terminal report artifact (Provenance / operator download) | bottom |
 
-> `multiqc_json` is the machine output PipeGuard cares about; its keys (`report_general_stats_data`, `report_saved_raw_data`, **`report_data_sources`** — the per-metric file pointer, `report_general_stats_headers`) are the `MetricValue` + `Evidence.source` bridge (nf-core §4). **`multiqc_html` was PROMOTED 2026-07-12 (`1621e3f`) from reserved to a real optional output:** `multiqc .` always writes `multiqc_report.html` (no `--no-report`), so it is a genuine product of the current command — the compiler now declares + publishes it as a real `emit: multiqc_html` channel, and it is in `ARTIFACT_KINDS`. It wires to no downstream card (read by humans, not the gate), but it is a real, wireable optional port, not a reserved slot.
+> `multiqc_json` is the machine output bayleaf cares about; its keys (`report_general_stats_data`, `report_saved_raw_data`, **`report_data_sources`** — the per-metric file pointer, `report_general_stats_headers`) are the `MetricValue` + `Evidence.source` bridge (nf-core §4). **`multiqc_html` was PROMOTED 2026-07-12 (`1621e3f`) from reserved to a real optional output:** `multiqc .` always writes `multiqc_report.html` (no `--no-report`), so it is a genuine product of the current command — the compiler now declares + publishes it as a real `emit: multiqc_html` channel, and it is in `ARTIFACT_KINDS`. It wires to no downstream card (read by humans, not the gate), but it is a real, wireable optional port, not a reserved slot.
 
 ## 4. EDGES (concrete wires in/out)
 

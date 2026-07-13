@@ -28,8 +28,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from pipeguard.synthetic import FailureMode as FM
-from pipeguard.synthetic import RunSpec, SampleSpec, generate_run
+from bayleaf.synthetic import FailureMode as FM
+from bayleaf.synthetic import RunSpec, SampleSpec, generate_run
 
 _REPO = Path(__file__).resolve().parent.parent
 _DATA = _REPO / "data"

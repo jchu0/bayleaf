@@ -1,14 +1,14 @@
-# 2026-07-11 (MST) — Product rebrand: PipeGuard → bayleaf (surface only)
+# 2026-07-11 (MST) — Product rebrand: bayleaf → bayleaf (surface only)
 
 **Branch:** `feat/rebrand-bayleaf` — a git worktree off `main`, isolated from the in-flight
 `feat/custom-script-io` WIP (which was left untouched).
 
 ## What & why
 
-Renamed the **product** from PipeGuard to **bayleaf** (tagline: *"Add subtle flavor to your NGS
+Renamed the **product** from bayleaf to **bayleaf** (tagline: *"Add subtle flavor to your NGS
 project"*) across the user-facing surface, and replaced the logo/favicon with a bay-leaf mark.
-Scope was deliberately the **brand surface, not the code**: the Python package stays `pipeguard`
-(imports, `PIPEGUARD_*` env vars, `src/pipeguard/`), and the `X-PipeGuard-*` wire headers are
+Scope was deliberately the **brand surface, not the code**: the Python package stays `bayleaf`
+(imports, `BAYLEAF_*` env vars, `src/bayleaf/`), and the `X-Bayleaf-*` wire headers are
 unchanged — renaming those is a separate, breaking, coordinated change for a later pass.
 
 ## Changed (15 files)
@@ -23,15 +23,15 @@ unchanged — renaming those is a separate, breaking, coordinated change for a l
    product label, and the rendered in-UI mentions in `RunReport`, `BuilderModals`, `BuilderShared`,
    `Lineage`, `Admin`.
 3. **README** — top-level `README.md` rebranded (title `# bayleaf 🌿`, the tagline, and a
-   **"Name vs. package"** note stating the importable package is still `pipeguard` so every command
+   **"Name vs. package"** note stating the importable package is still `bayleaf` so every command
    still works verbatim); `frontend/README.md` given a bayleaf header.
 
 ## Deliberately NOT changed (deferred to the package-rename pass)
 
-1. The `pipeguard` Python package/module, all `PIPEGUARD_*` env vars, `from pipeguard import …`.
-2. The `X-PipeGuard-*` HTTP wire headers (11 refs across `api/` + `frontend/`) — internal protocol,
+1. The `bayleaf` Python package/module, all `BAYLEAF_*` env vars, `from bayleaf import …`.
+2. The `X-Bayleaf-*` HTTP wire headers (11 refs across `api/` + `frontend/`) — internal protocol,
    invisible to users, breaking to rename in lockstep.
-3. Code comments / FastAPI route docstrings mentioning PipeGuard (2 left: `RunReport.tsx:180`
+3. Code comments / FastAPI route docstrings mentioning bayleaf (2 left: `RunReport.tsx:180`
    comment, `api/main.py:550` docstring), plus the wider `docs/` tree.
 
 ## Verification

@@ -1,12 +1,12 @@
-# Local Postgres for the PipeGuard persistence + feedback port (ADR-0016).
+# Local Postgres for the bayleaf persistence + feedback port (ADR-0016).
 #
 # OFF by default — the offline demo/tests need none of this (they use SQLite + JSONL). Bring it
 # up only when you want to exercise the Postgres adapters:
 #
 #   docker compose -f deploy/postgres/docker-compose.yml up -d
 #   uv sync --extra postgres
-#   export DATABASE_URL=postgresql://pipeguard:${POSTGRES_PASSWORD:-pipeguard}@localhost:5432/pipeguard
-#   export PIPEGUARD_REPOSITORY=postgres PIPEGUARD_FEEDBACK_STORE=postgres
+#   export DATABASE_URL=postgresql://bayleaf:${POSTGRES_PASSWORD:-bayleaf}@localhost:5432/bayleaf
+#   export BAYLEAF_REPOSITORY=postgres BAYLEAF_FEEDBACK_STORE=postgres
 #   uv run rebuild-db run.events.jsonl        # project the ledger into Postgres (optional)
 #
 # The password is a DEV-ONLY default sourced from POSTGRES_PASSWORD — never commit a real one;
@@ -14,20 +14,20 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: pipeguard-postgres
+    container_name: bayleaf-postgres
     environment:
-      POSTGRES_USER: pipeguard
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pipeguard}
-      POSTGRES_DB: pipeguard
+      POSTGRES_USER: bayleaf
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bayleaf}
+      POSTGRES_DB: bayleaf
     ports:
       - "5432:5432"
     volumes:
-      - pipeguard_pgdata:/var/lib/postgresql/data
+      - bayleaf_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pipeguard -d pipeguard"]
+      test: ["CMD-SHELL", "pg_isready -U bayleaf -d bayleaf"]
       interval: 5s
       timeout: 3s
       retries: 10
 
 volumes:
-  pipeguard_pgdata:
+  bayleaf_pgdata:

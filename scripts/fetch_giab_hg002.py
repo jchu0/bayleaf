@@ -3,7 +3,7 @@
 
 Why this script exists
 ----------------------
-PipeGuard validates its coverage/faithfulness gates against *real* truth data,
+bayleaf validates its coverage/faithfulness gates against *real* truth data,
 but raw reads and truth artifacts must never live in git (CLAUDE.md Data-handling
 rule 1). So the reproducible record is committed as an accession *manifest*
 (``scripts/giab_hg002_manifest.json``) plus this fetch script; the bytes land in a

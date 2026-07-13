@@ -1,1 +1,1 @@
-"""FastAPI read-API over the pipeguard core (the production seam, ADR-0010)."""
+"""FastAPI read-API over the bayleaf core (the production seam, ADR-0010)."""

@@ -9,16 +9,16 @@
 
 ## Overview
 
-What PipeGuard must *do*, as traceable capability requirements (**REQ-F-NNN**). Each
+What bayleaf must *do*, as traceable capability requirements (**REQ-F-NNN**). Each
 traces to an ADR, the architecture, or a grounded data doc. Quality attributes
 (determinism, security, performance) live in [nonfunctional.md](nonfunctional.md);
 boundaries in [scope-and-wishlist.md](scope-and-wishlist.md). Requirements describe
 in-scope MVP behavior; deferred items are marked *(wishlist)*.
 
-> **Naming (Fact).** The product surface was renamed **PipeGuard → bayleaf** (2026-07-11,
+> **Naming (Fact).** The product surface was renamed **bayleaf → bayleaf** (2026-07-11,
 > commit `41330fe`) — README, frontend, FastAPI title, and UI copy. The importable Python
-> package (`src/pipeguard/`), the `PIPEGUARD_*` env vars, and these engineering docs deliberately
-> keep the `pipeguard` name; "PipeGuard" throughout this doc refers to the same system now
+> package (`src/bayleaf/`), the `BAYLEAF_*` env vars, and these engineering docs deliberately
+> keep the `bayleaf` name; "bayleaf" throughout this doc refers to the same system now
 > presented as bayleaf.
 
 ## Decision gate
@@ -86,7 +86,7 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    demo runs carry no `trace.txt` and are unaffected). Downstream it is **advisory only**: the
    EXEC-001 finding's recurring signature flows to the pipeline-repair agent (REQ-F-023) via the
    monitoring rollup, giving that agent a **structured executor-failure** feed distinct from
-   PipeGuard's own gate findings. The **verdict policy is unchanged** — an operational/execution
+   bayleaf's own gate findings. The **verdict policy is unchanged** — an operational/execution
    failure → RERUN (REQ-F-014). *Trace:* [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md),
    [qc_metrics.md](../data/qc_metrics.md) §Verdict policy,
    [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)/[ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md),
@@ -97,7 +97,7 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    is an empty tuple) — the stock runbook never routes, and every pinned demo verdict is
    unaffected. When armed, a deterministic rule (`rules._check_route_to_human`) emits a cited,
    immutable `Finding` (category `variant`, **variant** gate) whose suggested verdict is
-   **ESCALATE**; it **quotes the source ClinVar classification verbatim** (never PipeGuard's own
+   **ESCALATE**; it **quotes the source ClinVar classification verbatim** (never bayleaf's own
    determination — ADR-0004) and cites the accession/review status. The action space is only
    `{route-to-human}` — no Pathogenic/Benign verdict, no probability; the variant **QC** gate
    (REQ-F-013, DP/GQ/AB) is untouched. A qualified human clears the hold via the existing
@@ -127,12 +127,12 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    ADR-0012.
 3. **REQ-F-022 — Outbound notify.** For each *actionable* card (HOLD/RERUN/ESCALATE;
    clean cards are skipped), the system can emit a per-verdict, evidence-cited notification
-   through a swappable notify port (`PIPEGUARD_NOTIFIER=stub|slack`, stub-first, $0). The
+   through a swappable notify port (`BAYLEAF_NOTIFIER=stub|slack`, stub-first, $0). The
    hook is **optional and off by default** — `run_gate(notifier=…)` is wired only when a
    notifier is injected, and with none the event trail is byte-for-byte unchanged. It
    **formats what the gate decided, never a verdict** (ADR-0001); the live Slack post is
-   opt-in via `PIPEGUARD_SLACK_LIVE`, degrades to the stub on any error, and every send is
-   recorded as a `notification.emitted` ledger event. `python -m pipeguard.notify <run_dir>`
+   opt-in via `BAYLEAF_SLACK_LIVE`, degrades to the stub on any error, and every send is
+   recorded as a `notification.emitted` ledger event. `python -m bayleaf.notify <run_dir>`
    is the CLI. *Trace:* [architecture.md](../design/architecture.md) §Outbound notify seam,
    [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md).
 
@@ -149,7 +149,7 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
 
 1. **REQ-F-023 — Advisory pipeline-repair agent.** On a **recurring issue signature** rolled up
    from the monitoring view (the same `Finding.signature` counter `GET /api/monitoring` uses — now
-   including structured pipeline-executor failures via EXEC-001, REQ-F-017, not only PipeGuard's own
+   including structured pipeline-executor failures via EXEC-001, REQ-F-017, not only bayleaf's own
    gate findings), the system can produce a cited **RepairProposal** {`summary`, `attach_to` (pipeline stage), `scope`
    (gate)} proposing a **human-reviewed** remediation grounded in a curated remediation corpus
    (ADR-0008 taxonomy + the runbook; **no invented thresholds**). `advisory` is pinned `True` and the
@@ -159,12 +159,12 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    `GET /api/monitoring/signatures/{signature}/repair` (404 if the signature does not recur in the
    window) — explicitly **not** the deferred ~3× auto-escalation trigger — and **never edits a
    pipeline** (compose ≠ execute; a fix changes nothing on the gate until a human approves + the
-   builder emits a new `run_layout.yaml`). Env `PIPEGUARD_PIPELINE_REPAIR_AGENT=stub|claude`
-   (Opus-high, `PIPEGUARD_PIPELINE_REPAIR_MODEL`), stub-default, degrade-to-stub on any error.
+   builder emits a new `run_layout.yaml`). Env `BAYLEAF_PIPELINE_REPAIR_AGENT=stub|claude`
+   (Opus-high, `BAYLEAF_PIPELINE_REPAIR_MODEL`), stub-default, degrade-to-stub on any error.
    *Trace:* [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
    [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md),
    [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md),
-   [agents.md](../design/agents.md) §Roster #2, `src/pipeguard/pipeline_repair/`,
+   [agents.md](../design/agents.md) §Roster #2, `src/bayleaf/pipeline_repair/`,
    [tasks T-058](../planning/tasks.md).
 2. **REQ-F-024 — Advisory archivist (librarian) agent.** The system can index/summarize
    already-decided runs into an **ArchiveDigest** (an organizational digest + a prepared export
@@ -174,8 +174,8 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    organizational number is deterministic and only the summary prose may be model-authored. Its
    `released`-lifecycle readiness flag is an **organizational** state, never a per-sample verdict
    (REQ-F-003 holds). Exposed on-demand at `GET /api/runs/{id}/archive-digest` (one run) and
-   `GET /api/archive/index` (cross-run). Env `PIPEGUARD_ARCHIVIST_AGENT=stub|claude` (Haiku,
-   `PIPEGUARD_ARCHIVIST_MODEL`), stub-default, degrade-to-stub. *Trace:*
+   `GET /api/archive/index` (cross-run). Env `BAYLEAF_ARCHIVIST_AGENT=stub|claude` (Haiku,
+   `BAYLEAF_ARCHIVIST_MODEL`), stub-default, degrade-to-stub. *Trace:*
    [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md),
    [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md) §model-tiering,
    [data-platform-and-archivist.md](../design/data-platform-and-archivist.md) §5,
@@ -190,8 +190,8 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    `ARTIFACT_KINDS` vocabulary is surfaced `reserved`, **never fabricated as a live wire**
    (`PortSpec.known` is computed against that vocabulary — structural, not a convention). A
    request that matches no curated card (or is blank) returns a conservative "defer to a human"
-   proposal with no invented tool or ports. Env `PIPEGUARD_NODE_AUTHOR_AGENT=stub|claude`
-   (`PIPEGUARD_NODE_AUTHOR_MODEL`, default mid/Sonnet), stub-default, degrade-to-stub on any error
+   proposal with no invented tool or ports. Env `BAYLEAF_NODE_AUTHOR_AGENT=stub|claude`
+   (`BAYLEAF_NODE_AUTHOR_MODEL`, default mid/Sonnet), stub-default, degrade-to-stub on any error
    (incl. a safety refusal). **Narrower than the roster's original design** (see
    [node-authoring-agent.md](../design/node-authoring-agent.md) "What actually shipped"): the
    corpus is a fixed **9 curated cards** (this pipeline's own 7 tools + 2 reference nodes —
@@ -201,7 +201,7 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    then commit `dff2cef` retired **NGSCheckMate** from the *proposable* set (→ 9) — retired-but-pinned:
    the JSON line stays commented in `tool_cards.jsonl` (and the `ngscheckmate` kind stays in
    `ARTIFACT_KINDS`), so it can be un-commented without loss but is not currently proposed.
-   Corpus file: `src/pipeguard/node_author/knowledge/tool_cards.jsonl`, not a parser over a dropped
+   Corpus file: `src/bayleaf/node_author/knowledge/tool_cards.jsonl`, not a parser over a dropped
    `nextflow_schema.json`/`--help`/README, so the agent can only propose a tool already known to
    the corpus via `propose_node()` — it does not yet onboard a genuinely new/arbitrary tool through
    its main retrieval path. `GET /api/builder/node-proposal` + Pipeline-Builder wiring now exist
@@ -212,7 +212,7 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md),
    [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md),
    [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md),
-   [agents.md](../design/agents.md) §Roster #5, `src/pipeguard/node_author/`,
+   [agents.md](../design/agents.md) §Roster #5, `src/bayleaf/node_author/`,
    [tasks T-046](../planning/tasks.md).
 
 ## Provenance & persistence (ADR-0002/0003)
@@ -287,7 +287,7 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    the originating UI `source`. It is **off the deterministic gate** (never mutates a
    verdict/provenance event; ADR-0001), carries **no operator identity** (`extra="forbid"`
    structural guard), and resolves `origin` server-side. The sink is a **pluggable store**
-   (JSONL default / SQLite / Postgres, `PIPEGUARD_FEEDBACK_STORE`) with its own table, separate
+   (JSONL default / SQLite / Postgres, `BAYLEAF_FEEDBACK_STORE`) with its own table, separate
    from the decision projection and degrading to JSONL (ADR-0016). An **advisory feedback agent**
    (`python -m api.feedback_agent`, stub/claude) categorizes the corpus structurally out-of-band.
    *Trace:* [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md),
@@ -303,7 +303,7 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    the deterministic gate is a terminal locked node with no verdict control, and every emitted
    locator's `origin` is `unknown` (config locates, never relabels provenance). A composed graph
    **saves + versions** via `POST/GET /api/pipelines` — a **product-domain store off the gate**
-   (pluggable JSONL/SQLite/Postgres, `PIPEGUARD_PIPELINE_STORE`, degrade-to-JSONL, ADR-0016),
+   (pluggable JSONL/SQLite/Postgres, `BAYLEAF_PIPELINE_STORE`, degrade-to-JSONL, ADR-0016),
    storing the graph as a **tolerant versioned envelope** (arbitrary payload kept as-is) with a
    server-authored monotonic per-name version. It **reserves** a `draft→save→approve` review
    lifecycle (`status` + reviewer/approver fields, server-authored, no identity via the
@@ -431,7 +431,7 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    `runs[]` remained uncapped in **both** directions until the backend gained `page`/`limit`.
    **Closed 2026-07-11 (T-132, commit `deee99f`):** `GET /api/monitoring` now accepts additive
    `page`/`limit` on `runs[]`, mirroring `GET /api/runs` exactly (same param names, the same
-   `X-PipeGuard-{Total-Count,Page,Limit}` response headers); the KPI roll-up, per-gate pass rates,
+   `X-Bayleaf-{Total-Count,Page,Limit}` response headers); the KPI roll-up, per-gate pass rates,
    and ranked signatures are computed BEFORE the slice, so a page can never distort them — only the
    throughput array itself is sliced. `Monitoring.tsx` wires a `<Pager>` to the new params; the
    chart still renders every run **on the current page** as a scrolling bar (T-100's chart framing
@@ -450,11 +450,11 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
 ## AI configurability (ADR-0006)
 
 1. **REQ-F-050 — Env-flippable AI, off by default.** Every AI seam flips via env, each
-   defaulting to `stub` ($0, offline): the synthesizer (`PIPEGUARD_SYNTHESIZER`) plus five
-   advisory agents — QC-triage (`PIPEGUARD_TRIAGE_AGENT`), off-gate feedback
-   (`PIPEGUARD_FEEDBACK_AGENT`), pipeline-repair (`PIPEGUARD_PIPELINE_REPAIR_AGENT`), archivist
-   (`PIPEGUARD_ARCHIVIST_AGENT`), and node-authoring (`PIPEGUARD_NODE_AUTHOR_AGENT`, REQ-F-025,
-   2026-07-10) — all `stub|claude`; model via `PIPEGUARD_*_MODEL`. *Trace:*
+   defaulting to `stub` ($0, offline): the synthesizer (`BAYLEAF_SYNTHESIZER`) plus five
+   advisory agents — QC-triage (`BAYLEAF_TRIAGE_AGENT`), off-gate feedback
+   (`BAYLEAF_FEEDBACK_AGENT`), pipeline-repair (`BAYLEAF_PIPELINE_REPAIR_AGENT`), archivist
+   (`BAYLEAF_ARCHIVIST_AGENT`), and node-authoring (`BAYLEAF_NODE_AUTHOR_AGENT`, REQ-F-025,
+   2026-07-10) — all `stub|claude`; model via `BAYLEAF_*_MODEL`. *Trace:*
    [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [architecture.md](../design/architecture.md)
    §Swappable seams, [agents.md](../design/agents.md).
 2. **REQ-F-051 — Deterministic fallback on failure.** If an AI call is disabled,
@@ -474,7 +474,7 @@ had reserved or listed as *not-yet-built*.
 1. **REQ-F-060 — Identity + RBAC primitive (DEV SHIM).** `api/auth.py` gives the
    write/authoring surfaces one shared current-user + role source: a `Role`
    (**viewer | reviewer | approver**), an `Actor{id, role}`, `current_actor()` reading the
-   `X-PipeGuard-Actor` / `X-PipeGuard-Role` request headers with a **permissive DEV-DEFAULT**
+   `X-Bayleaf-Actor` / `X-Bayleaf-Role` request headers with a **permissive DEV-DEFAULT**
    (`id=dev`, `role=approver`) so the offline demo and tests need no auth wiring, and
    `require_role(*roles)` (raises **403** on an insufficient role). It is explicitly a
    documented **DEV SHIM** — it *trusts* the headers, so it is trivially **spoofable** and is
@@ -502,7 +502,7 @@ had reserved or listed as *not-yet-built*.
    + `api/settings_store.py` add `draft→save→approve` **config-override** authoring with
    reviewer/approver RBAC (REQ-F-060), an audit trail, and **lenient sanity guardrails** (range
    checks, not clinical thresholds), storing each override as a **tolerant versioned envelope** in
-   a pluggable store (`PIPEGUARD_SETTINGS_STORE=jsonl|sqlite|postgres`, degrade-to-JSONL, ADR-0016),
+   a pluggable store (`BAYLEAF_SETTINGS_STORE=jsonl|sqlite|postgres`, degrade-to-JSONL, ADR-0016),
    mirroring the pipeline store (REQ-F-045). The override `name` is a server-validated **slug**
    (`^[A-Za-z0-9][A-Za-z0-9._-]*$`); the Settings screen now **slugifies** the display assay
    string before POSTing (2026-07-09 maintainer batch — the un-slugified name 422'd save and
@@ -557,7 +557,7 @@ had reserved or listed as *not-yet-built*.
    additive params in REQ-F-047: a `status` filter (**running | needs_review | released**, keyed to
    the honest lifecycle of REQ-F-046), `q` now matching **run_id OR platform** (case-insensitive,
    was run_id only), friendly sort aliases (**recent / urgent / date** over the raw sort keys), and
-   **per-status facet counts** returned on an `X-PipeGuard-Status-Counts` response header. All
+   **per-status facet counts** returned on an `X-Bayleaf-Status-Counts` response header. All
    optional and additive — no params still yields a byte-identical `RunSummary[]` body (REQ-F-047).
    *Trace:* [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md) §2,
    [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), REQ-F-046/REQ-F-047,
@@ -590,10 +590,10 @@ had reserved or listed as *not-yet-built*.
    — REAL reads of `GET /api/health` (new, trivial liveness endpoint) +
    the runbook's gate count + the metric-registry version/gated-count, labelled
    illustrative-not-clinical. **Built out (2026-07-10, T-094, commit `7c56564`, "A3/A4"):** gained
-   an **Artifact-store** stat card (`local` · the `PIPEGUARD_ARTIFACT_STORE` s3 seam, built
+   an **Artifact-store** stat card (`local` · the `BAYLEAF_ARTIFACT_STORE` s3 seam, built
    [tasks T-039](../planning/tasks.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md)
    §3) and an **Observability** section linking the read-API's `/metrics` exporter,
-   Prometheus (`:9090`), and the Grafana "PipeGuard — QC decision gate" dashboard (`:3000`, built
+   Prometheus (`:9090`), and the Grafana "bayleaf — QC decision gate" dashboard (`:3000`, built
    under the telemetry-connector work) as off-demo-path links, with a note on bringing up the
    `deploy/telemetry/` compose stack; Users & roles also gained a per-user
    **password/email-reset** action — a labelled production seam (no live mail) that toasts what
@@ -618,7 +618,7 @@ had reserved or listed as *not-yet-built*.
    `running`. This demo build only has real reads on disk for `HG002` —
    other submitted samples are **honestly skipped** (registered, reported, never fabricated a
    run for), and a submission with no processable sample 422s. **Compose ≠ execute still holds
-   at the core:** `src/pipeguard/` never runs a tool — only the API layer triggers the external
+   at the core:** `src/bayleaf/` never runs a tool — only the API layer triggers the external
    driver, mirroring the Pipeline Builder's hand-off concept (REQ-F-045) but now wired end to
    end. Reframes the earlier "Submit never runs anything" framing to "Submit hands off to an
    execution boundary." **Update (2026-07-11, T-123):** the triggered driver is now
@@ -653,7 +653,7 @@ had reserved or listed as *not-yet-built*.
     (`frontend/src/screens/Login.tsx`) fronts every route; `App.tsx`'s `RequireAuth` redirects an
     unauthenticated visit to `/login` and preserves the intended destination. Four demo accounts
     (`frontend/src/auth.ts`: viewer / reviewer / approver / admin, one shared password) map to the
-    same `Actor{id, role}` the API already consumes via `X-PipeGuard-Actor`/`-Role` (REQ-F-060) —
+    same `Actor{id, role}` the API already consumes via `X-Bayleaf-Actor`/`-Role` (REQ-F-060) —
     login simply chooses which actor the app acts as; the session (`{id, role}` only, **no
     token/password**) persists to `localStorage` so a refresh stays signed in. Every production
     seam is a **labelled placeholder, not implemented**: OAuth/OIDC against a real IdP, server-side
@@ -841,12 +841,12 @@ had reserved or listed as *not-yet-built*.
     pipeline-repair, archivist, feedback-categorizer, node-author (roster #5, still
     design-note-only per [agents.md](../design/agents.md)), and a new **metrics-expansion agent**
     row — a proposed **phase-2** idea (ST2: propose new QC metrics to track + wiring) with **no
-    backend agent module or env var** (confirmed: `PIPEGUARD_METRICS_AGENT` appears nowhere under
+    backend agent module or env var** (confirmed: `BAYLEAF_METRICS_AGENT` appears nowhere under
     `src/`/`api/`), explicitly not to be read as a shipped roster addition. Each row edits behind
     a pencil into a staged draft (model + live toggle); **nothing applies until an explicit
     Save** (Cancel discards) — the same deliberateness principle REQ-F-075 established for
     stakes-y writes, applied here even though this table has no backend write at all (Save only
-    updates local React state; the T-045 "UI-only, not wired to `PIPEGUARD_*_MODEL`" gap is
+    updates local React state; the T-045 "UI-only, not wired to `BAYLEAF_*_MODEL`" gap is
     unchanged). A "New agent" button links to the Pipeline Builder (`/builder`), the closest
     existing agent-authoring surface. Verdicts stay rule-derived — this is an operator *view* of
     config, never a control that can move a gate (ADR-0001). `git diff --stat c79f62c 7b579bb --
@@ -913,7 +913,7 @@ had reserved or listed as *not-yet-built*.
     (verified: `src/provenance.ts` derives its vocabulary "ONLY from what the ledger actually
     emits," five types — `analysis_run.started`/`sample.registered`/`finding.emitted`/
     `verdict.decided`/`analysis_run.completed` — cross-checked against
-    `src/pipeguard/provenance.py`'s six-member `EventType` enum, whose sixth member
+    `src/bayleaf/provenance.py`'s six-member `EventType` enum, whose sixth member
     `NOTIFICATION_EMITTED` `run_gate` itself never emits, only the separate notify port does, so
     the frontend's "five emitted, everything else generic" framing holds); expanding a row is a
     trace-back — `finding.emitted` → its cited evidence in place, `verdict.decided` → the decision
@@ -1105,7 +1105,7 @@ had reserved or listed as *not-yet-built*.
     the 18 identifier classes, and an explicit non-compliance disclaimer). It is an **egress
     transform only** — reads already-computed `DecisionCard`s, never a rule/verdict/gate input
     (ADR-0001) — and records the egress as a `DATA_EXPORTED` `ProvenanceEvent` (a new, separate,
-    pluggable sink, `api/share_store.py` — `PIPEGUARD_SHARE_STORE=jsonl|sqlite|postgres`,
+    pluggable sink, `api/share_store.py` — `BAYLEAF_SHARE_STORE=jsonl|sqlite|postgres`,
     degrade-to-JSONL, matching the other four off-gate stores, [ADR-0016](../adr/ADR-0016-postgres-port.md)
     — distinct from the gate's own `EventLedger`; see
     [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md)) that `GET /api/runs/{id}`
@@ -1124,7 +1124,7 @@ had reserved or listed as *not-yet-built*.
     EVAL-051, [tasks T-120](../planning/tasks.md),
     [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md).
 26. **REQ-F-085 — Pipeline codegen: compile a card graph → a runnable Nextflow pipeline
-    (ADR-0003, realized).** A pure-text compiler (`src/pipeguard/nextflow/`) turns a Pipeline-
+    (ADR-0003, realized).** A pure-text compiler (`src/bayleaf/nextflow/`) turns a Pipeline-
     Builder graph (`{nodes, edges}`, the Builder's exact save shape) into a runnable nf-core-style
     Nextflow DSL2 bundle (`main.nf`+`modules/*.nf`+`nextflow.config`+`README.md`) — it never
     invokes `nextflow` or any tool (compose ≠ execute, ADR-0001/0003). A curated `catalog.py`
@@ -1166,7 +1166,7 @@ had reserved or listed as *not-yet-built*.
     data already on the wire (no new endpoint): verdict mix, a route-to-human hero panel quoting
     ClinVar significance **verbatim** (no authored pathogenicity, ADR-0004/G3/G4), per-sample gate
     outcomes with cited evidence, and a sign-off footer stating human sign-off is a labelled seam,
-    not a button — PipeGuard never marks a report final on its own. Read-only; confidence stays
+    not a button — bayleaf never marks a report final on its own. Read-only; confidence stays
     omitted (T-019). Narrower than the full design: no interpretation agent, no per-variant
     evidence table, no persisted/signed report artifact. *Trace:*
     [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) Decision D1 (report
@@ -1230,7 +1230,7 @@ had reserved or listed as *not-yet-built*.
 32. **REQ-F-091 — Durable execution-job persistence + restart recovery.** The two execution
     routers (`api/routers/intake.py`'s `POST /api/runs`, `api/routers/pipeline_run.py`'s
     `POST /api/pipelines/run`) persist each background job's status via `api/job_store.py`
-    (`JobStore` Protocol, `jsonl` default | `sqlite`, `PIPEGUARD_JOB_STORE`) instead of an
+    (`JobStore` Protocol, `jsonl` default | `sqlite`, `BAYLEAF_JOB_STORE`) instead of an
     in-process dict, so a backend restart no longer loses job state or leaves a poller hung on
     `running` forever. A restart-recovered job whose result dir is on disk resolves to `complete`;
     otherwise it resolves to a new terminal status, **`lost`** (distinct from `failed` — its owning
@@ -1267,11 +1267,11 @@ had reserved or listed as *not-yet-built*.
     [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md).
 35. **REQ-F-094 — Per-variant Report table + read-only `GET /api/runs/{id}/variants` (W3
     continuation).** A new read-only endpoint (`api/main.py`) serves every `VariantCall` a run's
-    `variants.csv` carries, parsed via the SAME `pipeguard.parsers.parse_variant_calls` the
+    `variants.csv` carries, parsed via the SAME `bayleaf.parsers.parse_variant_calls` the
     route-to-human rule (VAR-RTH-001) already uses — 404 for an unknown run, `[]` (never a 404 or
     a fabricated row) when a run has no `variants.csv`. `RunReport.tsx` renders it as a paginated
     table (Sample/Gene/HGVS/ClinVar significance quoted VERBATIM/review status/accession) beneath
-    the route-to-human hero, with its own disclaimer that PipeGuard authors no pathogenicity and
+    the route-to-human hero, with its own disclaimer that bayleaf authors no pathogenicity and
     sets no verdict here (ADR-0004/ADR-0001). This closes the "no per-variant evidence table" gap
     REQ-F-087 and [variant-interpretation.md §0 item 3](../design/variant-interpretation.md)
     used to name — narrower than the full `AnnotatedVariant` model still design-only
@@ -1310,7 +1310,7 @@ had reserved or listed as *not-yet-built*.
     `POST /api/builder/node-proposal/accept` (`reviewer`/`approver`, `api/routers/node_author.py`)
     RE-DERIVES the proposal server-side from the submitted request (never trusts a client-supplied
     proposal), guards `matched`, runs it through a new deterministic
-    `src/pipeguard/node_author/conformance.py` `check_conformance()` — mechanically asserting
+    `src/bayleaf/node_author/conformance.py` `check_conformance()` — mechanically asserting
     [agent-authoring-contract.md](../design/agent-authoring-contract.md)'s capability pins
     (`advisory` present and `True`; no `verdict`/`confidence` key anywhere in the candidate; no
     `script`/`stub` command-body key anywhere; every port kind is a real `ARTIFACT_KINDS` member or
@@ -1318,11 +1318,11 @@ had reserved or listed as *not-yet-built*.
     pinned, plus the tool `version` when matched) — and stores a `status="draft"` `LibraryEntry`
     (metadata only: ports, a pinned version, suggested locators, citations — **never** a
     `script:`/`stub:` command body) in a new pluggable `api/library_store.py`
-    (`LibraryStore` Protocol, `PIPEGUARD_LIBRARY_STORE=jsonl|sqlite`, degrade-to-JSONL,
+    (`LibraryStore` Protocol, `BAYLEAF_LIBRARY_STORE=jsonl|sqlite`, degrade-to-JSONL,
     **deliberately no Postgres adapter** — a node-local corpus of accepted drafts, not shared
     product state, [ADR-0016 item 9](../adr/ADR-0016-postgres-port.md)). `GET /api/builder/library`
     lists accepted entries (optional `tool`/`status` filters). A companion
-    `src/pipeguard/node_author/importer.py` (`import_from_nextflow_schema`) deterministically parses
+    `src/bayleaf/node_author/importer.py` (`import_from_nextflow_schema`) deterministically parses
     an nf-core `nextflow_schema.json` into a `NodeProposal` for a tool **NOT** already in the
     curated 9-card corpus (was 11; see REQ-F-025 for the two post-11 retirements) — the structured, lowest-injection-risk half of the doc-drop importer
     REQ-F-025 notes is unbuilt; a `format: file-path` param maps to a real `ARTIFACT_KINDS` kind
@@ -1359,14 +1359,14 @@ had reserved or listed as *not-yet-built*.
     2026-07-11, branch `feat/custom-script-io`).** A Builder card MAY carry a **human-authored**
     verbatim Nextflow `script:` body (plus optional `container`/`conda` packaging) — a third path
     alongside a catalogued tool and an uncatalogued placeholder. `NfNode`
-    (`src/pipeguard/nextflow/compiler.py`) gains optional `script`/`container`/`conda` fields,
+    (`src/bayleaf/nextflow/compiler.py`) gains optional `script`/`container`/`conda` fields,
     absent on every ordinary card; a non-empty `script` marks the node `is_custom()`, and
     `_render_module` checks for it **before** the catalog, so the operator's body wins even if the
     card's tool name collides with a catalogued one — the catalog is never consulted for a custom
     node. The body is emitted **byte-for-byte** (only re-indented), never rewritten or fabricated;
     it is wired from the node's own typed `ins`/`outs` exactly like a catalogued per-sample process
     (meta-threaded). A **blank/whitespace** script is a `CompileError` (a 422 at
-    `POST /api/pipelines/compile`) — PipeGuard never fabricates a command; an uncatalogued node with
+    `POST /api/pipelines/compile`) — bayleaf never fabricates a command; an uncatalogued node with
     **no** script (`script is None`) is unaffected and keeps its existing labelled placeholder. The
     emitted process carries an honest header comment + `label 'operator_authored'` naming it
     operator-authored, not curated, and stating production needs sandboxing/allowlisting.
@@ -1383,14 +1383,14 @@ had reserved or listed as *not-yet-built*.
     header/label above; (iii) agents stay metadata-only — `NodeProposal`/`PortSpec` carry no command
     field, so this card is the human-authoring surface
     [agent-authoring-contract.md](../design/agent-authoring-contract.md) already presupposed; (iv)
-    the core (`src/pipeguard/`) still never executes — only the out-of-core drivers shell out,
+    the core (`src/bayleaf/`) still never executes — only the out-of-core drivers shell out,
     unchanged. 9 tests (`tests/test_nextflow_custom_process.py`, pure-offline: verbatim rendering +
     label, catalog-bypass-on-collision, blank-script rejection, uncatalogued-placeholder unchanged,
     a novel output kind wired by name, compose≠execute, germline-drift-green) + 2 more in
     `tests/test_nextflow_api.py` (a custom node compiles over the wire; a blank script 422s).
-    **Honest deferral:** the custom script itself runs with **no PipeGuard-side runtime
+    **Honest deferral:** the custom script itself runs with **no bayleaf-side runtime
     sandbox/allowlist** — safety is the approval gate + the honest label + deployment-side
-    sandboxing (an ADR-0020 Assumption, not something PipeGuard builds); an operator's declared
+    sandboxing (an ADR-0020 Assumption, not something bayleaf builds); an operator's declared
     output glob is not yet enforced by the emitted command (`path("*")` captures the whole work
     dir); a custom process is always meta-threaded per-sample, so a non-per-sample (aggregator or
     no-input source) custom process is an unhandled edge case (ADR-0020 §Revisit when). *Trace:*
@@ -1407,7 +1407,7 @@ had reserved or listed as *not-yet-built*.
     "reviewer", "approver")`) lists the directories + files directly under an **allowlisted** root,
     one level at a time, returning **metadata only** (`name`, `is_dir`, `size` for files, an
     extension-inferred `kind` or `null` when unrecognized — never file content). `root` is a
-    **key** into a small configured map (`PIPEGUARD_BROWSE_ROOTS`, a `key=abs_path` comma-separated
+    **key** into a small configured map (`BAYLEAF_BROWSE_ROOTS`, a `key=abs_path` comma-separated
     override; default `{"data": <repo>/data}`), never a raw filesystem path, so a caller can only
     ever browse a root an operator deliberately exposed. Traversal-hardened (REQ-NF-027) exactly
     like the existing artifact-download idiom. Powers a new `FileBrowser.tsx` component (a
@@ -1506,7 +1506,7 @@ had reserved or listed as *not-yet-built*.
     `POST /api/runs/{run_id}/cards/{sample_id}/ask` (`AskRequest{question}` → `AgentReply`,
     `advisory: Literal[True]`, no verdict/confidence field ever) answers a free-text question about a
     decision card — even a clean PROCEED one, unlike the existing `GET .../triage`. The stub path
-    (`PIPEGUARD_TRIAGE_AGENT=stub`, the $0 default) retrieves and cites corpus knowledge, explicitly
+    (`BAYLEAF_TRIAGE_AGENT=stub`, the $0 default) retrieves and cites corpus knowledge, explicitly
     framed as retrieval, never fabricated prose; the Claude path writes only the answer text, with
     citations staying deterministic (retriever + findings) and any API error/refusal degrading to the
     stub. **Authz seam closed (2026-07-13, commit `a1aef73`):** this was the only advisory endpoint
@@ -1514,7 +1514,7 @@ had reserved or listed as *not-yet-built*.
     advisory endpoint was covered; now `Depends(require_role("viewer","reviewer","approver"))` — the
     read-family floor, not the write/exec reviewer+ floor, since a question is advisory (ADR-0001),
     not a mutation. Demo behavior is unchanged (the permissive dev-default clears viewer+ under both
-    normal and `PIPEGUARD_AUTH_STRICT` modes); the value is seam coverage for a future real-IdP swap.
+    normal and `BAYLEAF_AUTH_STRICT` modes); the value is seam coverage for a future real-IdP swap.
     *Trace:* [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (advisory-only),
     [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the `require_role` primitive),
     [design/agents.md](../design/agents.md), [design/architecture.md](../design/architecture.md),

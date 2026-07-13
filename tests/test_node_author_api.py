@@ -13,8 +13,8 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from api.main import app
-from pipeguard.identifiers import PLATFORM_VERSION, SCHEMA_VERSION
-from pipeguard.node_author import NODE_AUTHOR_CORPUS_VERSION
+from bayleaf.identifiers import PLATFORM_VERSION, SCHEMA_VERSION
+from bayleaf.node_author import NODE_AUTHOR_CORPUS_VERSION
 
 client = TestClient(app)
 

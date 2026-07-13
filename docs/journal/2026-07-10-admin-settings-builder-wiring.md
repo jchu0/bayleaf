@@ -26,7 +26,7 @@ empty, so no backend/test-census trigger fires this sweep.
    changed).
 2. **`7c56564` (T-094, "A3/A4") — Admin: System observability + artifact store + password reset.**
    Same file. `SystemTab` gains a 4th `StatCard` ("Artifact store" · `local` ·
-   `PIPEGUARD_ARTIFACT_STORE · s3 seam` — grounded: `src/pipeguard/artifacts/__init__.py` defines
+   `BAYLEAF_ARTIFACT_STORE · s3 seam` — grounded: `src/bayleaf/artifacts/__init__.py` defines
    exactly this env var, T-039) and an `OBS` array of three links (`Prometheus /metrics` at
    `${apiBase}/metrics`, `Prometheus` at `localhost:9090`, `Grafana` at `localhost:3000` — grounded:
    `docs/ops/telemetry-connectors.md` already documents these same two ports from T-036/T-079, no
@@ -92,13 +92,13 @@ commits above:
 - 🔴 doc create/move/rename/status-flip → N/A, no doc was created/moved/renamed this session
   (this journal is a *new file*, which is the unconditional row above, not this one).
 - 🔴 `models.py`/`parsers.py`/`persistence/` field change → **N/A, confirmed**: `git diff --stat
-  eb01915 4208f0b -- src/ api/` is empty — none of the 4 commits touch `src/pipeguard/` or `api/`
+  eb01915 4208f0b -- src/ api/` is empty — none of the 4 commits touch `src/bayleaf/` or `api/`
   at all, only `frontend/src/`.
 - 🔴 test census (`tests/`) → **N/A, confirmed**: `git diff --stat eb01915 4208f0b -- tests/` is
   empty. `quality/evaluation.md`'s hardcoded count is untouched by this batch; not re-derived
   since nothing could have falsified it.
 - 🟠 `runbook.py`/`rules.py` → N/A, untouched (no backend change at all this batch).
-- 🟠 `src/pipeguard/metrics/` → N/A, untouched.
+- 🟠 `src/bayleaf/metrics/` → N/A, untouched.
 - 🟠 `provenance.py`/`engine.py`/`EventType` → N/A, untouched.
 - 🟠 new advisory agent/model tier/corpus → N/A, none of the 4 touch `triage/`,
   `pipeline_repair/`, or an off-gate agent module (the Archivist reads stay uncalled, not newly

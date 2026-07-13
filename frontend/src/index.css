@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* Design tokens — VERBATIM from the design handoff (docs/design/frontend/README.md
-   §Design tokens; exact values in source/PipeGuard.dc.html). Light content (#eef1f4 shell,
+   §Design tokens; exact values in source/bayleaf.dc.html). Light content (#eef1f4 shell,
    white cards, #1f5fd0 accent) + a dark left nav (#141a21). Tailwind v4 @theme → utilities
    (bg-page, bg-card, text-text, border-line, bg-nav, bg-proceed-bg, text-escalate-fg, …). */
 @theme {

@@ -16,7 +16,7 @@ integrity). Reference pipeline: nf-core/sarek (germline DNA panel).
 
 **Update (2026-07-11):** this doc's package/module conventions (bioconda + biocontainer dual
 packaging, `process`/`conda`/`container` directives, `emit:` channel names) are no longer only
-notes on someone else's convention — `src/pipeguard/nextflow/catalog.py` follows them directly to
+notes on someone else's convention — `src/bayleaf/nextflow/catalog.py` follows them directly to
 generate a REAL, runnable DSL2 pipeline from a Builder card graph, and
 `scripts/run_giab_pipeline.py` now runs that generated pipeline via `nextflow run` for the intake
 driver. See [design/nextflow-codegen.md](../design/nextflow-codegen.md). **Same-day follow-up
@@ -113,10 +113,10 @@ MarkDuplicates `PERCENT_DUPLICATION`.
   unstable** (e.g. fastp `after_filtering_q30_rate` reading zero, MultiQC issue #936). Pin
   a canonical registry `our_key → {module, json_key, source_file, unit}` rather than
   trusting General-Stats column names. This also replaces the fixed `QCMetrics` columns.
-  **Now implemented** as [`metric_registry.yaml`](../../src/pipeguard/metrics/metric_registry.yaml)
+  **Now implemented** as [`metric_registry.yaml`](../../src/bayleaf/metrics/metric_registry.yaml)
   + a typed `MetricRegistry`, on the QC critical path (see [metric_registry.md](metric_registry.md)).
   **Update (gap-analysis WS-03/WS-06, 2026-07-12): real MultiQC/fastp/mosdepth parsing now
-  exists** — [`src/pipeguard/ingest/nfcore.py`](../../src/pipeguard/ingest/nfcore.py)'s
+  exists** — [`src/bayleaf/ingest/nfcore.py`](../../src/bayleaf/ingest/nfcore.py)'s
   `ingest_results_dir()` parses a published nf-core `results/` dir straight into registry-keyed
   `SampleMetrics`, and `RunArtifacts.qc: list[QCMetrics | SampleMetrics]` (a transition Union) lets
   the gate consume either shape byte-identically — proven end-to-end against **real** HG002 output

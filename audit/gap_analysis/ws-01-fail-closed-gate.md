@@ -10,25 +10,25 @@ Make "missing data" a **deterministic finding** so the verdict fails closed by t
 
 ## Exact changes
 
-**`src/pipeguard/rules.py`**
+**`src/bayleaf/rules.py`**
 - `_check_presence` (`rules.py:85-130`) — add the symmetric **sheet-without-QC** rule. New param `qc_present: bool` (or pass `qc`+`demux`). Emit `QC-MISSING` (category `QC`, severity `WARN`, `suggested_verdict=HOLD`) when `qc is None and sheet is not None` (declared-for-sequencing but no QC artifact). Cites `Evidence(source="qc_metrics.csv", locator=f"sample_id={sid}", value="missing", expected="present")` — the new rule authors its own evidence (invariant 2). Guard on `sheet is not None` so an intake-only/accessioned-but-not-run sample is not false-HOLDed.
 - New `_check_expected_metrics(sid, by_key, runbook)` — for each `our_key` in `runbook.expected_metrics` not in `by_key`, emit `QC-EXPECTED-<key>` (category from registry gate, `WARN`, `HOLD`) "expected metric not examined." This restores signal for `required=False` safety metrics *bound to a profile* without NA-flagging genuinely lean runs.
 - `evaluate_sample` (`rules.py:436-478`) — keep the `if qc is not None:` guard (avoids N duplicate NA findings), but after the threshold loop call `_check_expected_metrics` (only when `qc is not None`; the `qc is None` case is covered by `QC-MISSING`). Add new `compute_check_coverage(...)` (below).
 - New `compute_check_coverage(sid, artifacts, runbook, findings) -> CheckCoverage` — deterministic: enumerates the expected check set (provenance/metadata/qc-threshold/expected-metric/pipeline categories the runbook defines) vs. what actually ran given the artifacts present, returns counts + not-examined labels + `categories_ran`/`categories_not_run`. Lives in `rules.py` because it is a pure function of artifacts+runbook (trust anchor), not narration.
 
-**`src/pipeguard/runbook.py`**
+**`src/bayleaf/runbook.py`**
 - Add to `Runbook` (`runbook.py:71-95`): `pipeline_profile: str = "default"` and `expected_metrics: tuple[str, ...] = ()`. `DEFAULT_RUNBOOK` leaves `expected_metrics=()` → zero behavior change. A `germline-panel` runbook variant sets e.g. `("qc.breadth_20x",)`. This is the seam WS-06 (§6a `RunbookSet`) will lift onto the per-`(assay, sample_type, platform)` profile — same field name so the migration is a move, not a rename.
 
-**`src/pipeguard/synthesis/base.py` + `stub.py` + `claude.py`**
+**`src/bayleaf/synthesis/base.py` + `stub.py` + `claude.py`**
 - `Synthesizer.synthesize` protocol (`base.py:46-53`) — add optional `coverage: CheckCoverage | None = None`. `aggregate_verdict` untouched (invariant 1).
 - `StubSynthesizer.synthesize` (`stub.py:44-81`) — replace the empty-findings prose (`stub.py:50-56`): headline `"{verdict} — {ran}/{expected} checks passed"` (not "all checks passed"); rationale states coverage: `"{sample} passed the {ran} checks that ran; {not_examined_labels} not examined."` The non-empty branch appends the same coverage tail.
 - `ClaudeSynthesizer` — thread `coverage` through; the live prompt may narrate coverage but the count is deterministic (never model-authored).
 
-**`src/pipeguard/models.py`**
+**`src/bayleaf/models.py`**
 - New `CheckCoverage(BaseModel)`: `checks_expected: int`, `checks_ran: int`, `not_examined: list[str]`, `categories_ran: list[Category]`, `categories_not_run: list[Category]`.
 - `DecisionCard` (`models.py:215-306`) — add `check_coverage: CheckCoverage | None = None`, documented (like `metric_values`, `models.py:249-253`) as contextual metadata **excluded from `content_hash`** (`models.py:287-306`).
 
-**`src/pipeguard/engine.py`**
+**`src/bayleaf/engine.py`**
 - `run_gate` loop (`engine.py:104-146`) — compute `coverage = compute_check_coverage(sample_id, artifacts, runbook, findings)`, pass into `synthesizer.synthesize(sample_id, findings, artifacts, coverage)` (`engine.py:137`), and attach `card.check_coverage = coverage` alongside the `metric_values` attach (`engine.py:144-146`).
 
 **`api/main.py` + `api/card_readout.py`**
@@ -78,10 +78,10 @@ Shared-core files touched: `rules.py`, `runbook.py`, `models.py`, `synthesis/bas
 - Coverage denominator must be defined precisely (thresholds evaluated + presence/provenance/pipeline rules that executed) so "M not examined" isn't a misleading count — pin it in `compute_check_coverage`'s docstring and a test.
 
 ### Critical Files for Implementation
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/rules.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/runbook.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/synthesis/stub.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/models.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/rules.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/runbook.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/synthesis/stub.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/models.py
 - /Users/jchu/IdeaProjects/claude_life_science_hackathon/frontend/src/screens/RunDetail.tsx
 
 ---

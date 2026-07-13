@@ -84,7 +84,7 @@ Grounding against the actual diff caught it.
   coverage — flagged honestly in `quality/evaluation.md` §"What we do not claim" (item 4) and
   `quality/risks.md` RISK-034, rather than left silently unmentioned.
 - `data/schemas.md` checked for `RunbookThreshold`/`pipeline_gate`: no hits — it's an API-layer
-  (`api/main.py`) model, not a `src/pipeguard/models.py` core model, so the 🔴 schemas.md map
+  (`api/main.py`) model, not a `src/bayleaf/models.py` core model, so the 🔴 schemas.md map
   row does not fire for this change (confirmed by grep, not assumed).
 
 ## Decisions
@@ -108,7 +108,7 @@ Grounding against the actual diff caught it.
   the archive. Flagging here in case the maintainer wants a superseding handoff note instead.
 - `docs/demo/run-of-show.md` / `docs/demo/demo_plan.md` do not mention Submit at all (checked:
   no hits for "Submit"), so there is no stale claim to fix there — but neither do they warn an
-  operator that a *live* Submit demo needs `PIPEGUARD_BIOCONDA_BIN` set before starting
+  operator that a *live* Submit demo needs `BAYLEAF_BIOCONDA_BIN` set before starting
   `uvicorn`, and the demo launch commands in `run-of-show.md`/`README.md` don't set it. Not
   edited (redesigning the demo script is a product call, not implied by this batch), but
   recorded as RISK-034's owner/revisit trigger.

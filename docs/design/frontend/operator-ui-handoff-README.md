@@ -1,8 +1,8 @@
-# Handoff: PipeGuard operator UI → React
+# Handoff: bayleaf operator UI → React
 
 ## Overview
 
-PipeGuard is an AI-assisted **provenance & QC decision gate** for genomics pipeline
+bayleaf is an AI-assisted **provenance & QC decision gate** for genomics pipeline
 runs. For each sample in a sequencing run it recommends **proceed / hold / rerun /
 escalate**, always with the supporting evidence, and uses AI to accelerate triage.
 Domain: rare-disease germline DNA panel, Illumina short-read. The primary user is a
@@ -25,16 +25,16 @@ codebase's React environment**, using its established patterns and component lib
 The brief specifies the intended stack: **React + a component library (shadcn/ui or
 Mantine)**. Design in composable components and standard patterns; theme-aware and
 responsive are nice-to-haves. If the target repo already has a component library and
-tokens, map PipeGuard's primitives onto them rather than porting the inline styles
+tokens, map bayleaf's primitives onto them rather than porting the inline styles
 verbatim.
 
 Two source files are provided:
 
-- **`PipeGuard.html`** — a single self-contained file. **Open it in any browser** (no
+- **`bayleaf.html`** — a single self-contained file. **Open it in any browser** (no
   build step, no server, works offline). This is the visual + interaction reference.
   Use the **"State"** control in the top bar to preview loading / empty / error, and the
   **run switcher** (top bar) to move between runs.
-- **`source/PipeGuard.dc.html`** — the annotated source. The `<script>` logic class at
+- **`source/bayleaf.dc.html`** — the annotated source. The `<script>` logic class at
   the bottom holds the **complete mock-data model** (`SAMPLES`, `TICKETS`, `STAGES`,
   `INTAKE`, `CONFIG`, `MONITORING`, `AGENT`, `RUNS`, thresholds). Treat this as the
   data contract: it is the source of truth for the shapes your React views must render.
@@ -48,7 +48,7 @@ Two source files are provided:
 are all intended as specified. Recreate the UI faithfully using the codebase's existing
 libraries and patterns — match the layout, hierarchy, verdict color semantics, and
 states precisely. Exact hex values, type sizes, and spacing are listed under
-[Design tokens](#design-tokens); pull real values from `source/PipeGuard.dc.html` when
+[Design tokens](#design-tokens); pull real values from `source/bayleaf.dc.html` when
 in doubt.
 
 ---
@@ -268,7 +268,7 @@ verdicts.
 
 ## Data model (the contract)
 
-The full mock data lives in `source/PipeGuard.dc.html`. Match these shapes. Abbreviated:
+The full mock data lives in `source/bayleaf.dc.html`. Match these shapes. Abbreviated:
 
 ```ts
 type Verdict = 'proceed' | 'hold' | 'rerun' | 'escalate';
@@ -392,9 +392,9 @@ linear. Keep all motion subtle and functional.
 ## Files in this bundle
 
 - `README.md` — this document (self-sufficient; implement from this alone).
-- `PipeGuard.html` — self-contained clickable prototype. **Open in a browser** — the
+- `bayleaf.html` — self-contained clickable prototype. **Open in a browser** — the
   visual + interaction reference.
-- `source/PipeGuard.dc.html` — annotated source; the `<script>` logic class holds the
+- `source/bayleaf.dc.html` — annotated source; the `<script>` logic class holds the
   **complete mock-data model** (the data contract).
 - `source/support.js` — the prototype's render runtime (reference only; do not port).
 - `frontend-design-brief.md` — the original product brief (audience, principles, scope).

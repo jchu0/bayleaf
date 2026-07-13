@@ -22,7 +22,7 @@ port (over a lean hero-flow) are recorded so the tradeoff is deliberate, not dri
 ## Decision
 
 1. **FastAPI read-API (`api/`)** wraps the core as the production seam (ADR-0010) — the
-   core stays framework-agnostic (no FastAPI/React imports in `src/pipeguard/`).
+   core stays framework-agnostic (no FastAPI/React imports in `src/bayleaf/`).
 2. **React + Vite + Tailwind frontend (`frontend/`)** consumes the API, built to the
    v2.1 prototype's design system (IBM Plex, verdict/gate tokens).
 3. **Streamlit (`app/`) is kept as the guaranteed-working demo fallback** — never

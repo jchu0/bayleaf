@@ -9,7 +9,7 @@
 
 ## Context
 
-The Nextflow codegen path (`src/pipeguard/nextflow/`, [design/nextflow-codegen.md](../design/nextflow-codegen.md))
+The Nextflow codegen path (`src/bayleaf/nextflow/`, [design/nextflow-codegen.md](../design/nextflow-codegen.md))
 compiles a Builder card graph into a runnable pipeline from a **curated catalog**
 (`catalog.py`): each catalogued tool card maps to a human-vetted `ProcessSpec` with a real
 `script:`. A card outside the catalog compiles to a labelled placeholder that fails loudly on a
@@ -39,7 +39,7 @@ execute trust seam, or (c) letting an un-reviewed command reach a compute host.
 Add an **operator-authored custom-script process**: a Builder card on which a **human** provides a
 verbatim Nextflow `script:` body (plus optional `container`/`conda` packaging). Concretely:
 
-1. **Model.** `NfNode` (`src/pipeguard/nextflow/compiler.py`) gains three optional fields —
+1. **Model.** `NfNode` (`src/bayleaf/nextflow/compiler.py`) gains three optional fields —
    `script: str | None`, `container: str | None`, `conda: str | None`. A node with a **non-empty**
    `script` is a **custom process** (`NfNode.is_custom()`). The fields are absent on every ordinary
    card, so the change is purely additive.
@@ -87,7 +87,7 @@ command on a compute host is only acceptable because **four independent guardrai
    `ProcessSpec` to the curated catalog. The compose ≠ execute trust seam that keeps agent-authored
    metadata from becoming arbitrary code execution is unchanged — this feature adds the *human* path
    the contract presupposed, not an agent one.
-4. **[iv] The core never executes.** `src/pipeguard/` (including `src/pipeguard/nextflow/`) emits
+4. **[iv] The core never executes.** `src/bayleaf/` (including `src/bayleaf/nextflow/`) emits
    TEXT and runs nothing — `compile_graph` returns a string bundle and spawns no subprocess (pinned
    by a test). Only the out-of-core drivers (`scripts/run_giab_pipeline.py` + `api/routers/`) ever
    shell out to `nextflow run`, exactly as before this change (ADR-0001, ADR-0003). No new execution
@@ -124,7 +124,7 @@ operator's real body or a loud gap — never a guess.
 | | |
 |---|---|
 | **Gains** | An operator can run a real step off the curated catalog (e.g. `bcftools annotate` over a VCF) entirely in-product; the node-author contract's presupposed human-authoring surface now exists; the Builder → runnable-Nextflow story is complete for human-authored steps, not just the seven catalogued tools. |
-| **Costs** | The compiler can now emit an arbitrary operator command — so the honest label, the blank-script rejection, and (above all) the W1 approval gate before any run are load-bearing, not optional. (The compiler was robustness-hardened alongside this: `_groovy_escape` on interpolated values incl. operator `conda`/`container` strings, kind/tool/id identifier validation, a File-input source fix, and duplicate-node / fan-in-clobber / proc-name-collision / port-drift guards — `src/pipeguard/nextflow/compiler.py` — so a graph can't smuggle Groovy or silently mis-wire; these harden every process, not just custom ones.) Output filenames aren't known from the typed model, so a custom process declares `path("*")` (captures the work dir); the operator's script is responsible for producing its declared artifacts. A custom process is meta-threaded per-sample, so it expects a per-sample input carrying `meta` (the common "runs on a pipeline output" case); a custom node with only reference/no per-sample inputs is an edge case not specially handled. |
+| **Costs** | The compiler can now emit an arbitrary operator command — so the honest label, the blank-script rejection, and (above all) the W1 approval gate before any run are load-bearing, not optional. (The compiler was robustness-hardened alongside this: `_groovy_escape` on interpolated values incl. operator `conda`/`container` strings, kind/tool/id identifier validation, a File-input source fix, and duplicate-node / fan-in-clobber / proc-name-collision / port-drift guards — `src/bayleaf/nextflow/compiler.py` — so a graph can't smuggle Groovy or silently mis-wire; these harden every process, not just custom ones.) Output filenames aren't known from the typed model, so a custom process declares `path("*")` (captures the work dir); the operator's script is responsible for producing its declared artifacts. A custom process is meta-threaded per-sample, so it expects a per-sample input carrying `meta` (the common "runs on a pipeline output" case); a custom node with only reference/no per-sample inputs is an edge case not specially handled. |
 | **Follow-ups** | The Builder's custom-script card UI (authoring surface, the honest label, review affordances) — frontend, built separately. The backend compile + compile-API + run-gate threading are done; the store already round-trips the `script` field, so no persistence change was needed. Optional: let the operator declare output globs (tighter than `path("*")`); a per-deployment allowlist/sandbox profile for the emitted process. |
 
 ## Revisit when

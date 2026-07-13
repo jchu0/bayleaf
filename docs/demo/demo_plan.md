@@ -10,7 +10,7 @@
 ## The narrative (60 seconds)
 
 A sequencing run finishes; an operator must decide, per sample, **proceed / hold /
-rerun / escalate** — today that means combing logs and QC reports by hand. PipeGuard is
+rerun / escalate** — today that means combing logs and QC reports by hand. bayleaf is
 the **operations layer**: deterministic rules make the call with **cited evidence**, an
 advisory **Claude agent** accelerates triage, and every decision is recorded in an
 **append-only provenance ledger** the database is a rebuildable projection of. **Rules
@@ -62,8 +62,8 @@ npm --prefix frontend run dev                  # React UI (proxies /api -> :8010
 
 ## The "wow" moments
 
-1. **Flip the AI on, live.** `PIPEGUARD_TRIAGE_AGENT=claude` (and/or
-   `PIPEGUARD_SYNTHESIZER=claude`) → the same triage panel now shows Claude-written prose,
+1. **Flip the AI on, live.** `BAYLEAF_TRIAGE_AGENT=claude` (and/or
+   `BAYLEAF_SYNTHESIZER=claude`) → the same triage panel now shows Claude-written prose,
    with citations + addressed findings still **deterministic**. If the API errors or the
    safety classifier refuses, it **degrades to the stub** — the demo cannot break.
 2. **Reproducibility from the log.** `make emit-ledger && make rebuild-db` writes a fresh
@@ -71,10 +71,10 @@ npm --prefix frontend run dev                  # React UI (proxies /api -> :8010
    authoritative log — `16 event(s) → 1 run, 5 decision cards`, byte-stable. The DB is
    disposable; the log is truth.
 3. **An escalation lands in Slack, live.**
-   `PIPEGUARD_NOTIFIER=slack PIPEGUARD_SLACK_LIVE=1 uv run python -m pipeguard.notify data/mock_run_01`
+   `BAYLEAF_NOTIFIER=slack BAYLEAF_SLACK_LIVE=1 uv run python -m bayleaf.notify data/mock_run_01`
    → the gate runs and the S4 escalation (+ S5 hold) post to a real Slack channel as cited
    cards. Off by default (stub, $0); the live post is armed **only** by the explicit
-   `PIPEGUARD_SLACK_LIVE` flag (needs `uv sync --extra slack` + a bot token/channel in `.env`),
+   `BAYLEAF_SLACK_LIVE` flag (needs `uv sync --extra slack` + a bot token/channel in `.env`),
    and any Slack error degrades to the stub. Shows the ops-integration seam (ADR-0010) as a
    real, controlled side effect — verified end-to-end against a live workspace.
 

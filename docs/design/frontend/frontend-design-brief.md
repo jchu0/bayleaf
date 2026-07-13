@@ -14,7 +14,7 @@ self-contained — paste it into your design tool; it assumes no prior context.
 
 ## Brief
 
-**Product.** PipeGuard is an AI-assisted **provenance & QC decision gate** for
+**Product.** bayleaf is an AI-assisted **provenance & QC decision gate** for
 genomics pipeline runs — the operations layer that sits on top of a bioinformatics
 pipeline. For each sample in a sequencing run it recommends **proceed / hold /
 rerun / escalate**, always with the supporting evidence, and it uses AI to
@@ -72,7 +72,7 @@ system, and the key states (loading / empty / error).
 ## Build status (2026-07-08)
 
 The full screen set is now **built** in the React frontend (`frontend/`) and mirrored in the
-clickable prototype (`PipeGuard.html`): the six core screens below **plus** the v2 additions —
+clickable prototype (`bayleaf.html`): the six core screens below **plus** the v2 additions —
 including the **preflight/intake gate** — all exist. This brief stays the stable spec; the
 sections below record the intent the build followed.
 

@@ -10,14 +10,14 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from pipeguard import load_run
-from pipeguard.metrics import (
+from bayleaf import load_run
+from bayleaf.metrics import (
     default_registry,
     metric_values_for,
     producible_metric_keys,
     sample_metrics_from_qcmetrics,
 )
-from pipeguard.models import CanonicalUnit, MetricValue, QCMetrics, RawObservation, SampleMetrics
+from bayleaf.models import CanonicalUnit, MetricValue, QCMetrics, RawObservation, SampleMetrics
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
 
@@ -136,8 +136,8 @@ def test_runbook_thresholds_key_on_registered_metrics() -> None:
     This is the runbook<->registry linkage guard: a threshold that gates on an unregistered
     metric (a typo, or a metric we forgot to register) fails loudly here.
     """
-    from pipeguard.metrics import default_registry
-    from pipeguard.runbook import DEFAULT_RUNBOOK
+    from bayleaf.metrics import default_registry
+    from bayleaf.runbook import DEFAULT_RUNBOOK
 
     reg = default_registry()
     for t in DEFAULT_RUNBOOK.qc_thresholds:

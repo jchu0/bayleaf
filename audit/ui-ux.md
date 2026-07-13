@@ -1,4 +1,4 @@
-## PipeGuard Release-Hardening Audit — Specialist 1: UI/UX consistency auditor
+## bayleaf Release-Hardening Audit — Specialist 1: UI/UX consistency auditor
 
 **Run mode:** Fable 5, code-only / headless (route + `file:line` + quoted string; no browser this pass, per the resolved evidence mode). Every citation below was re-opened and the quoted string confirmed. Line numbers may shift under concurrent Builder edits (G5) — re-anchor by the quoted string.
 
@@ -141,4 +141,4 @@
 - **Empty/error honesty.** `RunSelector` and `PipelineRepairModal` say "Couldn't load …" on failure rather than fabricating rows; `States.ErrorBox` offers `onRetry`; RunOverview's bespoke 503 error offers Retry (`RunOverview.tsx:159-165`).
 
 ### Low-confidence / not filed (couldn't confirm the defect)
-- **Provenance run-summary pin renders a payload `status` verbatim.** `Provenance.tsx:176,202` shows `{nSamples} · {status}` where `status = readStr(completed.payload,'status')` sourced from `src/pipeguard/engine.py:169` (`payload={"status": arun.status, …}`). If `arun.status` is a snake_case enum it would leak a raw value; I could not confirm the exact string headless, so I am **not** filing it — flagged here as a 60-second thing to eyeball on the real Provenance page. Marked Possible only.
+- **Provenance run-summary pin renders a payload `status` verbatim.** `Provenance.tsx:176,202` shows `{nSamples} · {status}` where `status = readStr(completed.payload,'status')` sourced from `src/bayleaf/engine.py:169` (`payload={"status": arun.status, …}`). If `arun.status` is a snake_case enum it would leak a raw value; I could not confirm the exact string headless, so I am **not** filing it — flagged here as a 60-second thing to eyeball on the real Provenance page. Marked Possible only.

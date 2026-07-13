@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from pipeguard import DEFAULT_RUNBOOK, Verdict, evaluate_run, load_run, run_gate
-from pipeguard.metrics import default_registry, metric_values_for
-from pipeguard.models import (
+from bayleaf import DEFAULT_RUNBOOK, Verdict, evaluate_run, load_run, run_gate
+from bayleaf.metrics import default_registry, metric_values_for
+from bayleaf.models import (
     Category,
     CheckCoverage,
     Evidence,
@@ -27,11 +27,11 @@ from pipeguard.models import (
     Severity,
     SourceKind,
 )
-from pipeguard.parsers import parse_sample_sheet, parse_sample_sheet_header
-from pipeguard.provenance import EventLedger, EventType
-from pipeguard.rules import _evaluate_metric, compute_check_coverage, evaluate_sample
-from pipeguard.runbook import QCThreshold, Runbook
-from pipeguard.synthesis import StubSynthesizer, aggregate_verdict
+from bayleaf.parsers import parse_sample_sheet, parse_sample_sheet_header
+from bayleaf.provenance import EventLedger, EventType
+from bayleaf.rules import _evaluate_metric, compute_check_coverage, evaluate_sample
+from bayleaf.runbook import QCThreshold, Runbook
+from bayleaf.synthesis import StubSynthesizer, aggregate_verdict
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
 

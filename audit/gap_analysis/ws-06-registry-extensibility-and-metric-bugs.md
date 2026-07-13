@@ -17,22 +17,22 @@ Invert the ingestion contract from **named model fields** to a **registry-keyed 
 4. **Store consolidation (6d).** Collapse the seven `api/*_store.py` JSONL/SQLite/Postgres trios (~2,186 LOC, all the same "indexed columns + full-JSON document, env-selected, degrade-to-JSONL" shape — e.g. `share_store.py:1-60`) behind one generic `JsonlStore[ModelT]`; defer Postgres. Independent of the deterministic core; can land anytime.
 
 ## Exact changes
-- **`src/pipeguard/models.py`**
+- **`src/bayleaf/models.py`**
   - `320-347` `QCMetrics`: demote to a deprecated compatibility shim; add `def to_sample_metrics(self) -> SampleMetrics` that lowers the frozen-five via the legacy scale table.
   - New `RawObservation(BaseModel, frozen)`: `raw_value: float`, `raw_unit: str`, `source_field: str|None`, `source_locator: str|None`.
   - New `SampleMetrics(BaseModel)`: `sample_id: str`, `raw: dict[str, RawObservation]` (keyed by registry `our_key`).
   - `RunArtifacts.qc` (`466-473`): change element type `list[QCMetrics] → list[SampleMetrics]`; keep a `@property` legacy view during the shim window. `sample_ids()` (`487-500`) unchanged.
-- **`src/pipeguard/metrics/registry.py`**
+- **`src/bayleaf/metrics/registry.py`**
   - `MetricSource` (`68-77`): add `raw_unit: str | None` — the unit this source's `raw_field` is emitted in; the frozen-CSV parser reads it (defaulting to `canonical_unit` → identity normalize). `observe(...)` (`280-316`) unchanged.
-- **`src/pipeguard/metrics/mapping.py`**
+- **`src/bayleaf/metrics/mapping.py`**
   - Delete `_QCMETRICS_MAP` (`23-40`). Rewrite `metric_values_for` (`43-79`) to take `SampleMetrics` and loop `reg.observe(metric_key=k, raw_value=o.raw_value, raw_unit=o.raw_unit, ...)` over `sm.raw.items()`. Keep the legacy field→(our_key,unit) table *only* inside `QCMetrics.to_sample_metrics` for the shim.
-- **`src/pipeguard/parsers.py`**
+- **`src/bayleaf/parsers.py`**
   - `parse_qc_metrics` (`210-237`): drop the 13 hardcoded `row.get(...)` calls; iterate `df.columns`, `resolve_alias` each to an `our_key` (unknown → collect as honest "unmapped columns", never silently dropped), read `raw_unit` from the entry source, emit `SampleMetrics`.
-- **`src/pipeguard/runbook.py`**
+- **`src/bayleaf/runbook.py`**
   - `QCThreshold` (`13-42`): add `kind: Literal["one_sided","target_band"] = "one_sided"` and optional band fields (`target_low/target_high`, `hard_low/hard_high`, canonical unit); a validator ties `target_band` to registry `direction == target_band`.
   - `81-90`: fix the `% reads identified` label → `"Reads passing filter"` (matches registry display).
   - Add wired `target_band` thresholds for `variant.titv` and `qc.fold_enrichment`; note `mean_coverage` relabel.
-- **`src/pipeguard/rules.py`**
+- **`src/bayleaf/rules.py`**
   - `_evaluate_metric` (`194-279`): add a `target_band` branch (pass inside target; WARN/HOLD inside hard band; CRITICAL/RERUN outside), authoring band Evidence via the existing `_to_display_unit` path (`174-191`).
   - `evaluate_sample` QC block (`453-460`): `by_key` now comes from `metric_values_for(sample_metrics)`; a `None` lookup = missing metric (preserves WS-01 semantics + the `cluster_pf` structural HOLD).
 - **`metric_registry.yaml`**: add `raw_unit` under each `source`; correct `qc.mean_target_coverage` (`161-175`) source honesty (driver uses mosdepth panel windows, not Picard `MEAN_TARGET_COVERAGE`); bump `metric_registry_version: 1 → 2`.
@@ -79,11 +79,11 @@ Shared-core files touched: `models.py`, `metrics/{registry,mapping}.py`, `parser
 - **6d is scope, not correctness.** Store consolidation is real duplication but off the decision path; sequence it last and don't let it block the P1 metric fixes.
 
 ### Critical Files for Implementation
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/models.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/metrics/mapping.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/metrics/registry.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/runbook.py
-- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/pipeguard/rules.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/models.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/metrics/mapping.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/metrics/registry.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/runbook.py
+- /Users/jchu/IdeaProjects/claude_life_science_hackathon/src/bayleaf/rules.py
 
 ## Test-First Contract (per surfaced gap)
 

@@ -39,13 +39,13 @@ traced to its source.
    live AI is flipped on only for the demo moment. *Trace:* [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md),
    [nonfunctional.md](nonfunctional.md) REQ-NF-030/031.
 3. **REQ-C-012 — Model selection is a cost lever.** Model is configurable per AI seam
-   (`PIPEGUARD_*_MODEL`) to trade cost against quality within the budget. *Trace:*
+   (`BAYLEAF_*_MODEL`) to trade cost against quality within the budget. *Trace:*
    ADR-0006, [architecture.md](../design/architecture.md) §Swappable seams.
 
 ## Licensing
 
 1. **REQ-C-020 — External-process invocation only.** Third-party genomics tools are
-   invoked as **external processes** (arm's-length subprocess), which keeps PipeGuard's
+   invoked as **external processes** (arm's-length subprocess), which keeps bayleaf's
    own code MIT-licensable. Verified for VerifyBamID2 (MIT), peddy (MIT), Picard
    (MIT), and PLINK (GPL-3.0) in [qc_metrics-rare-disease.md](../data/qc_metrics-rare-disease.md)
    §4. *Trace:* [licensing.md](../data/licensing.md).
@@ -65,7 +65,7 @@ traced to its source.
 
 ## Domain safety
 
-1. **REQ-C-030 — Research/demo tool, not a clinical decision system.** PipeGuard has
+1. **REQ-C-030 — Research/demo tool, not a clinical decision system.** bayleaf has
    production intent but makes **no diagnostic, therapeutic, or safety claims** and is
    not a clinical decision system. *Trace:* CLAUDE.md life-science guardrails,
    [scope-and-wishlist.md](scope-and-wishlist.md) §Out of scope.
@@ -87,7 +87,7 @@ traced to its source.
 
 ## Scope boundary
 
-1. **REQ-C-040 — Sit on top of the pipeline, do not build it.** PipeGuard is the
+1. **REQ-C-040 — Sit on top of the pipeline, do not build it.** bayleaf is the
    operations layer over an existing bioinformatics pipeline; building or modifying
    the upstream clinical pipeline is out of scope. Inputs are VCF + QC outputs (VCF-first,
    ADR-0004). *Trace:* [scope-and-wishlist.md](scope-and-wishlist.md), [strategy.md](../data/strategy.md).

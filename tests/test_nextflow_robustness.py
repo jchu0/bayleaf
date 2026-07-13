@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard.nextflow import (
+from bayleaf.nextflow import (
     CompileError,
     NfEdge,
     NfGraph,

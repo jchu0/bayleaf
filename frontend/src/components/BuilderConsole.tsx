@@ -63,7 +63,7 @@ const RESOLVE_CHIP: Record<string, string> = {
 // localStorage key) rather than threaded through a prop, so the resize never touches the
 // PipelineBuilder call site. Clamp: a floor that keeps the tabs legible, a ceiling at 70vh
 // so the drawer can't swallow the canvas above it.
-const H_KEY = 'pipeguard.builder.consoleHeight'
+const H_KEY = 'bayleaf.builder.consoleHeight'
 const DEFAULT_H = 240
 const MIN_H = 140
 const maxH = () => Math.round((typeof window === 'undefined' ? 900 : window.innerHeight) * 0.7)

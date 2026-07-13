@@ -34,7 +34,7 @@ questions must stay separate.
    overrides, or re-enters it (ADR-0001).
 
 2. **A new, structurally off-gate advisory interpretation layer.** A framework-agnostic core
-   `src/pipeguard/interpretation/` (never imported by `rules.py`/`run_gate`, like `triage/` and `pipeline_repair/`)
+   `src/bayleaf/interpretation/` (never imported by `rules.py`/`run_gate`, like `triage/` and `pipeline_repair/`)
    surfaces, **per candidate variant, as cited evidence**: ClinVar classification **quoted verbatim** with its
    review-status/star rating + accession + DB version; gnomAD population/popmax allele frequency; a **mechanical**
    inheritance-fit against an operator-declared mode; and the variant-gate call-quality already computed. Plus a
@@ -51,7 +51,7 @@ questions must stay separate.
    (`api/interpretation_agent.py`, an `InterpretationDigest`) pins `advisory: Literal[True] = True`, has **no
    verdict/decision/pathogenicity/confidence field to set**, carries a fixed disclaimer + citations, and refines
    **only** prose via an optional LLM. Stub-first ($0, offline), lazy `anthropic` import, degrade-to-stub on any
-   error/refusal, `PIPEGUARD_INTERPRETATION_AGENT=stub|claude` (cheap tier default). AI is OFF by default (ADR-0006).
+   error/refusal, `BAYLEAF_INTERPRETATION_AGENT=stub|claude` (cheap tier default). AI is OFF by default (ADR-0006).
 
 5. **A cited, human-signed run report.** `api/report.py` is a pure projection over already-decided `DecisionCard`s
    (like `card_readout.py`) — it authors no verdict. It renders provenance header + version pins, decision summary,
@@ -186,7 +186,7 @@ before any external share.
    quoting ClinVar VERBATIM, per-sample gate outcomes + cited evidence, a sign-off footer stating
    human sign-off is a labelled seam — built over already-wired `detail`, **not** the full
    `api/report.py`/`ReportStore`/sign-off lifecycle. A `GET /api/runs/{run_id}/variants` read-only
-   endpoint (parsed via `pipeguard.parsers.parse_variant_calls`) powers a per-variant table (Sample ·
+   endpoint (parsed via `bayleaf.parsers.parse_variant_calls`) powers a per-variant table (Sample ·
    Gene · HGVS · ClinVar significance VERBATIM · review status · accession) — only the `VariantCall`/D2
    fields, **no** gnomAD AF / inheritance-fit / call-quality join.
 

@@ -11,7 +11,7 @@ documented-only (wishlist #14, `docs/design/data-platform-and-archivist.md` §2.
 
 Why it lives in `api/` and not the core: de-identification is an **export-path data
 transform only**. It never reads, sets, or overrides a verdict, finding, confidence, or
-gate input — the deterministic gate in `src/pipeguard/` is untouched (ADR-0001, CLAUDE.md
+gate input — the deterministic gate in `src/bayleaf/` is untouched (ADR-0001, CLAUDE.md
 architecture guardrail 1). Rules decide; this only shapes what the read-API emits.
 
 Design (four field classes, applied per row against the run's read-only `origin`):
@@ -30,7 +30,7 @@ Provenance non-laundering (design §5e): ``origin`` is read-only from the per-ru
 (``api/main._run_origin``); the guarded-origin set is a fixed classification here, **not**
 env-configurable, so config can never relabel a run *up* to ``real-giab`` to launder it.
 
-Config (env, mirroring the existing ``os.environ`` pattern): ``PIPEGUARD_DEID_SALT`` sets
+Config (env, mirroring the existing ``os.environ`` pattern): ``BAYLEAF_DEID_SALT`` sets
 the pseudonymization salt; absent, a documented **non-secret demo default** is used (the
 salt is a heuristic, not a secret — see the module note above).
 """
@@ -45,18 +45,18 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-# Stable id/version for the manifest header (X-PipeGuard-Deid-Policy). Bumping the field
+# Stable id/version for the manifest header (X-Bayleaf-Deid-Policy). Bumping the field
 # classes below bumps this so a consumer can tell which policy shaped a file. NOT a
 # compliance attestation — see the module docstring.
 DEID_POLICY_ID = "demo-deid-v1"
 
 # Env var for the pseudonymization salt (documented in .env.example).
-_ENV_DEID_SALT = "PIPEGUARD_DEID_SALT"
+_ENV_DEID_SALT = "BAYLEAF_DEID_SALT"
 
 # A documented, non-secret demo default. The salt is a heuristic input to pseudonymization,
 # not a credential — hashing here is explicitly NOT HIPAA de-id, so a public default is
-# acceptable and keeps the offline demo deterministic. Override via PIPEGUARD_DEID_SALT.
-_DEFAULT_SALT = "pipeguard-demo-deid-salt"
+# acceptable and keeps the offline demo deterministic. Override via BAYLEAF_DEID_SALT.
+_DEFAULT_SALT = "bayleaf-demo-deid-salt"
 
 # Pseudonym token length (hex chars kept from the digest). 16 hex chars = 64 bits of the
 # digest — collision-negligible at demo scale while staying short enough to read in a cell.
@@ -167,7 +167,7 @@ def default_policy() -> DeidPolicy:
     ``subject_id`` / ``tissue`` → ``GATE_BY_ORIGIN`` (intake cohort keys — withheld for
     real/guarded origins, pseudonymized for non-real). Every other export column is unnamed
     and therefore ``PASSTHROUGH``, so a non-identity export is byte-identical to before this
-    policy existed. Salt from ``PIPEGUARD_DEID_SALT`` (documented non-secret demo default).
+    policy existed. Salt from ``BAYLEAF_DEID_SALT`` (documented non-secret demo default).
 
     Note (honest tradeoff): ``tissue`` is a low-cardinality attribute that a *real* policy
     might keep as a coarse feature rather than hash; the demo classes it as a cohort key to

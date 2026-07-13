@@ -1,6 +1,6 @@
 """WS-03 — nf-core/MultiQC ``results/`` ingestion adapter (offline, fixture-driven).
 
-These tests exercise the REAL parse path (``pipeguard.ingest.nfcore``), never a mock: a
+These tests exercise the REAL parse path (``bayleaf.ingest.nfcore``), never a mock: a
 hand-built ``results/`` publish tree (a ``fastp.json`` + mosdepth summary/thresholds +
 ``multiqc_data/multiqc_data.json``, shaped like what ``pipelines/germline/main.nf`` publishes)
 is parsed into the registry-keyed ``SampleMetrics`` contract (WS-06·PR1) and lowered to canonical
@@ -29,9 +29,9 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard.ingest.nfcore import ingest_results_dir
-from pipeguard.metrics import metric_values_for
-from pipeguard.settings import run_store_root
+from bayleaf.ingest.nfcore import ingest_results_dir
+from bayleaf.metrics import metric_values_for
+from bayleaf.settings import run_store_root
 
 # --------------------------------------------------------------- fixture publish-dir builders
 # Shaped to match scripts/run_giab_pipeline.py's parse_fastp / parse_mosdepth expectations, so the
@@ -167,7 +167,7 @@ def test_adapter_qcmetrics_equal_bespoke_driver_path(tmp_path: Path) -> None:
     """
     from scripts.run_giab_pipeline import RunConfig, parse_publish_dir, write_run_dir_multi
 
-    from pipeguard.parsers import parse_qc_metrics
+    from bayleaf.parsers import parse_qc_metrics
 
     pub = tmp_path / "results"
     _write_structured_sample(pub, "HG002", mean=54.2, q30_rate=0.882, dup_rate=0.0057)
@@ -246,7 +246,7 @@ def test_renamed_multiqc_key_still_resolves_on_the_live_path(tmp_path: Path) -> 
 def test_resolve_alias_has_a_real_call_site_under_ingest() -> None:
     """Standing guard (Gap B): resolve_alias must be invoked on the live ingest path, not just
     referenced in a docstring — freezes the 'aliases[] is dead weight' regression."""
-    src = Path(__file__).resolve().parents[1] / "src" / "pipeguard" / "ingest" / "nfcore.py"
+    src = Path(__file__).resolve().parents[1] / "src" / "bayleaf" / "ingest" / "nfcore.py"
     text = src.read_text(encoding="utf-8")
     assert ".resolve_alias(" in text
 
@@ -309,7 +309,7 @@ def test_nonexistent_results_dir_is_honest_empty_not_crash(tmp_path: Path) -> No
 
 
 def test_run_store_root_defaults_to_repo_data(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("PIPEGUARD_DATA_ROOT", raising=False)
+    monkeypatch.delenv("BAYLEAF_DATA_ROOT", raising=False)
     root = run_store_root()
     assert root.name == "data"
     assert root.is_absolute()
@@ -318,7 +318,7 @@ def test_run_store_root_defaults_to_repo_data(monkeypatch: pytest.MonkeyPatch) -
 def test_run_store_root_honors_env_override(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("PIPEGUARD_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("BAYLEAF_DATA_ROOT", str(tmp_path))
     assert run_store_root() == tmp_path
 
 
@@ -327,10 +327,10 @@ def test_run_store_root_is_resolved_at_call_time_not_import(
 ) -> None:
     """Resolution is per-call: a mid-process setenv must be visible on the very next call (so a
     test/deploy can repoint discovery), never captured once at import."""
-    monkeypatch.delenv("PIPEGUARD_DATA_ROOT", raising=False)
+    monkeypatch.delenv("BAYLEAF_DATA_ROOT", raising=False)
     first = run_store_root()
     assert first.name == "data"
-    monkeypatch.setenv("PIPEGUARD_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("BAYLEAF_DATA_ROOT", str(tmp_path))
     assert run_store_root() == tmp_path
 
 
@@ -363,9 +363,9 @@ def test_real_nextflow_results_ingest_and_gate() -> None:
     ingestion spine on REAL HG002 output, not a fixture. Zero unmapped keys, real ~88% Q30 / >30x
     coverage, and the gate HOLDs on the structural cluster_pf-missing exactly as the driver's own
     parse path does. This is the anti-scaffold complement to the fixture tests above."""
-    from pipeguard import run_gate
-    from pipeguard.models import RunArtifacts, Sample, SampleSheetEntry, Verdict
-    from pipeguard.synthesis import StubSynthesizer
+    from bayleaf import run_gate
+    from bayleaf.models import RunArtifacts, Sample, SampleSheetEntry, Verdict
+    from bayleaf.synthesis import StubSynthesizer
 
     ing = ingest_results_dir(_REAL_RESULTS)
     assert [sm.sample_id for sm in ing.samples] == ["HG002"]

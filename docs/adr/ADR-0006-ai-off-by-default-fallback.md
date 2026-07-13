@@ -46,12 +46,12 @@ tests pass without it. Model selection is configurable to trade cost for quality
 ## Realized (2026-07-08)
 
 1. **Synthesizer + QC-triage agent** are stub-first and off by default (`get_synthesizer`,
-   `get_triage_agent`): each lazy-imports `anthropic`, is selected by a `PIPEGUARD_*` env var,
+   `get_triage_agent`): each lazy-imports `anthropic`, is selected by a `BAYLEAF_*` env var,
    and falls back to the deterministic stub on *any* error — including a safety refusal. Model
-   choice is configurable via `PIPEGUARD_*_MODEL`.
+   choice is configurable via `BAYLEAF_*_MODEL`.
 2. **The notify port ([ADR-0010](ADR-0010-ticketing-notify-read-api.md)) inherited the same
    contract:** stub-first, `slack_sdk` lazy-imported (deliberately not a dependency), live send
-   guarded behind `PIPEGUARD_SLACK_LIVE`, degrading to the offline stub on any error — so the
+   guarded behind `BAYLEAF_SLACK_LIVE`, degrading to the offline stub on any error — so the
    default demo and the test suite never open a socket.
 
 ## Revisit when

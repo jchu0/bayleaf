@@ -11,7 +11,7 @@ read:
 Two hard boundaries make this safe to point at a real data host:
 
   1. **Allowlist, not free filesystem access.** ``root`` is a *key* into a small configured map
-     (default ``{"data": <repo>/data}``, env-overridable via ``PIPEGUARD_BROWSE_ROOTS``), never a
+     (default ``{"data": <repo>/data}``, env-overridable via ``BAYLEAF_BROWSE_ROOTS``), never a
      raw path — a caller can only ever browse inside a root an operator deliberately exposed.
   2. **Traversal-hardening (mirrors the artifact-download idiom in ``api/main.py``).** The requested
      ``root/path`` is ``resolve()``-d and asserted to still live INSIDE the resolved root; a ``..``
@@ -45,7 +45,7 @@ _DEFAULT_DATA_ROOT = Path(__file__).resolve().parent.parent.parent / "data"
 # Env override: a comma-separated ``key=abs_path`` map (e.g. "data=/srv/runs,ref=/srv/reference").
 # Read per request (not cached at import) so a deployment/test can retarget the roots without a
 # reimport — matching the per-call env reads in ``api.auth`` / ``api.deid``.
-_ENV_BROWSE_ROOTS = "PIPEGUARD_BROWSE_ROOTS"
+_ENV_BROWSE_ROOTS = "BAYLEAF_BROWSE_ROOTS"
 
 # Bound the query params so a hostile client can't drive a giant path/key through the resolver.
 _MAX_ROOT_KEY_LEN = 128
@@ -90,7 +90,7 @@ class FileListing(BaseModel):
 
 
 def _browse_roots() -> dict[str, Path]:
-    """Resolve the allowlisted browse roots: the ``PIPEGUARD_BROWSE_ROOTS`` override or the default.
+    """Resolve the allowlisted browse roots: the ``BAYLEAF_BROWSE_ROOTS`` override or the default.
 
     The override is a tolerant ``key=abs_path,key2=abs_path2`` string — a blank or ``=``-less
     segment is skipped rather than raising (a boundary parse is a signal, not a crash). If the

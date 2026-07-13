@@ -5,12 +5,12 @@ sample so a reviewer/approver can acknowledge → resolve/suppress → (re)open 
 state, a **separate concern** from the decision projection (the ``Repository`` port): a ticket
 NEVER re-enters the deterministic gate and can never set or override a verdict/finding/confidence
 (ADR-0001). This mirrors ``api/pipeline_store.py`` over the shared :mod:`api.base_store` generic —
-three adapters, env-selected via ``PIPEGUARD_REVIEW_STORE`` (default ``jsonl``); the DB adapters
+three adapters, env-selected via ``BAYLEAF_REVIEW_STORE`` (default ``jsonl``); the DB adapters
 **degrade to the offline JSONL** if selection fails (missing extra / no DSN / unreachable server),
 so a misconfigured DB never breaks the write path — it just falls back to the file.
 
-  - :class:`JsonlReviewStore` — default, zero-dep file (``PIPEGUARD_REVIEW_PATH``).
-  - :class:`SqliteReviewStore` — a ``review_tickets`` table (stdlib; ``PIPEGUARD_REVIEW_DB``).
+  - :class:`JsonlReviewStore` — default, zero-dep file (``BAYLEAF_REVIEW_PATH``).
+  - :class:`SqliteReviewStore` — a ``review_tickets`` table (stdlib; ``BAYLEAF_REVIEW_DB``).
   - :class:`PostgresReviewStore` — a ``review_tickets`` table (the ``[postgres]`` extra).
 
 Unlike the append-only feedback/pipeline sinks, a ticket is **mutable**: an action transitions its
@@ -39,9 +39,9 @@ from api.base_store import JsonlDocStore, SqliteStore, select_backend
 _Record = dict[str, Any]
 _Records = list[dict[str, Any]]
 
-_ENV_REVIEW_STORE = "PIPEGUARD_REVIEW_STORE"
-_ENV_REVIEW_PATH = "PIPEGUARD_REVIEW_PATH"
-_ENV_REVIEW_DB = "PIPEGUARD_REVIEW_DB"
+_ENV_REVIEW_STORE = "BAYLEAF_REVIEW_STORE"
+_ENV_REVIEW_PATH = "BAYLEAF_REVIEW_PATH"
+_ENV_REVIEW_DB = "BAYLEAF_REVIEW_DB"
 _ENV_DATABASE_URL = "DATABASE_URL"
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -199,7 +199,7 @@ class JsonlReviewStore(JsonlDocStore):
 
 
 def review_db_path() -> str:
-    """The SQLite review-DB path (``PIPEGUARD_REVIEW_DB`` or the repo-root default)."""
+    """The SQLite review-DB path (``BAYLEAF_REVIEW_DB`` or the repo-root default)."""
     return os.environ.get(_ENV_REVIEW_DB, "").strip() or str(_DEFAULT_REVIEW_DB)
 
 
@@ -364,7 +364,7 @@ class PostgresReviewStore:
 def get_review_store() -> ReviewStore:
     """Select the review-ticket sink from the environment (default: the offline JSONL file).
 
-    ``PIPEGUARD_REVIEW_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing it
+    ``BAYLEAF_REVIEW_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing it
     (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store — see
     :func:`api.base_store.select_backend` (the shared degrade-to-JSONL ladder).
     """

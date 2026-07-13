@@ -129,16 +129,16 @@ type InboxState = {
 const PRIORITY_FROM_TICKET: Record<string, InboxPriority> = { high: 'high', medium: 'med', low: 'low' }
 
 function overlayKey(actorId: string): string {
-  return `pipeguard.inbox.overlay.${actorId}`
+  return `bayleaf.inbox.overlay.${actorId}`
 }
 function selfKey(actorId: string): string {
-  return `pipeguard.inbox.self.${actorId}`
+  return `bayleaf.inbox.self.${actorId}`
 }
 function folderKey(actorId: string): string {
-  return `pipeguard.inbox.folders.${actorId}`
+  return `bayleaf.inbox.folders.${actorId}`
 }
 function commentsKey(actorId: string): string {
-  return `pipeguard.inbox.comments.${actorId}`
+  return `bayleaf.inbox.comments.${actorId}`
 }
 
 function loadJson<T>(key: string, fallback: T): T {

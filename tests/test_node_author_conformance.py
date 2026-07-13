@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pipeguard.node_author import (
+from bayleaf.node_author import (
     NodeProposal,
     check_conformance,
     import_from_nextflow_schema,

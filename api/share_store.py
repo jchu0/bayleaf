@@ -1,21 +1,21 @@
 """Pluggable sink for de-identified share/report egress events (ADR-0018 D3, ADR-0016) — off-gate.
 
-A ``DATA_EXPORTED`` :class:`~pipeguard.provenance.ProvenanceEvent` records that a de-identified
+A ``DATA_EXPORTED`` :class:`~bayleaf.provenance.ProvenanceEvent` records that a de-identified
 share left the boundary, so a data-out is auditable in the SAME provenance vocabulary as the gate's
-decisions. This is a SEPARATE sink from the gate's own :class:`~pipeguard.provenance.EventLedger`:
+decisions. This is a SEPARATE sink from the gate's own :class:`~bayleaf.provenance.EventLedger`:
 the gate ledger is a deterministic, cacheable re-derivation per run (``api.main._evaluate`` is
 ``@lru_cache``) and must stay byte-stable; a share is a live, actor-driven side effect that must
 survive that cache and a process restart. It never reads, sets, or overrides a verdict/finding/gate
 input — it only records that data left (ADR-0001 holds).
 
-Three adapters, env-selected via ``PIPEGUARD_SHARE_STORE`` (default ``jsonl``), matching the other
+Three adapters, env-selected via ``BAYLEAF_SHARE_STORE`` (default ``jsonl``), matching the other
 off-gate sinks (feedback/pipeline/review/settings). The JSONL + SQLite plumbing is the shared
 :mod:`api.base_store` generic; the DB adapters **degrade to the offline JSONL** if selection fails
 (missing extra / no DSN / unreachable server), so a misconfigured DB never breaks the egress-audit
 path — it just falls back to the file.
 
-  - :class:`JsonlShareStore` — default, zero-dep append-only file (``PIPEGUARD_SHARE_PATH``).
-  - :class:`SqliteShareStore` — a ``share_events`` table (stdlib; ``PIPEGUARD_SHARE_DB``).
+  - :class:`JsonlShareStore` — default, zero-dep append-only file (``BAYLEAF_SHARE_PATH``).
+  - :class:`SqliteShareStore` — a ``share_events`` table (stdlib; ``BAYLEAF_SHARE_DB``).
   - :class:`PostgresShareStore` — a ``share_events`` table (``[postgres]`` extra; ``DATABASE_URL``).
 
 Query grain is ``for_run(run_id)`` (oldest-first) — exactly what ``get_run`` needs to merge the
@@ -31,11 +31,11 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from api.base_store import JsonlStore, SqliteStore, select_backend
-from pipeguard.provenance import ProvenanceEvent
+from bayleaf.provenance import ProvenanceEvent
 
-_ENV_SHARE_STORE = "PIPEGUARD_SHARE_STORE"
-_ENV_SHARE_PATH = "PIPEGUARD_SHARE_PATH"
-_ENV_SHARE_DB = "PIPEGUARD_SHARE_DB"
+_ENV_SHARE_STORE = "BAYLEAF_SHARE_STORE"
+_ENV_SHARE_PATH = "BAYLEAF_SHARE_PATH"
+_ENV_SHARE_DB = "BAYLEAF_SHARE_DB"
 _ENV_DATABASE_URL = "DATABASE_URL"
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -126,7 +126,7 @@ class JsonlShareStore(JsonlStore[ProvenanceEvent]):
 
 
 def share_db_path() -> str:
-    """The SQLite share-DB path (``PIPEGUARD_SHARE_DB`` or the repo-root default)."""
+    """The SQLite share-DB path (``BAYLEAF_SHARE_DB`` or the repo-root default)."""
     return os.environ.get(_ENV_SHARE_DB, "").strip() or str(_DEFAULT_SHARE_DB)
 
 
@@ -216,7 +216,7 @@ class PostgresShareStore:
 def get_share_store() -> ShareStore:
     """Select the share-egress-audit sink from the environment (default: the offline JSONL file).
 
-    ``PIPEGUARD_SHARE_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing it
+    ``BAYLEAF_SHARE_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing it
     (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store — see
     :func:`api.base_store.select_backend` (the shared degrade-to-JSONL ladder).
     """

@@ -15,12 +15,12 @@ unit, direction, source contract). It is a **versioned artifact** (pinned per `A
 as `metric_registry_version`). This is why a MultiQC key change never silently breaks a gate.
 
 **Realized in code (T-024/T-025).** The registry is a real
-[`metric_registry.yaml`](../../src/pipeguard/metrics/metric_registry.yaml) loaded by a typed,
-frozen [`MetricRegistry`](../../src/pipeguard/metrics/registry.py)
+[`metric_registry.yaml`](../../src/bayleaf/metrics/metric_registry.yaml) loaded by a typed,
+frozen [`MetricRegistry`](../../src/bayleaf/metrics/registry.py)
 (`entry`/`resolve_alias`/`normalize`/`denormalize`/`observe`), and it is **on the QC critical
 path today**: the rule engine maps each parsed `QCMetrics` field to its `our_key`, normalizes
 via `observe`, and gates on `MetricValue.normalized_value`
-([mapping.py](../../src/pipeguard/metrics/mapping.py) → [rules.py](../../src/pipeguard/rules.py)).
+([mapping.py](../../src/bayleaf/metrics/mapping.py) → [rules.py](../../src/bayleaf/rules.py)).
 
 ## Entry shape
 
@@ -156,9 +156,9 @@ the registry's `display_name` (not the raw `our_key`, T-082 follow-up). The rema
 (`qc.zero_cov_targets`, `qc.fold_enrichment`, `qc.fold_80`, `identity.ngscheckmate_match`,
 `identity.sex_concordance`, `variant.allele_balance`) remain registered-only with **no parser at
 all** — an honest, unchanged gap, not newly introduced by WS-02/WS-04. Verified against
-`src/pipeguard/metrics/mapping.py` `_QCMETRICS_MAP` (13 entries, **unaffected** by WS-02/WS-04 —
+`src/bayleaf/metrics/mapping.py` `_QCMETRICS_MAP` (13 entries, **unaffected** by WS-02/WS-04 —
 freemix/snp_f1 flow through the WS-03 `ingest.nfcore` adapter, not the flat-CSV
-`_QCMETRICS_MAP` path, so `producible_metric_keys()` is unchanged), `src/pipeguard/runbook.py`'s
+`_QCMETRICS_MAP` path, so `producible_metric_keys()` is unchanged), `src/bayleaf/runbook.py`'s
 `qc_thresholds` (13 `QCThreshold(...)` entries), and
 `tests/test_api.py::test_metric_catalog_lists_registered_metrics_and_gated_flag` (asserts
 `n_registered == 21`, `n_gated == 13`, and the ungated count `== 8` over

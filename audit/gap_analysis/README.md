@@ -32,7 +32,7 @@ toolchain now run on this machine); the REAL germline pipeline ran end-to-end on
    10/10), Gap 3 (dup-rate) **REFUTED** — `0.0057` was already the correct percent, no change, Gaps 4-5 metric
    source/label honesty (mosdepth, not Picard; "Reads passing filter," not a demux concept), Gap 6 store
    consolidation (7 off-gate stores → one generic `JsonlStore`/`SqliteStore` base). **DONE.**
-4. ✅ **WS-03** (`b231068`, `6c38ab3`) — `src/pipeguard/ingest/nfcore.py::ingest_results_dir()`, a real
+4. ✅ **WS-03** (`b231068`, `6c38ab3`) — `src/bayleaf/ingest/nfcore.py::ingest_results_dir()`, a real
    nf-core/MultiQC `results/` → `SampleMetrics` adapter, proven end-to-end on genuine HG002 output (zero
    unmapped keys, matching the driver's own parse, same HOLD verdict). **DONE, but with an honest unresolved
    gap:** the adapter is gate-wired and gate-proven, but **not gate-called** by any production path — intake

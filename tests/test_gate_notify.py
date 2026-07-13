@@ -1,7 +1,7 @@
 """Tests for wiring the outbound notify port into `run_gate` (offline, stub-first).
 
 The notify hook is OPTIONAL and off by default (mirrors the `repo` seam): passing a
-:class:`~pipeguard.notify.StubNotifier` to `run_gate` notifies the actionable cards and
+:class:`~bayleaf.notify.StubNotifier` to `run_gate` notifies the actionable cards and
 emits an auditable `notification.emitted` event per notification (ADR-0002/ADR-0010),
 while passing NO notifier leaves the card list and the 16-event demo trail byte-for-byte
 unchanged. These run fully offline — the stub records to an in-memory outbox and never
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard import (
+from bayleaf import (
     EventLedger,
     EventType,
     SqliteRepository,
@@ -22,9 +22,9 @@ from pipeguard import (
     rebuild_db,
     run_gate,
 )
-from pipeguard.notify import NotifyStatus, StubNotifier
-from pipeguard.persistence import read_ledger
-from pipeguard.synthesis import StubSynthesizer
+from bayleaf.notify import NotifyStatus, StubNotifier
+from bayleaf.persistence import read_ledger
+from bayleaf.synthesis import StubSynthesizer
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
 

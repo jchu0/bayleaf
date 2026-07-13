@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard import (
+from bayleaf import (
     EventLedger,
     SqliteRepository,
     Verdict,
@@ -19,11 +19,11 @@ from pipeguard import (
     rebuild_db,
     run_gate,
 )
-from pipeguard.persistence import get_repository, project_events
-from pipeguard.persistence import postgres as _pg
-from pipeguard.persistence import sqlite as _sq
-from pipeguard.persistence.postgres import PostgresRepository
-from pipeguard.synthesis import StubSynthesizer
+from bayleaf.persistence import get_repository, project_events
+from bayleaf.persistence import postgres as _pg
+from bayleaf.persistence import sqlite as _sq
+from bayleaf.persistence.postgres import PostgresRepository
+from bayleaf.synthesis import StubSynthesizer
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
 
@@ -114,7 +114,7 @@ def test_finding_rows_carry_ledger_payload(ledger_and_cards):
 
 def test_events_round_trip_faithfully(ledger_and_cards):
     """Projected events reconstruct to the same ledger events, in order."""
-    from pipeguard.persistence import read_ledger
+    from bayleaf.persistence import read_ledger
 
     path, _ = ledger_and_cards
     original = list(read_ledger(path))
@@ -254,7 +254,7 @@ def _dump(repo: SqliteRepository) -> dict[str, list[dict]]:
 
 
 def test_get_repository_defaults_to_offline_sqlite(monkeypatch):
-    monkeypatch.delenv("PIPEGUARD_REPOSITORY", raising=False)
+    monkeypatch.delenv("BAYLEAF_REPOSITORY", raising=False)
     repo = get_repository()
     assert type(repo).__name__ == "SqliteRepository"
     repo.close()
@@ -262,7 +262,7 @@ def test_get_repository_defaults_to_offline_sqlite(monkeypatch):
 
 def test_get_repository_postgres_degrades_to_sqlite_when_unavailable(monkeypatch):
     # Postgres selected but no psycopg/DATABASE_URL here -> degrade to SQLite, never raise.
-    monkeypatch.setenv("PIPEGUARD_REPOSITORY", "postgres")
+    monkeypatch.setenv("BAYLEAF_REPOSITORY", "postgres")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     repo = get_repository()
     assert type(repo).__name__ == "SqliteRepository"

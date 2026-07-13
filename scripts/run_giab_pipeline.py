@@ -16,7 +16,7 @@ then runs the run dir through the *unchanged* ``run_gate`` with the default runb
 recompute the read-API serves. The run shows up in the operator UI like any other, but every number
 is derived from real reads that flowed through a real Nextflow execution.
 
-Compose ≠ execute stays intact at the CORE: ``src/pipeguard/`` never runs a tool; this standalone
+Compose ≠ execute stays intact at the CORE: ``src/bayleaf/`` never runs a tool; this standalone
 driver (in ``scripts/``, outside the core) shells out to Nextflow, which orchestrates the toolchain.
 
 Prereqs: ``nextflow`` + a JRE and the bioconda tools (``fastp``, ``bwa-mem2``, ``samtools``,
@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO
 
-from pipeguard import run_gate_from_dir
+from bayleaf import run_gate_from_dir
 
 _REPO = Path(__file__).resolve().parent.parent
 _GIAB = _REPO / "data" / "real-giab"
@@ -369,7 +369,7 @@ def run_nextflow(cfg: RunConfig) -> Path:
     Nextflow-first: the driver runs ``nextflow run <cfg.pipeline>`` (the germline reference by
     default, or a Builder-compiled pipeline) against ``cfg``'s inputs — it does NOT invoke
     fastp/bwa-mem2/samtools/… itself. Each process publishes to ``<outdir>/results``. ``nextflow`` +
-    a JRE + the bioconda tools must be on PATH (the intake endpoint injects PIPEGUARD_BIOCONDA_BIN).
+    a JRE + the bioconda tools must be on PATH (the intake endpoint injects BAYLEAF_BIOCONDA_BIN).
     Work + outputs land in a per-run gitignored scratch dir so concurrent runs never collide.
     """
     nextflow = shutil.which("nextflow")

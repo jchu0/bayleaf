@@ -22,7 +22,7 @@
    the gate ESCALATEs HG002 via `VAR-RTH-001` with a verbatim `CLNSIG=="Pathogenic"` evidence row,
    and a stock committed run (`RUN-2026-07-04-GIAB-A`) stays disarmed. 10 tests in that file now
    (was 9).
-2. **`076ecd4` (D3 backend).** `src/pipeguard/provenance.py` gains
+2. **`076ecd4` (D3 backend).** `src/bayleaf/provenance.py` gains
    `EventType.DATA_EXPORTED = "data.exported"` — a new entry in the core event vocabulary, with an
    inline comment explaining it's an egress transform, never a gate input. `api/main.py` gains
    `POST /api/runs/{run_id}/share` (`require_role("approver")`): builds one row per decision card
@@ -31,7 +31,7 @@
    (`rows` + a `ShareManifest`: policy id, n_rows, origin, the content hash, event id, the 18
    §164.514(b)(2) classes, a disclaimer naming it "NOT certified/attested" + "NOT a compliance
    claim"). The event is recorded via new `api/share_ledger.py` — a **separate**, gitignored,
-   append-only JSONL (`PIPEGUARD_SHARE_LEDGER`), not the gate's own `EventLedger`. Read the whole
+   append-only JSONL (`BAYLEAF_SHARE_LEDGER`), not the gate's own `EventLedger`. Read the whole
    module: its docstring explains why — the gate ledger is a deterministic re-derivation
    (`@lru_cache`'d `_evaluate`) that must stay cacheable, while a share is a live side effect that
    must survive a restart. `get_run` merges `share_events(run_id)` into `RunDetail.events` live

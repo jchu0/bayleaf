@@ -30,7 +30,7 @@ is built for. The committed compose file + venv were left unchanged.
 **Pipeline Builder — the editable superset of the Provenance canvas.** The maintainer
 refreshed the handoff (`design/frontend/README.md` → Pipeline Builder + a regenerated
 prototype); I committed it, then built `PipelineBuilder.tsx` from its data contract
-(`source/PipeGuard.dc.html` — the 7 seeded tool nodes with params/locators/IO, the edge
+(`source/bayleaf.dc.html` — the 7 seeded tool nodes with params/locators/IO, the edge
 paths, the three `run_layout.yaml` profiles). It reuses the app shell + tokens verbatim and
 adds the net-new surfaces: the sub-header toolbar (Edit/View, profile switcher,
 Tidy/Validate/Emit), a three-pane workspace (palette · dot-grid H-scroll canvas · node
@@ -65,7 +65,7 @@ config loader) are designed, not built.
 ## Open questions & TODO
 
 - Pipeline Builder Phase-2 (from the handoff): free composition + edge-drawing, Tidy
-  auto-layout, dry-run (locator resolution vs a real run dir), the `PIPEGUARD_RUN_LAYOUT`
+  auto-layout, dry-run (locator resolution vs a real run dir), the `BAYLEAF_RUN_LAYOUT`
   loader so the running system consumes an emitted layout, in-app Run hand-off, RNA-seq.
 - Copy/Download on the emit console are stubbed (no clipboard/file write yet).
 - The live Postgres test needs docker + the `[postgres]` extra to actually run (skips

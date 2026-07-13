@@ -1,10 +1,10 @@
-# Datadog Agent OpenMetrics check for the PipeGuard read-API `/metrics` seam.
+# Datadog Agent OpenMetrics check for the bayleaf read-API `/metrics` seam.
 #
 # Install path: drop this file at `conf.d/openmetrics.d/conf.yaml` under the
 # Datadog Agent config dir (or add the `instances:` entry to an existing one),
 # then restart the Agent. Uses the OpenMetrics V2 check (`openmetrics_endpoint`).
 #
-# Pull model: the Datadog Agent scrapes /metrics; PipeGuard makes no outbound
+# Pull model: the Datadog Agent scrapes /metrics; bayleaf makes no outbound
 # call and ships no credentials. The exposition carries only aggregate counts and
 # closed-enum verdict/gate labels — no sample ids, no PHI
 # (see docs/ops/telemetry-connectors.md).
@@ -17,16 +17,16 @@ init_config:
 
 instances:
   - openmetrics_endpoint: http://host.docker.internal:8010/metrics
-    namespace: pipeguard
+    namespace: bayleaf
     # Explicit allow-list of the four series the seam exposes. Under OpenMetrics V2
     # a `_total` counter is ingested as `<namespace>.<name>.count` in Datadog
-    # (e.g. `pipeguard.cards.count`), preserving the verdict/gate label dimensions.
+    # (e.g. `bayleaf.cards.count`), preserving the verdict/gate label dimensions.
     metrics:
-      - pipeguard_runs_total
-      - pipeguard_samples_total
-      - pipeguard_cards_total
-      - pipeguard_gate_flagged_samples_total
+      - bayleaf_runs_total
+      - bayleaf_samples_total
+      - bayleaf_cards_total
+      - bayleaf_gate_flagged_samples_total
     min_collection_interval: 30
     tags:
-      - service:pipeguard
+      - service:bayleaf
       - component:read-api

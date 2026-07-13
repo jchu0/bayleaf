@@ -5,15 +5,15 @@ flows (Settings, Review-queue, Pipeline lifecycle) stop hardcoding ``a.rivera / 
 the UI and instead read a single current-user+role dependency. This lives in ``api/`` (the
 delivery layer, which already speaks FastAPI) and is wholly **OFF the deterministic decision
 gate** (ADR-0001): it can gate who may *write* product state, but it never touches a verdict,
-finding, confidence, or rule — those stay in the framework-agnostic ``src/pipeguard/`` core.
+finding, confidence, or rule — those stay in the framework-agnostic ``src/bayleaf/`` core.
 
 Design (MVP-first, production-ready seam):
 
   - :data:`Role` — the closed RBAC vocabulary (``viewer`` < ``reviewer`` < ``approver``).
   - :class:`Actor` — the authenticated principal (``id`` + ``role``); ``id`` is what gets
     captured into audit / ``*_by`` fields on a transition.
-  - :func:`current_actor` — a FastAPI dependency that reads the ``X-PipeGuard-Actor`` /
-    ``X-PipeGuard-Role`` headers. **Dev-default is permissive** — with no headers it returns
+  - :func:`current_actor` — a FastAPI dependency that reads the ``X-Bayleaf-Actor`` /
+    ``X-Bayleaf-Role`` headers. **Dev-default is permissive** — with no headers it returns
     ``Actor(id="dev", role="approver")`` so the offline demo and the existing test suite pass
     with no auth wiring and no endpoint behavior changes.
   - :func:`require_role` — a dependency *factory*; ``Depends(require_role("approver"))`` 403s
@@ -22,7 +22,7 @@ Design (MVP-first, production-ready seam):
 
 **⚠ PRODUCTION SEAM — DEV PERMISSIVE AUTH, NOT AN IDENTITY SYSTEM (audit AS-03).** The
 header-trust here is a *dev shim*: the RBAC role is read from the client-supplied, UNVERIFIED
-``X-PipeGuard-Role`` header — **any caller can self-assert any role** — and a header-less request
+``X-Bayleaf-Role`` header — **any caller can self-assert any role** — and a header-less request
 defaults to the permissive ``approver`` so the offline demo/tests clear every gate with zero auth
 wiring. This means the shipped ``require_role("approver")`` egress/exec gates are *advisory*, not
 enforced. This is intentional and safe for the offline, single-operator, contrived-data demo; it
@@ -32,7 +32,7 @@ for a verified identity provider (session cookie / OIDC / signed JWT) that retur
 working unchanged because they depend only on the :class:`Actor` contract, never on how it was
 derived. That swap is the single chokepoint to harden; nothing downstream moves.
 
-**Opt-in tightening (default unchanged).** Setting ``PIPEGUARD_AUTH_STRICT`` defaults a *header-
+**Opt-in tightening (default unchanged).** Setting ``BAYLEAF_AUTH_STRICT`` defaults a *header-
 less* request to ``viewer`` instead of ``approver`` — a small hardening for a deployment that has
 not yet swapped the IdP but wants header-less callers to be least-privileged. It is **off by
 default**, so the demo's permissive header-less-approver flow is byte-for-byte unchanged; it does
@@ -64,25 +64,25 @@ Role = Literal["viewer", "reviewer", "approver"]
 DEV_DEFAULT_ID = "dev"
 DEV_DEFAULT_ROLE: Role = "approver"
 
-# Opt-in hardening (AS-03): when ``PIPEGUARD_AUTH_STRICT`` is truthy, a *header-less* request
+# Opt-in hardening (AS-03): when ``BAYLEAF_AUTH_STRICT`` is truthy, a *header-less* request
 # defaults to the least-privileged ``viewer`` instead of ``approver``. OFF by default so the
 # offline demo's permissive header-less-approver flow is unchanged. This does NOT verify the
 # (still-trusted) role header — a real IdP swap remains the only enforcement fix; it only lowers
 # the no-header fallback for a deployment that wants least-privilege before that swap lands.
-_ENV_AUTH_STRICT = "PIPEGUARD_AUTH_STRICT"
+_ENV_AUTH_STRICT = "BAYLEAF_AUTH_STRICT"
 _STRICT_DEFAULT_ROLE: Role = "viewer"
 
 # One-shot loud warning that permissive dev auth is live. Logged (never raised) on first use of
 # ``current_actor`` so it surfaces in server logs without breaking the offline demo/tests.
-_logger = logging.getLogger("pipeguard.auth")
+_logger = logging.getLogger("bayleaf.auth")
 _permissive_warning_emitted = False
 
 # The valid role tokens, derived from the Literal so this can never drift from ``Role``.
 _ROLES: tuple[Role, ...] = get_args(Role)
 
 # Header names carrying the (dev-shim) principal. Case-insensitive on the wire per HTTP.
-_ACTOR_HEADER = "X-PipeGuard-Actor"
-_ROLE_HEADER = "X-PipeGuard-Role"
+_ACTOR_HEADER = "X-Bayleaf-Actor"
+_ROLE_HEADER = "X-Bayleaf-Role"
 
 # Bound + charset-lock the actor id BEFORE it is captured into an audit / ``*_by`` field or a
 # log line: this is the same defensive discipline the other write seams use (feedback/pipeline
@@ -124,7 +124,7 @@ def _normalize_actor_id(raw: str | None) -> str:
 
 
 def _headerless_default_role() -> Role:
-    """The role for a *header-less* request: ``viewer`` under ``PIPEGUARD_AUTH_STRICT``, else
+    """The role for a *header-less* request: ``viewer`` under ``BAYLEAF_AUTH_STRICT``, else
     ``approver`` (the demo default). Read from the env per call (mirroring ``api.deid``) so a test
     can toggle it without a reimport. The default (env unset) is unchanged — AS-03."""
     strict = os.environ.get(_ENV_AUTH_STRICT, "").strip().lower() in {"1", "true", "yes", "on"}
@@ -158,7 +158,7 @@ def _normalize_role(raw: str | None) -> Role:
     """Trim + validate the role header, falling back to the header-less default role when absent.
 
     Absent/blank -> :func:`_headerless_default_role` (``approver`` by default; ``viewer`` under
-    ``PIPEGUARD_AUTH_STRICT``). Present-but-unknown is a hard 400: silently coercing an
+    ``BAYLEAF_AUTH_STRICT``). Present-but-unknown is a hard 400: silently coercing an
     unrecognized role would be a privilege decision made by accident, so an explicit unknown role
     must fail loudly instead of defaulting (which could over- or under-grant).
     """
@@ -179,9 +179,9 @@ def current_actor(
     """FastAPI dependency resolving the current principal from the dev-shim auth headers.
 
     ⚠ **Dev shim, not enforcement (AS-03).** The role is read from the UNVERIFIED
-    ``X-PipeGuard-Role`` header — any caller can self-assert any role — and with **no headers** it
+    ``X-Bayleaf-Role`` header — any caller can self-assert any role — and with **no headers** it
     returns the permissive dev default (``id="dev"``, ``role="approver"``; ``viewer`` under
-    ``PIPEGUARD_AUTH_STRICT``) so the offline demo and the existing tests run with zero auth wiring
+    ``BAYLEAF_AUTH_STRICT``) so the offline demo and the existing tests run with zero auth wiring
     and no endpoint behavior changes. Each header is resolved independently and tolerantly (a
     partial header set still works); a *present but malformed* value is a 400 (see the
     ``_normalize_*`` helpers) rather than a silent coercion. A one-shot loud warning is logged on

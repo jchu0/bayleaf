@@ -22,9 +22,9 @@ Built it as a **guarded production seam**, mirroring the S3 artifact-store patte
 offline demo/tests stay zero-dep and never open a socket:
 - `PostgresRepository` implements the `Repository` port, behaviourally identical to the SQLite
   adapter — same five tables, `ON CONFLICT DO UPDATE` idempotent upserts (replay stays a no-op,
-  ADR-0002), `JSONB` + `TIMESTAMPTZ`, a `pipeguard_meta` layout-version row. `psycopg` is lazy
+  ADR-0002), `JSONB` + `TIMESTAMPTZ`, a `bayleaf_meta` layout-version row. `psycopg` is lazy
   (the `[postgres]` extra); the module imports fine without it.
-- `get_repository()` flips `PIPEGUARD_REPOSITORY=sqlite|postgres` and **degrades to SQLite on
+- `get_repository()` flips `BAYLEAF_REPOSITORY=sqlite|postgres` and **degrades to SQLite on
   any failure**, logging the exception *type* only — never `str(exc)`, which could carry the DSN
   password. `rebuild-db` now targets either backend.
 - **Feedback is a separate concern from the decision projection.** A pluggable `FeedbackStore`
@@ -45,7 +45,7 @@ via an env default) is there for when someone wants to run it.
 send it.
 
 **#3b — feedback agent.** An advisory agent mirroring the QC-triage seam (stub-first / opt-in
-Claude / deterministic fallback, `PIPEGUARD_FEEDBACK_AGENT`). It reads the `FeedbackStore` and
+Claude / deterministic fallback, `BAYLEAF_FEEDBACK_AGENT`). It reads the `FeedbackStore` and
 emits a structured `FeedbackAssessment` — per-item category/area/sentiment/priority from the
 structured fields + an aggregate rollup + recurring themes. Off-gate, no HTTP surface (run via
 `python -m api.feedback_agent`). **PII-safe:** the deterministic path parses no message text,

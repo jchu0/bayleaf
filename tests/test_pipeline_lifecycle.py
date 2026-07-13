@@ -26,8 +26,8 @@ def client(tmp_path: Any, monkeypatch: Any) -> TestClient:
     # Route every store read/write into a per-test tmp JSONL file; force the JSONL adapter so the
     # test never touches a real DB. get_pipeline_store() re-reads the env per call, so seeding and
     # the endpoints share the same file.
-    monkeypatch.setenv("PIPEGUARD_PIPELINE_PATH", str(tmp_path / "pipelines.jsonl"))
-    monkeypatch.delenv("PIPEGUARD_PIPELINE_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_PIPELINE_PATH", str(tmp_path / "pipelines.jsonl"))
+    monkeypatch.delenv("BAYLEAF_PIPELINE_STORE", raising=False)
     app = FastAPI()
     app.include_router(router)
     return TestClient(app)
@@ -103,7 +103,7 @@ def test_approve_requires_pending_review_state(client: TestClient) -> None:
 def test_approve_requires_approver_role(client: TestClient) -> None:
     _seed_draft("wgs", _node_graph())
     # A reviewer may submit …
-    reviewer = {"X-PipeGuard-Role": "reviewer", "X-PipeGuard-Actor": "a.rivera"}
+    reviewer = {"X-Bayleaf-Role": "reviewer", "X-Bayleaf-Actor": "a.rivera"}
     assert client.post("/api/pipelines/wgs/submit", headers=reviewer).status_code == 200
     # … but may NOT approve (approver-only) -> 403, and the error must not leak the caller id.
     denied = client.post("/api/pipelines/wgs/approve", headers=reviewer)
@@ -112,7 +112,7 @@ def test_approve_requires_approver_role(client: TestClient) -> None:
     # An approver clears the gate.
     ok = client.post(
         "/api/pipelines/wgs/approve",
-        headers={"X-PipeGuard-Role": "approver", "X-PipeGuard-Actor": "b.chen"},
+        headers={"X-Bayleaf-Role": "approver", "X-Bayleaf-Actor": "b.chen"},
     )
     assert ok.status_code == 200
     assert ok.json()["approved_by"] == "b.chen"
@@ -120,7 +120,7 @@ def test_approve_requires_approver_role(client: TestClient) -> None:
 
 def test_submit_requires_reviewer_or_approver(client: TestClient) -> None:
     _seed_draft("wgs", _node_graph())
-    denied = client.post("/api/pipelines/wgs/submit", headers={"X-PipeGuard-Role": "viewer"})
+    denied = client.post("/api/pipelines/wgs/submit", headers={"X-Bayleaf-Role": "viewer"})
     assert denied.status_code == 403
 
 

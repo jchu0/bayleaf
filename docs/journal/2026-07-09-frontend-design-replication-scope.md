@@ -11,7 +11,7 @@
 **Method.** A `Workflow` fan-out spawned 14 read-only analysis agents (shell+nav, tokens, Submit,
 Runs, Intake, Decision cards, Review queue, Provenance, Agent triage, Monitoring, Settings, Pipeline
 builder, data contract, repo hygiene), each comparing the **canonical** design
-(`docs/design/frontend/README.md` + `source/PipeGuard.dc.html`, 3360 lines) to its React target,
+(`docs/design/frontend/README.md` + `source/bayleaf.dc.html`, 3360 lines) to its React target,
 then a synthesis stage deduped findings and ordered the plan. Baseline before any change: frontend
 `tsc -b` clean + `oxlint` clean.
 
@@ -23,7 +23,7 @@ complete. Lesson for future workflows: cap per-field verbosity or split detail i
 single field can't blow the output budget.
 
 **Canonical vs stale (the headline overlap, F25).** `docs/design/frontend/` is the newest package
-(dc.html 3360 lines / 1.19 MB). The repo-root `/PipeGuard.html`, `/source/`, `/briefs/`, `/handoffs/`
+(dc.html 3360 lines / 1.19 MB). The repo-root `/bayleaf.html`, `/source/`, `/briefs/`, `/handoffs/`
 are an **older untracked extraction** (dc.html 2956 lines / 800 KB, superseded 00–03 handoff naming) —
 a tab-complete/grep hazard that patches the wrong file. Recommendation: `rm -rf` the four root paths,
 `git add` the README-cited `docs/design/frontend/briefs/…`, commit the WIP design files, add
@@ -80,7 +80,7 @@ Action key: **DECIDE** = genuine maintainer call · **AUTO** = safe to auto-reso
 | **F22** | contradiction | pipeline-builder | Default mode is **Edit** in code but README says **View**; Params were made editable and Locators read-only, **inverting** the design (Locators are the load-bearing edit surface); Tidy sits disabled in the toolbar instead of functional in the canvas cluster. | Default to **View**; make **Locators editable / Params read-only**; move Tidy to the canvas action cluster and make it work. | **AUTO** |
 | **F23** | overlap | shell-nav, settings | Two "Settings" surfaces share the word: Configure→Settings (the `/settings` thresholds screen, exists) and the user-panel **profile/preferences dialog** (missing). | Build the dialog as a **separate modal**; do not route the popover's Settings to `/settings`. | **AUTO** |
 | **F24** | overlap | tokens-theme | `--color-page` and `--color-card-2` are byte-identical (`#eef1f4`), collapsing the design's two-step neutral backdrop; `--color-nav-hover` is `#1b232c` vs design `#1b222b`; `App.css` is dead Vite scaffold. | Restore `--color-page: #f5f7f9`, keep `--color-card-2: #eef1f4`; add `--color-nav-active #22303f`; align nav-hover to `#1b222b`; delete `App.css`. | **AUTO** |
-| **F25** | overlap / hygiene | repo-hygiene | **Two parallel copies** of the design package: canonical `docs/design/frontend/` (newest, some WIP `M`) and an **older untracked root extraction** (`/PipeGuard.html`, `/source/`, `/briefs/`, `/handoffs/`) with the superseded 00–03 handoff naming. A tab-complete/grep can patch the wrong (older) file. | `rm -rf` the four root paths (untracked, zero history); `git add` the untracked README-cited `docs/design/frontend/briefs/review-to-design-brief.md`; commit the 4 WIP files; add **root-anchored** `.gitignore` guards (`/PipeGuard.html`, `/source/`, `/briefs/`, `/handoffs/`). Keep the large prototypes committed (cited source of truth; use git-lfs later if size bites, never gitignore). | **AUTO** |
+| **F25** | overlap / hygiene | repo-hygiene | **Two parallel copies** of the design package: canonical `docs/design/frontend/` (newest, some WIP `M`) and an **older untracked root extraction** (`/bayleaf.html`, `/source/`, `/briefs/`, `/handoffs/`) with the superseded 00–03 handoff naming. A tab-complete/grep can patch the wrong (older) file. | `rm -rf` the four root paths (untracked, zero history); `git add` the untracked README-cited `docs/design/frontend/briefs/review-to-design-brief.md`; commit the 4 WIP files; add **root-anchored** `.gitignore` guards (`/bayleaf.html`, `/source/`, `/briefs/`, `/handoffs/`). Keep the large prototypes committed (cited source of truth; use git-lfs later if size bites, never gitignore). | **AUTO** |
 | **F26** | ambiguity | data-contract | README §7 TS sketch uses `{id,samples,attention,date}`; shipped API + `types.ts` use `{run_id,n_samples,n_attention,run_date}`. | Use the **API/pydantic names**; treat README §7 TS as illustrative. | **AUTO** |
 | **F27** | backend-gap | submit, data-contract | No `POST /api/submissions`, no samplesheet-upload, **no BaseSpace endpoint**. | Build Submit **local-state only** (registration/navigation); keep `source:'basespace'` selectable but wire no client method. Preserve compose ≠ execute. | **AUTO / BACKEND** |
 | **F28** | backend-gap | provenance | `RunArtifact` has no `url/href`; per-stage **note string** isn't served. | "Open in store"/"download" need an artifact URL field (or a defined client no-op/store route); "Copy digest" is client-side clipboard. Per-stage note: add a stage note field or, interim, present gate `rationale` in the band and synthesize non-gate notes. | **BACKEND** |
@@ -104,7 +104,7 @@ These are the shared contracts every screen imports; parallel writers on them co
 
 **W1-B · Data contract** (`types.ts`) — the gating dependency for every screen. Add `RunStatus`; `status/platform/run_date` on `RunSummary`; the `Monitoring*` family; `CardReadout/QcReadout/GateReadout/MetricReadout/CardHeader`; the `Pipeline*` family; `Ticket*` family; `ThresholdOverride*` family; `RunbookPolicy/RunbookThreshold`; unions `OriginTag/ArtifactKind/ReferenceKind`; frontend-local compose types `Submission/SampleRow/LayoutLocator/RunLayoutConfig/ProposedFlag/AgentProposal`. Use **backend wire names/values** (F15, F26). *Effort L.*
 
-**W1-C · API client** (`api.ts`, depends on W1-B) — a **header-aware fetch** returning `{data,total,statusCounts,page,limit}` (current `get<T>` discards headers, so pagination + status facets are structurally unreadable); **RBAC header injection** (`X-PipeGuard-Actor`/`-Role`) on writes; new methods: `runs(opts)`, `monitoring(window)`, `qcReadout(run,sid)`, pipeline CRUD+lifecycle, review tickets, settings thresholds, `runbook()`, `export()`, archive/repair reads. Only for endpoints that exist (respect F16/F27). *Effort L.*
+**W1-C · API client** (`api.ts`, depends on W1-B) — a **header-aware fetch** returning `{data,total,statusCounts,page,limit}` (current `get<T>` discards headers, so pagination + status facets are structurally unreadable); **RBAC header injection** (`X-Bayleaf-Actor`/`-Role`) on writes; new methods: `runs(opts)`, `monitoring(window)`, `qcReadout(run,sid)`, pipeline CRUD+lifecycle, review tickets, settings thresholds, `runbook()`, `export()`, archive/repair reads. Only for endpoints that exist (respect F16/F27). *Effort L.*
 
 **W1-D · Shared RoleContext** (new `context/RoleContext.tsx`) — one `reviewer|approver` source consumed by the user panel, Settings save/approve, Pipeline-builder approve, Review queue, and feeding W1-C's actor/role. Resolves the F-cluster where a popover toggle would otherwise be cosmetic. *Effort S.*
 
@@ -207,7 +207,7 @@ hygiene folded in.
 Single-author foundation landed; `tsc -b` + `oxlint` clean; browser-verified (no console errors,
 API data loads).
 
-- **Wave 0 hygiene** — removed the stale root `/PipeGuard.html /source /briefs /handoffs`
+- **Wave 0 hygiene** — removed the stale root `/bayleaf.html /source /briefs /handoffs`
   duplicate; added root-anchored `.gitignore` guards (F25).
 - **W1-A tokens/serif** — `--color-page` restored to `#f5f7f9` (un-collapsed from `--color-card-2`
   `#eef1f4`, F24); added `--color-nav-active #22303f`, `--font-serif` (Newsreader), `pgspin`
@@ -217,7 +217,7 @@ API data loads).
   OriginTag/ArtifactKind/ReferenceKind; the Monitoring*, CardReadout/QcReadout, RunbookPolicy,
   Pipeline*, Ticket*, ThresholdOverride*, AgentProposal, and frontend-local compose families — all
   on backend wire names/values (needs_review, pending_review).
-- **W1-C api.ts** — header-aware `runsPage()` (reads X-PipeGuard-Total-Count/-Status-Counts/-Page/
+- **W1-C api.ts** — header-aware `runsPage()` (reads X-Bayleaf-Total-Count/-Status-Counts/-Page/
   -Limit), RBAC header injection via `setApiActor`, and typed methods for every shipped endpoint
   (runs query, qcReadout, monitoring, tickets, pipeline CRUD+lifecycle, threshold overrides, runbook,
   archive/repair reads). No invented endpoints (respects F16/F27).

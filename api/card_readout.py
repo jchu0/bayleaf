@@ -1,13 +1,13 @@
 """Decision-card QC readout — an API-LAYER PROJECTION over an already-decided card.
 
 This module joins two things the deterministic gate *already produced* — a
-:class:`~pipeguard.models.DecisionCard`'s ``metric_values`` (registry-normalized QC numbers)
-and the :class:`~pipeguard.runbook.Runbook`'s ``qc_thresholds`` — into the gate-grouped,
+:class:`~bayleaf.models.DecisionCard`'s ``metric_values`` (registry-normalized QC numbers)
+and the :class:`~bayleaf.runbook.Runbook`'s ``qc_thresholds`` — into the gate-grouped,
 flagged-first table the design's Decision card wants. It is a **pure re-presentation**:
 
   * It NEVER sets, moves, or second-guesses a verdict / finding / confidence (ADR-0001);
     the gate is the sole authority and stays byte-for-byte untouched.
-  * Its ``status`` is derived to *mirror* the QC rule (`pipeguard.rules`) exactly, so the
+  * Its ``status`` is derived to *mirror* the QC rule (`bayleaf.rules`) exactly, so the
     readout can never contradict the finding the gate emitted for the same metric:
     ``pass`` ⟺ the gate passed (no finding), ``fail`` ⟺ a CRITICAL hard-fail finding,
     ``borderline`` ⟺ a WARN finding (whether a near-miss or a clear miss of the gate).
@@ -30,11 +30,11 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from pipeguard import DecisionCard, Runbook, run_gate_from_dir
-from pipeguard.metrics import default_registry
-from pipeguard.models import CanonicalUnit, Gate, MetricValue, Sample, Severity, Verdict
-from pipeguard.rules import _evaluate_metric
-from pipeguard.runbook import DEFAULT_RUNBOOK, QCThreshold
+from bayleaf import DecisionCard, Runbook, run_gate_from_dir
+from bayleaf.metrics import default_registry
+from bayleaf.models import CanonicalUnit, Gate, MetricValue, Sample, Severity, Verdict
+from bayleaf.rules import _evaluate_metric
+from bayleaf.runbook import DEFAULT_RUNBOOK, QCThreshold
 
 
 def _display_name(our_key: str) -> str:
@@ -260,7 +260,7 @@ def _to_display(
 def _classify(value: float, threshold: QCThreshold) -> tuple[ReadoutStatus, bool]:
     """Return (status, within_borderline_band), mirroring the QC rule exactly.
 
-    The rule (`pipeguard.rules`) decides: passes ⟺ value satisfies the gate; else a hard-fail
+    The rule (`bayleaf.rules`) decides: passes ⟺ value satisfies the gate; else a hard-fail
     (past ``hard_fail``) is CRITICAL, otherwise a WARN. We reproduce that boundary logic so the
     readout status can never disagree with the finding the gate emitted for the same metric.
     ``within_borderline_band`` reproduces the rule's relative-band test (``gate * (1 ± band)``)
@@ -509,12 +509,12 @@ _DEFAULT_DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
 
 def _data_root() -> Path:
-    """The run-data root, resolved at call-time from ``PIPEGUARD_DATA_ROOT`` (else the default).
+    """The run-data root, resolved at call-time from ``BAYLEAF_DATA_ROOT`` (else the default).
 
     Resolved per call — not captured at import — so a test/deploy can repoint it with an env var
     without depending on main.py (the same monkeypatch-friendly pattern as api/feedback_store.py).
     """
-    raw = os.environ.get("PIPEGUARD_DATA_ROOT", "").strip()
+    raw = os.environ.get("BAYLEAF_DATA_ROOT", "").strip()
     return Path(raw) if raw else _DEFAULT_DATA_ROOT
 
 

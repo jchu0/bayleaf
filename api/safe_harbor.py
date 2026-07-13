@@ -13,7 +13,7 @@ program before any external share.** The maintainer chose this conservative defa
 
 Why it lives in ``api/`` (not the core): de-identification is an **egress-path data transform
 only**. It never reads, sets, or overrides a verdict, finding, confidence, or gate input — the
-deterministic gate in ``src/pipeguard/`` is untouched (ADR-0001). Rules decide; this only shapes
+deterministic gate in ``src/bayleaf/`` is untouched (ADR-0001). Rules decide; this only shapes
 what the read-API lets out. Structured pseudonymization reuses ``api.deid`` (salted, non-
 reversible); this module adds the Safe-Harbor pieces the export policy left as seams: date
 generalization to year, age capping at 90+, and mechanical free-text redaction of identifiers.

@@ -1,8 +1,8 @@
 """Tests for the read-only per-variant endpoint (GET /api/runs/{id}/variants) — the W3 slice.
 
 The endpoint serves EVERY annotated candidate variant for a run, parsed from its `variants.csv`
-via the same `pipeguard.parsers.parse_variant_calls` the gate uses. It is a read-only projection
-of an externally-produced annotation (ADR-0018): PipeGuard never runs an annotator and never
+via the same `bayleaf.parsers.parse_variant_calls` the gate uses. It is a read-only projection
+of an externally-produced annotation (ADR-0018): bayleaf never runs an annotator and never
 authors pathogenicity — the ClinVar significance is preserved VERBATIM (ADR-0004), and no verdict
 is set here (ADR-0001).
 

@@ -37,7 +37,7 @@ from api.pipeline_store import JsonlPipelineGraphStore, get_pipeline_store
 from api.review_store import JsonlReviewStore, get_review_store
 from api.settings_store import JsonlSettingsStore, get_settings_store
 from api.share_store import JsonlShareStore, get_share_store
-from pipeguard.provenance import EntityRef, EventType, ProvenanceEvent
+from bayleaf.provenance import EntityRef, EventType, ProvenanceEvent
 
 # The IO primitives that must live in exactly ONE class (the generic base). If any concrete store
 # re-implements one of these, the boilerplate has re-forked — the whole point of the consolidation.
@@ -49,8 +49,8 @@ class Case:
     """One store's write/read shape, so the same structural + byte checks run over all seven."""
 
     name: str
-    env_store: str  # PIPEGUARD_*_STORE (unset => default JSONL)
-    env_path: str  # PIPEGUARD_*_PATH (the JSONL sink)
+    env_store: str  # BAYLEAF_*_STORE (unset => default JSONL)
+    env_path: str  # BAYLEAF_*_PATH (the JSONL sink)
     jsonl_cls: type[Any]
     get_fn: Callable[[], Any]
     tolerant: bool  # whether a corrupt line is skipped (True) or surfaced (False)
@@ -160,8 +160,8 @@ def _dumps_versioned(rec: dict[str, Any]) -> str:
 CASES: list[Case] = [
     Case(
         "feedback",
-        "PIPEGUARD_FEEDBACK_STORE",
-        "PIPEGUARD_FEEDBACK_PATH",
+        "BAYLEAF_FEEDBACK_STORE",
+        "BAYLEAF_FEEDBACK_PATH",
         JsonlFeedbackStore,
         get_feedback_store,
         tolerant=False,
@@ -172,8 +172,8 @@ CASES: list[Case] = [
     ),
     Case(
         "library",
-        "PIPEGUARD_LIBRARY_STORE",
-        "PIPEGUARD_LIBRARY_PATH",
+        "BAYLEAF_LIBRARY_STORE",
+        "BAYLEAF_LIBRARY_PATH",
         JsonlLibraryStore,
         get_library_store,
         tolerant=True,
@@ -184,8 +184,8 @@ CASES: list[Case] = [
     ),
     Case(
         "review",
-        "PIPEGUARD_REVIEW_STORE",
-        "PIPEGUARD_REVIEW_PATH",
+        "BAYLEAF_REVIEW_STORE",
+        "BAYLEAF_REVIEW_PATH",
         JsonlReviewStore,
         get_review_store,
         tolerant=False,
@@ -196,8 +196,8 @@ CASES: list[Case] = [
     ),
     Case(
         "pipeline",
-        "PIPEGUARD_PIPELINE_STORE",
-        "PIPEGUARD_PIPELINE_PATH",
+        "BAYLEAF_PIPELINE_STORE",
+        "BAYLEAF_PIPELINE_PATH",
         JsonlPipelineGraphStore,
         get_pipeline_store,
         tolerant=False,
@@ -208,8 +208,8 @@ CASES: list[Case] = [
     ),
     Case(
         "settings",
-        "PIPEGUARD_SETTINGS_STORE",
-        "PIPEGUARD_SETTINGS_PATH",
+        "BAYLEAF_SETTINGS_STORE",
+        "BAYLEAF_SETTINGS_PATH",
         JsonlSettingsStore,
         get_settings_store,
         tolerant=False,
@@ -220,8 +220,8 @@ CASES: list[Case] = [
     ),
     Case(
         "job",
-        "PIPEGUARD_JOB_STORE",
-        "PIPEGUARD_JOB_PATH",
+        "BAYLEAF_JOB_STORE",
+        "BAYLEAF_JOB_PATH",
         JsonlJobStore,
         get_job_store,
         tolerant=True,
@@ -232,8 +232,8 @@ CASES: list[Case] = [
     ),
     Case(
         "share",
-        "PIPEGUARD_SHARE_STORE",
-        "PIPEGUARD_SHARE_PATH",
+        "BAYLEAF_SHARE_STORE",
+        "BAYLEAF_SHARE_PATH",
         JsonlShareStore,
         get_share_store,
         tolerant=True,

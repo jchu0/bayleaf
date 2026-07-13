@@ -32,7 +32,7 @@ code, so a tool's copyleft does not reach bayleaf's source
    distributed image triggers GPLv3 obligations *on that binary*. Prefer installing from
    upstream and invoking what is on `PATH`; keep the genomics toolchain
    (bioconda/containers) separate from the app's `uv` toolchain.
-4. **No linking, no vendoring of tool source** into `src/pipeguard/`.
+4. **No linking, no vendoring of tool source** into `src/bayleaf/`.
 
 ## Tools — verified verbatim in-repo
 

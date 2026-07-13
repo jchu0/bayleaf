@@ -81,7 +81,7 @@ cases, no drift found):
    they previously both saved.
 7. **`08a42ad` (T-091) — real, persisted theme + density.** New
    `frontend/src/context/PrefsContext.tsx` (83 lines): `Theme = 'light'|'dark'|'system'`,
-   `Density = 'split'|'brief'|'dense'`, `localStorage` key `pipeguard.prefs`
+   `Density = 'split'|'brief'|'dense'`, `localStorage` key `bayleaf.prefs`
    (`try/catch`-guarded load + persist — private-mode-safe, degrades to defaults). Theme resolves
    `system` via `matchMedia('(prefers-color-scheme: dark)')` and stamps
    `document.documentElement.dataset.theme`; a live `matchMedia` `change` listener keeps it in
@@ -119,14 +119,14 @@ commits above:
 - 🔴 doc create/move/rename/status-flip → N/A, no doc was created/moved/renamed this session
   (this journal is a *new file*, which is the unconditional row above, not this one).
 - 🔴 `models.py`/`parsers.py`/`persistence/` field change → N/A, none of the 8 commits touch
-  `src/pipeguard/` at all (grepped `git show --stat` output above — every changed path is under
+  `src/bayleaf/` at all (grepped `git show --stat` output above — every changed path is under
   `frontend/src/` or `api/`).
 - 🔴 test census (`tests/`) → **fires**: `tests/test_card_readout.py` (+1 test, T-087) and
   `tests/test_api.py` (+1 assertion pair in an existing test, T-090, not a new test function).
   Checked `quality/evaluation.md` for a hardcoded count — deferred to CHK-2 below (see Decisions;
   waived with the specific count re-derived).
 - 🟠 `runbook.py`/`rules.py` → N/A, untouched.
-- 🟠 `src/pipeguard/metrics/` → N/A, untouched.
+- 🟠 `src/bayleaf/metrics/` → N/A, untouched.
 - 🟠 `provenance.py`/`engine.py`/`EventType` → N/A, untouched.
 - 🟠 new advisory agent/model tier/corpus → N/A, none of the 8 touch `triage/`,
   `pipeline_repair/`, or an off-gate agent module.

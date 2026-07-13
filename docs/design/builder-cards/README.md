@@ -95,7 +95,7 @@ Items 1–3 below (ports, card size, half-circle visual) **shipped 2026-07-11** 
 [UIC-16](../ui-conventions.md)); item 4 (the reserved-port kinds) is **essentially closed
 2026-07-12** — every shown port is now a real channel or removed, with one deliberate
 `adapter_fasta` deferral. Verified by reading `frontend/src/components/BuilderShared.tsx` /
-`BuilderCanvas.tsx` + `src/pipeguard/nextflow/catalog.py` directly:
+`BuilderCanvas.tsx` + `src/bayleaf/nextflow/catalog.py` directly:
 
 1. **Ports are four-sided — CLOSED.** `BuilderShared.portSide(kind, dir)` is the single geometry
    source of truth: reference/panel **input** kinds (`reference_fasta`/`panel_bed`/`truth_vcf`/
@@ -219,5 +219,5 @@ section is the closest thing to their retirement record).
    script round-tripped. This card is orthogonal to the retired `Truth VCF`/`NGSCheckMate` nodes
    above but was designed as their natural successor: a lab that wants "the NGSCheckMate identity
    check back" now authors it as a custom-script card (a real `ngscheckmate` command, wired from a
-   `bam` input to an `ngscheckmate`-kind output) rather than PipeGuard shipping a second bespoke,
+   `bam` input to an `ngscheckmate`-kind output) rather than bayleaf shipping a second bespoke,
    possibly-unwired palette tile for it.

@@ -27,13 +27,13 @@ non-colliding ids this time, unlike the previous batch (`2026-07-09-frontend-bat
 
 ### Grounding method (per claim)
 
-- **QC enrichment (T-082/a9b06ad).** Read `src/pipeguard/models.py`, `parsers.py`,
+- **QC enrichment (T-082/a9b06ad).** Read `src/bayleaf/models.py`, `parsers.py`,
   `metrics/mapping.py` (the 8-entry `_QCMETRICS_MAP` addition), `runbook.py` (the `required`
   field + 5 new `QCThreshold`s with concrete `gate`/`hard_fail` values), `rules.py`
   (`_evaluate_metric`'s `if not threshold.required: return None` guard), and
   `api/card_readout.py` (`_display_name`, already landed and using
   `default_registry().entry(our_key).display_name`, confirming the follow-up commit's claim).
-  Cross-checked the "10 gated / 10 ungated" claim against `src/pipeguard/metrics/metric_registry.yaml`
+  Cross-checked the "10 gated / 10 ungated" claim against `src/bayleaf/metrics/metric_registry.yaml`
   (counted 20 `our_key` entries) and `runbook.py`'s `qc_thresholds` list (counted 10 `QCThreshold`s)
   — exact match. Cross-checked which of the 10 "ungated" entries actually have a producer: only
   `preflight.phix_aligned` / `variant.gq` / `variant.titv` appear in `_QCMETRICS_MAP`; the other 7
@@ -45,11 +45,11 @@ non-colliding ids this time, unlike the previous batch (`2026-07-09-frontend-bat
   `GET /api/runs/{id}/artifacts/{name}` route, the `RunArtifact.url` field, and the
   `_ARTIFACT_STAGE` dict changing from one `(stage, role)` tuple per kind to a `list[...]`.
   Confirmed `RunArtifact` (the `url`-carrying model) lives in `api/main.py`, **not**
-  `src/pipeguard/models.py` — so the 🔴 "models.py/parsers.py/persistence — new field" map row
+  `src/bayleaf/models.py` — so the 🔴 "models.py/parsers.py/persistence — new field" map row
   does **not** fire (that's `RunArtifacts`, the core intake bundle, a different type); the correct
   row is the 🟠 "api/ endpoint... new/changed capability" one, routing to architecture.md +
   functional.md, which I updated. `QCMetrics` (which DID gain 8 core-model fields, T-082) is a
-  genuine `src/pipeguard/models.py` hit, so `schemas.md` got the 🔴 treatment there instead.
+  genuine `src/bayleaf/models.py` hit, so `schemas.md` got the 🔴 treatment there instead.
 - **Builder tool-I/O + connectors (T-083/T-084).** Read the `BuilderShared.tsx`/`BuilderCanvas.tsx`
   diffs directly — confirmed the exact I/O deltas (bcftools call/norm's `panel_bed`, markdup's
   `bai` vs the phantom `samtools_stats`, mosdepth's `mosdepth_thresholds`) and the minimap
@@ -138,7 +138,7 @@ non-colliding ids this time, unlike the previous batch (`2026-07-09-frontend-bat
   I/O in its example tables (e.g. `n_markdup` outputs `bam`/`markdup_metrics`/`samtools_stats`;
   `n_norm` carries `panel_bed`) — the same shape T-083 fixed in the live app. This is the
   maintainer's stable design brief (per the ToC: "the stable spec"), analogous to the excluded
-  `briefs/`/`handoffs/`/`source/`/`PipeGuard.html` deliverables, and prior sessions never edited
+  `briefs/`/`handoffs/`/`source/`/`bayleaf.html` deliverables, and prior sessions never edited
   it when correcting implementation drift (they annotate `design/frontend/README.md` with
   "Shipped" notes instead, which is what this session did too). Not edited; noted here so the
   maintainer can decide whether the brief itself should be corrected or left as historical
@@ -151,8 +151,8 @@ non-colliding ids this time, unlike the previous batch (`2026-07-09-frontend-bat
   *implementation pattern*, not a new requirement per se), but flagging it as a candidate
   REQ-NF for a future security-focused pass.
 - **Uncommitted local changes** already present at session start (`docs/design/frontend/
-  PipeGuard.html`, `README.md`, `source/PipeGuard.dc.html`, `source/support.js`, plus untracked
-  root `PipeGuard.html`/`briefs/`/`handoffs/`/`source/`) were left completely alone — none of the
+  bayleaf.html`, `README.md`, `source/bayleaf.dc.html`, `source/support.js`, plus untracked
+  root `bayleaf.html`/`briefs/`/`handoffs/`/`source/`) were left completely alone — none of the
   nine commits swept this session touch those paths, and they read as the maintainer's own
   in-progress design-package work, explicitly out of scope per the operating contract.
 

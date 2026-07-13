@@ -5,7 +5,7 @@ configured key, never a raw path — an unknown key 404s) and the **traversal-ha
 escape, an absolute path, or an escaping symlink is rejected AND provably cannot exfiltrate a file
 outside the root). Plus the listing contract: kind inference (``.vcf.gz`` → ``vcf``), dirs-first
 ordering, and a correct parent link on a nested subdir. The browse roots are redirected to a tmp
-sandbox via ``PIPEGUARD_BROWSE_ROOTS`` (read per request) so the suite controls the layout and can
+sandbox via ``BAYLEAF_BROWSE_ROOTS`` (read per request) so the suite controls the layout and can
 plant a secret OUTSIDE the root to prove no escape.
 """
 
@@ -54,7 +54,7 @@ def _make_sandbox(monkeypatch: Any, tmp_path: Path) -> Path:
     (root / "calls" / "sample.vcf.gz").write_text("##fileformat=VCFv4.2\n", encoding="utf-8")
     (root / "panel.bed").write_text("chr1\t0\t100\n", encoding="utf-8")
     (root / "notes.txt").write_text("hello", encoding="utf-8")
-    monkeypatch.setenv("PIPEGUARD_BROWSE_ROOTS", f"sandbox={root}")
+    monkeypatch.setenv("BAYLEAF_BROWSE_ROOTS", f"sandbox={root}")
     return root
 
 
@@ -199,6 +199,6 @@ def test_viewer_role_may_browse(monkeypatch: Any, tmp_path: Path) -> None:
     resp = client.get(
         "/api/files",
         params={"root": "sandbox"},
-        headers={"X-PipeGuard-Actor": "reader", "X-PipeGuard-Role": "viewer"},
+        headers={"X-Bayleaf-Actor": "reader", "X-Bayleaf-Role": "viewer"},
     )
     assert resp.status_code == 200

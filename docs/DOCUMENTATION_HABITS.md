@@ -149,7 +149,7 @@ against the actual code and fix drift), **AUTHOR** (a new doc/ADR/journal from `
 **CHK** (the [Session-end checklist](#session-end-doc-checklist) below). By design it **points at
 the living sources** (this file, the Doc-update map, the templates) rather than a hardcoded
 snapshot — a doc agent that embedded the rules would itself go stale. It is **dev tooling**, not a
-PipeGuard product/roster agent (the roster in [design/agents.md](design/agents.md) is advisory
+bayleaf product/roster agent (the roster in [design/agents.md](design/agents.md) is advisory
 agents over genomics data, ADR-0001). Custom agents load at session start, so a freshly-edited
 definition takes effect next session. For a purely read-only freshness *report* with no edits, use
 a read-only Explore agent instead.

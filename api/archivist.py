@@ -3,7 +3,7 @@
 Mirrors the QC-triage agent (ADR-0009/0012) and the feedback agent (`api/feedback_agent.py`):
 stub-first ($0, offline, deterministic) with an opt-in Claude path that falls back to the stub on
 ANY error. It reads across the api-layer projection the rules pipeline ignores — the already-decided
-:class:`~pipeguard.models.DecisionCard`s plus the run's on-disk artifact pointers — and emits a
+:class:`~bayleaf.models.DecisionCard`s plus the run's on-disk artifact pointers — and emits a
 STRUCTURED, human-readable :class:`ArchiveDigest`: it indexes / rolls up / summarizes a released run
 (or a cross-run set) and PROPOSES an organizational / archival action + a prepared export manifest.
 
@@ -20,7 +20,7 @@ durable ArtifactRef registry, output-tree ingestion, and audit-grade (ledger-rea
 are deferred (design §2.2 / Appendix B). This builds the smallest useful advisory core over a clean
 seam: one ``digest(runs)`` method — one run → a per-run digest + manifest; many → a cross-run index.
 
-Env: ``PIPEGUARD_ARCHIVIST_AGENT`` = "stub" (default) | "claude"; ``PIPEGUARD_ARCHIVIST_MODEL``
+Env: ``BAYLEAF_ARCHIVIST_AGENT`` = "stub" (default) | "claude"; ``BAYLEAF_ARCHIVIST_MODEL``
 default ``claude-haiku-4-5-20251001`` — organizing is a cheap, low-stakes task, so the cheapest tier
 (ADR-0012). PII posture (design §5.2.7 least-privilege): the deterministic index uses only the cards
 + artifact pointers (which carry NO intake identity — subject_id/tissue/submitted_by never reach
@@ -42,11 +42,11 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from pipeguard import EventLedger, load_run, run_gate
-from pipeguard.identifiers import SCHEMA_VERSION, new_id, utc_now
-from pipeguard.identifiers import content_hash as _content_hash
-from pipeguard.models import DecisionCard
-from pipeguard.provenance import EventType
+from bayleaf import EventLedger, load_run, run_gate
+from bayleaf.identifiers import SCHEMA_VERSION, new_id, utc_now
+from bayleaf.identifiers import content_hash as _content_hash
+from bayleaf.models import DecisionCard
+from bayleaf.provenance import EventType
 
 # Public agent identity carried on every digest's `agent` field.
 ARCHIVIST_AGENT = "archivist"
@@ -492,7 +492,7 @@ class ClaudeArchivist:
     name = "claude"
 
     def __init__(self, model: str | None = None, max_tokens: int = 512) -> None:
-        self.model = model or os.environ.get("PIPEGUARD_ARCHIVIST_MODEL", _DEFAULT_ARCHIVIST_MODEL)
+        self.model = model or os.environ.get("BAYLEAF_ARCHIVIST_MODEL", _DEFAULT_ARCHIVIST_MODEL)
         self.max_tokens = max_tokens
         self._fallback = StubArchivist()
         self._client: Any = None  # anthropic client, created lazily on first use
@@ -563,7 +563,7 @@ class ClaudeArchivist:
 
 def get_archivist_agent() -> ArchivistAgent:
     """Select the archivist agent from the environment (default: the zero-cost stub)."""
-    choice = os.environ.get("PIPEGUARD_ARCHIVIST_AGENT", "stub").strip().lower()
+    choice = os.environ.get("BAYLEAF_ARCHIVIST_AGENT", "stub").strip().lower()
     if choice == "claude":
         return ClaudeArchivist()
     return StubArchivist()

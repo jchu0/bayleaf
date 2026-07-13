@@ -17,8 +17,8 @@ import { VERDICT_ORDER } from '../verdict'
 // only — it renders what the run ALREADY produced and terminates the E2E in one signed-off-shaped
 // document. It NEVER sets or annotates a verdict/confidence: every verdict here is quoted verbatim
 // from the rule engine's cards (ADR-0001, G1), and every ClinVar significance is quoted VERBATIM
-// from the finding's cited evidence (G3/G4) — PipeGuard authors no pathogenicity. The report has
-// no write path; human sign-off is a labelled seam, not a button (ADR-0018 L61: PipeGuard can
+// from the finding's cited evidence (G3/G4) — bayleaf authors no pathogenicity. The report has
+// no write path; human sign-off is a labelled seam, not a button (ADR-0018 L61: bayleaf can
 // never mark a report final on its own). The route-to-human hero + per-sample blocks render over
 // `detail` (cards + events) already on the wire; the full per-variant table (W3) additionally
 // reads GET /api/runs/{id}/variants — every ClinVar significance quoted VERBATIM, no interpretation
@@ -181,7 +181,7 @@ export function RunReport({ detail }: { detail: RunDetail }) {
 
       {/* Full per-variant table (W3) — every annotated candidate variant the run carried, read from
           variants.csv via the read-only endpoint. This is the fuller table beneath the route-to-
-          human hero above; ClinVar significance is quoted VERBATIM, PipeGuard authors no
+          human hero above; ClinVar significance is quoted VERBATIM, bayleaf authors no
           pathogenicity and sets no verdict here (ADR-0004 / ADR-0001). */}
       <section>
         <SectionTitle icon={<Dna size={14} strokeWidth={2} className="text-accent" />}>

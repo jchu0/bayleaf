@@ -17,7 +17,7 @@ Bring one up and run it against it::
 
     docker compose -f deploy/postgres/docker-compose.yml up -d
     uv sync --extra postgres
-    DATABASE_URL=postgresql://pipeguard:pipeguard@localhost:5432/pipeguard \\
+    DATABASE_URL=postgresql://bayleaf:bayleaf@localhost:5432/bayleaf \\
         uv run pytest tests/test_persistence_postgres_live.py -v
 """
 
@@ -35,7 +35,7 @@ pytest.importorskip("psycopg")
 
 from api.feedback_store import PostgresFeedbackStore
 from api.share_store import PostgresShareStore
-from pipeguard import (
+from bayleaf import (
     EventLedger,
     SqliteRepository,
     Verdict,
@@ -43,16 +43,16 @@ from pipeguard import (
     rebuild_db,
     run_gate,
 )
-from pipeguard.persistence.postgres import PostgresRepository
-from pipeguard.persistence.repository import Repository
-from pipeguard.provenance import EntityRef, EventType, ProvenanceEvent
-from pipeguard.synthesis import StubSynthesizer
+from bayleaf.persistence.postgres import PostgresRepository
+from bayleaf.persistence.repository import Repository
+from bayleaf.provenance import EntityRef, EventType, ProvenanceEvent
+from bayleaf.synthesis import StubSynthesizer
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
 
 # The compose default (deploy/postgres/docker-compose.yml); DATABASE_URL overrides it, so a live
 # run can point at whatever host port the container is mapped to.
-_DEFAULT_DSN = "postgresql://pipeguard:pipeguard@localhost:5432/pipeguard"
+_DEFAULT_DSN = "postgresql://bayleaf:bayleaf@localhost:5432/bayleaf"
 
 
 def _dsn() -> str:

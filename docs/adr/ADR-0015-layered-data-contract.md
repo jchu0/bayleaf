@@ -31,7 +31,7 @@ We had already made the individual decisions — an event-sourced core
 ([ADR-0013](ADR-0013-gate-architecture-verdict-policy.md)) — but never captured, in one
 place, *how the core data structures fit together and why each shape is what it is*. This
 ADR is that synthesis. It does not restate those ADRs; it explains the record layer they
-all rest on. Ground truth: `src/pipeguard/models.py`, `identifiers.py`, `provenance.py`,
+all rest on. Ground truth: `src/bayleaf/models.py`, `identifiers.py`, `provenance.py`,
 and [data/schemas.md](../data/schemas.md).
 
 ## Decision
@@ -82,7 +82,7 @@ with the *why*, because the reasoning is the point.
    contract.** A metric crosses every component boundary as its `normalized_value` — a
    decimal in the registry's `canonical_unit` — while `raw_value`/`raw_unit` (what the tool
    reported) are snapshotted *alongside* it. Consumers read `normalized_value`, never
-   `raw_value`; the metric registry (`pipeguard.metrics`) is the single unit authority.
+   `raw_value`; the metric registry (`bayleaf.metrics`) is the single unit authority.
    *Why:* this defeats the units-mismatch class of bug (a percent handed where a fraction is
    expected). Runbook thresholds are stored in the same `canonical_unit`, so
    `rules._evaluate_metric` compares a threshold and the value it gates on one scale by

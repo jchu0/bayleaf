@@ -2,13 +2,13 @@
 
 Feedback is product telemetry, a **separate concern** from the decision projection (the
 `Repository` port): its rows never mix with runs/cards/events. Three adapters, env-selected via
-``PIPEGUARD_FEEDBACK_STORE`` (default ``jsonl``); the JSONL + SQLite plumbing is the shared
+``BAYLEAF_FEEDBACK_STORE`` (default ``jsonl``); the JSONL + SQLite plumbing is the shared
 :mod:`api.base_store` generic, and the DB adapters **degrade to the offline JSONL** if selection
 fails (missing extra / no DSN / unreachable server), so a misconfigured DB never breaks the write
 path — it just falls back to the file.
 
-  - :class:`JsonlFeedbackStore` — default, zero-dep append-only file (``PIPEGUARD_FEEDBACK_PATH``).
-  - :class:`SqliteFeedbackStore` — a ``feedback`` table (stdlib; ``PIPEGUARD_FEEDBACK_DB``).
+  - :class:`JsonlFeedbackStore` — default, zero-dep append-only file (``BAYLEAF_FEEDBACK_PATH``).
+  - :class:`SqliteFeedbackStore` — a ``feedback`` table (stdlib; ``BAYLEAF_FEEDBACK_DB``).
   - :class:`PostgresFeedbackStore` — a ``feedback`` table (``[postgres]`` extra; ``DATABASE_URL``).
 
 Every adapter also exposes ``read_all`` so the advisory feedback agent can categorize the
@@ -26,9 +26,9 @@ from typing import Any, Protocol
 
 from api.base_store import JsonlDocStore, SqliteStore, select_backend
 
-_ENV_FEEDBACK_STORE = "PIPEGUARD_FEEDBACK_STORE"
-_ENV_FEEDBACK_PATH = "PIPEGUARD_FEEDBACK_PATH"
-_ENV_FEEDBACK_DB = "PIPEGUARD_FEEDBACK_DB"
+_ENV_FEEDBACK_STORE = "BAYLEAF_FEEDBACK_STORE"
+_ENV_FEEDBACK_PATH = "BAYLEAF_FEEDBACK_PATH"
+_ENV_FEEDBACK_DB = "BAYLEAF_FEEDBACK_DB"
 _ENV_DATABASE_URL = "DATABASE_URL"
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -121,7 +121,7 @@ class JsonlFeedbackStore(JsonlDocStore):
 
 
 def feedback_db_path() -> str:
-    """The SQLite feedback-DB path (``PIPEGUARD_FEEDBACK_DB`` or the repo-root default)."""
+    """The SQLite feedback-DB path (``BAYLEAF_FEEDBACK_DB`` or the repo-root default)."""
     return os.environ.get(_ENV_FEEDBACK_DB, "").strip() or str(_DEFAULT_FEEDBACK_DB)
 
 
@@ -201,7 +201,7 @@ class PostgresFeedbackStore:
 def get_feedback_store() -> FeedbackStore:
     """Select the feedback sink from the environment (default: the offline JSONL file).
 
-    ``PIPEGUARD_FEEDBACK_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing
+    ``BAYLEAF_FEEDBACK_STORE=sqlite|postgres`` swaps in a DB adapter; ANY failure constructing
     it (missing extra / DSN, unwritable path, unreachable server) degrades to the JSONL store — see
     :func:`api.base_store.select_backend` (the shared degrade-to-JSONL ladder).
     """

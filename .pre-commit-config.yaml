@@ -12,9 +12,9 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^docs/design/frontend/PipeGuard\.html$ # generated minified bundle
+        exclude: ^docs/design/frontend/bayleaf\.html$ # generated minified bundle
       - id: end-of-file-fixer
-        exclude: ^docs/design/frontend/PipeGuard\.html$ # generated minified bundle
+        exclude: ^docs/design/frontend/bayleaf\.html$ # generated minified bundle
       - id: check-yaml
       - id: check-toml
       - id: check-merge-conflict

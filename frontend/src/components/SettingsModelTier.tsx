@@ -14,7 +14,7 @@ import { useToast } from './Toast'
 // or removed at once, an active/available split (a clear status divide), and edits staged behind an
 // explicit inline-expander Save (the maintainer's explicit-edit rule — a stray dropdown change never takes
 // effect on its own). Purely local demo state — the T-045 seam (nothing here is wired to the real
-// PIPEGUARD_*_MODEL env vars yet), so writes surface via a toast rather than an audit-backed persist.
+// BAYLEAF_*_MODEL env vars yet), so writes surface via a toast rather than an audit-backed persist.
 // List pricing ($ in / out per 1M tokens) is ILLUSTRATIVE, not a live or contractual quote.
 type ModelKey = 'opus' | 'sonnet' | 'haiku' | 'fable'
 
@@ -30,7 +30,7 @@ const MODEL_NAME: Record<ModelKey, string> = Object.fromEntries(MODELS.map((m) =
 const MODEL_COST: Record<ModelKey, string> = Object.fromEntries(MODELS.map((m) => [m.key, m.cost])) as Record<ModelKey, string>
 
 // The real advisory-agent roster (CLAUDE.md code map §3) + the ST2 metrics-expansion agent. Every one
-// is advisory + off the deterministic gate, stub-first ($0), model picked via a PIPEGUARD_*_MODEL env
+// is advisory + off the deterministic gate, stub-first ($0), model picked via a BAYLEAF_*_MODEL env
 // var on the backend; this table is the operator-facing view of that config. `wired` = the agent is
 // actually plumbed end-to-end today (starts ACTIVE); the phase-2 seams start AVAILABLE (designed, add-
 // able to the roster, but not yet running) — that split is the honest active/available divide.
@@ -45,13 +45,13 @@ type Agent = {
   phase2?: boolean // a labelled seam — proposed, not yet wired end-to-end
 }
 const AGENTS: Agent[] = [
-  { key: 'synthesizer', label: 'Card synthesizer', desc: 'Narrates decision cards (never sets a verdict)', def: 'sonnet', env: 'PIPEGUARD_SYNTHESIZER', wired: true },
-  { key: 'qc_triage', label: 'QC-triage agent', desc: 'Answers "Ask the agent" for a flagged card', def: 'sonnet', env: 'PIPEGUARD_TRIAGE_AGENT', wired: true },
-  { key: 'pipeline_repair', label: 'Pipeline-repair agent', desc: 'Proposes fixes for recurring signatures', def: 'opus', env: 'PIPEGUARD_PIPELINE_REPAIR_AGENT', wired: true },
-  { key: 'archivist', label: 'Archivist agent', desc: 'Organizes released runs for archival', def: 'haiku', env: 'PIPEGUARD_ARCHIVIST_AGENT', wired: true },
-  { key: 'feedback', label: 'Feedback categorizer', desc: 'Categorizes reviewer overrides', def: 'haiku', env: 'PIPEGUARD_FEEDBACK_AGENT', wired: true },
-  { key: 'node_author', label: 'Node-author agent', desc: 'Proposes a typed tool node for the Builder palette', def: 'sonnet', env: 'PIPEGUARD_NODE_AUTHOR_AGENT', wired: true, where: 'builder' },
-  { key: 'metrics_expand', label: 'Metrics-expansion agent', desc: 'Proposes new QC metrics to track + wiring', def: 'sonnet', env: 'PIPEGUARD_METRICS_AGENT', wired: false, phase2: true },
+  { key: 'synthesizer', label: 'Card synthesizer', desc: 'Narrates decision cards (never sets a verdict)', def: 'sonnet', env: 'BAYLEAF_SYNTHESIZER', wired: true },
+  { key: 'qc_triage', label: 'QC-triage agent', desc: 'Answers "Ask the agent" for a flagged card', def: 'sonnet', env: 'BAYLEAF_TRIAGE_AGENT', wired: true },
+  { key: 'pipeline_repair', label: 'Pipeline-repair agent', desc: 'Proposes fixes for recurring signatures', def: 'opus', env: 'BAYLEAF_PIPELINE_REPAIR_AGENT', wired: true },
+  { key: 'archivist', label: 'Archivist agent', desc: 'Organizes released runs for archival', def: 'haiku', env: 'BAYLEAF_ARCHIVIST_AGENT', wired: true },
+  { key: 'feedback', label: 'Feedback categorizer', desc: 'Categorizes reviewer overrides', def: 'haiku', env: 'BAYLEAF_FEEDBACK_AGENT', wired: true },
+  { key: 'node_author', label: 'Node-author agent', desc: 'Proposes a typed tool node for the Builder palette', def: 'sonnet', env: 'BAYLEAF_NODE_AUTHOR_AGENT', wired: true, where: 'builder' },
+  { key: 'metrics_expand', label: 'Metrics-expansion agent', desc: 'Proposes new QC metrics to track + wiring', def: 'sonnet', env: 'BAYLEAF_METRICS_AGENT', wired: false, phase2: true },
 ]
 const AGENT_BY_KEY: Record<string, Agent> = Object.fromEntries(AGENTS.map((a) => [a.key, a]))
 const INITIAL_ACTIVE = AGENTS.filter((a) => a.wired).map((a) => a.key)
@@ -349,7 +349,7 @@ export function SettingsModelTier() {
               Local demo state · not persisted
             </span>
             <span
-              title="Each model is a PIPEGUARD_*_MODEL env var. Live = real, billed Claude calls. Verdicts stay rule-derived (ADR-0001)."
+              title="Each model is a BAYLEAF_*_MODEL env var. Live = real, billed Claude calls. Verdicts stay rule-derived (ADR-0001)."
               className="grid h-4 w-4 cursor-help place-items-center rounded-full border border-line text-[9px] font-bold text-text-3"
             >
               i

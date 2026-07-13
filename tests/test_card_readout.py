@@ -25,9 +25,9 @@ from api.card_readout import (
     build_qc_readout,
     router,
 )
-from pipeguard import DEFAULT_RUNBOOK, DecisionCard, run_gate_from_dir
-from pipeguard.models import CanonicalUnit, Gate, MetricValue, Severity, Verdict
-from pipeguard.rules import _evaluate_metric
+from bayleaf import DEFAULT_RUNBOOK, DecisionCard, run_gate_from_dir
+from bayleaf.models import CanonicalUnit, Gate, MetricValue, Severity, Verdict
+from bayleaf.rules import _evaluate_metric
 
 _RUN_DIR = "data/mock_run_01"
 
@@ -380,13 +380,13 @@ def test_qc_hold_blocks_the_downstream_variant_gate() -> None:
 
 def _run_dir_with_reports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *names: str) -> None:
     """Copy the pinned mock_run_01 into a tmp data root and drop the named HTML reports beside its
-    CSVs, then repoint ``PIPEGUARD_DATA_ROOT`` at it. The endpoint re-derives the card from this
+    CSVs, then repoint ``BAYLEAF_DATA_ROOT`` at it. The endpoint re-derives the card from this
     copy and scans it for QC reports — nothing runs Nextflow."""
     dst = tmp_path / "mock_run_01"
     shutil.copytree(_RUN_DIR, dst)
     for name in names:
         (dst / name).write_text("<html>fake QC report</html>", encoding="utf-8")
-    monkeypatch.setenv("PIPEGUARD_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("BAYLEAF_DATA_ROOT", str(tmp_path))
 
 
 def test_qc_reports_surfaced_when_present(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

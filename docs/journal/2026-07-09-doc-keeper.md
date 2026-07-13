@@ -22,7 +22,7 @@ canonical-is-truth, numbered-lists + crosslinks + ISO-MST, templates + no-duplic
 honesty, tie-claims-to-verification). Four modes: SWEEP / AUDIT / AUTHOR / CHK.
 
 **What it is not.** Dev tooling (a Claude Code subagent under `.claude/agents/`), **not** a
-PipeGuard product/roster agent. The roster ([agents.md](../design/agents.md)) is advisory agents
+bayleaf product/roster agent. The roster ([agents.md](../design/agents.md)) is advisory agents
 over genomics *run* data governed by ADR-0001 (rules decide, AI advises); the repo's own docs are
 not a product feature, so this doesn't belong in that roster or its intake checklist.
 

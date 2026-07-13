@@ -61,11 +61,11 @@ inheritance-fit, the review-ordering tier) remains design-only, not built:
 4. **The per-variant evidence table — BUILT the same day, later (W3 continuation, commit
    `fec0f83`), closing the "no per-variant evidence table" gap item 3 above used to carry.** A
    new read-only `GET /api/runs/{run_id}/variants` (`api/main.py`) serves every `VariantCall` a
-   run's `variants.csv` carries, parsed via the SAME `pipeguard.parsers.parse_variant_calls` the
+   run's `variants.csv` carries, parsed via the SAME `bayleaf.parsers.parse_variant_calls` the
    gate's route-to-human rule already uses (404 unknown run, `[]` when no `variants.csv` — an
    honest empty state, not fabricated rows). `RunReport.tsx` renders it as a paginated table
    (Sample · Gene · HGVS · ClinVar significance quoted VERBATIM · review status · accession)
-   beneath the route-to-human hero, with its own disclaimer that PipeGuard authors no
+   beneath the route-to-human hero, with its own disclaimer that bayleaf authors no
    pathogenicity and sets no verdict here. **This is still narrower than §1 item 1's full
    `AnnotatedVariant`:** the table surfaces only the `VariantCall` fields already in the D2
    model (ClinVar classification/review-status/accession/version) — there is no gnomAD
@@ -86,7 +86,7 @@ inheritance-fit, the review-ordering tier) remains design-only, not built:
 
 ## Overview
 
-The MVP-first architecture for extending PipeGuard past variant **calling** into an **advisory, cited,
+The MVP-first architecture for extending bayleaf past variant **calling** into an **advisory, cited,
 off-gate** rare-disease evidence + review-ordering + reporting surface — the decision and boundary are in
 [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md); this doc is the how. Synthesized from a
 four-facet design pass (2026-07-10). **Load-bearing rule:** the variant *gate* stays QC (call-quality); this layer
@@ -95,7 +95,7 @@ plus the order a human should review them — it decides nothing (ADR-0001).
 
 ## 1. Module map (mirrors the Archivist, ADR-0012)
 
-1. **`src/pipeguard/interpretation/` — deterministic core, framework-agnostic** (like `synthetic/`; never imported
+1. **`src/bayleaf/interpretation/` — deterministic core, framework-agnostic** (like `synthetic/`; never imported
    by `rules.py`/`run_gate`, so it is *structurally* off the gate). Frozen pydantic types following the
    `Evidence`/`MetricValue` conventions in `models.py`:
    - `ClinVarEvidence` — `classification` (verbatim `CLNSIG`), `review_status` (`CLNREVSTAT` → stars), `accession`
@@ -104,7 +104,7 @@ plus the order a human should review them — it decides nothing (ADR-0001).
    - `PopulationFrequency` — `gnomad_af`, `popmax_af`, `popmax_population`, `gnomad_version`, `citation`.
    - `InheritanceFit` — `declared_mode` (operator-provided), `observed_genotypes`, `fit ∈ {consistent, inconsistent,
      incomplete, unknown}`, `rationale` — a **mechanical** genotype-vs-mode check, not a causality claim.
-   - `AnnotatedVariant` — joins the above + the variant-gate `call_quality`. **No PipeGuard-authored pathogenicity
+   - `AnnotatedVariant` — joins the above + the variant-gate `call_quality`. **No bayleaf-authored pathogenicity
      field.**
    - `PriorityTier` enum + a transparent `tier_of(variant, config)` returning the tier **plus its contributing
      evidence** (never a black-box score). Cutoffs (rare-disease AF, which ClinVar tiers count) are **config-driven,
@@ -113,18 +113,18 @@ plus the order a human should review them — it decides nothing (ADR-0001).
    `advisory: Literal[True] = True` pinned, **no verdict/decision/pathogenicity/confidence field**, fixed
    `disclaimer`, `citations`, `generated_by` `stub`|`claude`; prose `summary` is the **only** LLM-refined field,
    grounded on the deterministic base. Stub-first ($0), lazy `anthropic`, degrade-to-stub on error/refusal.
-   `PIPEGUARD_INTERPRETATION_AGENT=stub|claude` (cheap tier default). **Deferred seam** — MVP surfaces the
+   `BAYLEAF_INTERPRETATION_AGENT=stub|claude` (cheap tier default). **Deferred seam** — MVP surfaces the
    deterministic evidence without the agent.
 3. **`api/report.py` — the run-report projection** (sibling of `card_readout.py`): assembles an immutable `RunReport`
    from `_evaluate(run_id)` cards + the `card_readout` QC projection + artifact pointers. **Authors no verdict.**
-4. **`api/report_store.py` — a fifth pluggable product store** (`PIPEGUARD_REPORT_STORE=jsonl|sqlite|postgres`,
+4. **`api/report_store.py` — a fifth pluggable product store** (`BAYLEAF_REPORT_STORE=jsonl|sqlite|postgres`,
    degrade-to-jsonl) joining feedback/pipeline/settings/review (ADR-0017); distinct from the decision `Repository`,
    never re-enters the gate.
 5. **`api/routers/reports.py`** — read: `GET /api/runs/{id}/interpretation`, `GET /api/runs/{id}/report`; off-gate
    lifecycle writes: `POST /api/runs/{id}/report/submit` + `/approve` (`require_role("reviewer","approver")`,
    server-authored `*_by`).
 6. **`api/share_target.py` / an `ArtifactSink.publish(bytes, ref)` port** — the downstream inverse of the upstream
-   `ArtifactStore.fetch` (`src/pipeguard/artifacts/`); stages/pushes, never runs a tool. `POST /api/share`
+   `ArtifactStore.fetch` (`src/bayleaf/artifacts/`); stages/pushes, never runs a tool. `POST /api/share`
    (`require_role("approver")` for external egress) → audited `ShareEvent`.
 7. **`scripts/fetch_clinvar.py` + `scripts/fetch_gnomad_panel.py` + manifests** — mirror `fetch_giab_hg002.py`
    (accessions + a fetch script; never commit raw; new git-ignored `real-clinvar`/`real-gnomad` origins).

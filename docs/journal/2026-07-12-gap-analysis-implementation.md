@@ -24,7 +24,7 @@ before landing.
    (it would falsely imply the output can be absent). Instead froze the evidence with two guards the
    compile/stub tests structurally can't give (the stub `touch`es the files): an offline stub/output
    consistency check for every catalogued tool, and a real-path acceptance test (green on real HG002 w/
-   `PIPEGUARD_BIOCONDA_BIN`; skips offline). Caveat: verified fastp 1.3.6; the catalog pins 0.23.4 — behavior
+   `BAYLEAF_BIOCONDA_BIN`; skips offline). Caveat: verified fastp 1.3.6; the catalog pins 0.23.4 — behavior
    is longstanding across fastp ≥0.20, final confirm is the live-Nextflow pass.
 
 2. **`4d6acbf` — WS-01·PR1: fail-closed gate.** Two seams that leaked PROCEED on missing data. `QC-MISSING`

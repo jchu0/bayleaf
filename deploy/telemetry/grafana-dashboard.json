@@ -22,8 +22,8 @@
       "id": 1,
       "type": "stat",
       "title": "Runs ingested",
-      "description": "pipeguard_runs_total — analysis runs the gate has recorded.",
-      "datasource": { "type": "prometheus", "uid": "pipeguard-prometheus" },
+      "description": "bayleaf_runs_total — analysis runs the gate has recorded.",
+      "datasource": { "type": "prometheus", "uid": "bayleaf-prometheus" },
       "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" }, "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } },
@@ -38,15 +38,15 @@
         "textMode": "value"
       },
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "pipeguard-prometheus" }, "editorMode": "code", "expr": "pipeguard_runs_total", "instant": true, "legendFormat": "runs", "refId": "A" }
+        { "datasource": { "type": "prometheus", "uid": "bayleaf-prometheus" }, "editorMode": "code", "expr": "bayleaf_runs_total", "instant": true, "legendFormat": "runs", "refId": "A" }
       ]
     },
     {
       "id": 2,
       "type": "stat",
       "title": "Samples processed",
-      "description": "pipeguard_samples_total — samples across all runs.",
-      "datasource": { "type": "prometheus", "uid": "pipeguard-prometheus" },
+      "description": "bayleaf_samples_total — samples across all runs.",
+      "datasource": { "type": "prometheus", "uid": "bayleaf-prometheus" },
       "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" }, "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } },
@@ -61,15 +61,15 @@
         "textMode": "value"
       },
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "pipeguard-prometheus" }, "editorMode": "code", "expr": "pipeguard_samples_total", "instant": true, "legendFormat": "samples", "refId": "A" }
+        { "datasource": { "type": "prometheus", "uid": "bayleaf-prometheus" }, "editorMode": "code", "expr": "bayleaf_samples_total", "instant": true, "legendFormat": "samples", "refId": "A" }
       ]
     },
     {
       "id": 3,
       "type": "piechart",
       "title": "Decision cards by verdict",
-      "description": "pipeguard_cards_total{verdict} — proceed / hold / rerun / escalate share. Rules decide the verdict; this only counts what they emitted.",
-      "datasource": { "type": "prometheus", "uid": "pipeguard-prometheus" },
+      "description": "bayleaf_cards_total{verdict} — proceed / hold / rerun / escalate share. Rules decide the verdict; this only counts what they emitted.",
+      "datasource": { "type": "prometheus", "uid": "bayleaf-prometheus" },
       "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
       "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
       "options": {
@@ -80,15 +80,15 @@
         "tooltip": { "mode": "single", "sort": "none" }
       },
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "pipeguard-prometheus" }, "editorMode": "code", "expr": "pipeguard_cards_total", "instant": true, "legendFormat": "{{verdict}}", "refId": "A" }
+        { "datasource": { "type": "prometheus", "uid": "bayleaf-prometheus" }, "editorMode": "code", "expr": "bayleaf_cards_total", "instant": true, "legendFormat": "{{verdict}}", "refId": "A" }
       ]
     },
     {
       "id": 4,
       "type": "barchart",
       "title": "Flagged samples by gate",
-      "description": "pipeguard_gate_flagged_samples_total{gate} — samples the preflight / qc / variant gate flagged.",
-      "datasource": { "type": "prometheus", "uid": "pipeguard-prometheus" },
+      "description": "bayleaf_gate_flagged_samples_total{gate} — samples the preflight / qc / variant gate flagged.",
+      "datasource": { "type": "prometheus", "uid": "bayleaf-prometheus" },
       "gridPos": { "h": 9, "w": 12, "x": 0, "y": 5 },
       "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisLabel": "samples flagged", "fillOpacity": 80, "lineWidth": 1 }, "unit": "short" },
@@ -105,15 +105,15 @@
         "xTickLabelRotation": 0
       },
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "pipeguard-prometheus" }, "editorMode": "code", "expr": "pipeguard_gate_flagged_samples_total", "instant": true, "legendFormat": "{{gate}}", "refId": "A" }
+        { "datasource": { "type": "prometheus", "uid": "bayleaf-prometheus" }, "editorMode": "code", "expr": "bayleaf_gate_flagged_samples_total", "instant": true, "legendFormat": "{{gate}}", "refId": "A" }
       ]
     },
     {
       "id": 5,
       "type": "timeseries",
       "title": "Cards by verdict over time",
-      "description": "pipeguard_cards_total{verdict} as a trend — how the verdict mix moves as runs land.",
-      "datasource": { "type": "prometheus", "uid": "pipeguard-prometheus" },
+      "description": "bayleaf_cards_total{verdict} as a trend — how the verdict mix moves as runs land.",
+      "datasource": { "type": "prometheus", "uid": "bayleaf-prometheus" },
       "gridPos": { "h": 9, "w": 24, "x": 0, "y": 14 },
       "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisLabel": "cards", "drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "stepInterval": "" }, "unit": "short" },
@@ -124,19 +124,19 @@
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "pipeguard-prometheus" }, "editorMode": "code", "expr": "pipeguard_cards_total", "legendFormat": "{{verdict}}", "refId": "A" }
+        { "datasource": { "type": "prometheus", "uid": "bayleaf-prometheus" }, "editorMode": "code", "expr": "bayleaf_cards_total", "legendFormat": "{{verdict}}", "refId": "A" }
       ]
     }
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["pipeguard"],
+  "tags": ["bayleaf"],
   "templating": { "list": [] },
   "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},
   "timezone": "",
-  "title": "PipeGuard — QC decision gate",
-  "uid": "pipeguard-overview",
+  "title": "bayleaf — QC decision gate",
+  "uid": "bayleaf-overview",
   "version": 1,
   "weekStart": ""
 }

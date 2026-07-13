@@ -2,13 +2,13 @@
 
 | Field | Value |
 |---|---|
-| **Focus** | Close the pipeline-fixer's structured-issue gap: pull structured issues from an actual pipeline executor's trace (not only PipeGuard's own gate findings) and feed them to the pipeline-repair agent (#2). |
+| **Focus** | Close the pipeline-fixer's structured-issue gap: pull structured issues from an actual pipeline executor's trace (not only bayleaf's own gate findings) and feed them to the pipeline-repair agent (#2). |
 | **Outcome** | New gate rule **EXEC-001**: a Nextflow/nf-core `trace.txt` is READ on the gate path; a failed task → a structured Finding → RERUN → flows to the repair agent via the existing recurring-signature rollup. Commit e79a319; **359 tests**, mypy + ruff clean; the pinned verdicts stayed byte-identical. |
 
 ## Discussion
 
 **Why, and the honest split.** The user asked whether the backend pulls structured issues *from
-the pipeline* for the fixer. Answer: **yes** for PipeGuard's own gate `Finding`s (already
+the pipeline* for the fixer. Answer: **yes** for bayleaf's own gate `Finding`s (already
 structured/cited, incl. the log-marker `PIPE-001`), **no** for an external *executor's* structured
 trace (there was no ingestion — `SourceKind.EXECUTION_TRACE` was reserved but unpopulated, and
 `PIPE-001` only grepped a free-text `pipeline.log`). This built the missing (b) piece: read a real

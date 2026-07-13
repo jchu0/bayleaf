@@ -126,4 +126,4 @@ this pass. `archive/session-1` keeps the untouched originals (local only).
 - [`CLAUDE.md`](../../CLAUDE.md) · [`DOCUMENTATION_HABITS.md`](../DOCUMENTATION_HABITS.md) · [`TABLE_OF_CONTENTS.md`](../TABLE_OF_CONTENTS.md) · [`_templates/`](../_templates/) · [`planning/tasks.md`](../planning/tasks.md).
 - [`requirements/scope-and-wishlist.md`](../requirements/scope-and-wishlist.md) · [`data/strategy.md`](../data/strategy.md).
 - [`data/qc_metrics.md`](../data/qc_metrics.md) (+ `-sources`, `-rare-disease`, `nf-core-conventions`) · [`data/schemas.md`](../data/schemas.md) · [`data/metric_registry.md`](../data/metric_registry.md).
-- [`design/frontend/frontend-design-brief.md`](../design/frontend/frontend-design-brief.md) + the `PipeGuard.html` prototype.
+- [`design/frontend/frontend-design-brief.md`](../design/frontend/frontend-design-brief.md) + the `bayleaf.html` prototype.

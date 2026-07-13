@@ -27,7 +27,7 @@ guardrail fit, simplicity, and design fidelity. Winner: a **scoped hybrid** —
 reframed to **read-only over the DECISION domain**: no endpoint mutates a verdict/finding/
 provenance event/EventLedger, and the one write (`POST /api/feedback`) is append-only product
 telemetry that is structurally off the gate — a separate module (`api/feedback.py`) that never
-imports the `pipeguard` core. Security posture baked in: `extra="forbid"` on both request
+imports the `bayleaf` core. Security posture baked in: `extra="forbid"` on both request
 models is a *structural* PII guard (a smuggled `email`/`subject_id`/server field is a hard
 422); the store path is server-fixed (no request value touches it → no traversal); records go
 through `json.dumps` (one escaped line each → no log-forging); a write `OSError` maps to a
@@ -53,8 +53,8 @@ decision-domain-untouched); ruff/mypy/tsc/oxlint clean; browser E2E of both surf
 records land in the gitignored JSONL with the right keys + server-resolved origin).
 
 **Aside — external design churn noticed.** The working tree carried uncommitted changes to
-`docs/design/frontend/` (README rewritten to "PipeGuard **Pipeline Builder** → React",
-regenerated `PipeGuard.html`/`.dc.html`/`support.js`) — the maintainer's separate "Claude
+`docs/design/frontend/` (README rewritten to "bayleaf **Pipeline Builder** → React",
+regenerated `bayleaf.html`/`.dc.html`/`support.js`) — the maintainer's separate "Claude
 design" Pipeline-Builder (wishlist #11) work. Left entirely untouched; W12 committed only its
 own 11 files.
 

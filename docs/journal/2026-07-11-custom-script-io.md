@@ -22,8 +22,8 @@ Read the branch state directly before touching any doc:
    the `truth_vcf` locator; a new `EXTRA_VOCAB_KINDS = ['truth_vcf', 'ngscheckmate']` keeps both
    KINDS in `ARTIFACT_KINDS` even with no seeded producer. `PipelineBuilder.tsx` — palette drops the
    Truth VCF tile + the "Contamination" section, adds a "File input" tile.
-   `src/pipeguard/nextflow/catalog.py` — `REFERENCE_PARAM` drops `truth_vcf`.
-   `src/pipeguard/node_author/knowledge/tool_cards.jsonl` — `source_truth_vcf` card removed,
+   `src/bayleaf/nextflow/catalog.py` — `REFERENCE_PARAM` drops `truth_vcf`.
+   `src/bayleaf/node_author/knowledge/tool_cards.jsonl` — `source_truth_vcf` card removed,
    `tool_ngscheckmate`'s `source` field citation corrected. Confirmed: **no docs were touched by
    this commit** (its own commit message says so — "Doc sweep … folded into Branch B's doc pass").
 3. **Branch B** (working-tree `git diff` + `Read` on every new/untracked file):
@@ -32,7 +32,7 @@ Read the branch state directly before touching any doc:
      agents stay metadata-only, [iv] core never executes) plus a fifth narrower guard
      (never-fabricate-a-blank-script) is the load-bearing content every other doc's summary needed
      to match precisely, not paraphrase loosely.
-   - `src/pipeguard/nextflow/compiler.py` diff — `NfNode.script`/`.container`/`.conda`,
+   - `src/bayleaf/nextflow/compiler.py` diff — `NfNode.script`/`.container`/`.conda`,
      `is_custom()`, the `is_source()` guard (`is_custom()` nodes are never sources), the
      empty-script `CompileError` check in `compile_graph`, `_render_module`'s custom-first check,
      `_render_custom`/`_custom_input_decl`.
@@ -40,7 +40,7 @@ Read the branch state directly before touching any doc:
      additively through `CompileNode`/`_to_graph` on both the stateless compile path and the W1
      approval-gated run path.
    - `api/routers/files.py` (new, untracked) — read in full: the allowlist (`_browse_roots()`,
-     `PIPEGUARD_BROWSE_ROOTS`), the traversal-hardening (pre-check reject + `resolve()`-and-assert
+     `BAYLEAF_BROWSE_ROOTS`), the traversal-hardening (pre-check reject + `resolve()`-and-assert
      within root), kind inference, RBAC (`viewer`+).
    - `frontend/src/components/FileBrowser.tsx` (new), `BuilderModals.tsx`/`BuilderShared.tsx`/
      `PipelineBuilder.tsx` diffs — `CustomScriptInspector`, `makeCustomNode`, `toCompileNode`/
@@ -94,7 +94,7 @@ paragraph, since Branch B's custom-script card is itself a direct, on-topic addi
 Builder wishlist item, not just a corpus-count footnote).
 
 Not touched (out of scope by the operating contract): `docs/design/frontend/pipeline-builder-brief.md`,
-`frontend-design-brief.md`, `handoffs/`, `PipeGuard.html`, `source/` — these are the maintainer's
+`frontend-design-brief.md`, `handoffs/`, `bayleaf.html`, `source/` — these are the maintainer's
 design deliverables (briefs/handoffs/source), explicitly off-limits unless a task is about them.
 Also not touched: `reference/domain-primer.md`, `reference/glossary.md`, `data/qc_metrics.md`,
 `data/licensing.md`, `data/nf-core-conventions.md` — all mention NGSCheckMate, but as the REAL
@@ -200,8 +200,8 @@ directly-user-approved session can apply it verbatim if they choose.
 - `CLAUDE.md`'s "Current code map" needs the Branch A+B paragraph — drafted, not applied (see
   Discussion above); needs the maintainer or a directly-user-approved session to add it.
 - No runtime sandbox exists yet for an operator-authored custom script (ADR-0020's own Assumptions
-  section names this explicitly — deployment-side sandboxing, not a PipeGuard-built one).
-- `PIPEGUARD_BROWSE_ROOTS` defaults to `data/` only; a production deployment pointing it at a
+  section names this explicitly — deployment-side sandboxing, not a bayleaf-built one).
+- `BAYLEAF_BROWSE_ROOTS` defaults to `data/` only; a production deployment pointing it at a
   genuinely large data host has not been exercised (`test_files_api.py` only sandboxes small
   `tmp_path` trees + the repo's own small `data/`).
 - The Builder's `CustomScriptInspector`/`FileBrowser.tsx` UI has no dedicated frontend test in this

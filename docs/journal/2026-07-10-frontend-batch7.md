@@ -15,7 +15,7 @@
 
 | Field | Value |
 |---|---|
-| **Focus** | Doc-keeper SWEEP for four maintainer-feedback frontend commits landed on `main`: a theme revert + themeable left nav (GA1/GA2), a Pipeline-Builder canvas regression fix + minimap viewport tracking (PB3), Monitoring/Review-queue polish (M7/RQ1), and a brand-new Inbox notification/triage workspace (GA3). Explicitly out of scope: ADR-0018, `docs/design/variant-interpretation.md`, and any `src/pipeguard/`/`api/` files — Wave 6 owns those. |
+| **Focus** | Doc-keeper SWEEP for four maintainer-feedback frontend commits landed on `main`: a theme revert + themeable left nav (GA1/GA2), a Pipeline-Builder canvas regression fix + minimap viewport tracking (PB3), Monitoring/Review-queue polish (M7/RQ1), and a brand-new Inbox notification/triage workspace (GA3). Explicitly out of scope: ADR-0018, `docs/design/variant-interpretation.md`, and any `src/bayleaf/`/`api/` files — Wave 6 owns those. |
 | **Participants** | maintainer (UI feedback); doc-keeper subagent |
 | **Outcome** | All four commits' owed docs updated in one pass: `CLAUDE.md` code map (new "Wave 7" paragraph), `docs/planning/tasks.md` (T-105–T-108), `docs/design/architecture.md` (new paragraph + screen-count fix + Related), `docs/design/frontend/README.md` (§4/§5.5/§5.8/§5.11-new/§6/§9/§11), `docs/requirements/functional.md` (REQ-F-077 + REQ-F-073 amendment), `docs/requirements/scope-and-wishlist.md` (item 5 amendment + screen-count fix). No backend/core files touched (verified below). |
 
@@ -65,7 +65,7 @@ the "ground every claim in code" rule:
    from `api.listTickets({status:'open'})` + `{status:'in_review'})` — the already-off-gate
    review-queue endpoint, no new backend route; (b) the operator's overlay (read/flag/priority/
    column/due/note) and self-authored reminders persist to two `localStorage` keys **scoped per
-   `actor.id`** (`pipeguard.inbox.overlay.<id>` / `pipeguard.inbox.self.<id>`), re-read whenever
+   `actor.id`** (`bayleaf.inbox.overlay.<id>` / `bayleaf.inbox.self.<id>`), re-read whenever
    `actorId` changes — i.e. Admin's "Act as" (`RoleContext.setActor`) genuinely swaps to that
    person's board, not a shared one; (c) `unreadCount` excludes the `done` column (the kanban
    archive) and drives both the Sidebar "Inbox" badge and the top-bar bell badge from the same
@@ -111,7 +111,7 @@ these four commits:
   own correction of Batch 7's T-072 claim: fix superseded claims in place, don't just contradict
   them from a later paragraph).
 - No `data/schemas.md`, `provenance.md`, `metric_registry.md`, `qc_metrics.md`, or ADR trigger
-  fired — confirmed no `src/pipeguard/`/`api/` file appears in any of the four diffs
+  fired — confirmed no `src/bayleaf/`/`api/` file appears in any of the four diffs
   (`git show --stat` on each, reproduced above; also `git diff --stat b4c3672 d832553 -- src/
   api/ tests/` is empty).
 - `quality/risks.md` — considered and **waived** for Inbox's per-operator `localStorage` state:

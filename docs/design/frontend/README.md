@@ -1,11 +1,11 @@
-# PipeGuard — Frontend Design Handoff (complete)
+# bayleaf — Frontend Design Handoff (complete)
 
-A single, current package for implementing the PipeGuard frontend in React. This supersedes
+A single, current package for implementing the bayleaf frontend in React. This supersedes
 all earlier handoffs — the prototype here reflects the latest design across every screen.
 
 ---
 
-## 1. What PipeGuard is
+## 1. What bayleaf is
 A provenance & QC **decision gate** for germline/somatic sequencing runs. Deterministic
 rules compute a per-sample verdict — **proceed · hold · rerun · escalate** — across three
 gate stages (**preflight · qc · variant**). Agents *advise* but never decide; every artifact
@@ -13,10 +13,10 @@ is traceable to its origin. The product's spine: **rules decide, AI advises, not
 critical path can launder a verdict.**
 
 ## 2. How to use this package
-- **`PipeGuard.html`** — the complete, self-contained clickable prototype. Open in any
+- **`bayleaf.html`** — the complete, self-contained clickable prototype. Open in any
   browser; works offline. This is the **design reference** — the source of truth for layout,
   color, type, spacing, and interaction.
-- **`source/PipeGuard.dc.html`** — annotated prototype source. Its `<script>` logic class
+- **`source/bayleaf.dc.html`** — annotated prototype source. Its `<script>` logic class
   holds all mock data, the live-YAML generator, and every handler referenced below. Read it
   to see exact values. `source/support.js` is the prototype runtime — **reference only, do
   not port.**
@@ -29,7 +29,7 @@ library and the token source of truth (`frontend/src/index.css` `@theme`,
 
 ## 3. Fidelity
 **High-fidelity.** Final layout, tokens, and interactions are intended as-shown. Where a
-value isn't stated here, read it from `source/PipeGuard.dc.html`.
+value isn't stated here, read it from `source/bayleaf.dc.html`.
 
 ---
 
@@ -37,7 +37,7 @@ value isn't stated here, read it from `source/PipeGuard.dc.html`.
 - **Login gate (Shipped 2026-07-09→10, T-081, commit `0f7e85f`).** The whole app now sits
   behind `screens/Login.tsx`: email/password (+ show/hide), a one-click demo-account picker
   (`l.santos` viewer / `a.rivera` reviewer / `m.chen` approver / `s.ops`/`admin@lab.org` admin,
-  shared password `pipeguard`), a labelled CAPTCHA placeholder that gates submit, a "Forgot
+  shared password `bayleaf`), a labelled CAPTCHA placeholder that gates submit, a "Forgot
   password?" stub, and a security-posture footer naming every production seam NOT built (real
   OAuth/OIDC, server-side password hashing, an httpOnly session cookie, real CAPTCHA, signed
   reset links, TLS). `App.tsx`'s `RequireAuth` guard redirects any unauthenticated route to
@@ -145,7 +145,7 @@ The pipeline's front door — registers a run + its samples **before processing*
   (`scripts/run_giab_pipeline.py`) as a background subprocess; the UI polls
   `GET /api/runs/{id}/intake-status` and navigates to Decision cards on completion. This demo
   build only has real reads on disk for `HG002`; other samples are honestly reported as
-  *skipped*, never fabricated. **Compose ≠ execute still holds at the core** — `src/pipeguard/`
+  *skipped*, never fabricated. **Compose ≠ execute still holds at the core** — `src/bayleaf/`
   itself never runs a tool; only the API layer triggers the external driver (see §8). A
   BaseSpace connector remains wishlist (T-057).
 - **Real file parsing, closes the "visual mock" limitation (2026-07-10, Wave 4, T-101, commit
@@ -502,7 +502,7 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
   `AgentComposer.tsx` is wired to the REAL `POST .../ask` endpoint (WS-07 Q2) — no hardcoded
   reply string; the offline stub renders a genuine retrieval-grounded answer. The now-dead
   `AgentSourceToggle.tsx` is deleted in favor of a passive "Live agent: not armed" status (arming
-  is env-side, `PIPEGUARD_TRIAGE_AGENT=claude` — the UI can only report it).
+  is env-side, `BAYLEAF_TRIAGE_AGENT=claude` — the UI can only report it).
 - **IA-duplication fix (Shipped 2026-07-13, T-163, commits `a499691`, `f230f7e`).** The
   run-independent route above rendered through the SAME component the per-run route uses, so the
   two launcher tiles showed on **both** — the maintainer's own report: "system agents and agent
@@ -606,9 +606,9 @@ authoring.
   now built, 2026-07-10, T-046**; this row + §6's static modal preview below predate that build
   and were not re-verified by it — see [design/node-authoring-agent.md](../node-authoring-agent.md)
   "What actually shipped"), and a **new metrics-expansion agent** row (ST2 — proposes new QC metrics to track +
-  wiring; labelled **phase-2**, no backend agent or `PIPEGUARD_*` env var exists for it yet — this
+  wiring; labelled **phase-2**, no backend agent or `BAYLEAF_*` env var exists for it yet — this
   is a UI-only placeholder for a proposed idea, **not** a shipped roster addition; see
-  [design/agents.md](../agents.md)). Each row shows its real `PIPEGUARD_*_MODEL` env var + model/
+  [design/agents.md](../agents.md)). Each row shows its real `BAYLEAF_*_MODEL` env var + model/
   cost + a Stub·$0/Live status; a pencil opens a staged draft (model + live toggle) with explicit
   Save/Cancel — nothing applies until Save (verified: Cancel discards, no leak), one row edits at
   a time. A **"New agent"** button crosslinks to `/builder` (the node-author agent's home) — the
@@ -1023,7 +1023,7 @@ the node) · **Diff** · **Dry run** (locator resolution → matched / ambiguous
 resolves paths only, reads no bytes). **Emit / Copy / Download** produce the real
 `run_layout.yaml`. **Emit writes nothing to disk (corrected 2026-07-13, T-166, commit
 `b03d1fa`, honesty finding J3).** The Emit success panel used to claim it "Wrote
-`src/pipeguard/layout/run_layout.yaml`," but `onEmit` only snapshots the composed YAML into
+`src/bayleaf/layout/run_layout.yaml`," but `onEmit` only snapshots the composed YAML into
 React state (a `console.log`, no filesystem/API call) — the copy now reads "Snapshotted the
 config as `run_layout.yaml` — Emit composes only: nothing is written to disk and no tool runs.
 Use Copy / Download to save it."
@@ -1045,7 +1045,7 @@ Use Copy / Download to save it."
   pickers (e.g. the Run hand-off modal below) as future consumers.
 
 **Run.** A **hand-off** modal (composes ≠ executes): Emit `run_layout.yaml` → Nextflow/bioconda
-runs (outside PipeGuard) → deterministic ingest writes `run/` → `run_gate` gates + records the
+runs (outside bayleaf) → deterministic ingest writes `run/` → `run_gate` gates + records the
 ledger → Decision cards. Primary action hands off to the engine; the UI never runs tools.
 **Shipped 2026-07-10 (T-069, commit `adfd7aa`):** the modal now renders the REAL composed
 `run_layout.yaml` the builder emits (`yamlFor`, labelled by profile + locator count), and its
@@ -1057,7 +1057,7 @@ off to Nextflow" button — no network call, compose ≠ execute unchanged.
 originally written below (`still a static preview, unwired to any backend`, `retrieval over a
 fixed 11-card curated corpus`), but **both of those framings are now stale — read this box first.**
 What's new (2026-07-10, T-046): the agent's Python core is now built
-(`src/pipeguard/node_author/`), and it is a **different, narrower mechanism** than this modal
+(`src/bayleaf/node_author/`), and it is a **different, narrower mechanism** than this modal
 originally assumed — retrieval over a curated corpus from a natural-language request, not a
 doc-drop parser. **Superseded 2026-07-11 (W2, T-127):** a read-only `GET /api/builder/node-proposal`
 endpoint now exists and `AuthorToolNodeModal` renders the REAL proposal — it is no longer a static,
@@ -1144,11 +1144,11 @@ connect + `GET /basespace/runs` + import.
 
 ## 8. Invariants (never cross)
 Rules decide / AI advises · **agents off the critical path** (port-less; the triage chat and
-node-author agent never change a verdict) · **compose ≠ execute holds at the core**: `src/pipeguard/`
+node-author agent never change a verdict) · **compose ≠ execute holds at the core**: `src/bayleaf/`
 never runs a tool; Submit now hands off to a real **execution boundary**
 (`POST /api/runs` → `api/routers/intake.py` triggers `scripts/run_giab_pipeline.py` as a
 background subprocess, T-057, 2026-07-09) and Builder emits `run_layout.yaml` for a hand-off —
-the API layer may trigger an external driver, but only the driver (never PipeGuard itself)
+the API layer may trigger an external driver, but only the driver (never bayleaf itself)
 runs a genomics tool · the gate reads the frozen five
 `run/` CSVs · **origin never relabels up** (stamped at ingest, never authored — incl.
 provenance links, locators, reference cards) · reuse the existing event vocabulary · **no
@@ -1156,7 +1156,7 @@ confidence meter** · no clinical/diagnostic claims.
 
 ## 9. Tokens
 Reuse `frontend/src/index.css` `@theme` + `frontend/src/verdict.ts`. Key families (exact hexes
-in `source/PipeGuard.dc.html` `:root` and the app's theme): verdict 4-shade
+in `source/bayleaf.dc.html` `:root` and the app's theme): verdict 4-shade
 (proceed/hold/rerun/escalate, each dot/bg/bd/fg); gate accents **preflight `#1f6feb` · qc
 `#1f5fd0` · variant `#0e8f7e`**; severity (critical/warn/info); accent `#1f5fd0`; neutrals
 `--bg/--surface/--surface-2/--surface-3/--border/--border-strong/--text/--text-2/--text-3`.
@@ -1191,8 +1191,8 @@ control (§5.4), consolidating what `DecisionVerdictBar` + a legend + an attenti
 the tally display and the filter.
 
 ## 10. Files
-- `PipeGuard.html` — complete self-contained prototype (open in a browser).
-- `source/PipeGuard.dc.html` — annotated source (all data + handlers).
+- `bayleaf.html` — complete self-contained prototype (open in a browser).
+- `source/bayleaf.dc.html` — annotated source (all data + handlers).
 - `source/support.js` — prototype runtime (reference only; do not port).
 - `briefs/review-to-design-brief.md` — authoritative product brief.
 
@@ -1263,8 +1263,8 @@ governance; **not** "any approver," which was the original, now-corrected framin
 4. **System** — REAL reads of `GET /api/health` + the runbook's gate count + the metric-registry
    version/gated-count, labelled illustrative-not-clinical. **Shipped 2026-07-10 (T-094, commit
    `7c56564`, "A3/A4"):** gained an **Artifact-store** stat card (`local` · the
-   `PIPEGUARD_ARTIFACT_STORE` s3 seam) and an **Observability** section linking the read-API's
-   `/metrics` exporter, Prometheus (`:9090`), and the Grafana "PipeGuard — QC decision gate"
+   `BAYLEAF_ARTIFACT_STORE` s3 seam) and an **Observability** section linking the read-API's
+   `/metrics` exporter, Prometheus (`:9090`), and the Grafana "bayleaf — QC decision gate"
    dashboard (`:3000`, built T-036/T-079) as off-demo-path links (Grafana blocks framing; the
    telemetry stack is off the offline demo path), with a note on bringing up the compose stack.
    Users & roles also gained a per-user **password/email-reset** action — a labelled production

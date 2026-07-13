@@ -24,10 +24,10 @@ from pathlib import Path
 
 import pytest
 
-from pipeguard import run_gate
-from pipeguard.ingest.nfcore import ingest_results_dir
-from pipeguard.models import RunArtifacts, Sample, SampleSheetEntry, Severity, Verdict
-from pipeguard.synthesis import StubSynthesizer
+from bayleaf import run_gate
+from bayleaf.ingest.nfcore import ingest_results_dir
+from bayleaf.models import RunArtifacts, Sample, SampleSheetEntry, Severity, Verdict
+from bayleaf.synthesis import StubSynthesizer
 
 _FIX = Path(__file__).parent / "fixtures" / "giab_real"
 

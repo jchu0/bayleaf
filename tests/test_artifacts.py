@@ -12,14 +12,14 @@ fake client — never a real bucket.
 
 from pathlib import Path
 
-from pipeguard import run_gate_from_dir
-from pipeguard.artifacts import (
+from bayleaf import run_gate_from_dir
+from bayleaf.artifacts import (
     ArtifactStore,
     LocalArtifactStore,
     get_artifact_store,
     run_gate_from_store,
 )
-from pipeguard.synthesis import StubSynthesizer
+from bayleaf.synthesis import StubSynthesizer
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
 
@@ -77,7 +77,7 @@ def test_run_gate_from_store_degrades_on_missing_run(tmp_path):
 
 
 def test_get_artifact_store_defaults_to_local(monkeypatch):
-    monkeypatch.delenv("PIPEGUARD_ARTIFACT_STORE", raising=False)
+    monkeypatch.delenv("BAYLEAF_ARTIFACT_STORE", raising=False)
     store = get_artifact_store()
     assert isinstance(store, LocalArtifactStore)
     assert store.name == "local"

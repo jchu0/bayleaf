@@ -11,4 +11,4 @@ end-to-end. It is NOT real data and implies nothing about a real individual:
   `RouteToHumanPolicy` with `Pathogenic,Likely_pathogenic` **for this run only** — every other run
   stays disarmed (route-to-human is off by default in the core).
 - QC is deliberately clean, so the sample's **only** escalation is the route-to-human hold — the rule
-  routes it to a qualified reviewer; PipeGuard authors no pathogenicity of its own (ADR-0004).
+  routes it to a qualified reviewer; bayleaf authors no pathogenicity of its own (ADR-0004).

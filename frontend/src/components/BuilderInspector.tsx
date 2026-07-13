@@ -552,7 +552,7 @@ function ToolView({
             </div>
             <p className="text-[10.5px] leading-relaxed text-text-3">
               Snap-in observes this node's checkpoint output. It has <strong>no data ports</strong> — it can never set, route, or delay a verdict.
-              Flip to <span className="font-mono">claude</span> via <span className="font-mono">PIPEGUARD_TRIAGE_AGENT</span>; any error degrades to the stub.
+              Flip to <span className="font-mono">claude</span> via <span className="font-mono">BAYLEAF_TRIAGE_AGENT</span>; any error degrades to the stub.
             </p>
           </div>
         )}

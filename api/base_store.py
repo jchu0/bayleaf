@@ -48,7 +48,7 @@ class JsonlStore(Generic[ModelT]):
     """Generic append/rewrite JSONL document store — the single home for the JSONL boilerplate.
 
     A concrete store subclasses this and provides:
-      - :meth:`_resolve_path` — its ``PIPEGUARD_*_PATH`` sink (resolved at call-time so tests
+      - :meth:`_resolve_path` — its ``BAYLEAF_*_PATH`` sink (resolved at call-time so tests
         monkeypatch cleanly);
       - :meth:`_encode` / :meth:`_decode` — one record <-> one JSONL line;
       - :attr:`_lock` — its MODULE-level ``_WRITE_LOCK`` (so the JSONL / SQLite / Postgres adapters

@@ -42,21 +42,21 @@ requirement for a provenance tool.
 |---|---|
 | `real-giab` | Real GIAB HG002 data (NIST) plus its gold-standard truth VCF / high-confidence BED |
 | `synthetic` | Programmatically perturbed **from real data** to create labeled failure modes |
-| `contrived` | Invented values, no real provenance — hand-authored *or* machine-generated (realistic formats, **not** derived from real data). The distinguishing axis from `synthetic` is real-data derivation, not authoring method: the [`pipeguard.synthetic`](../../src/pipeguard/synthetic/) generator emits `contrived` runs because its values are invented, not perturbed from a real sample. |
+| `contrived` | Invented values, no real provenance — hand-authored *or* machine-generated (realistic formats, **not** derived from real data). The distinguishing axis from `synthetic` is real-data derivation, not authoring method: the [`bayleaf.synthetic`](../../src/bayleaf/synthetic/) generator emits `contrived` runs because its values are invented, not perturbed from a real sample. |
 
 ## Sources
 
 1. **GIAB HG002** (NIST) — real short-read Illumina data + truth VCF + high-confidence BED. Open license.
 2. **gnomAD** — population allele frequencies. **ClinVar** — clinical significance (public domain). Used for annotation, not gating claims.
-3. **Failure-mode generator** ([`pipeguard.synthetic`](../../src/pipeguard/synthetic/)) —
+3. **Failure-mode generator** ([`bayleaf.synthetic`](../../src/bayleaf/synthetic/)) —
    emits labeled failure-mode run directories (sample swap, duplicate/missing barcodes, low
    reads-PF, low Q30, coverage dropout, low-support variant, contamination, step failure). It
    is **`contrived`, not `synthetic`**: values are invented (realistic Illumina shapes), *not*
    perturbed from a real sample. Each run self-declares that origin **end-to-end** — both
-   in-band (a `pipeguard-synthetic` line in `pipeline.log`) and out-of-band (an `origin`
+   in-band (a `bayleaf-synthetic` line in `pipeline.log`) and out-of-band (an `origin`
    marker file), both derived from one `ORIGIN_LABEL="contrived"` constant so they can never
    disagree — and is reproducible under `data/`. A thin scale driver
-   ([`pipeguard.synthetic.scale`](../../src/pipeguard/synthetic/scale.py)) runs the same
+   ([`bayleaf.synthetic.scale`](../../src/bayleaf/synthetic/scale.py)) runs the same
    generator at volume (one large N-sample run + many-run batches) without adding any rule
    logic or new failure modes. Perturbing real GIAB bundles into `synthetic` failure modes
    remains the aspirational upgrade (see origin labels below).
@@ -74,7 +74,7 @@ Per-track status (each artifact labeled by origin):
 1. **`contrived` — done, and now at scale.** `data/mock_run_01/` is hand-authored (realistic
    Illumina formats, invented values, two planted issues: S4 barcode swap, S5 borderline QC),
    labeled in [`data/README.md`](../../data/README.md). The
-   [`pipeguard.synthetic`](../../src/pipeguard/synthetic/) generator also emits `contrived`
+   [`bayleaf.synthetic`](../../src/bayleaf/synthetic/) generator also emits `contrived`
    failure-mode runs programmatically (`mock_run_02/03`; Sources 3) and, via its scale driver,
    a committed 30-sample showcase run (`mock_run_scale_30/`, spanning all four verdicts) plus
    on-demand bulk volume regenerated into a git-ignored `data/synthetic_bulk/` (never
@@ -88,7 +88,7 @@ Per-track status (each artifact labeled by origin):
    **honestly still `contrived`**: only the sample IDs are GIAB-flavored (HG00x / NA2xxxx) and
    the `RunSpec.platform` field is rotated across four real instrument names (NovaSeq X /
    NextSeq 2000 / NovaSeq 6000 / MiSeq) to exercise the platform facet/search; the run *data*
-   is invented, exactly like every other `pipeguard.synthetic` output. It never touches, and is
+   is invented, exactly like every other `bayleaf.synthetic` output. It never touches, and is
    named to be visually distinct from, the genuinely-fetched `real-giab` run below.
 2. **`real-giab` — two producers now, both validated end-to-end.** The GIAB HG002 fetch script
    ([`scripts/fetch_giab_hg002.py`](../../scripts/fetch_giab_hg002.py)) runs end-to-end on a

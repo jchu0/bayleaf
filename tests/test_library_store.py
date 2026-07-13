@@ -45,8 +45,8 @@ def _entry(
 
 
 def _use_jsonl(monkeypatch: Any, tmp_path: Path) -> None:
-    monkeypatch.delenv("PIPEGUARD_LIBRARY_STORE", raising=False)
-    monkeypatch.setenv("PIPEGUARD_LIBRARY_PATH", str(tmp_path / "library_entries.jsonl"))
+    monkeypatch.delenv("BAYLEAF_LIBRARY_STORE", raising=False)
+    monkeypatch.setenv("BAYLEAF_LIBRARY_PATH", str(tmp_path / "library_entries.jsonl"))
 
 
 def test_jsonl_is_the_default_and_round_trips(monkeypatch: Any, tmp_path: Path) -> None:
@@ -111,9 +111,9 @@ def test_sqlite_reappend_of_same_id_is_idempotent(tmp_path: Path) -> None:
 
 def test_sqlite_degrades_to_jsonl_on_unwritable_path(monkeypatch: Any, tmp_path: Path) -> None:
     # =sqlite pointed at a DB under a nonexistent dir must NOT crash accept — it degrades to JSONL.
-    monkeypatch.setenv("PIPEGUARD_LIBRARY_STORE", "sqlite")
-    monkeypatch.setenv("PIPEGUARD_LIBRARY_DB", str(tmp_path / "no" / "such" / "dir" / "x.sqlite"))
-    monkeypatch.setenv("PIPEGUARD_LIBRARY_PATH", str(tmp_path / "library_entries.jsonl"))
+    monkeypatch.setenv("BAYLEAF_LIBRARY_STORE", "sqlite")
+    monkeypatch.setenv("BAYLEAF_LIBRARY_DB", str(tmp_path / "no" / "such" / "dir" / "x.sqlite"))
+    monkeypatch.setenv("BAYLEAF_LIBRARY_PATH", str(tmp_path / "library_entries.jsonl"))
     store = get_library_store()
     assert isinstance(store, JsonlLibraryStore)  # degraded to the file
     store.add(_entry("lib1", "fastp", n=1))  # still writes, via the fallback
