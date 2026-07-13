@@ -327,9 +327,12 @@ def _summary_prose(
     if not runs:
         return "No runs to archive."
     verdicts = ", ".join(f"{v}={verdict_counts[v]}" for v in _VERDICT_ORDER if verdict_counts[v])
-    top_sig = signatures[0]
+    # A clean run (or index) can have no recurring signatures; index [0] must stay guarded,
+    # not evaluated eagerly — a released run with 0 attention otherwise 500s the digest.
     sig_note = (
-        f" Top recurring signature: {top_sig.title} ({top_sig.count}x)." if signatures else ""
+        f" Top recurring signature: {signatures[0].title} ({signatures[0].count}x)."
+        if signatures
+        else ""
     )
     if scope == "run":
         run = runs[0]
