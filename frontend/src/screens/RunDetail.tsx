@@ -25,12 +25,12 @@ import type {
   CheckCoverage,
   QcReportLink,
   RunbookPolicy,
-  RunDetail as RunDetailData,
   Verdict,
 } from '../types'
 import { GATE_DOT, GATE_TAG, VERDICT_ORDER, governingGate } from '../verdict'
 import { usePrefs } from '../context/PrefsContext'
 import { useAccess } from '../context/AccessContext'
+import { useRun } from '../hooks/useRun'
 
 type Density = 'split' | 'brief' | 'dense'
 type CardFilter = Verdict | 'all' | 'attention'
@@ -48,11 +48,12 @@ const GATE_SEQUENCE: Gate[] = ['preflight', 'qc', 'variant']
 export function RunDetail() {
   const { runId = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [detail, setDetail] = useState<RunDetailData | null>(null)
+  // Run detail + error come from the shared useRun cache (UX-DUP #2) — RunDetail, AgentTriage, and
+  // Provenance no longer each fetch this heavy payload. `refresh` re-fetches after a release/retry.
+  const { detail, error, refresh } = useRun(runId)
   const [readouts, setReadouts] = useState<ReadoutState>({})
   // Run-independent QC policy, backing the "QC gate ran but nothing measured" placeholder (S3).
   const [runbook, setRunbook] = useState<RunbookPolicy | null>(null)
-  const [error, setError] = useState<string | null>(null)
   // Density is a saved user preference (persists across runs + refresh); it is now authored ONLY in
   // user Settings / the profile dialog (UIC-8 removed the per-page Layout control), so this screen
   // reads it but never sets it — default stays 'split' via PrefsContext.
@@ -60,7 +61,6 @@ export function RunDetail() {
   // canSee gates inline cross-links (queue, provenance) so a restricted actor is never invited into
   // a RequirePage-gated dead-end — mirrors how the nav hides those pages (view-gate, not authz).
   const { canSee } = useAccess()
-  const [reload, setReload] = useState(0)
   // A released run short-circuits to the released panel and hides its cards. This latch lets the
   // operator override that terminal-state gate to inspect the per-sample cards/provenance anyway.
   const [inspectReleased, setInspectReleased] = useState(false)
@@ -73,35 +73,32 @@ export function RunDetail() {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState<PerPage>('25')
 
+  // Reset the per-card open/expand overrides + readouts whenever the run changes (the detail itself
+  // is supplied by useRun; this effect no longer fetches it).
   useEffect(() => {
     setOverride({})
     setAllState(null)
     setReadouts({})
-    setDetail(null)
-    setError(null)
+  }, [runId])
+
+  // Fan out each card's QC readout once the (cached or freshly fetched) detail arrives — the hero
+  // table + honest header chips come from this api projection; a failure degrades one card, never
+  // the screen. Skips running (no final cards) / released (cards hidden) runs. Keyed on `detail` so
+  // it re-runs after a refresh() re-fetch, and on runId so a stale run's readouts never land.
+  useEffect(() => {
+    if (!detail) return
+    if (detail.summary.status === 'running' || detail.summary.status === 'released') return
     let cancelled = false
-    api
-      .run(runId)
-      .then((d) => {
-        if (cancelled) return
-        setDetail(d)
-        // Running (no final cards) / released (cards hidden) runs don't render cards — skip the
-        // readout fan-out for them.
-        if (d.summary.status === 'running' || d.summary.status === 'released') return
-        // Fetch each card's QC readout independently — the hero table + honest header chips come
-        // from the api projection; a failure degrades one card, never the screen.
-        for (const c of d.cards) {
-          api
-            .qcReadout(runId, c.sample_id)
-            .then((rd) => !cancelled && setReadouts((m) => ({ ...m, [c.sample_id]: rd })))
-            .catch(() => !cancelled && setReadouts((m) => ({ ...m, [c.sample_id]: 'error' })))
-        }
-      })
-      .catch((e) => !cancelled && setError(String(e)))
+    for (const c of detail.cards) {
+      api
+        .qcReadout(runId, c.sample_id)
+        .then((rd) => !cancelled && setReadouts((m) => ({ ...m, [c.sample_id]: rd })))
+        .catch(() => !cancelled && setReadouts((m) => ({ ...m, [c.sample_id]: 'error' })))
+    }
     return () => {
       cancelled = true
     }
-  }, [runId, reload])
+  }, [detail, runId])
 
   // A released run hides its cards, so the main effect never fetches their QC readouts. When the
   // operator opts to inspect anyway (inspectReleased), fan out the readout fetch on demand so the
@@ -202,7 +199,7 @@ export function RunDetail() {
   }
 
   function renderBody() {
-    if (error) return <ErrorBox message={error} onRetry={() => setReload((r) => r + 1)} />
+    if (error) return <ErrorBox message={error} onRetry={() => refresh()} />
     if (!detail) return <DecisionLoading />
     if (detail.summary.status === 'running') return <DecisionLoading />
     if (detail.summary.status === 'released' && !inspectReleased) {
@@ -277,7 +274,7 @@ export function RunDetail() {
       <>
         {viewTabs()}
 
-        {synthesisError && <DecisionSynthesisError onRetry={() => setReload((r) => r + 1)} />}
+        {synthesisError && <DecisionSynthesisError onRetry={() => refresh()} />}
 
         <DecisionVerdictBar counts={counts} />
 

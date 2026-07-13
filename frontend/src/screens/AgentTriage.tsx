@@ -10,7 +10,8 @@ import { AgentComposer } from '../components/AgentComposer'
 import { AgentSubjectCard } from '../components/AgentSubjectCard'
 import { ArchivistModal, PipelineRepairModal } from '../components/BuilderModals'
 import { GATE_DOT, GATE_LABEL, VERDICT_DOT, VERDICT_LABEL, governingGate } from '../verdict'
-import type { RunDetail, TriageNote } from '../types'
+import { useRun } from '../hooks/useRun'
+import type { TriageNote } from '../types'
 
 const VERDICT_RANK: Record<string, number> = { escalate: 0, rerun: 1, hold: 2, proceed: 3 }
 
@@ -21,8 +22,7 @@ export function AgentTriage() {
   // per-sample triage). Split the content so the two nav items aren't near-duplicate pages.
   const isSystemView = !runId
   const [params] = useSearchParams()
-  const [detail, setDetail] = useState<RunDetail | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const { detail, error } = useRun(runId)
   const [picked, setPicked] = useState<string | null>(null)
   const [note, setNote] = useState<TriageNote | null>(null)
   const [noteState, setNoteState] = useState<'idle' | 'loading' | 'ready' | 'none'>('idle')
@@ -32,15 +32,11 @@ export function AgentTriage() {
   const [repairOpen, setRepairOpen] = useState(false)
   const [archivistOpen, setArchivistOpen] = useState(false)
 
+  // Reset the triage-specific UI when the run changes; detail/error now come from the shared useRun
+  // cache (the run-independent /agents route has no runId → the org agents render, triage prompts).
   useEffect(() => {
-    setDetail(null)
     setPicked(null)
     setPage(1)
-    setError(null)
-    // No run in context (the run-independent /agents route): the org agents below still render;
-    // only the per-run triage section shows a prompt to open a run.
-    if (!runId) return
-    api.run(runId).then(setDetail).catch((e) => setError(String(e)))
   }, [runId])
 
   const flagged = useMemo(
