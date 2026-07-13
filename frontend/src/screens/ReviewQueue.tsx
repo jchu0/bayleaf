@@ -1081,7 +1081,13 @@ function TicketCard({
         <div className="flex items-start gap-2.5 border-t border-line bg-proceed-bg px-4 py-3">
           <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-proceed" />
           <p className="flex-1 text-[12.5px] leading-relaxed text-proceed-fg">
-            <strong>Resolved by {ui.resolvedBy ?? 'a.rivera'}.</strong> {resolutionNote(verdict)}
+            <strong>
+              Resolved by{' '}
+              {/* Never fabricate the resolver: show a muted not-captured value, not a real user
+                  name, when the resolve action carried no actor (data-handling: missing = signal). */}
+              {ui.resolvedBy ?? <span className="font-normal text-text-3">unknown</span>}.
+            </strong>{' '}
+            {resolutionNote(verdict)}
           </p>
           {assignee && (
             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-proceed-bd bg-card px-2.5 py-1.5 text-[12px] text-text-2">
