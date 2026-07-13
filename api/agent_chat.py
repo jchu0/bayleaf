@@ -57,10 +57,17 @@ _ASK_MAX_TOKENS = 2048  # free-text answers run long; a small cap silently trunc
 def _repair_grounding(
     question: str, context_refs: dict[str, Any]
 ) -> tuple[str, list[ChatCitation]]:
-    """Retrieve remediation-corpus entries for the question — pipeline-repair's real corpus."""
-    from bayleaf.pipeline_repair.retrieval import RemediationRetriever
+    """Retrieve over pipeline-repair's combined corpora: remediation templates + the bayleaf-system
+    & tool docs (P3 §2), so the agent grounds in the systems involved and their limits, not just
+    fix templates."""
+    from bayleaf.pipeline_repair.retrieval import (
+        RemediationRetriever,
+        load_remediation_corpus,
+        load_system_corpus,
+    )
 
-    hits = RemediationRetriever.from_default_corpus().retrieve(question, top_k=3)
+    retriever = RemediationRetriever((*load_remediation_corpus(), *load_system_corpus()))
+    hits = retriever.retrieve(question, top_k=4)
     citations = [
         ChatCitation(kind="knowledge", ref=h.entry.id, title=h.entry.title, score=h.score)
         for h in hits
