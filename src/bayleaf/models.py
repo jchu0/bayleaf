@@ -544,6 +544,13 @@ class RunArtifacts(BaseModel):
     platform: str | None = None
     run_date: str | None = None
     run_name: str | None = None
+    # Per-run POLICY: metric-registry source modules the operator DECLARED ABSENT for this run (e.g.
+    # ``{"sav_interop"}`` for a FASTQ-start run with no upstream Illumina/SAV data). The gate WAIVES
+    # those thresholds — an absent value emits an INFO "not examined — declared absent" note instead
+    # of the NA HOLD (runbook.Runbook.waive_source_classes → rules._evaluate_metric). Empty = the
+    # default (every metric expected; a missing required one HOLDs). A declared policy INPUT, not an
+    # operator override of a verdict — rules still decide (ADR-0001). Un-hashed context.
+    waived_metric_sources: frozenset[str] = Field(default_factory=frozenset)
 
     def sample_ids(self) -> list[str]:
         """Union of sample IDs seen across all artifacts, order-stable."""

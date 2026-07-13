@@ -109,8 +109,9 @@ def _run_body(name: str, run_id: str) -> dict[str, Any]:
 
 
 def test_sheet_creation_registers_run_and_skips_unfixtured_samples(monkeypatch: Any) -> None:
-    """A multi-sample sheet (W4 fan-out intent) registers the run and honestly reports which
-    samples can be processed — only HG002 has panel reads on disk, so the rest are *skipped*."""
+    """A multi-sample sheet (W4 fan-out) registers the run and honestly reports which samples can be
+    processed — the Ashkenazim trio (HG002/HG003/HG004) has panel reads on disk so all three are
+    processed; a sample with no reads (HG005) is *skipped* (registered, honestly not processed)."""
     monkeypatch.setattr(intake, "_run_pipeline", lambda *a, **k: None)  # stub the live driver
     body = {
         "run_name": "RUN-E2E-INTAKE",
@@ -121,6 +122,7 @@ def test_sheet_creation_registers_run_and_skips_unfixtured_samples(monkeypatch: 
             {"sample": "HG002", "type": "WGS", "i7": "AAAACCCC", "i5": "GGGGTTTT", "study": "e2e"},
             {"sample": "HG003", "type": "WGS"},
             {"sample": "HG004", "type": "WGS"},
+            {"sample": "HG005", "type": "WGS"},  # Han Chinese son — no panel reads on disk here
         ],
     }
     resp = client.post("/api/runs", json=body, headers=_REVIEWER)
@@ -128,8 +130,8 @@ def test_sheet_creation_registers_run_and_skips_unfixtured_samples(monkeypatch: 
     ack = resp.json()
     assert ack["run_id"] == "RUN-E2E-INTAKE"  # the run_name slugifies to the run id
     assert ack["status"] == "queued"
-    assert ack["processed_samples"] == ["HG002"]  # the only fixtured sample
-    assert ack["skipped_samples"] == ["HG003", "HG004"]  # registered, honestly not processed
+    assert ack["processed_samples"] == ["HG002", "HG003", "HG004"]  # the on-disk trio, all run
+    assert ack["skipped_samples"] == ["HG005"]  # no reads on disk → honestly not processed
 
 
 def test_intake_parse_contract_rejects_pii_and_a_no_op_sheet(monkeypatch: Any) -> None:

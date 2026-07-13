@@ -50,6 +50,25 @@ _REF = _GIAB / "ref" / "chr20.fa"
 _RAW_R1 = _GIAB / "fastq" / "HG002.R1.fastq.gz"
 _RAW_R2 = _GIAB / "fastq" / "HG002.R2.fastq.gz"
 _PANEL_BED = _REPO / "scripts" / "panel_regions.example.bed"
+
+# The GIAB samples with panel-scale reads on disk (data/real-giab/fastq/, git-ignored). The live
+# driver can run ANY subset as a real multi-sample flowcell — each row aligns against the shared
+# chr20 reference + panel BED. HG002 is the Ashkenazim son; HG003/HG004 are the father/mother (same
+# panel slice, fetched by scripts/fetch_panel_fastq.sh — reads never committed). This is the single
+# source of truth for which samples the API may process (api/routers/intake.py imports the ids).
+_GIAB_SAMPLE_READS: dict[str, tuple[Path, Path]] = {
+    "HG002": (_GIAB / "fastq" / "HG002.R1.fastq.gz", _GIAB / "fastq" / "HG002.R2.fastq.gz"),
+    "HG003": (_GIAB / "fastq" / "HG003.R1.fastq.gz", _GIAB / "fastq" / "HG003.R2.fastq.gz"),
+    "HG004": (_GIAB / "fastq" / "HG004.R1.fastq.gz", _GIAB / "fastq" / "HG004.R2.fastq.gz"),
+}
+GIAB_SAMPLE_IDS: frozenset[str] = frozenset(_GIAB_SAMPLE_READS)
+
+# Per-run UPSTREAM declaration → the metric-registry source classes it declares ABSENT. A
+# ``fastq_only`` run (analysis starts from FASTQ, no Illumina/SAV instrument feed) declares the
+# ``sav_interop`` class absent, so the gate NOTES the missing cluster-PF instead of HOLDing on it
+# (bayleaf.runbook.Runbook.waive_source_classes). ``sequencer`` (default) waives nothing — every
+# metric expected, a missing required one HOLDs. Written into the run dir as run_policy.json.
+_UPSTREAM_WAIVERS: dict[str, list[str]] = {"sequencer": [], "fastq_only": ["sav_interop"]}
 _WORK = _GIAB / "pipeline"  # intermediates + the nextflow work/ dir (git-ignored)
 _NF_RUNS = _REPO / ".nf-runs"  # per-run Nextflow scratch (work/ + nf-out/), git-ignored
 _PIPELINE = _REPO / "pipelines" / "germline" / "main.nf"  # the Builder-generated pipeline, ADR-0003
@@ -79,6 +98,19 @@ class RunConfig:
     reference: Path = _REF
     panel_bed: Path = _PANEL_BED
     origin: str = "real-giab"  # provenance tag for the run dir; operator inputs may set another
+    # Per-run upstream declaration (``sequencer`` | ``fastq_only``). Recorded into the run dir as
+    # run_policy.json so the gate can waive the declared-absent metric class (_UPSTREAM_WAIVERS).
+    upstream: str = "sequencer"
+    # Optional multi-sample set: (sample_id, r1, r2) rows. Empty → the single (sample, read1, read2)
+    # above (the Builder-run + single-sample path, byte-identical). When set, the driver writes an
+    # N-row Nextflow samplesheet and fans out per sample (parse/write/gate is already N-way).
+    samples: tuple[tuple[str, Path, Path], ...] = ()
+
+    def sample_rows(self) -> list[tuple[str, Path, Path]]:
+        """The (sample, r1, r2) rows: the multi-sample set if set, else the single default."""
+        if self.samples:
+            return list(self.samples)
+        return [(self.sample, self.read1, self.read2)]
 
 
 @dataclass(frozen=True)
@@ -395,14 +427,19 @@ def run_nextflow(cfg: RunConfig) -> Path:
     # sample, so the moment a multi-sample sheet (multiple read pairs on disk) is handed in, an
     # N-sample run yields N gated cards. That multi-read-pair live input is the env-gated piece.
     samplesheet = scratch / "samplesheet.csv"
+    rows = cfg.sample_rows()
     samplesheet.write_text(
-        f"sample,fastq_1,fastq_2\n{cfg.sample},{cfg.read1},{cfg.read2}\n",
+        "sample,fastq_1,fastq_2\n" + "".join(f"{s},{r1},{r2}\n" for s, r1, r2 in rows),
         encoding="utf-8",
         newline="\n",
     )
     # Executor auto-detected at the run boundary; no cluster here → the local-serial fallback.
     profile = _detect_profile()
-    _log("nextflow", f"nextflow run {cfg.pipeline.name} — sample {cfg.sample} · -profile {profile}")
+    ids = [s for s, _r1, _r2 in rows]
+    _log(
+        "nextflow",
+        f"nextflow run {cfg.pipeline.name} — {len(rows)} sample(s) {ids} · -profile {profile}",
+    )
     cmd = [
         nextflow, "run", str(cfg.pipeline), "-ansi-log", "false", "-profile", profile,
         "-work-dir", str(scratch / "work"),
@@ -611,6 +648,20 @@ def write_run_dir_multi(cfg: RunConfig, samples: list[SampleMetrics]) -> None:
     )
     w("pipeline.log", "\n".join(_LOG) + "\n")
     w("origin", f"{cfg.origin}\n")
+    # Record the run's UPSTREAM policy so the gate (bayleaf.parsers.load_run) can waive the
+    # declared-absent metric class. Written for EVERY run (an auditable declaration): ``sequencer``
+    # records an empty waiver (no behavior change); ``fastq_only`` records the SAV class.
+    w(
+        "run_policy.json",
+        json.dumps(
+            {
+                "upstream": cfg.upstream,
+                "waived_metric_sources": _UPSTREAM_WAIVERS.get(cfg.upstream, []),
+            },
+            indent=2,
+        )
+        + "\n",
+    )
 
 
 def write_run_dir(
@@ -639,42 +690,79 @@ def main() -> int:
     ap.add_argument("--platform", default=_PLATFORM, help="Illumina InstrumentPlatform")
     ap.add_argument("--submitted-by", default="giab", help="operator id for sample_metadata")
     ap.add_argument("--sample", default=_SAMPLE, help="sample id")
+    ap.add_argument(
+        "--samples", default="",
+        help="comma-separated GIAB sample ids to run as ONE multi-sample flowcell (resolved to "
+        "reads via the on-disk registry); overrides --sample/--read1/--read2 when set",
+    )  # fmt: skip
     ap.add_argument("--pipeline", type=Path, default=_PIPELINE, help="Nextflow main.nf to run")
     ap.add_argument("--read1", type=Path, default=_RAW_R1, help="R1 fastq(.gz)")
     ap.add_argument("--read2", type=Path, default=_RAW_R2, help="R2 fastq(.gz)")
     ap.add_argument("--reference", type=Path, default=_REF, help="indexed reference FASTA")
     ap.add_argument("--panel-bed", type=Path, default=_PANEL_BED, help="panel BED")
     ap.add_argument("--origin", default="real-giab", help="provenance origin tag for the run dir")
+    ap.add_argument(
+        "--upstream", default="sequencer", choices=sorted(_UPSTREAM_WAIVERS),
+        help="upstream declaration: 'sequencer' (default; all metrics expected) or 'fastq_only' "
+        "(no Illumina/SAV feed → the SAV metric class is declared absent; gate notes, not holds)",
+    )  # fmt: skip
     args = ap.parse_args()
+
+    # --samples resolves a comma-separated id list to (id, r1, r2) rows via the on-disk registry, so
+    # the API can run a real multi-sample flowcell (HG002+HG003+HG004). Absent → the single-sample
+    # (sample/read1/read2) default, byte-identical to the pre-multi driver (the Builder-run path).
+    multi: tuple[tuple[str, Path, Path], ...] = ()
+    if args.samples.strip():
+        rows: list[tuple[str, Path, Path]] = []
+        for sid in (x.strip() for x in args.samples.split(",") if x.strip()):
+            if sid not in _GIAB_SAMPLE_READS:
+                sys.exit(
+                    f"unknown sample {sid!r} — not in the on-disk GIAB registry "
+                    f"{sorted(_GIAB_SAMPLE_READS)}. Fetch its panel reads first "
+                    "(scripts/fetch_panel_fastq.sh)."
+                )
+            r1, r2 = _GIAB_SAMPLE_READS[sid]
+            rows.append((sid, r1, r2))
+        multi = tuple(rows)
+
     cfg = RunConfig(
         run_id=args.run_id,
         run_dir=_REPO / "data" / args.run_id,
         platform=args.platform,
         run_date=args.run_date,
         submitted_by=args.submitted_by,
-        sample=args.sample,
+        sample=multi[0][0] if multi else args.sample,
         pipeline=args.pipeline,
-        read1=args.read1,
-        read2=args.read2,
+        read1=multi[0][1] if multi else args.read1,
+        read2=multi[0][2] if multi else args.read2,
         reference=args.reference,
         panel_bed=args.panel_bed,
         origin=args.origin,
+        upstream=args.upstream,
+        samples=multi,
     )
 
+    # Reference + panel are shared across samples (checked once); each sample's reads are checked in
+    # the per-sample loop below so a missing fastq names the sample it belongs to.
     for path, hint in (
         (cfg.reference, "indexed reference FASTA missing"),
-        (cfg.read1, "R1 fastq missing"),
-        (cfg.read2, "R2 fastq missing"),
         (cfg.panel_bed, "panel BED missing"),
     ):
         if not path.exists():
             sys.exit(f"required input missing: {path} — {hint}")
+    for sid, r1, r2 in cfg.sample_rows():
+        for path, hint in ((r1, f"{sid} R1 fastq missing"), (r2, f"{sid} R2 fastq missing")):
+            if not path.exists():
+                sys.exit(f"required input missing: {path} — {hint}")
 
-    _log("intake", f"registering run {cfg.run_id} — sample {cfg.sample}")
+    ids = [s for s, _r1, _r2 in cfg.sample_rows()]
+    _log("intake", f"registering run {cfg.run_id} — {len(ids)} sample(s) {ids}")
     # Pre-flight guards (P3-3/4/5) — fail LOUDLY before the Nextflow launch, never silently proceed.
+    # Reference index + contig naming are shared (checked once); FASTQ pairing is per sample.
     _preflight_reference_index(cfg.reference)
     _preflight_contigs(cfg.reference, cfg.panel_bed)
-    _preflight_fastqs(cfg.read1, cfg.read2)
+    for _sid, r1, r2 in cfg.sample_rows():
+        _preflight_fastqs(r1, r2)
     results = run_nextflow(cfg)
     # W4: discover + parse EVERY sample the pipeline published (one ${id}.fastp.json per sample).
     # A fan-out of 1 (this live HG002 driver) parses one; a multi-sample sheet would parse N. A

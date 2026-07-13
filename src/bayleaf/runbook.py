@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .metrics.mapping import producible_metric_keys
+from .metrics.registry import UnknownMetricError, default_registry
 
 if TYPE_CHECKING:
     # Only for the `resolve()` annotation — imported lazily so `runbook` never hard-depends on
@@ -57,6 +58,13 @@ class QCThreshold(BaseModel):
     # checks (extra-QC / variant tier) that score a run which emits them, without NA-flagging a lean
     # run that omits them. The five frozen-CSV metrics stay required=True (unchanged behavior).
     required: bool = True
+    # Per-run POLICY exemption (NOT a static runbook property): set by ``waive_source_classes`` when
+    # the operator declared this metric's upstream data absent for a run (e.g. a FASTQ-start run
+    # with no SAV/InterOp feed). A WAIVED + absent metric emits an INFO "not examined — declared
+    # absent" note instead of the required-metric NA HOLD (rules._evaluate_metric). Distinct from
+    # ``required``: required=False is a lean-run optional metric (silent when absent); waived is a
+    # deliberate, auditable per-run declaration (visible INFO note). Default False = normal gating.
+    waived: bool = False
     # WS-06 Gap 2: the gate SHAPE. `one_sided` (default) keeps `gate`/`hard_fail`/`higher_is_better`
     # 100% unchanged — every existing threshold is byte-identical. `target_band` switches to the
     # four canonical band fields below (a both-tails gate); `gate`/`hard_fail` are then unused but
@@ -352,6 +360,30 @@ class Runbook(BaseModel):
     def threshold_for(self, metric: str) -> QCThreshold | None:
         return next((t for t in self.qc_thresholds if t.metric == metric), None)
 
+    def waive_source_classes(self, modules: frozenset[str]) -> Runbook:
+        """Return a COPY whose thresholds sourced from any of ``modules`` are ``waived`` — a per-run
+        policy exemption for a run that DECLARED that upstream data absent (e.g. ``{"sav_interop"}``
+        for a FASTQ-start run with no Illumina/SAV feed). A threshold's source class is its registry
+        entry's ``source.module``. A waived + absent metric emits an INFO "not examined — declared
+        absent" note rather than the required-metric NA HOLD (rules._evaluate_metric). Rules still
+        decide — this maps a declared policy input onto the runbook, never an operator verdict
+        override (ADR-0001). Empty ``modules`` → ``self`` unchanged; an unregistered our_key is left
+        un-waived (defensive — a policy declaration can never silently drop a real gate)."""
+        if not modules:
+            return self
+        reg = default_registry()
+
+        def _in_class(t: QCThreshold) -> bool:
+            try:
+                return reg.entry(t.our_key).source.module in modules
+            except UnknownMetricError:
+                return False
+
+        thresholds = [
+            t.model_copy(update={"waived": True}) if _in_class(t) else t for t in self.qc_thresholds
+        ]
+        return self.model_copy(update={"qc_thresholds": thresholds})
+
 
 DEFAULT_RUNBOOK = Runbook()
 
@@ -460,6 +492,22 @@ class RunbookSet(BaseModel):
         runbook). No cloning: ``RunbookSet.of(rb).default is rb``.
         """
         return cls(default=runbook, profiles=[])
+
+    def waive_source_classes(self, modules: frozenset[str]) -> RunbookSet:
+        """Apply the per-run source-class waiver (see :meth:`Runbook.waive_source_classes`) to the
+        ``default`` AND every profile, so a run's declared-absent policy holds whichever profile a
+        sample resolves to. Empty ``modules`` → ``self`` unchanged."""
+        if not modules:
+            return self
+        return self.model_copy(
+            update={
+                "default": self.default.waive_source_classes(modules),
+                "profiles": [
+                    p.model_copy(update={"runbook": p.runbook.waive_source_classes(modules)})
+                    for p in self.profiles
+                ],
+            }
+        )
 
     def resolve(self, sample: Sample | None, platform: str | None = None) -> Runbook:
         """Return the profile matching this sample's ``(assay, sample_type, platform)``, else the

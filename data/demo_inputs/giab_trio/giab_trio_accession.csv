@@ -1,0 +1,4 @@
+Sample_ID,Subject_ID,Tissue,Sex,Consent,Collected_On,Accession_ID,Site,Notes
+HG002,NA24385,Whole blood,male,research,2026-07-13,ACC-2026-HG002,GIAB / NIST,Ashkenazim son — GIAB benchmark cell line (not a patient)
+HG003,NA24149,Whole blood,male,research,2026-07-13,ACC-2026-HG003,GIAB / NIST,Ashkenazim father — GIAB benchmark cell line (not a patient)
+HG004,NA24143,Whole blood,female,research,2026-07-13,ACC-2026-HG004,GIAB / NIST,Ashkenazim mother — GIAB benchmark cell line (not a patient)

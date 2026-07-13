@@ -16,6 +16,7 @@ gate is supposed to catch.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from pathlib import Path
 from typing import NamedTuple
@@ -358,6 +359,10 @@ def load_run(run_dir: str | Path, run_id: str | None = None) -> RunArtifacts:
     # Annotated candidate variants (ADR-0018) — absent for every run today; feeds only the
     # off-by-default route-to-human rule, so a run without variants.csv is unaffected.
     variant_calls = parse_variant_calls(_maybe("variants.csv"))
+    # Per-run POLICY (optional): a run may DECLARE certain upstream metric classes absent (e.g. a
+    # FASTQ-start run with no sequencer/SAV feed) so the gate notes them instead of HOLDing. Written
+    # by the driver as run_policy.json; absent → the default (nothing waived). Tolerant parse.
+    waived = _parse_waived_sources(_maybe("run_policy.json"))
 
     return RunArtifacts(
         run_id=run_id,
@@ -371,4 +376,22 @@ def load_run(run_dir: str | Path, run_id: str | None = None) -> RunArtifacts:
         platform=header.platform,
         run_date=header.run_date,
         run_name=header.run_name,
+        waived_metric_sources=waived,
     )
+
+
+def _parse_waived_sources(path: Path) -> frozenset[str]:
+    """Read ``waived_metric_sources`` (a list of registry source-module names) from a run's optional
+    ``run_policy.json``. Tolerant by contract (a missing/garbled file is a signal, not a crash): any
+    read/parse error, or a non-list value, yields the empty set (nothing waived) — a policy file can
+    never silently WIDEN gating, and its absence is the safe default."""
+    if not path.exists():
+        return frozenset()
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return frozenset()
+    raw = doc.get("waived_metric_sources") if isinstance(doc, dict) else None
+    if not isinstance(raw, list):
+        return frozenset()
+    return frozenset(str(x) for x in raw if isinstance(x, str) and x.strip())
