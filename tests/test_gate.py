@@ -27,7 +27,7 @@ from pipeguard.models import (
 from pipeguard.parsers import parse_sample_sheet, parse_sample_sheet_header
 from pipeguard.provenance import EventLedger, EventType
 from pipeguard.rules import _evaluate_metric, compute_check_coverage, evaluate_sample
-from pipeguard.runbook import Runbook
+from pipeguard.runbook import QCThreshold, Runbook
 from pipeguard.synthesis import StubSynthesizer, aggregate_verdict
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
@@ -131,6 +131,88 @@ def test_fraction_metric_display_is_not_100x_too_small():
     assert ev.value == "85%"
     assert ev.expected == "≥ 90%"
     assert ev.threshold == "hard-fail ≥ 80%"
+
+
+# ── WS-06 Gap 2: target-band (both-tails) QC gate ─────────────────────────────────
+#
+# A registry `direction: target_band` metric (variant.titv, qc.fold_enrichment) is out of spec on
+# EITHER tail — too low OR too high. The one-sided QCThreshold can only gate one side, so before
+# WS-06 Gap 2 a target_band metric parsed + normalized but could never score. These tests pin the
+# new `kind="target_band"` gate: PASS inside the target band, WARN/HOLD inside the hard band but
+# outside target, CRITICAL/RERUN outside the hard band — on BOTH tails. Bands are illustrative /
+# operator-configurable, NOT clinical (CLAUDE.md life-science guardrail 3).
+
+
+def _titv_mv(ratio: float):
+    """A variant.titv MetricValue at a raw ratio (canonical unit is ratio — a passthrough)."""
+    return default_registry().observe(
+        metric_key="variant.titv", raw_value=ratio, raw_unit="ratio", sample_id="SX"
+    )
+
+
+def test_target_band_titv_scores():
+    """The wired variant.titv target_band threshold actually scores: PASS in-band, WARN/HOLD inside
+    the hard band but outside target, CRITICAL/RERUN outside the hard band — with cited band
+    Evidence. The verdict is a pure function of the emitted findings (ADR-0001)."""
+    threshold = DEFAULT_RUNBOOK.threshold_for("variant_titv")
+    assert threshold is not None and threshold.kind == "target_band"
+
+    # In-band → passes (no finding).
+    assert _evaluate_metric("SX", threshold, _titv_mv(2.05)) is None
+
+    # Outside target but inside the hard band → WARN / HOLD, with the band cited on the Evidence.
+    warn = _evaluate_metric("SX", threshold, _titv_mv(2.6))
+    assert warn is not None
+    assert warn.severity is Severity.WARN
+    assert warn.suggested_verdict is Verdict.HOLD
+    ev = warn.evidence[0]
+    assert ev.source_field == "variant_titv" and ev.source_kind is SourceKind.METRIC
+    assert "2.6" in ev.value  # the observed value is cited verbatim
+    # The target band [2, 2.1] and the hard band [1.8, 2.8] are both cited on the finding.
+    assert "2" in ev.expected and "2.1" in ev.expected
+    assert ev.threshold is not None and "1.8" in ev.threshold and "2.8" in ev.threshold
+
+    # Outside the hard band → CRITICAL / RERUN.
+    crit = _evaluate_metric("SX", threshold, _titv_mv(3.5))
+    assert crit is not None
+    assert crit.severity is Severity.CRITICAL
+    assert crit.suggested_verdict is Verdict.RERUN
+
+    # Verdict = f(findings): the rules author the finding, aggregate_verdict maps it (ADR-0001).
+    assert aggregate_verdict([warn]) is Verdict.HOLD
+    assert aggregate_verdict([crit]) is Verdict.RERUN
+
+
+def test_target_band_gates_both_tails():
+    """A target_band gate catches BOTH tails — a one-sided gate can only catch one. titv below the
+    band (1.5) AND above the band (3.5) each emit a finding; a within-hard low miss (1.9) is the
+    low-side WARN a `higher_is_better` one-sided gate would wave straight through."""
+    threshold = DEFAULT_RUNBOOK.threshold_for("variant_titv")
+    assert threshold is not None
+
+    low = _evaluate_metric("SX", threshold, _titv_mv(1.5))  # below hard_low 1.8
+    high = _evaluate_metric("SX", threshold, _titv_mv(3.5))  # above hard_high 2.8
+    assert low is not None and high is not None  # BOTH tails gate
+    assert low.suggested_verdict is Verdict.RERUN and high.suggested_verdict is Verdict.RERUN
+
+    # The low-side WARN (inside the hard band, below target) — the tail a one-sided ≥-gate ignores.
+    low_warn = _evaluate_metric("SX", threshold, _titv_mv(1.9))
+    assert low_warn is not None
+    assert low_warn.severity is Severity.WARN and low_warn.suggested_verdict is Verdict.HOLD
+
+
+def test_target_band_threshold_requires_bands():
+    """Constructing a target_band QCThreshold WITHOUT the four band fields is a config error — the
+    gate can't score a band it wasn't given, so it must fail loud at construction, not silently."""
+    with pytest.raises(ValidationError):
+        QCThreshold(
+            metric="variant_titv",
+            our_key="variant.titv",
+            label="Ts/Tv ratio",
+            gate=2.0,
+            hard_fail=1.8,
+            kind="target_band",
+        )
 
 
 # ── WS-01 · PR1: fail-closed on missing / expected-but-absent QC ──────────────────

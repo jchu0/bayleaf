@@ -7,18 +7,28 @@ because Q30 84.1 < gate 85.0") and lets the UI show *which rule* fired.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .metrics.mapping import producible_metric_keys
 
 
 class QCThreshold(BaseModel):
-    """A one-sided QC gate with a borderline band.
+    """A QC gate. Two shapes, discriminated by `kind`:
 
-    A value past `hard_fail` is a CRITICAL finding; a value within
-    `borderline_band` (relative) of the gate is a WARN (borderline) finding.
-    `higher_is_better` flips the comparison direction for metrics like
-    duplication rate where lower is better.
+    `one_sided` (the DEFAULT, unchanged): a value past `hard_fail` is a CRITICAL finding; a value
+    within `borderline_band` (relative) of the gate is a WARN (borderline) finding.
+    `higher_is_better` flips the comparison direction for metrics like duplication rate where lower
+    is better. `gate`/`hard_fail` decide.
+
+    `target_band` (WS-06 Gap 2): a BOTH-TAILS gate for a metric whose registry ``direction`` is
+    ``target_band`` (e.g. Ts/Tv, fold-enrichment) — out of spec on EITHER tail. The four canonical
+    band fields decide (``gate``/``hard_fail``/``higher_is_better`` are unused): PASS inside
+    ``[target_low, target_high]``; WARN/HOLD inside ``[hard_low, hard_high]`` but outside the target
+    band; CRITICAL/RERUN outside the hard band. A one-sided gate can only catch one tail, so a
+    target_band metric could never score until this shape existed. Bands are illustrative /
+    operator-configurable, NOT clinical (CLAUDE.md life-science guardrail 3).
     """
 
     metric: str
@@ -42,6 +52,56 @@ class QCThreshold(BaseModel):
     # checks (extra-QC / variant tier) that score a run which emits them, without NA-flagging a lean
     # run that omits them. The five frozen-CSV metrics stay required=True (unchanged behavior).
     required: bool = True
+    # WS-06 Gap 2: the gate SHAPE. `one_sided` (default) keeps `gate`/`hard_fail`/`higher_is_better`
+    # 100% unchanged — every existing threshold is byte-identical. `target_band` switches to the
+    # four canonical band fields below (a both-tails gate); `gate`/`hard_fail` are then unused but
+    # stay required for schema stability, so set them to representative in-band edges.
+    kind: Literal["one_sided", "target_band"] = "one_sided"
+    # Canonical-unit (registry scale, same as `gate`/`hard_fail`) band edges for a `target_band`
+    # gate; all four None for a `one_sided` gate (the default). PASS in [target_low, target_high];
+    # WARN in [hard_low, hard_high] but outside target; CRITICAL outside [hard_low, hard_high].
+    target_low: float | None = None
+    target_high: float | None = None
+    hard_low: float | None = None
+    hard_high: float | None = None
+
+    @model_validator(mode="after")
+    def _validate_band(self) -> QCThreshold:
+        """A `target_band` gate must carry all four band edges, ordered outer→inner→inner→outer.
+
+        `one_sided` (the default) is untouched — the band fields stay None and this is a no-op — so
+        every existing threshold + test is byte-identical. For `target_band`, a missing edge means
+        the gate can't score the band it claims to; a mis-ordered band (e.g. target wider than hard)
+        is nonsensical. Fail loud at construction rather than silently mis-gating a real run.
+        """
+        if self.kind != "target_band":
+            return self
+        edges = {
+            "hard_low": self.hard_low,
+            "target_low": self.target_low,
+            "target_high": self.target_high,
+            "hard_high": self.hard_high,
+        }
+        missing = [name for name, v in edges.items() if v is None]
+        if missing:
+            raise ValueError(
+                f"target_band threshold {self.our_key!r} requires all four band edges; "
+                f"missing: {missing}"
+            )
+        # mypy: the None-check above guarantees these are floats.
+        assert (
+            self.hard_low is not None
+            and self.target_low is not None
+            and self.target_high is not None
+            and self.hard_high is not None
+        )
+        if not (self.hard_low <= self.target_low <= self.target_high <= self.hard_high):
+            raise ValueError(
+                f"target_band threshold {self.our_key!r} band must order "
+                f"hard_low <= target_low <= target_high <= hard_high; got "
+                f"[{self.hard_low}, {self.target_low}, {self.target_high}, {self.hard_high}]"
+            )
+        return self
 
 
 class RouteToHumanPolicy(BaseModel):
@@ -182,6 +242,28 @@ class Runbook(BaseModel):
                 hard_fail=10.0,
                 required=False,
                 unit="x",
+            ),
+            # WS-06 Gap 2: a BOTH-TAILS (target_band) gate for Ts/Tv, the first threshold that can
+            # actually score a registry `direction: target_band` metric. Ts/Tv is out of spec on
+            # EITHER tail (too low → excess sequencing/false-positive artifact; too high → over-
+            # aggressive filtering), which a one-sided gate structurally can't catch. required=False
+            # means a run without a `variant_titv` value (the pinned demo + HG002) NA-flags nothing
+            # and every existing verdict is byte-identical. The band is an ILLUSTRATIVE whole-genome
+            # heuristic (~2.0-2.1 typical, hard 1.8-2.8), NOT a clinical threshold, and is
+            # operator-configurable (CLAUDE.md life-science guardrail 3). `gate`/`hard_fail` are
+            # unused for a target_band gate but required by the schema — set to the target edges.
+            QCThreshold(
+                metric="variant_titv",
+                our_key="variant.titv",
+                label="Ts/Tv ratio",
+                gate=2.0,
+                hard_fail=1.8,
+                kind="target_band",
+                target_low=2.0,
+                target_high=2.1,
+                hard_low=1.8,
+                hard_high=2.8,
+                required=False,
             ),
         ]
     )

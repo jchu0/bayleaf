@@ -246,6 +246,11 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -
             suggested_verdict=Verdict.HOLD,
         )
 
+    # WS-06 Gap 2: a target_band metric (Ts/Tv, fold-enrichment) is out of spec on EITHER tail, so
+    # it is scored by the band branch, not the one-sided gate below (which can only catch one side).
+    if threshold.kind == "target_band":
+        return _evaluate_target_band(sid, threshold, mv)
+
     # DECISION on the CANONICAL (normalized) value vs the canonical threshold — both on the
     # registry's scale, so a change in the source's raw unit can't silently move the gate.
     value = mv.normalized_value
@@ -303,6 +308,70 @@ def _evaluate_metric(sid: str, threshold: QCThreshold, mv: MetricValue | None) -
                 source_kind=SourceKind.METRIC,
                 source_field=threshold.metric,
                 threshold=f"hard-fail {direction} {disp_hard:g}{threshold.unit}",
+            )
+        ],
+        suggested_verdict=verdict,
+    )
+
+
+def _evaluate_target_band(sid: str, threshold: QCThreshold, mv: MetricValue) -> Finding | None:
+    """Score a BOTH-TAILS (target_band) metric against its canonical band (WS-06 Gap 2).
+
+    PASS (None) inside ``[target_low, target_high]``; a WARN → HOLD ``Finding`` inside
+    ``[hard_low, hard_high]`` but outside the target band (either tail); a CRITICAL → RERUN
+    ``Finding`` outside the hard band (either tail). Decides on the CANONICAL (normalized) value vs
+    canonical band edges — same scale, so the source's raw unit can't silently move the gate — then
+    renders value + both bands into the operator DISPLAY unit via the same ``_to_display_unit`` path
+    the one-sided branch uses. The rule only AUTHORS the finding; ``aggregate_verdict`` maps it to a
+    verdict (ADR-0001)."""
+    value = mv.normalized_value
+    # The QCThreshold validator guarantees all four edges are present for kind=="target_band"; the
+    # asserts narrow float | None -> float for mypy and document that invariant.
+    assert (
+        threshold.target_low is not None
+        and threshold.target_high is not None
+        and threshold.hard_low is not None
+        and threshold.hard_high is not None
+    )
+    if threshold.target_low <= value <= threshold.target_high:
+        return None  # in the target band — passes
+
+    within_hard = threshold.hard_low <= value <= threshold.hard_high
+    if within_hard:
+        severity = Severity.WARN
+        verdict = Verdict.HOLD
+        qualifier = "is outside the target band"
+    else:
+        severity = Severity.CRITICAL
+        verdict = Verdict.RERUN
+        qualifier = "is outside the acceptable band"
+
+    reg = default_registry()
+    u = threshold.unit
+    disp_value = _to_display_unit(reg, threshold.our_key, value, u)
+    disp_tlo = _to_display_unit(reg, threshold.our_key, threshold.target_low, u)
+    disp_thi = _to_display_unit(reg, threshold.our_key, threshold.target_high, u)
+    disp_hlo = _to_display_unit(reg, threshold.our_key, threshold.hard_low, u)
+    disp_hhi = _to_display_unit(reg, threshold.our_key, threshold.hard_high, u)
+    return Finding(
+        rule_id=f"QC-{threshold.metric.upper()}",
+        sample_id=sid,
+        category=Category.QC,
+        severity=severity,
+        title=f"{threshold.label} {qualifier}",
+        detail=(
+            f"{threshold.label} for {sid} is {disp_value:g}{u}; runbook target band is "
+            f"[{disp_tlo:g}, {disp_thi:g}]{u} (hard band [{disp_hlo:g}, {disp_hhi:g}]{u})."
+        ),
+        evidence=[
+            Evidence(
+                source="qc_metrics.csv",
+                locator=f"{sid}.{threshold.metric}",
+                value=f"{disp_value:g}{u}",
+                expected=f"within [{disp_tlo:g}, {disp_thi:g}]{u}",
+                source_kind=SourceKind.METRIC,
+                source_field=threshold.metric,
+                threshold=f"hard band [{disp_hlo:g}, {disp_hhi:g}]{u}",
             )
         ],
         suggested_verdict=verdict,
