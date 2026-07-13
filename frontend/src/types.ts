@@ -787,6 +787,17 @@ export type NodeProposal = {
   mode: 'stub' | 'claude'
 }
 
+// Starter scaffolds for onboarding the proposed tool (GET /api/builder/node-proposal/scaffolds).
+// Filled DRAFT artifacts (ProcessSpec + Nextflow process, and a metric entry when the tool emits
+// QC) with the runnable command left a TODO — the agent lays out the skeleton, a human authors the
+// compute (compose ≠ execute). Empty scaffolds when the request matched no tool-card.
+export type NodeScaffolds = {
+  request: string
+  matched: boolean
+  tool: string | null
+  scaffolds: Record<string, string>
+}
+
 // An accepted tool-card LIBRARY ENTRY (POST /api/builder/node-proposal/accept → GET
 // /api/builder/library). A NodeProposal accepted as a draft: METADATA only (ports/version/locators
 // via the embedded proposal), never a runnable script:/stub: body — a human authors the ProcessSpec

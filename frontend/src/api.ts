@@ -28,6 +28,7 @@ import type {
   NextflowGraphBody,
   NodeObservation,
   NodeProposal,
+  NodeScaffolds,
   PipelineGraph,
   PipelineRunStatus,
   PipelineGraphAck,
@@ -325,6 +326,10 @@ export const api = {
   acceptNodeProposal: (request: string) =>
     write<LibraryEntry>('/api/builder/node-proposal/accept', 'POST', { request }),
   builderLibrary: () => get<LibraryEntry[]>('/api/builder/library'),
+  // Starter scaffolds for the proposed tool (read-only): filled DRAFT ProcessSpec + Nextflow
+  // process (+ metric entry) with the command left a TODO — a human authors the compute.
+  nodeScaffolds: (request: string) =>
+    get<NodeScaffolds>(`/api/builder/node-proposal/scaffolds?${new URLSearchParams({ request }).toString()}`),
 
   // ── System-agents chat (design/system-agents-chat.md) ──
   // Advisory chat with a system agent; history is structured + retained (archive/delete are

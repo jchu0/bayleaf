@@ -109,6 +109,8 @@ export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState(false) // true → honest "agent unavailable"
   const [accepting, setAccepting] = useState(false)
   const [accepted, setAccepted] = useState<string | null>(null) // library entry id once accepted
+  const [scaffolds, setScaffolds] = useState<Record<string, string> | null>(null)
+  const [scaffoldsBusy, setScaffoldsBusy] = useState(false)
 
   // Fetch the advisory proposal whenever the SUBMITTED request changes (Propose / Enter). On any
   // failure we show an honest "agent unavailable" — the gate, the runs, and the canvas are unaffected.
@@ -118,6 +120,7 @@ export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
     setError(false)
     setProposal(null)
     setAccepted(null) // a fresh request is not yet accepted
+    setScaffolds(null)
     api
       .nodeProposal(request)
       .then((p) => {
@@ -164,6 +167,20 @@ export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
       toast(`Accept failed — ${(e as Error).message}`, 'error')
     } finally {
       setAccepting(false)
+    }
+  }
+  // Fetch the starter scaffolds on demand (read-only): filled DRAFT ProcessSpec + Nextflow process
+  // (+ metric entry) the human completes. Toggling off just hides them.
+  const toggleScaffolds = async () => {
+    if (scaffolds) return setScaffolds(null)
+    if (!proposal?.matched || scaffoldsBusy) return
+    setScaffoldsBusy(true)
+    try {
+      setScaffolds((await api.nodeScaffolds(request)).scaffolds)
+    } catch (e) {
+      toast(`Couldn't load scaffolds — ${(e as Error).message}`, 'error')
+    } finally {
+      setScaffoldsBusy(false)
     }
   }
 
@@ -317,6 +334,43 @@ export function AuthorToolNodeModal({ onClose }: { onClose: () => void }) {
               </div>
 
               <div className="text-[10px] leading-snug text-text-3">{proposal.disclaimer}</div>
+
+              {/* Starter scaffolds (P3 §3.4): filled DRAFT artifacts the human completes. The agent
+                  lays out the skeleton; the runnable command is left a TODO (compose ≠ execute). */}
+              {proposal.matched && (
+                <div className="rounded-xl border border-line bg-card">
+                  <button
+                    type="button"
+                    onClick={toggleScaffolds}
+                    disabled={scaffoldsBusy}
+                    className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[11.5px] font-semibold text-text-2 hover:bg-card-2"
+                  >
+                    {scaffoldsBusy ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />}
+                    Starter scaffolds
+                    <span className="font-normal text-text-3">— DRAFT ProcessSpec + Nextflow process to complete</span>
+                    <span className="ml-auto text-text-3">{scaffolds ? '−' : '+'}</span>
+                  </button>
+                  {scaffolds && (
+                    <div className="flex flex-col gap-2 border-t border-line px-3.5 py-3">
+                      {Object.entries(scaffolds).map(([fname, text]) => (
+                        <div key={fname}>
+                          <div className="mb-1 flex items-center gap-2">
+                            <span className="font-mono text-[10.5px] text-text-2">{fname}</span>
+                            <button
+                              type="button"
+                              onClick={() => { navigator.clipboard?.writeText(text).catch(() => {}); toast(`Copied ${fname}.`, 'info') }}
+                              className="rounded border border-line px-1.5 py-0.5 text-[9.5px] text-text-3 hover:border-line-strong"
+                            >
+                              copy
+                            </button>
+                          </div>
+                          <pre className="max-h-52 overflow-auto rounded-lg border border-line bg-card-2 p-2.5 font-mono text-[10px] leading-relaxed text-text-2 whitespace-pre-wrap">{text}</pre>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : null}
         </div>

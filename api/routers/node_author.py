@@ -32,7 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from api.auth import Actor, require_role
 from api.library_store import get_library_store
 from bayleaf.identifiers import new_id, utc_now
-from bayleaf.node_author import NodeProposal, check_conformance, propose_node
+from bayleaf.node_author import NodeProposal, check_conformance, propose_node, render_scaffolds
 
 router = APIRouter(prefix="/api", tags=["node_author"])
 
@@ -68,6 +68,40 @@ def get_node_proposal(
     on any live-API error.
     """
     return propose_node(request)
+
+
+class NodeScaffolds(BaseModel):
+    """Filled DRAFT scaffolds for onboarding the proposed tool (P3 §3.4). ``scaffolds`` maps an
+    artifact filename → its templated text; empty when the request matched no tool-card."""
+
+    model_config = ConfigDict(extra="forbid")
+    request: str
+    matched: bool
+    tool: str | None = None
+    scaffolds: dict[str, str] = Field(default_factory=dict)
+
+
+@router.get("/builder/node-proposal/scaffolds")
+def get_node_scaffolds(
+    request: str = Query(
+        "", max_length=_MAX_REQUEST_LEN, description="Same request as node-proposal; scaffolds it."
+    ),
+) -> NodeScaffolds:
+    """Starter scaffolds for the tool a request proposes (agent #6, off the gate; P3 §3.4).
+
+    Re-derives the proposal (``propose_node``) and renders filled DRAFT artifacts — a `ProcessSpec`
+    catalog entry, the Nextflow `process` skeleton, and (if the tool emits QC) a metric-registry
+    entry — with the runnable command left as an explicit TODO. The agent lays out the conformant
+    skeleton; a HUMAN authors the compute (compose ≠ execute, ADR-0001/0003). Read-only, runs no
+    tool; an unmatched request yields an empty ``scaffolds`` (nothing to scaffold), never an error.
+    """
+    proposal = propose_node(request)
+    return NodeScaffolds(
+        request=request,
+        matched=proposal.matched,
+        tool=proposal.tool,
+        scaffolds=render_scaffolds(proposal),
+    )
 
 
 class AcceptNodeProposalIn(BaseModel):

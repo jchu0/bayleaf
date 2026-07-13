@@ -40,6 +40,7 @@ from .retrieval import (
     ToolCardRetriever,
     load_tool_card_corpus,
 )
+from .scaffolds import render_scaffolds
 
 __all__ = [
     "ARTIFACT_KINDS",
@@ -64,4 +65,5 @@ __all__ = [
     "is_conformant",
     "load_tool_card_corpus",
     "propose_node",
+    "render_scaffolds",
 ]
