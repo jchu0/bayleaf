@@ -1,5 +1,7 @@
 # Journal — 2026-07-11 (MST) — W3/W4 deferred-slice continuations + doc sweep
 
+> **Naming note (2026-07-13, MST):** this dated entry predates the rename **route-to-human → flag-for-review** (`VAR-RTH-001 → VAR-FFR-001`, `RouteToHumanPolicy → FlagForReviewPolicy`, `_check_route_to_human → _check_flag_for_review`, the `route_to_human` field/marker + `route_to_human.json` stage key → `flag_for_review*`, `tests/test_route_to_human.py → tests/test_flag_for_review.py`). The old names below are kept as accurate-at-the-time; current-state docs use the new names. See [2026-07-13-flag-for-review-rename-and-page-naming.md](2026-07-13-flag-for-review-rename-and-page-naming.md).
+
 | Field | Value |
 |---|---|
 | **Focus** | Close two named deferrals left open by earlier same-day work: T-128's (W3) "no per-variant evidence table" gap, and T-129's (W4) "a true multi-sample driver run … stays deferred" gap — then sweep every doc the [Doc-update map](../TABLE_OF_CONTENTS.md#doc-update-map) obligates. |

@@ -1,5 +1,7 @@
 # Journal — 2026-07-11 · Review-queue ownership: fix orphaned escalations
 
+> **Naming note (2026-07-13, MST):** this dated entry predates the rename **route-to-human → flag-for-review** (`VAR-RTH-001 → VAR-FFR-001`, `RouteToHumanPolicy → FlagForReviewPolicy`, `_check_route_to_human → _check_flag_for_review`, the `route_to_human` field/marker + `route_to_human.json` stage key → `flag_for_review*`, `tests/test_route_to_human.py → tests/test_flag_for_review.py`). The old names below are kept as accurate-at-the-time; current-state docs use the new names. See [2026-07-13-flag-for-review-rename-and-page-naming.md](2026-07-13-flag-for-review-rename-and-page-naming.md).
+
 Branch: `feat/review-queue-ownership` (off `origin/main` `d37fb2b`, in an isolated
 worktree — this session ran alongside a `feat/custom-script-io` instance sharing
 the primary checkout, so the work was isolated to avoid colliding with its

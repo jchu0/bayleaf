@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft — for maintainer review |
-| **Last updated** | 2026-07-11 (MST) |
+| **Last updated** | 2026-07-13 (MST) — naming refresh only: the variant-gate rule this doc references is renamed **route-to-human → flag-for-review** (`VAR-RTH-001 → VAR-FFR-001`); no design change. Prior: 2026-07-11 (MST) |
 | **Audience** | all (contributors and Claude Code) |
 | **Related** | [design/architecture.md](architecture.md) · [design/agents.md](agents.md) · [design/variant-interpretation.md](variant-interpretation.md) · [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) · [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md) · [ADR-0007](../adr/ADR-0007-ml-ready-structured-outputs.md) · [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md) · [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md) · [ADR-0015](../adr/ADR-0015-layered-data-contract.md) · [ADR-0016](../adr/ADR-0016-postgres-port.md) · [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) · [data/provenance.md](../data/provenance.md) · [data/schemas.md](../data/schemas.md) · [data/metric_registry.md](../data/metric_registry.md) · [data/strategy.md](../data/strategy.md) · [planning/tasks.md](../planning/tasks.md) · [journal/2026-07-09-giab-e2e-pipeline.md](../journal/2026-07-09-giab-e2e-pipeline.md) · [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md) · [journal/2026-07-10-admin-settings-builder-wiring.md](../journal/2026-07-10-admin-settings-builder-wiring.md) · [journal/2026-07-10-builder-modals-and-run-selector.md](../journal/2026-07-10-builder-modals-and-run-selector.md) · [journal/2026-07-10-batch8-theme-monitoring-recharts.md](../journal/2026-07-10-batch8-theme-monitoring-recharts.md) · [journal/2026-07-10-settings-agent-table.md](../journal/2026-07-10-settings-agent-table.md) · [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md) · [journal/2026-07-10-frontend-wave9.md](../journal/2026-07-10-frontend-wave9.md) · [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md) · [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md) · [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md) · [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) · [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) · [design/nextflow-codegen.md](nextflow-codegen.md) |
 
@@ -302,7 +302,7 @@ parse](nextflow-codegen.md#multi-sample-driver-parse-2026-07-11-w4-continuation)
 
 Separately (W3 continuation, same day): a new read-only `GET /api/runs/{run_id}/variants`
 (`api/main.py`) joins the "already built" read surfaces this doc catalogs — every `VariantCall` a
-run's `variants.csv` carries, served verbatim via the same `parse_variant_calls` the route-to-human
+run's `variants.csv` carries, served verbatim via the same `parse_variant_calls` the flag-for-review
 rule uses. No new persistence, no new store — a direct re-parse per request, like the export
 endpoint in §2.1(a) above. See [functional.md REQ-F-094](../requirements/functional.md).
 

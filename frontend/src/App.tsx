@@ -23,6 +23,7 @@ import { RunDetail } from './screens/RunDetail'
 import { RunOverview } from './screens/RunOverview'
 import { Settings } from './screens/Settings'
 import { Submit } from './screens/Submit'
+import { SystemAgents } from './screens/SystemAgents'
 
 // Auth gate: an unauthenticated visitor is redirected to /login, preserving where they were headed
 // so login can bounce them back. Everything under <Layout> is protected; /login is the one public route.
@@ -74,6 +75,8 @@ export default function App() {
               <Route path="/runs/:runId/agent" element={<RequirePage page="agent"><AgentTriage /></RequirePage>} />
               {/* Run-independent home for the org-wide system agents (pipeline-repair, archivist) — they
                   act across runs, so they must stay reachable even when no run is in context / a run 404s. */}
+              <Route path="/system-agents" element={<RequirePage page="systemAgents"><SystemAgents /></RequirePage>} />
+              {/* Legacy /agents deep-link — kept stable; renders per-run Triage (empty without a run). */}
               <Route path="/agents" element={<RequirePage page="agent"><AgentTriage /></RequirePage>} />
               <Route path="/settings" element={<RequirePage page="settings"><Settings /></RequirePage>} />
               {/* Admin stays governed solely by isAdmin (its own guard) — never page-gated. */}

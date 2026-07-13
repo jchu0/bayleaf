@@ -9,12 +9,12 @@ import { Fingerprint } from './Fingerprint'
 // three provenance views. Tools describe what this build actually touches: it starts from FASTQ, so
 // alignment/variant-calling/filter are shown but marked "not run in this build" (no artifacts)
 // rather than fabricating a run — the honesty guardrail wins over a populated-looking mock. The
-// three post-variant stages (filter/normalize, route-to-human review, de-identified share) are
+// three post-variant stages (filter/normalize, flag-for-review review, de-identified share) are
 // honest downstream nodes (W3): each reads "not run in this build" unless THIS build actually
-// produced its artifact or fired its rule. The route-to-human REVIEW node carries the variant gate
-// (VAR-RTH-001) — so a fired ESCALATE surfaces there instead of the DAG lying "skipped" while the
+// produced its artifact or fired its rule. The flag-for-review REVIEW node carries the variant gate
+// (VAR-FFR-001) — so a fired ESCALATE surfaces there instead of the DAG lying "skipped" while the
 // decision escalated (the CLINVAR-RTH honesty fix). Variant *calling* stays "not run" (no VCF),
-// which is the honest read — the route-to-human check ran over externally-annotated calls.
+// which is the honest read — the flag-for-review check ran over externally-annotated calls.
 type StageDef = { key: PipelineStage; n: number; title: string; tool: string; gate?: Gate }
 
 // The numbered PROCESS chain (left→right DAG). The decision gate is deliberately NOT in here:
@@ -28,7 +28,7 @@ const STAGES: StageDef[] = [
   { key: 'align', n: 4, title: 'Alignment', tool: 'not run in this build' },
   { key: 'variant', n: 5, title: 'Variant calling', tool: 'not run in this build' },
   { key: 'filter', n: 6, title: 'Filter / normalize', tool: 'not run in this build' },
-  { key: 'review', n: 7, title: 'Route to human', tool: 'route-to-human · VAR-RTH-001', gate: 'variant' },
+  { key: 'review', n: 7, title: 'Flag for review', tool: 'flag-for-review · VAR-FFR-001', gate: 'variant' },
   { key: 'share', n: 8, title: 'De-identified share', tool: 'Safe-Harbor-style scrub' },
 ]
 
@@ -183,7 +183,7 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
   // A downstream stage is "not run in this build" when it produced no artifact AND (for a gated
   // stage) its gate never fired anything actionable. This is the honesty short-circuit — BUT a
   // fired gate must WIN over it: the CLINVAR-RTH fixture carries only variants.csv (no .vcf), so
-  // the review node has zero artifacts while VAR-RTH-001 ESCALATED it. Reading "skipped" there
+  // the review node has zero artifacts while VAR-FFR-001 ESCALATED it. Reading "skipped" there
   // would contradict the decision the rules already made, so a fired gate falls through to the
   // gate-status branch below (escalate → blocked, hold/rerun → warn).
   const isNotRun = (stage: Stage): boolean => {
@@ -268,13 +268,13 @@ export function ProvenanceLineage({ detail, artifacts }: { detail: RunDetail; ar
     if (stage.key === 'align')
       return 'Not run in this build — lineage starts from FASTQ; alignment provenance is future work.'
     if (stage.key === 'variant')
-      return 'Not run in this build — no in-build variant caller ran; the route-to-human check reads externally-annotated calls (variants.csv).'
+      return 'Not run in this build — no in-build variant caller ran; the flag-for-review check reads externally-annotated calls (variants.csv).'
     if (stage.key === 'filter')
       return 'Not run in this build — variant filtering / normalization provenance is future work.'
-    // Route-to-human: prefer the fired variant-gate rationale (rules-authored, below). When the
+    // Flag-for-review: prefer the fired variant-gate rationale (rules-authored, below). When the
     // policy is disarmed / no candidate matched, the gate produced nothing → honest "not run".
     if (stage.key === 'review' && isNotRun(stage))
-      return 'Not run in this build — route-to-human (VAR-RTH-001) is off by default; no clinically-significant variant was routed for review this run.'
+      return 'Not run in this build — flag for review (VAR-FFR-001) is off by default; no clinically-significant variant was flagged for review this run.'
     // De-identified share (ADR-0018 D3): status/note come from the event trail, not an artifact.
     if (stage.key === 'share')
       return shared

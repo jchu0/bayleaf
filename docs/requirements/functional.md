@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-13 (MST) — REQ-F-104 gains the `POST .../ask` `require_role` authz-floor addendum (T-164). Prior: 2026-07-12 (MST) — gap-analysis-remediation: REQ-F-104/105/106 (ask-agent endpoint, fail-closed gate + `CheckCoverage`, authored-pipeline submit-time validation) + Notes/deferred items 10-11 (WS-02/WS-04 metric-count bump + optional-modules honesty) |
+| **Last updated** | 2026-07-13 (MST) — **route-to-human → flag-for-review** naming refresh (REQ-F-018: rule id `VAR-FFR-001`, `FlagForReviewPolicy`, `flag_for_review` marker, `flag_for_review.json` stage key). **REQ-F-042 page-name simplification + 12→13 screens** (new **System Agents** page; Sample accessioning→Sample Metadata, Submit samplesheet→Samplesheet, Intake gate→Intake, Decision cards→Decisions, Agent triage→Triage, Pipeline builder→Pipeline; labels match `frontend/src/access.ts`). REQ-F-104 gains the `POST .../ask` `require_role` authz-floor addendum (T-164). Prior: 2026-07-12 (MST) — gap-analysis-remediation: REQ-F-104/105/106 (ask-agent endpoint, fail-closed gate + `CheckCoverage`, authored-pipeline submit-time validation) + Notes/deferred items 10-11 (WS-02/WS-04 metric-count bump + optional-modules honesty) |
 | **Audience** | software / all |
 | **Related** | [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md), [audit/gap_analysis/ws-02-identity-provenance.md](../../audit/gap_analysis/ws-02-identity-provenance.md), [audit/gap_analysis/ws-04-giab-concordance.md](../../audit/gap_analysis/ws-04-giab-concordance.md), [journal 2026-07-12 gap-analysis-remediation-verification](../journal/2026-07-12-gap-analysis-remediation-verification.md), [scope-and-wishlist.md](scope-and-wishlist.md), [nonfunctional.md](nonfunctional.md), [constraints.md](constraints.md), [HISTORY.md](../HISTORY.md) (archived wave/batch narrative), [design/architecture.md](../design/architecture.md), [design/agents.md](../design/agents.md), [data-platform-and-archivist.md](../design/data-platform-and-archivist.md), [metric_registry.md](../data/metric_registry.md), [qc_metrics.md](../data/qc_metrics.md), [schemas.md](../data/schemas.md), [backend-contracts](../design/frontend/handoffs/2026-07-09-backend-contracts.md), [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [ADR-0008](../adr/ADR-0008-issue-taxonomy-suppression-escalation.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0014](../adr/ADR-0014-productionization-fastapi-react.md), [ADR-0016](../adr/ADR-0016-postgres-port.md), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md), [journal 2026-07-10 wave6](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-09 frontend-batch2](../journal/2026-07-09-frontend-batch2.md), [journal 2026-07-09 frontend-batch3](../journal/2026-07-09-frontend-batch3.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 batch5](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal 2026-07-10 batch6](../journal/2026-07-10-admin-settings-builder-wiring.md), [journal 2026-07-10 batch7](../journal/2026-07-10-builder-modals-and-run-selector.md), [journal 2026-07-10 batch8](../journal/2026-07-10-batch8-theme-monitoring-recharts.md), [journal 2026-07-10 wave4](../journal/2026-07-10-wave4-submit-parsing-and-api-errors.md), [journal 2026-07-10 confirm-dialog](../journal/2026-07-10-confirm-dialog-audit-gate.md), [journal 2026-07-10 settings-agent-table](../journal/2026-07-10-settings-agent-table.md), [journal 2026-07-10 wave7](../journal/2026-07-10-frontend-batch7.md), [journal 2026-07-10 wave8](../journal/2026-07-10-frontend-wave8.md), [journal 2026-07-10 wave9](../journal/2026-07-10-frontend-wave9.md), [journal 2026-07-10 wave10](../journal/2026-07-10-wave10-node-author-uic.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-11 nextflow](../journal/2026-07-11-nextflow-codegen-execution.md), [journal 2026-07-11 audit+W1-W4+E2E](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal 2026-07-11 P3 backlog](../journal/2026-07-11-p3-backlog.md), [journal 2026-07-11 fleet](../journal/2026-07-11-fleet.md), [journal 2026-07-12 builder-agent-hardening](../journal/2026-07-12-builder-agent-hardening.md), [design/ui-conventions.md](../design/ui-conventions.md), [design/builder-cards/](../design/builder-cards/), [design/node-authoring-agent.md](../design/node-authoring-agent.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) |
 
@@ -91,28 +91,28 @@ in-scope MVP behavior; deferred items are marked *(wishlist)*.
    [qc_metrics.md](../data/qc_metrics.md) §Verdict policy,
    [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md)/[ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md),
    `rules._check_execution_trace`, [tasks T-061](../planning/tasks.md).
-9. **REQ-F-018 — Route-to-human policy (VAR-RTH-001), off by default.** The system can route a
+9. **REQ-F-018 — Flag for review policy (VAR-FFR-001), off by default.** The system can route a
    sample to **mandatory human review** when an externally-annotated candidate variant carries an
-   operator-armed ClinVar significance. **Disarmed by default** (`RouteToHumanPolicy.significances`
+   operator-armed ClinVar significance. **Disarmed by default** (`FlagForReviewPolicy.significances`
    is an empty tuple) — the stock runbook never routes, and every pinned demo verdict is
-   unaffected. When armed, a deterministic rule (`rules._check_route_to_human`) emits a cited,
+   unaffected. When armed, a deterministic rule (`rules._check_flag_for_review`) emits a cited,
    immutable `Finding` (category `variant`, **variant** gate) whose suggested verdict is
    **ESCALATE**; it **quotes the source ClinVar classification verbatim** (never bayleaf's own
    determination — ADR-0004) and cites the accession/review status. The action space is only
-   `{route-to-human}` — no Pathogenic/Benign verdict, no probability; the variant **QC** gate
+   `{flag-for-review}` — no Pathogenic/Benign verdict, no probability; the variant **QC** gate
    (REQ-F-013, DP/GQ/AB) is untouched. A qualified human clears the hold via the existing
    RBAC-gated review queue (REQ-F-063, ADR-0017) — no new access pattern. The system **reads** an
    externally-produced annotated variant table (`variants.csv` → `models.VariantCall`, parsed by
    `parsers.parse_variant_calls`); it never runs an annotator (compose ≠ execute, ADR-0003).
    **Fires end-to-end against a committed run (2026-07-11):** `api.main._active_runbook(run_id)`
    is the deployment-config seam that arms the policy **per run** from an optional
-   `route_to_human` marker file in the run dir; `data/RUN-2026-07-11-CLINVAR-RTH/`
+   `flag_for_review` marker file in the run dir; `data/RUN-2026-07-11-CLINVAR-RTH/`
    (`origin=contrived`) is a committed, test-pinned fixture that ESCALATEs HG002 via
-   `VAR-RTH-001` when evaluated through the live API, closing the earlier "never fires
+   `VAR-FFR-001` when evaluated through the live API, closing the earlier "never fires
    end-to-end" gap — every unmarked run stays disarmed. *Trace:*
    [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) decision D2 +
    [Realized](../adr/ADR-0018-variant-interpretation-advisory-evidence.md#realized-2026-07-11),
-   [qc_metrics.md](../data/qc_metrics.md) §Route-to-human policy, [schemas.md](../data/schemas.md)
+   [qc_metrics.md](../data/qc_metrics.md) §Flag for review policy, [schemas.md](../data/schemas.md)
    `VariantCall`, [tasks T-109, T-119](../planning/tasks.md).
 
 ## Advisory triage agent (ADR-0009/0012)
@@ -243,32 +243,37 @@ pipeline-repair, archivist, and node-authoring, all now built, REQ-F-050).
    pipeline-repair (REQ-F-023) and archivist (REQ-F-024) calls, each invoking an advisory agent
    **without re-entering the verdict path** — all read-only over already-decided artifacts.
    *Trace:* [architecture.md](../design/architecture.md), [agents.md](../design/agents.md), ADR-0010.
-3. **REQ-F-042 — Operator screens.** The UI presents **12 operator screens** (was 11 when this
-   entry was last corrected; Sample accessioning — REQ-F-082 — is new as of Wave 9, T-117),
-   rebuilt to the refreshed design prototype
+3. **REQ-F-042 — Operator screens.** The UI presents **13 operator screens** (was 12; System
+   Agents — the org-wide Pipeline-repair/Archivist launchers split off Triage — is new as of
+   2026-07-13, T-160/T-163; before that Sample Metadata — REQ-F-082, formerly "Sample accessioning"
+   — was new as of Wave 9, T-117). **Page names were simplified 2026-07-13** to match
+   `frontend/src/access.ts::PAGE_CATALOG`: Sample accessioning → **Sample Metadata**, Submit
+   samplesheet → **Samplesheet**, Intake gate → **Intake**, Decision cards → **Decisions**, Agent
+   triage → **Triage**, Pipeline builder → **Pipeline**. Rebuilt to the refreshed design prototype
    (`docs/design/frontend/`, 2026-07-09) in a **three-group nav** — **Operate** (reordered
    2026-07-10, Wave 8, T-110, G4, to Notification→Action→Steps, then Wave 9, T-117, to lead the
-   Steps sub-sequence with accessioning): Inbox (REQ-F-077), review queue
-   (tickets w/ role-gated actions, REQ-F-063), sample accessioning (a CRM subject/sample
-   registration step upstream of the samplesheet — REQ-F-082), submit samplesheet (register a run's
+   Steps sub-sequence with Sample Metadata): Inbox (REQ-F-077), review queue
+   (tickets w/ role-gated actions, REQ-F-063), Sample Metadata (a CRM subject/sample
+   registration step upstream of the samplesheet — REQ-F-082), Samplesheet (register a run's
    SampleSheet/FASTQ and hand off to the `POST /api/runs` execution boundary — REQ-F-067;
    compose≠execute still holds at the core), runs overview (per-verdict counts + needs-attention +
    a client-side scale kit: search/facet/sort/date-range/paginate; the top-bar run switcher shares
    the Runs list's status-derived dot via `RUN_STATUS_META`, fixing a bug where the switcher's dot
-   read `n_attention` instead of the real lifecycle `status`), intake/preflight (run-level QC
+   read `n_attention` instead of the real lifecycle `status`), Intake/preflight (run-level QC
    rollup + per-sample admission with manual override, plus lazy-loaded preflight metadata —
-   REQ-F-080), decision cards (verdict + per-gate strip + a QC-readout hero from
+   REQ-F-080), Decisions (verdict + per-gate strip + a QC-readout hero from
    REQ-F-064/REQ-F-068 + cited evidence); **Analyze:** provenance (Lineage / Event trail /
-   Artifacts — REQ-F-078), agent triage (advisory note + citations + offline/live), monitoring
-   (windowed aggregate, REQ-F-047); **Configure:** pipeline builder (REQ-F-045, on-canvas editing
+   Artifacts — REQ-F-078), Triage (advisory note + citations + offline/live), System Agents
+   (run-independent org-wide Pipeline-repair/Archivist launchers, split off Triage 2026-07-13),
+   monitoring (windowed aggregate, REQ-F-047); **Configure:** Pipeline (REQ-F-045, on-canvas editing
    REQ-F-079) and settings (runbook thresholds, labelled illustrative). A separate Admin
    governance screen sits outside this operator nav, gated on the login identity's **`isAdmin`**
    (a frontend-only governance capability layered over the wire roles, **not** "any approver" —
-   REQ-F-066/REQ-F-069) — off the deterministic gate, it is not counted among the 12. A shared
+   REQ-F-066/REQ-F-069) — off the deterministic gate, it is not counted among the 13. A shared
    `RoleContext` (reviewer|approver) drives every RBAC-gated control, and now exposes a
    full `setActor(actor)` (id+role together) consumed by Admin's "Act as" (REQ-F-066). A
    **second, distinct** frontend-only governance layer, the page-access **view-gate**
-   (REQ-F-082), additionally filters which of these 12 screens a given user's nav even shows —
+   (REQ-F-082), additionally filters which of these 13 screens a given user's nav even shows —
    layered over, not replacing, `RoleContext`. Screens
    state their data boundary rather than fabricate instrument/compute artifacts the FASTQ-first
    build doesn't capture; one honest gap is explicitly rendered empty rather than invented:
@@ -1163,7 +1168,7 @@ had reserved or listed as *not-yet-built*.
     [tasks T-126](../planning/tasks.md), [journal 2026-07-11](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
 28. **REQ-F-087 — RunDetail Report tab: a per-run QC Decision & Provenance report (W3).** A new
     `?view=report` tab on `RunDetail` (`RunReport.tsx`) renders a single-document report over
-    data already on the wire (no new endpoint): verdict mix, a route-to-human hero panel quoting
+    data already on the wire (no new endpoint): verdict mix, a flag-for-review hero panel quoting
     ClinVar significance **verbatim** (no authored pathogenicity, ADR-0004/G3/G4), per-sample gate
     outcomes with cited evidence, and a sign-off footer stating human sign-off is a labelled seam,
     not a button — bayleaf never marks a report final on its own. Read-only; confidence stays
@@ -1174,13 +1179,13 @@ had reserved or listed as *not-yet-built*.
     [design/variant-interpretation.md §0](../design/variant-interpretation.md#0-build-status-update-2026-07-10-after-the-maintainers-d1d2d3-sign-off),
     [tasks T-128](../planning/tasks.md), [journal 2026-07-11](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md).
 29. **REQ-F-088 — Honest downstream provenance stages (`filter`/`review`/`share`) + the
-    route-to-human lineage fix (W3).** The Lineage DAG (`Provenance.tsx`) grows from 6 to 9
+    flag-for-review lineage fix (W3).** The Lineage DAG (`Provenance.tsx`) grows from 6 to 9
     stages; `PipelineStage` (`types.ts`) gains `filter | review | share`, each reading "not run in
     this build" unless THIS build actually produced its artifact or fired its gate —
     `api/main.py`'s `_ARTIFACT_STAGE` gains the filename→stage seams (a `.norm.vcf.gz` →
-    `filter`, a `route_to_human.json` → `review`, a `share_manifest.json` → `share`; none is
+    `filter`, a `flag_for_review.json` → `review`, a `share_manifest.json` → `share`; none is
     emitted by any committed fixture, so all three read honestly empty today). **Fixes a real
-    honesty bug**: a fired route-to-human ESCALATE (`VAR-RTH-001`, REQ-F not yet numbered — see
+    honesty bug**: a fired flag-for-review ESCALATE (`VAR-FFR-001`, REQ-F not yet numbered — see
     ADR-0018 D2) used to render the review node as "skipped" (no VCF artifact) even though the
     rules had already escalated the sample; a fired gate now wins over the no-artifact default,
     so the review node reads ESCALATE, matching the decision the rules made. *Trace:*
@@ -1268,10 +1273,10 @@ had reserved or listed as *not-yet-built*.
 35. **REQ-F-094 — Per-variant Report table + read-only `GET /api/runs/{id}/variants` (W3
     continuation).** A new read-only endpoint (`api/main.py`) serves every `VariantCall` a run's
     `variants.csv` carries, parsed via the SAME `bayleaf.parsers.parse_variant_calls` the
-    route-to-human rule (VAR-RTH-001) already uses — 404 for an unknown run, `[]` (never a 404 or
+    flag-for-review rule (VAR-FFR-001) already uses — 404 for an unknown run, `[]` (never a 404 or
     a fabricated row) when a run has no `variants.csv`. `RunReport.tsx` renders it as a paginated
     table (Sample/Gene/HGVS/ClinVar significance quoted VERBATIM/review status/accession) beneath
-    the route-to-human hero, with its own disclaimer that bayleaf authors no pathogenicity and
+    the flag-for-review hero, with its own disclaimer that bayleaf authors no pathogenicity and
     sets no verdict here (ADR-0004/ADR-0001). This closes the "no per-variant evidence table" gap
     REQ-F-087 and [variant-interpretation.md §0 item 3](../design/variant-interpretation.md)
     used to name — narrower than the full `AnnotatedVariant` model still design-only

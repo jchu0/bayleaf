@@ -19,18 +19,18 @@ import { VERDICT_ORDER } from '../verdict'
 // from the rule engine's cards (ADR-0001, G1), and every ClinVar significance is quoted VERBATIM
 // from the finding's cited evidence (G3/G4) — bayleaf authors no pathogenicity. The report has
 // no write path; human sign-off is a labelled seam, not a button (ADR-0018 L61: bayleaf can
-// never mark a report final on its own). The route-to-human hero + per-sample blocks render over
+// never mark a report final on its own). The flag-for-review hero + per-sample blocks render over
 // `detail` (cards + events) already on the wire; the full per-variant table (W3) additionally
 // reads GET /api/runs/{id}/variants — every ClinVar significance quoted VERBATIM, no interpretation
 // agent, no verdict authored here.
 
 
-// A route-to-human finding carries the ClinVar significance verbatim in a CLNSIG evidence row.
+// A flag-for-review finding carries the ClinVar significance verbatim in a CLNSIG evidence row.
 function clnsigOf(f: Finding): Evidence | null {
   return f.evidence.find((e) => e.source_field === 'CLNSIG') ?? null
 }
-function isRouteToHuman(f: Finding): boolean {
-  return f.rule_id === 'VAR-RTH-001' || clnsigOf(f) != null
+function isFlagForReview(f: Finding): boolean {
+  return f.rule_id === 'VAR-FFR-001' || clnsigOf(f) != null
 }
 
 type RthHit = { sampleId: string; verdict: Verdict; finding: Finding; clnsig: Evidence; candidate: Evidence | null }
@@ -73,7 +73,7 @@ export function RunReport({ detail }: { detail: RunDetail }) {
     [detail],
   )
 
-  // Every route-to-human hit across the run: the sample, its verdict, the verbatim ClinVar row,
+  // Every flag-for-review hit across the run: the sample, its verdict, the verbatim ClinVar row,
   // and the annotated candidate row. The rules already decided ESCALATE — the report only surfaces
   // the cited evidence they stood on.
   const rthHits: RthHit[] = useMemo(() => {
@@ -81,7 +81,7 @@ export function RunReport({ detail }: { detail: RunDetail }) {
     for (const c of detail.cards) {
       for (const f of c.findings) {
         const clnsig = clnsigOf(f)
-        if (!isRouteToHuman(f) || !clnsig) continue
+        if (!isFlagForReview(f) || !clnsig) continue
         const candidate = f.evidence.find((e) => e !== clnsig) ?? null
         out.push({ sampleId: c.sample_id, verdict: c.verdict, finding: f, clnsig, candidate })
       }
@@ -158,30 +158,30 @@ export function RunReport({ detail }: { detail: RunDetail }) {
         </div>
       )}
 
-      {/* Route-to-human — the clinically-significant hero of the report. Rules decided ESCALATE;
+      {/* Flag for review — the clinically-significant hero of the report. Rules decided ESCALATE;
           the report surfaces the verbatim ClinVar citation they stood on. */}
       <section>
         <SectionTitle icon={<ShieldAlert size={14} strokeWidth={2} className="text-escalate" />}>
-          Clinically significant variants · routed to human review
+          Clinically significant variants · flagged for review
         </SectionTitle>
         {rthHits.length === 0 ? (
           <div className="mt-2.5 flex items-center gap-2.5 rounded-[12px] border border-line bg-card px-4 py-3.5 text-[12.5px] text-text-2">
             <CheckCircle2 size={16} strokeWidth={2} className="shrink-0 text-text-3" />
-            No variants were routed to human review in this run. Route-to-human (VAR-RTH-001) is off by default; it fires
+            No variants were flagged for review in this run. Flag for review (VAR-FFR-001) is off by default; it fires
             only when the runbook arms a ClinVar significance for the run.
           </div>
         ) : (
           <div className="mt-2.5 flex flex-col gap-2.5">
             {rthHits.map((h) => (
-              <RouteToHumanCard key={`${h.sampleId}:${h.finding.id}`} hit={h} />
+              <FlagForReviewCard key={`${h.sampleId}:${h.finding.id}`} hit={h} />
             ))}
           </div>
         )}
       </section>
 
       {/* Full per-variant table (W3) — every annotated candidate variant the run carried, read from
-          variants.csv via the read-only endpoint. This is the fuller table beneath the route-to-
-          human hero above; ClinVar significance is quoted VERBATIM, bayleaf authors no
+          variants.csv via the read-only endpoint. This is the fuller table beneath the flag-for-
+          review hero above; ClinVar significance is quoted VERBATIM, bayleaf authors no
           pathogenicity and sets no verdict here (ADR-0004 / ADR-0001). */}
       <section>
         <SectionTitle icon={<Dna size={14} strokeWidth={2} className="text-accent" />}>
@@ -315,9 +315,9 @@ export function RunReport({ detail }: { detail: RunDetail }) {
   )
 }
 
-// One route-to-human hit — the ClinVar classification quoted VERBATIM, the annotated candidate, the
-// citation, and the routing action. The big quoted string is the cited source value, unmodified.
-function RouteToHumanCard({ hit }: { hit: RthHit }) {
+// One flag-for-review hit — the ClinVar classification quoted VERBATIM, the annotated candidate, the
+// citation, and the flag action. The big quoted string is the cited source value, unmodified.
+function FlagForReviewCard({ hit }: { hit: RthHit }) {
   const { clnsig, candidate, finding } = hit
   const reviewStatus = clnsig.threshold // the finding packs "review status: …" here
   const citation = clnsig.source // e.g. "ClinVar 2026-01"
@@ -327,7 +327,7 @@ function RouteToHumanCard({ hit }: { hit: RthHit }) {
       <div className="flex flex-wrap items-center gap-2.5 border-b border-escalate-bd px-4 py-3">
         <VerdictBadge verdict={hit.verdict} />
         <span className="font-mono text-[14px] font-semibold text-text">{hit.sampleId}</span>
-        <span className="text-[12.5px] text-text-2">Routed to mandatory human review</span>
+        <span className="text-[12.5px] text-text-2">Flagged for review</span>
         <span className="ml-auto rounded-[5px] border border-line bg-card px-1.5 py-px font-mono text-[10.5px] font-medium text-text-2">
           {finding.rule_id}
         </span>

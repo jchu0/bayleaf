@@ -2,7 +2,7 @@
 
 The acceptance criterion for the just-landed W1 (approval-gated ``POST /api/pipelines/run``), W3
 (RunDetail Report data + downstream provenance stages ``filter | review | share`` + the
-route-to-human fix), and W4 (per-sample fan-out intent + full port wiring). It threads the real API
+flag-for-review fix), and W4 (per-sample fan-out intent + full port wiring). It threads the real API
 surface — intake (``api/routers/intake.py``), the Builder save/lifecycle
 (``api/main.save_pipeline`` + ``api/routers/pipelines_lifecycle.py``), operator execution
 (``api/routers/pipeline_run.py``), and the read-API (``GET /api/runs/{id}``) — over the committed
@@ -26,7 +26,7 @@ graph the offline tests run is a real, ``nextflow -stub-run``-valid pipeline —
 ``nextflow`` is absent (mirrors ``test_nextflow_compile.py::test_generated_germline_stub_runs``).
 
 Guardrails (CLAUDE.md / ADR-0001): the test never sets a verdict/confidence — it asserts what the
-RULES decided. The route-to-human evidence is ClinVar quoted VERBATIM (G3/G4); bayleaf authors no
+RULES decided. The flag-for-review evidence is ClinVar quoted VERBATIM (G3/G4); bayleaf authors no
 pathogenicity. Compose != execute: every "run" is a hand-off assertion, not an execution.
 """
 
@@ -55,7 +55,7 @@ _VIEWER = {"X-Bayleaf-Role": "viewer", "X-Bayleaf-Actor": "v.iewer"}
 
 # The committed fixtures the Report assertions read (never fabricated; pinned demo scenarios).
 _MOCK = "mock_run_01"  # proceed / hold / escalate mix (the pinned scenario)
-_RTH = "RUN-2026-07-11-CLINVAR-RTH"  # route-to-human: HG002 escalates via VAR-RTH-001
+_RTH = "RUN-2026-07-11-CLINVAR-RTH"  # flag-for-review: HG002 escalates via VAR-FFR-001
 
 # The seeded germline chain's topological step order (what the approved graph compiles to). The
 # first two are the invariant head of the chain; BCFTOOLS_NORM is the tail — pinned so a wiring
@@ -247,16 +247,16 @@ def test_report_data_verdict_mix_and_per_sample_gate_outcomes() -> None:
     assert all(c["confidence"] is None for c in detail["cards"])
 
 
-def test_report_route_to_human_quotes_clinvar_verbatim() -> None:
-    """The route-to-human Report (W3): HG002 escalates via VAR-RTH-001 on the variant gate, and the
+def test_report_flag_for_review_quotes_clinvar_verbatim() -> None:
+    """The flag-for-review Report (W3): HG002 escalates via VAR-FFR-001 on the variant gate, and the
     ClinVar significance is QUOTED VERBATIM as cited evidence — bayleaf authors no pathogenicity
-    (G3/G4, ADR-0004). The per-run arming (data/RUN-…-CLINVAR-RTH/route_to_human) drives it; the
+    (G3/G4, ADR-0004). The per-run arming (data/RUN-…-CLINVAR-RTH/flag_for_review) drives it; the
     core default stays disarmed."""
     detail = client.get(f"/api/runs/{_RTH}").json()
     assert detail["summary"]["counts"] == {"proceed": 0, "hold": 0, "rerun": 0, "escalate": 1}
     hg002 = next(c for c in detail["cards"] if c["sample_id"] == "HG002")
     assert hg002["verdict"] == "escalate"  # a deterministic rule routed it (rules decide)
-    rth = next(f for f in hg002["findings"] if f["rule_id"] == "VAR-RTH-001")
+    rth = next(f for f in hg002["findings"] if f["rule_id"] == "VAR-FFR-001")
     assert rth["gate"] == "variant"  # lands on the variant gate, not QC
     # The finding QUOTES ClinVar verbatim + cites the accession — it authors no significance.
     clnsig = next(e for e in rth["evidence"] if e["source_field"] == "CLNSIG")
@@ -269,7 +269,7 @@ def test_report_route_to_human_quotes_clinvar_verbatim() -> None:
 
 def test_downstream_provenance_stages_read_honestly(tmp_path: Path, monkeypatch: Any) -> None:
     """W3 downstream lineage honesty. The frontend Provenance ``review | filter | share`` nodes
-    derive from the API DATA this test asserts: the route-to-human REVIEW node reads ESCALATE (the
+    derive from the API DATA this test asserts: the flag-for-review REVIEW node reads ESCALATE (the
     fired variant gate WINS over "skipped"), while FILTER / SHARE honestly read "not run in this
     build" (no artifact / no share event) — never a fabricated green."""
     _isolate_store(tmp_path, monkeypatch)  # isolate the SHARE store — no stray local export
@@ -284,7 +284,7 @@ def test_downstream_provenance_stages_read_honestly(tmp_path: Path, monkeypatch:
         if g["gate"] == "variant"
     }
     assert ("variant", "escalate") in variant_outcomes
-    # ...and no route_to_human.json artifact exists — the FIRED GATE, not an artifact, is the signal
+    # ...and no flag_for_review.json artifact exists — the FIRED GATE, not an artifact, is signal
     # (the RTH fixture carries variants.csv, not a .vcf/routing record).
     assert not any(a["stage"] == "review" for a in arts)
 
@@ -298,15 +298,15 @@ def test_downstream_provenance_stages_read_honestly(tmp_path: Path, monkeypatch:
 
 
 def test_downstream_stage_seam_mapping_is_honest() -> None:
-    """The W3 filename→stage seams (unit): a filtered/normalized VCF, a route-to-human routing
+    """The W3 filename→stage seams (unit): a filtered/normalized VCF, a flag-for-review routing
     record, and a de-identified share manifest each land on their OWN downstream stage; the per-run
-    route_to_human ARMING marker (config, no extension) is never a data artifact."""
+    flag_for_review ARMING marker (config, no extension) is never a data artifact."""
     from api.main import _artifact_stage_roles
 
     assert _artifact_stage_roles("HG002.norm.vcf.gz") == [("filter", "output")]
-    assert _artifact_stage_roles("route_to_human.json") == [("review", "output")]
+    assert _artifact_stage_roles("flag_for_review.json") == [("review", "output")]
     assert _artifact_stage_roles("share_manifest.json") == [("share", "output")]
-    assert _artifact_stage_roles("route_to_human") == []  # the arming marker is config, not data
+    assert _artifact_stage_roles("flag_for_review") == []  # the arming marker is config, not data
 
 
 # === Env-gated live confirmation =============================================================

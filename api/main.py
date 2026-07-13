@@ -40,7 +40,7 @@ from bayleaf.models import DecisionCard, Gate, Sample, VariantCall, Verdict
 from bayleaf.parsers import parse_variant_calls
 from bayleaf.pipeline_repair import RepairProposal, propose_repair, recurring_signature
 from bayleaf.provenance import EntityRef, EventType, ProvenanceEvent
-from bayleaf.runbook import RouteToHumanPolicy, Runbook
+from bayleaf.runbook import FlagForReviewPolicy, Runbook
 from bayleaf.triage import AgentReply, TriageNote, ask_agent
 
 from .archivist import ArchiveDigest, ArtifactRef, RunArchiveInput, _classify_kind, archive_digest
@@ -234,9 +234,9 @@ def _run_status(*, completed: bool, n_attention: int) -> str:
 
 def _active_runbook(run_id: str) -> Runbook:
     """The runbook the gate uses for THIS run — the stock DEFAULT_RUNBOOK unless the run dir carries
-    a `route_to_human` marker (comma-separated ClinVar significances) that arms VAR-RTH-001 for it.
+    a `flag_for_review` marker (comma-separated ClinVar significances) that arms VAR-FFR-001 for it.
 
-    Route-to-human is off by default in the core (ADR-0018 D2); this is the deployment-config seam
+    Flag-for-review is off by default in the core (ADR-0018 D2); this is the deployment-config seam
     that arms it, scoped PER RUN via a marker so a single contrived fixture can demonstrate the
     human-review escalation while every real/other run stays disarmed. Empty/absent → disarmed.
 
@@ -247,14 +247,14 @@ def _active_runbook(run_id: str) -> Runbook:
     ``RunbookSet`` per sample and folding approved Settings overrides into it is a labelled
     follow-up (WS-05 Gaps B/C/D) — deliberately NOT half-wired.
     """
-    marker = _run_dir(run_id) / "route_to_human"
+    marker = _run_dir(run_id) / "flag_for_review"
     if not marker.exists():
         return DEFAULT_RUNBOOK
     sigs = tuple(s.strip() for s in marker.read_text(encoding="utf-8").split(",") if s.strip())
     if not sigs:
         return DEFAULT_RUNBOOK
-    policy = RouteToHumanPolicy(significances=sigs)
-    return DEFAULT_RUNBOOK.model_copy(update={"route_to_human": policy})
+    policy = FlagForReviewPolicy(significances=sigs)
+    return DEFAULT_RUNBOOK.model_copy(update={"flag_for_review": policy})
 
 
 @lru_cache(maxsize=32)
@@ -594,8 +594,8 @@ def get_run_variants(run_id: str) -> list[VariantCall]:
     runs an annotator (composes ≠ executes, ADR-0003) and never authors pathogenicity. Every
     ClinVar significance is preserved VERBATIM from the source (ADR-0004); no verdict or confidence
     is set here (ADR-0001) — this feeds the RunReport's full per-variant table beneath the
-    route-to-human hero. A run with no `variants.csv` returns an empty list (a missing annotation is
-    a signal, not an error); an unknown run is a 404, mirroring the other run-detail reads.
+    flag-for-review hero. A run with no `variants.csv` returns an empty list (a missing
+    annotation is a signal, not an error); an unknown run is a 404, mirroring other run reads.
     """
     run_dir = _run_dir(run_id)  # 404 if the run id is unknown (no SampleSheet.csv)
     # parse_variant_calls tolerates an absent file → [], so a run without variants.csv is fine.
@@ -627,9 +627,9 @@ _ARTIFACT_STAGE: dict[str, list[tuple[str, str]]] = {
     "pipeline.log": [("gate", "input")],
     # Post-variant lineage seams (W3). No committed fixture emits these, so the downstream
     # provenance stages honestly read "not run in this build" — but when a build DOES publish a
-    # route-to-human routing record or a de-identified share manifest, it lands on the right stage
-    # instead of vanishing (the route_to_human ARMING marker stays config, never a data artifact).
-    "route_to_human.json": [("review", "output")],
+    # flag-for-review routing record or a de-identified share manifest, it lands on the right stage
+    # instead of vanishing (the flag_for_review ARMING marker stays config, never a data artifact).
+    "flag_for_review.json": [("review", "output")],
     "share_manifest.json": [("share", "output")],
 }
 _SKIP_ARTIFACTS = {"origin"}  # provenance marker, not a data artifact

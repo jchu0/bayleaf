@@ -63,17 +63,17 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
         // Action: issues waiting on a human.
         { label: 'Review queue', to: '/queue', icon: Inbox, active: pathname.startsWith('/queue'), page: 'queue' },
         // Steps: the process flow, beginning at subject accessioning (the CRM step).
-        { label: 'Sample accessioning', to: '/accession', icon: ClipboardList, active: pathname.startsWith('/accession'), page: 'accession' },
-        { label: 'Submit samplesheet', to: '/submit', icon: FileUp, active: pathname.startsWith('/submit'), page: 'submit' },
+        { label: 'Sample Metadata', to: '/accession', icon: ClipboardList, active: pathname.startsWith('/accession'), page: 'accession' },
+        { label: 'Samplesheet', to: '/submit', icon: FileUp, active: pathname.startsWith('/submit'), page: 'submit' },
         {
-          label: 'Intake gate',
+          label: 'Intake',
           to: run ? `/runs/${run}/intake` : '/',
           icon: Filter,
           active: pathname.includes('/intake'),
           page: 'intake',
         },
         {
-          label: 'Decision cards',
+          label: 'Decisions',
           to: runHome,
           icon: FileCheck2,
           active: /^\/runs\/[^/]+$/.test(pathname),
@@ -96,7 +96,7 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
           page: 'provenance',
         },
         {
-          label: 'Agent triage',
+          label: 'Triage',
           to: run ? `/runs/${run}/agent` : '/',
           icon: Star,
           // Per-run triage only — exclude the run-independent /agents home (which also contains '/agent').
@@ -105,14 +105,14 @@ function useNav(runs: RunSummary[], defaultRunId: string | null): Group[] {
         },
         // The org-wide system agents (pipeline-repair, archivist) act across runs — a run-independent
         // entry so they're reachable without (and survive the 404 of) a specific run.
-        { label: 'System agents', to: '/agents', icon: Sparkles, active: pathname === '/agents', page: 'agent' },
+        { label: 'System Agents', to: '/system-agents', icon: Sparkles, active: pathname === '/system-agents', page: 'systemAgents' },
         { label: 'Monitoring', to: '/monitoring', icon: Activity, active: pathname.startsWith('/monitoring'), page: 'monitoring' },
       ],
     },
     {
       heading: 'Configure',
       items: [
-        { label: 'Pipeline builder', to: '/builder', icon: GitFork, active: pathname.startsWith('/builder'), page: 'builder' },
+        { label: 'Pipeline', to: '/builder', icon: GitFork, active: pathname.startsWith('/builder'), page: 'builder' },
         { label: 'Settings', to: '/settings', icon: SlidersVertical, active: pathname.startsWith('/settings'), page: 'settings' },
       ],
     },

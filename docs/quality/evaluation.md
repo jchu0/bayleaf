@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-13 (MST) — census refresh 722/54 → **727/55** (re-derived: `uv run pytest --collect-only -q` → 727; `git ls-files 'tests/*.py' \| wc -l` → 55). One new file, `tests/test_real_giab_calibrated.py` (+3, live-genomics WS-02/WS-04 real-calibrated-data proof), plus one test each in `test_gate.py` (b03d1fa's `CheckCoverage` contamination-flip freeze) and `test_pipeline_run.py` (`7cef743`'s Builder-Run parse-contract-parity red-before-impl guard). `uv run pytest -q` → **719 passed / 8 skipped** (unchanged skip set). Prior: 2026-07-12 (MST) — gap-analysis-remediation census refresh (634/48 → 708/52 → 722/54; WS-01/03/05/06/07/08/09/10, then WS-02/WS-04 + a caught pre-existing drift, `test_card_readout` 17→21, from the un-recounted `61936d1` WS-06 Gap 2 API-wiring commit) |
+| **Last updated** | 2026-07-13 (MST) — **route-to-human → flag-for-review** naming refresh: EVAL-012 + the test-file census entry `test_route_to_human` → `test_flag_for_review` (file renamed, count unchanged), rule id `VAR-FFR-001`. Also: census refresh 722/54 → **727/55** (re-derived: `uv run pytest --collect-only -q` → 727; `git ls-files 'tests/*.py' \| wc -l` → 55). One new file, `tests/test_real_giab_calibrated.py` (+3, live-genomics WS-02/WS-04 real-calibrated-data proof), plus one test each in `test_gate.py` (b03d1fa's `CheckCoverage` contamination-flip freeze) and `test_pipeline_run.py` (`7cef743`'s Builder-Run parse-contract-parity red-before-impl guard). `uv run pytest -q` → **719 passed / 8 skipped** (unchanged skip set). Prior: 2026-07-12 (MST) — gap-analysis-remediation census refresh (634/48 → 708/52 → 722/54; WS-01/03/05/06/07/08/09/10, then WS-02/WS-04 + a caught pre-existing drift, `test_card_readout` 17→21, from the un-recounted `61936d1` WS-06 Gap 2 API-wiring commit) |
 | **Audience** | software / all |
-| **Related** | [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) (the workstream tracker this census reflects), [journal/2026-07-12-gap-analysis-remediation-verification.md](../journal/2026-07-12-gap-analysis-remediation-verification.md), [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006, EVAL-009), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress, per-variant table EVAL-013), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (custom-script processes, EVAL-015; sandboxed file browser, EVAL-016; compiler robustness, EVAL-017), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (authored-pipeline intake + processing gate, EVAL-018), [HISTORY.md](../HISTORY.md) (archived census milestones), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) (EVAL-009, EVAL-013), [journal/2026-07-11-fleet.md](../journal/2026-07-11-fleet.md) (EVAL-008 update, EVAL-014), [journal/2026-07-11-custom-script-io.md](../journal/2026-07-11-custom-script-io.md) (EVAL-015, EVAL-016), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (EVAL-014), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
+| **Related** | [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) (the workstream tracker this census reflects), [journal/2026-07-12-gap-analysis-remediation-verification.md](../journal/2026-07-12-gap-analysis-remediation-verification.md), [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006, EVAL-009), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (flag-for-review, de-id, share egress, per-variant table EVAL-013), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (custom-script processes, EVAL-015; sandboxed file browser, EVAL-016; compiler robustness, EVAL-017), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (authored-pipeline intake + processing gate, EVAL-018), [HISTORY.md](../HISTORY.md) (archived census milestones), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) (EVAL-009, EVAL-013), [journal/2026-07-11-fleet.md](../journal/2026-07-11-fleet.md) (EVAL-008 update, EVAL-014), [journal/2026-07-11-custom-script-io.md](../journal/2026-07-11-custom-script-io.md) (EVAL-015, EVAL-016), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (EVAL-014), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
 
 ## Overview
 
@@ -82,8 +82,8 @@ genome-wide-calibrated VerifyBamID2 FREEMIX + real hap.py SNP-F1 vs GIAB v4.2.1 
 `ingest_results_dir → run_gate`, proving the parsers on genuine tool output, not just a
 format-mimicking fixture), `test_pipeline_run` (13, was 12 — `7cef743` adds the
 Builder-Run non-gateable-pipeline 422 freeze test), `test_pipeline_lifecycle` (11,
-submit/approve/dry-run/diff), `test_route_to_human` (10, the
-off-by-default route-to-human gate rule VAR-RTH-001, ADR-0018 D2), `test_node_observations` (10,
+submit/approve/dry-run/diff), `test_flag_for_review` (10, the
+off-by-default flag-for-review gate rule VAR-FFR-001, ADR-0018 D2), `test_node_observations` (10,
 was 8 — WS-08 interim's `logs`-grant-requires-reviewer+ access-control tests), `test_files_api` (10,
 the sandboxed `GET /api/files` browser: allowlist, traversal/absolute/symlink-escape rejection, kind
 inference, role gate, ADR-0020, EVAL-016), `test_e2e_pipeline` (10, the offline acceptance test threading
@@ -287,7 +287,7 @@ claim.
 |---|---|
 | **Target** | The full W1+W3+W4 arc over the real API surface — `api/routers/intake.py` (registration), `api/pipeline_store.py` + `api/routers/pipelines_lifecycle.py` (Save→Submit→Approve), `api/routers/pipeline_run.py` (the approval-gated execution, ADR-0017), `GET /api/runs/{id}` (report/provenance data, W3) |
 | **Type** | Deterministic (+ one machine-gated live check) |
-| **Automated?** | Yes — `test_e2e_pipeline.py` (9 offline + 1 machine-gated: `test_sheet_creation_registers_run_and_skips_unfixtured_samples`, `test_intake_parse_contract_rejects_pii_and_a_no_op_sheet`, `test_approval_gate_blocks_run_until_approved_then_accepts`, `test_run_rejects_a_posted_graph_no_bypass`, `test_seed_script_produces_an_approved_baseline_runnable_by_name`, `test_report_data_verdict_mix_and_per_sample_gate_outcomes`, `test_report_route_to_human_quotes_clinvar_verbatim`, `test_downstream_provenance_stages_read_honestly`, `test_downstream_stage_seam_mapping_is_honest`, `test_approved_germline_pipeline_stub_runs_live`) |
+| **Automated?** | Yes — `test_e2e_pipeline.py` (9 offline + 1 machine-gated: `test_sheet_creation_registers_run_and_skips_unfixtured_samples`, `test_intake_parse_contract_rejects_pii_and_a_no_op_sheet`, `test_approval_gate_blocks_run_until_approved_then_accepts`, `test_run_rejects_a_posted_graph_no_bypass`, `test_seed_script_produces_an_approved_baseline_runnable_by_name`, `test_report_data_verdict_mix_and_per_sample_gate_outcomes`, `test_report_flag_for_review_quotes_clinvar_verbatim`, `test_downstream_provenance_stages_read_honestly`, `test_downstream_stage_seam_mapping_is_honest`, `test_approved_germline_pipeline_stub_runs_live`) |
 
 **Definition of good.** The whole demo arc holds together end to end, over the real API, not just
 per-module unit tests: (1) a multi-sample sheet registers a run and honestly reports which
@@ -301,7 +301,7 @@ cannot smuggle a raw `graph` to bypass the gate (422, `extra="forbid"`). The com
 through the Builder, idempotently (a second call mints no duplicate revision). (3) The report/
 provenance data (W3, REQ-F-087/REQ-F-088): the pinned `mock_run_01` scenario's verdict mix and
 per-sample gate outcomes are exactly what EVAL-001 already pins; the committed
-`RUN-2026-07-11-CLINVAR-RTH` fixture escalates via `VAR-RTH-001` with ClinVar quoted **verbatim**
+`RUN-2026-07-11-CLINVAR-RTH` fixture escalates via `VAR-FFR-001` with ClinVar quoted **verbatim**
 (never bayleaf's own determination); the downstream `review` provenance stage reads ESCALATE
 (the fired gate wins over "skipped," the W3 honesty fix), while `filter`/`share` honestly read
 "not run in this build" since neither produced an artifact or event on this run.
@@ -321,7 +321,7 @@ be invisible to per-module unit tests that only check the compiler in isolation 
 asserting the actual `steps` list `POST /api/pipelines/run` returns. A regression that let a
 posted graph bypass the approval gate (the exact audit finding P1-6/P3-14 this arc closes) is
 pinned by `test_run_rejects_a_posted_graph_no_bypass`, independent of the store/approval state.
-The route-to-human "skipped-while-escalated" lineage bug (W3) is pinned directly by
+The flag-for-review "skipped-while-escalated" lineage bug (W3) is pinned directly by
 `test_downstream_provenance_stages_read_honestly`, not just by the underlying rule test
 (EVAL-012) — a regression in the frontend-facing stage-mapping logic, not just the rule, would be
 caught here.
@@ -748,18 +748,18 @@ break the tolerant boundary — asserted by `test_parse_execution_trace_is_toler
 trace must not change the pinned demo verdicts (those runs have no `trace.txt`) — preserved by
 EVAL-001/EVAL-010.
 
-### EVAL-012 — Route-to-human (VAR-RTH-001): off by default, verbatim ClinVar, rules decide
+### EVAL-012 — Flag for review (VAR-FFR-001): off by default, verbatim ClinVar, rules decide
 
 | Field | Value |
 |---|---|
-| **Target** | Route-to-human gate rule (`rules._check_route_to_human`, **VAR-RTH-001**) — `runbook.RouteToHumanPolicy` + `models.VariantCall` + `parsers.parse_variant_calls` end-to-end through the gate |
+| **Target** | Flag for review gate rule (`rules._check_flag_for_review`, **VAR-FFR-001**) — `runbook.FlagForReviewPolicy` + `models.VariantCall` + `parsers.parse_variant_calls` end-to-end through the gate |
 | **Type** | Failure-mode |
-| **Automated?** | Yes — `test_route_to_human.py` (`test_parse_variant_calls_reads_verbatim`, `test_parse_variant_calls_is_tolerant`, `test_route_to_human_is_off_by_default`, `test_armed_pathogenic_routes_to_human`, `test_armed_benign_does_not_route`, `test_significance_match_is_separator_insensitive`, `test_review_status_floor_gates_routing`, `test_end_to_end_armed_run_escalates_the_card`, `test_disarmed_run_matches_stock_evaluation`, `test_clinvar_rth_fixture_escalates_via_per_run_arming` — 2026-07-11, the committed-fixture end-to-end case, see Method below) |
+| **Automated?** | Yes — `test_flag_for_review.py` (`test_parse_variant_calls_reads_verbatim`, `test_parse_variant_calls_is_tolerant`, `test_flag_for_review_is_off_by_default`, `test_armed_pathogenic_routes_to_human`, `test_armed_benign_does_not_route`, `test_significance_match_is_separator_insensitive`, `test_review_status_floor_gates_routing`, `test_end_to_end_armed_run_escalates_the_card`, `test_disarmed_run_matches_stock_evaluation`, `test_clinvar_rth_fixture_escalates_via_per_run_arming` — 2026-07-11, the committed-fixture end-to-end case, see Method below) |
 
 **Definition of good.** With the policy **disarmed** (the shipped default — empty
 `significances`), a run carrying even a Pathogenic candidate produces **no** routing finding and
 `evaluate_sample` is byte-identical to a run with no `variants.csv` at all. **Armed** with a
-significance list, a matching candidate produces a CRITICAL `Finding` (`rule_id="VAR-RTH-001"`,
+significance list, a matching candidate produces a CRITICAL `Finding` (`rule_id="VAR-FFR-001"`,
 `category=variant`, lands on `Gate.VARIANT`) whose `suggested_verdict` is **ESCALATE** and drives
 the card to ESCALATE end-to-end (rules decide, ADR-0001); a Benign candidate never routes; the
 match is separator-/case-insensitive (`Likely_pathogenic` ≈ `"Likely pathogenic"`) while the
@@ -775,15 +775,15 @@ fires only for the matching significance, cites the accession/version, and quote
 assert the review-status floor gates a single-submitter call; run the gate end-to-end on an armed
 vs. disarmed runbook and assert ESCALATE only when armed. **2026-07-11 addition:** exercise the
 same rule against a **committed run**, not just an in-memory fixture — `api.main._active_runbook`
-reads the `route_to_human` marker in `data/RUN-2026-07-11-CLINVAR-RTH/` (a real HG002 run,
+reads the `flag_for_review` marker in `data/RUN-2026-07-11-CLINVAR-RTH/` (a real HG002 run,
 `origin=contrived`, carrying a verbatim-cited ClinVar Pathogenic BRCA1 spike HG002 does not
-actually carry) and asserts the card ESCALATEs via `VAR-RTH-001` with the verbatim `CLNSIG`
+actually carry) and asserts the card ESCALATEs via `VAR-FFR-001` with the verbatim `CLNSIG`
 evidence, while an unmarked committed run (`RUN-2026-07-04-GIAB-A`) stays disarmed — closing the
 "never fires end-to-end against a committed run" gap the 2026-07-10 sweep had left open.
 
 **Known failure modes.** A rule that fired on a disarmed default would move the pinned demo
 verdicts — prevented structurally (empty tuple ⇒ `.armed is False`) and pinned by
-`test_route_to_human_is_off_by_default`/`test_disarmed_run_matches_stock_evaluation`. A rule that
+`test_flag_for_review_is_off_by_default`/`test_disarmed_run_matches_stock_evaluation`. A rule that
 normalized or reclassified `clinvar_significance` before quoting it would risk bayleaf
 authoring pathogenicity — pinned by `test_armed_pathogenic_routes_to_human` asserting the quoted
 value is verbatim.
@@ -802,7 +802,7 @@ normalized/reclassified, ADR-0004). A run whose `variants.csv` carries a row ser
 field intact; a run with no `variants.csv` returns `[]` (an honest empty state — a missing
 annotation is a signal, not an error, never a fabricated row); an unknown run id is a 404,
 mirroring `get_run`/`get_card`'s existing read pattern (no new exposure — the same ClinVar value
-this endpoint serves was already reachable through a fired route-to-human `card.findings`
+this endpoint serves was already reachable through a fired flag-for-review `card.findings`
 citation, EVAL-012).
 
 **Method.** Hit the endpoint via `TestClient` against the committed `RUN-2026-07-11-CLINVAR-RTH`

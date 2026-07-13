@@ -357,7 +357,7 @@ def load_run(run_dir: str | Path, run_id: str | None = None) -> RunArtifacts:
     log = parse_log(_maybe("pipeline.log"))
     trace = parse_execution_trace(_maybe("trace.txt"))
     # Annotated candidate variants (ADR-0018) — absent for every run today; feeds only the
-    # off-by-default route-to-human rule, so a run without variants.csv is unaffected.
+    # off-by-default flag-for-review rule, so a run without variants.csv is unaffected.
     variant_calls = parse_variant_calls(_maybe("variants.csv"))
     # Per-run POLICY (optional): a run may DECLARE certain upstream metric classes absent (e.g. a
     # FASTQ-start run with no sequencer/SAV feed) so the gate notes them instead of HOLDing. Written

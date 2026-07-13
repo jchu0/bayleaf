@@ -137,8 +137,8 @@ export type RunsPage = {
 
 // The pipeline stages of the provenance canvas (§5). Fixed order: intake → demux → qc → align →
 // variant → filter → review → gate → share. The gate checkpoints attach to demux (preflight),
-// qc (qc), and review (variant — the route-to-human VAR-RTH-001 step). The post-variant stages
-// (filter/normalize, route-to-human review, de-identified share) are honest lineage nodes that
+// qc (qc), and review (variant — the flag-for-review VAR-FFR-001 step). The post-variant stages
+// (filter/normalize, flag-for-review review, de-identified share) are honest lineage nodes that
 // read "not run in this build" when this build produced no artifact/event for them (W3).
 export type PipelineStage =
   | 'intake'
@@ -174,7 +174,7 @@ export type RunDetail = {
 // annotated VCF/table (ADR-0018) — a driver ran the annotator; bayleaf never does (composes ≠
 // executes). `clinvar_significance` is a VERBATIM ClinVar quotation, never bayleaf's own call
 // (ADR-0004). Every field but `sample_id` is nullable: a partial annotation is a signal, not a
-// crash. Backs the RunReport's full per-variant table (W3), beneath the route-to-human hero.
+// crash. Backs the RunReport's full per-variant table (W3), beneath the flag-for-review hero.
 export type VariantCall = {
   sample_id: string
   gene: string | null
@@ -281,9 +281,9 @@ export type QCThreshold = {
   required: boolean
 }
 
-// Off-by-default route-to-human policy (ADR-0018 D2). Disarmed when `significances` is empty (the
+// Off-by-default flag-for-review policy (ADR-0018 D2). Disarmed when `significances` is empty (the
 // shipped default). Tuples serialize to arrays over the wire.
-export type RouteToHumanPolicy = {
+export type FlagForReviewPolicy = {
   significances: string[]
   review_statuses: string[]
 }
@@ -294,7 +294,7 @@ export type Runbook = {
   qc_thresholds: QCThreshold[]
   log_failure_markers: string[]
   trace_failure_statuses: string[]
-  route_to_human: RouteToHumanPolicy
+  flag_for_review: FlagForReviewPolicy
 }
 
 // One registered metric type from the canonical registry (GET /api/metrics/registry).

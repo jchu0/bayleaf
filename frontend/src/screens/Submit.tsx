@@ -575,7 +575,7 @@ export function Submit() {
     <div className="mx-auto max-w-[1080px]">
       {/* UIC-1: the left-nav names this page — no eyebrow/subtitle prose. The identity-required and
           guardrail notes below are explicit safety warnings and stay. */}
-      <PageHeader title="New submission" />
+      <PageHeader title="Samplesheet" />
 
       {/* method toggle */}
       <div className="mt-[18px]">

@@ -176,7 +176,7 @@ export function RunDetail() {
   // still shown per-card in the context rail), and the Layout control are all gone.
   return (
     <div className="mx-auto max-w-[1080px]">
-      <PageHeader title={view === 'report' ? 'Run report' : 'Decision cards'} />
+      <PageHeader title={view === 'report' ? 'Run report' : 'Decisions'} />
       {renderBody()}
     </div>
   )
@@ -188,7 +188,7 @@ export function RunDetail() {
       <div className="mb-4">
         <Tabs<RunView>
           items={[
-            { value: 'cards', label: 'Decision cards' },
+            { value: 'cards', label: 'Decisions' },
             { value: 'report', label: 'Report' },
           ]}
           value={view}
