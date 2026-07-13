@@ -15,7 +15,7 @@ export function SystemAgents() {
   return (
     <div className="pg-fade mx-auto max-w-[1080px]">
       <PageHeader
-        title="System Agents"
+        title="System agents"
         subtitle="Advisory agents that act across runs and the organization — never a single run, never a verdict."
       />
 

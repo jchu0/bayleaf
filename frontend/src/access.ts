@@ -37,7 +37,7 @@ export type PageMeta = { id: PageId; label: string; group: NavGroup }
 // Single source of truth — drives the Sidebar filter, the AccessEditor override table, and the
 // effective-access preview. Order within Operate reflects the real lab flow (accession first).
 export const PAGE_CATALOG: PageMeta[] = [
-  { id: 'accession', label: 'Sample Metadata', group: 'Operate' },
+  { id: 'accession', label: 'Sample metadata', group: 'Operate' },
   { id: 'submit', label: 'Samplesheet', group: 'Operate' },
   { id: 'runs', label: 'Runs', group: 'Operate' },
   { id: 'intake', label: 'Intake', group: 'Operate' },
@@ -46,7 +46,7 @@ export const PAGE_CATALOG: PageMeta[] = [
   { id: 'inbox', label: 'Inbox', group: 'Operate' },
   { id: 'provenance', label: 'Provenance', group: 'Analyze' },
   { id: 'agent', label: 'Triage', group: 'Analyze' },
-  { id: 'systemAgents', label: 'System Agents', group: 'Analyze' },
+  { id: 'systemAgents', label: 'System agents', group: 'Analyze' },
   { id: 'monitoring', label: 'Monitoring', group: 'Analyze' },
   { id: 'builder', label: 'Pipeline', group: 'Configure' },
   { id: 'settings', label: 'Settings', group: 'Configure' },
