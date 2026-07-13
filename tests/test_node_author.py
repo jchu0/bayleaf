@@ -264,6 +264,36 @@ def test_claude_path_falls_back_to_stub_on_error(monkeypatch):
     assert proposal.generated_by == "stub"  # error degrades to stub
 
 
+class _RecordingClient(_FakeClient):
+    """Records the kwargs create() was called with, so a test can assert the token budget."""
+
+    def __init__(self, response=None):
+        super().__init__(response=response)
+        self.create_kwargs: dict = {}
+
+    def create(self, **kwargs):
+        self.create_kwargs = kwargs
+        return self._response
+
+
+def test_claude_proposal_requests_a_larger_budget_than_1024(monkeypatch):
+    """Regression: the structured proposal (summary + rationale) must request >1024 tokens.
+    At 1024 a long grounded proposal truncated mid-JSON and silently degraded to the stub
+    (same class as the QC-triage `ask` fix, 2026-07-13)."""
+    client = _RecordingClient(
+        _FakeResponse('{"summary": "MODEL summary", "rationale": "MODEL rationale"}')
+    )
+    _claude_agent(monkeypatch, client).propose("fastp")
+    assert client.create_kwargs["max_tokens"] >= 2048
+
+
+def test_claude_path_falls_back_to_stub_on_truncation(monkeypatch):
+    """A max_tokens-truncated response leaves unterminated JSON; degrade to the stub cleanly."""
+    truncated = _FakeResponse('{"summary": "half-written', stop_reason="max_tokens")
+    proposal = _claude_agent(monkeypatch, _RecordingClient(truncated)).propose("fastp")
+    assert proposal.generated_by == "stub"  # guarded, not crashed
+
+
 def test_claude_path_no_match_returns_stub_defer_without_calling_model(monkeypatch):
     """An unmatched request never reaches the model — it returns the conservative stub proposal."""
     # A client that would raise if called proves the model is never invoked when there is no hit.

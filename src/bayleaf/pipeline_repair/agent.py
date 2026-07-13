@@ -203,8 +203,12 @@ class ClaudeRepairAgent:
     name = "claude"
 
     def __init__(
-        self, model: str | None = None, max_tokens: int = 1024, retriever: Retriever | None = None
+        self, model: str | None = None, max_tokens: int = 2048, retriever: Retriever | None = None
     ) -> None:
+        # 2048, not 1024: the proposal carries two free-text fields (summary + rationale). A long
+        # signature/remediation set can push a grounded proposal past 1024, and a truncated
+        # response yields unterminated JSON that would silently degrade to the stub (mirrors the
+        # QC-triage `ask` budget, 2026-07-13).
         self.model = model or os.environ.get(
             "BAYLEAF_PIPELINE_REPAIR_MODEL", _DEFAULT_PIPELINE_REPAIR_MODEL
         )
@@ -274,9 +278,10 @@ class ClaudeRepairAgent:
                 messages=[{"role": "user", "content": user_content}],
                 output_config={"format": {"type": "json_schema", "schema": _PROSE_SCHEMA}},
             )
-            # Guard the refusal path before reading content (life-sciences work can trip safety
-            # classifiers; fall back rather than break the demo).
-            if response.stop_reason == "refusal":
+            # Guard refusal AND truncation before reading content: a safety refusal (life-sciences
+            # work can trip classifiers) or a max_tokens cutoff both leave no usable JSON — degrade
+            # to the grounded stub rather than break the demo or trip json.loads on partial output.
+            if response.stop_reason in ("refusal", "max_tokens"):
                 return self._fallback.propose(signature)
 
             text = next((b.text for b in response.content if b.type == "text"), None)
