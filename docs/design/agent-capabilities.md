@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| **Status** | 🚧 §1 archivist DB retrieval **built**; §2 pipeline-repair **docs corpus built** (issues+resolutions half deferred — needs the monitoring tool-agent); §3 node-author QoL still design |
-| **Last updated** | 2026-07-13 (MST) — §2 docs-corpus built: `pipeline_repair/knowledge/bayleaf_system.jsonl` + catalog-derived tool docs (`load_system_corpus`) ground the repair chat; live-verified. Prior: §1 `api/archivist_retrieval.py`; initial design |
+| **Status** | 🚧 §1 archivist DB retrieval **built**; §2 pipeline-repair **docs corpus built** (issues+resolutions half deferred — needs the monitoring tool-agent); §3 node-author **Accept-to-library button built** (doc-upload + schema-delta + scaffolds-as-assets still design) |
+| **Last updated** | 2026-07-13 (MST) — §3 Accept-to-library button wired (`AuthorToolNodeModal` → `POST .../accept`, confirm+role-gated, live-verified). Prior: §2 docs corpus (`load_system_corpus`); §1 `api/archivist_retrieval.py` |
 | **Audience** | software / design / reviewers |
 | **Related** | [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0009](../adr/ADR-0009-corpora-retrieval-upskilling.md) (corpora/retrieval), [ADR-0012](../adr/ADR-0012-agent-scoping-model-tiering.md), [ADR-0023](../adr/ADR-0023-agent-taxonomy-and-action-boundary.md), [ADR-0024](../adr/ADR-0024-scope-by-wiring.md), [ADR-0025](../adr/ADR-0025-versioned-reversible-agent-config.md), [agents.md](agents.md), [agent-authoring-contract.md](agent-authoring-contract.md) |
 
@@ -57,10 +57,13 @@ verdict (unchanged from today).
 The backend is wired + live (`GET /api/builder/node-proposal` → live `claude-sonnet-5`); the gap is
 the **authoring surface** and the **onboarding inputs**.
 
-1. **Tool-node authoring popup (QoL).** Replace the minimal surface with a proper popup/page: enter
-   a request or tool name → see the proposed node (typed ports, pinned version, locators, cited
-   rationale) rendered clearly, with inline edit + "accept to library" (the accept path + conformance
-   harness already exist backend-side).
+1. **Tool-node authoring popup (QoL).** **Built (P3, 2026-07-13):** the `AuthorToolNodeModal` now
+   wires the **"Accept to library"** button (was the CLAUDE.md-deferred item) to
+   `POST /api/builder/node-proposal/accept` — confirm-gated, role-gated (reviewer/approver; server
+   re-checks, viewer→403 verified), server RE-DERIVES the proposal + runs `check_conformance`, and
+   persists a **metadata-only draft** `LibraryEntry`. The modal already renders typed ports (live vs
+   reserved), pinned version, locators, cited rationale, and the version stamps. **Still deferred:**
+   inline edit of the proposal before accept, and the `draft→approved` transition.
 2. **Doc-upload.** Let the operator attach relevant documentation (a `nextflow_schema.json`, a
    README, `--help` text) so onboarding a *new* tool updates the necessary parts **from that input**
    rather than searching: the card metadata, the Nextflow process wiring, and the **data-schema
