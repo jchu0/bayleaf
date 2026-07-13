@@ -11,14 +11,26 @@ import math
 from pathlib import Path
 
 from pipeguard import load_run
-from pipeguard.metrics import metric_values_for
-from pipeguard.models import CanonicalUnit, MetricValue, QCMetrics
+from pipeguard.metrics import (
+    default_registry,
+    metric_values_for,
+    producible_metric_keys,
+    sample_metrics_from_qcmetrics,
+)
+from pipeguard.models import CanonicalUnit, MetricValue, QCMetrics, RawObservation, SampleMetrics
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "mock_run_01"
 
 
 def _by_key(values: list[MetricValue]) -> dict[str, MetricValue]:
     return {v.metric_key: v for v in values}
+
+
+def _fields(values: list[MetricValue]) -> list[tuple[str, float, float, str, str | None]]:
+    """The identity-relevant fields of each MetricValue (ignores the per-observe id)."""
+    return [
+        (v.metric_key, v.normalized_value, v.raw_value, v.raw_unit, v.source_field) for v in values
+    ]
 
 
 def test_maps_qcmetrics_to_normalized_metric_values() -> None:
@@ -54,6 +66,55 @@ def test_maps_qcmetrics_to_normalized_metric_values() -> None:
         assert v.analysis_run_id == "arun_test"
         assert v.metric_registry_version == 1
     assert by["qc.q30"].source_field == "q30"
+
+
+# ── WS-06 PR1: the registry-keyed SampleMetrics ingestion contract ─────────────────
+
+
+def test_metric_values_for_accepts_sample_metrics_directly() -> None:
+    """WS-06 PR1: metric_values_for consumes the registry-keyed SampleMetrics contract directly (the
+    shape a WS-03 adapter emits) via a GENERIC loop over our_key → RawObservation — no field
+    enumeration. A missing metric is simply absent from the map."""
+    sm = SampleMetrics(
+        sample_id="S5",
+        raw={
+            "qc.q30": RawObservation(raw_value=84.1, raw_unit="percent", source_field="q30"),
+            "qc.mean_target_coverage": RawObservation(raw_value=29.2, raw_unit="x"),
+        },
+    )
+    by = _by_key(metric_values_for(sm))
+    assert set(by) == {"qc.q30", "qc.mean_target_coverage"}
+    assert math.isclose(by["qc.q30"].normalized_value, 0.841)
+    assert by["qc.q30"].canonical_unit is CanonicalUnit.FRACTION
+    assert by["qc.q30"].source_field == "q30"
+    assert math.isclose(by["qc.mean_target_coverage"].normalized_value, 29.2)
+
+
+def test_qcmetrics_and_sample_metrics_paths_are_byte_identical() -> None:
+    """WS-06 PR1 (verdict-neutral bridge): a QCMetrics normalized DIRECTLY vs. lowered through
+    SampleMetrics yields IDENTICAL MetricValues — the transition shim changes nothing, which is what
+    keeps the refactor byte-identical (and the pinned demo verdicts unchanged)."""
+    qc = QCMetrics(sample_id="S5", q30=84.1, mean_coverage=29.2, dup_rate=22.6)
+    direct = _fields(metric_values_for(qc))
+    lowered = _fields(metric_values_for(sample_metrics_from_qcmetrics(qc)))
+    assert direct == lowered
+
+
+def test_sample_metrics_carries_a_metric_with_no_qcmetrics_field() -> None:
+    """WS-06 Gap 1 (anti-scaffold): the registry-keyed contract carries ANY registered our_key
+    WITHOUT a named QCMetrics field — registering a metric is a registry entry, not a 14th model
+    field. contamination.freemix is registered but absent from the QCMetrics/_QCMETRICS_MAP layer;
+    it still flows ingest→MetricValue. A field-enumerated ingester structurally cannot do this."""
+    reg = default_registry()
+    key = "contamination.freemix"
+    entry = reg.entry(key)  # raises if not registered
+    assert key not in producible_metric_keys()  # NOT a QCMetrics field / _QCMETRICS_MAP key
+    sm = SampleMetrics(
+        sample_id="SX",
+        raw={key: RawObservation(raw_value=0.02, raw_unit=entry.canonical_unit.value)},
+    )
+    mvs = metric_values_for(sm)
+    assert len(mvs) == 1 and mvs[0].metric_key == key
 
 
 def test_missing_field_is_skipped_not_defaulted() -> None:

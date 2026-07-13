@@ -372,6 +372,35 @@ class QCMetrics(BaseModel):
     variant_titv: float | None = None
 
 
+class RawObservation(BaseModel):
+    """One raw metric observation as INGESTED, before registry normalization — the atom of the
+    registry-keyed ingestion contract (WS-06). ``raw_value`` is on ``raw_unit`` (the scale it was
+    emitted in — DECLARED, never guessed; the pct_* trap the registry defends). ``source_field`` /
+    ``source_locator`` keep provenance to the artifact column it came from.
+    ``metrics.metric_values_for`` normalizes a map of these into canonical ``MetricValue``s.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    raw_value: float
+    raw_unit: str
+    source_field: str | None = None
+    source_locator: str | None = None
+
+
+class SampleMetrics(BaseModel):
+    """One sample's ingested metrics as a REGISTRY-KEYED map (WS-06 ingestion contract) — the
+    inversion of the flat, field-enumerated ``QCMetrics``. ``raw`` maps a registry ``our_key`` to
+    its ``RawObservation``, so an nf-core/MultiQC adapter (WS-03) can emit metrics WITHOUT a new
+    named model field per metric. ``QCMetrics`` lowers into this via
+    ``metrics.sample_metrics_from_qcmetrics`` during the transition (it stays the frozen-CSV parse
+    output for one release; the ``RunArtifacts.qc`` type flip + registry-driven parser are PR2).
+    """
+
+    sample_id: str
+    raw: dict[str, RawObservation] = Field(default_factory=dict)
+
+
 class MetricValue(BaseModel):
     """One observed metric, normalized against the metric registry (schemas.md #6).
 

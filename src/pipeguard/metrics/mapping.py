@@ -13,7 +13,7 @@ the source scale is declared.
 
 from __future__ import annotations
 
-from ..models import MetricValue, QCMetrics
+from ..models import MetricValue, QCMetrics, RawObservation, SampleMetrics
 from .registry import MetricRegistry, default_registry
 
 # QCMetrics attribute -> (registry our_key, the raw_unit the parsed value is on). Explicit,
@@ -48,40 +48,56 @@ def producible_metric_keys() -> frozenset[str]:
     return frozenset(our_key for _, our_key, _ in _QCMETRICS_MAP)
 
 
+def sample_metrics_from_qcmetrics(qc: QCMetrics) -> SampleMetrics:
+    """Lower the flat frozen-CSV ``QCMetrics`` into the registry-keyed ``SampleMetrics`` contract
+    (WS-06 transition bridge). Uses the SAME ``_QCMETRICS_MAP`` (field → our_key → raw_unit), so a
+    ``QCMetrics`` produces byte-identical normalized values whether consumed directly or via
+    ``SampleMetrics``. A ``None`` field is skipped (a missing metric is a signal); ``raw`` follows
+    ``_QCMETRICS_MAP`` insertion order so downstream output stays stable."""
+    raw: dict[str, RawObservation] = {}
+    for attr, our_key, raw_unit in _QCMETRICS_MAP:
+        value = getattr(qc, attr)
+        if value is None:
+            continue
+        raw[our_key] = RawObservation(raw_value=value, raw_unit=raw_unit, source_field=attr)
+    return SampleMetrics(sample_id=qc.sample_id, raw=raw)
+
+
 def metric_values_for(
-    qc: QCMetrics,
+    source: QCMetrics | SampleMetrics,
     *,
     analysis_run_id: str | None = None,
     source_artifact_id: str | None = None,
     registry: MetricRegistry | None = None,
 ) -> list[MetricValue]:
-    """Build normalized ``MetricValue`` records from one sample's ``QCMetrics``.
+    """Build normalized ``MetricValue`` records from one sample's ingested metrics.
 
-    A missing (``None``) field is skipped, not defaulted — a missing metric is a signal,
-    not a crash (CLAUDE.md data-handling). Order follows ``_QCMETRICS_MAP`` so the output is
-    stable.
+    Accepts either the flat ``QCMetrics`` (lowered internally via ``sample_metrics_from_qcmetrics``,
+    so every existing caller is unchanged and byte-identical) OR the registry-keyed
+    ``SampleMetrics`` an adapter emits directly (WS-03). Then a GENERIC loop over the map
+    calls ``reg.observe(...)`` — NO field enumeration, so registering a metric is a registry entry,
+    not a new named model field. A missing metric is simply absent from the map (a signal, not a
+    crash — CLAUDE.md data-handling).
 
-    Note on ``cluster_pf`` (audit P3-1/P3-10): it IS mapped (``_QCMETRICS_MAP`` above) and
-    registered, but a reads-only fastq→BAM path can't produce this run-level SAV/InterOp metric,
-    so it typically arrives ``None`` here → its required=True runbook threshold NA-flags → a
-    STRUCTURAL, EXPECTED HOLD on every reads-based run (the pinned demo relies on HG002 → HOLD).
-    That is a deferred SAV-source policy, not a mapping gap; see ``runbook.py`` cluster_pf.
+    Note on ``cluster_pf`` (audit P3-1/P3-10): it IS in ``_QCMETRICS_MAP`` and registered, but a
+    reads-only fastq→BAM path can't produce this run-level SAV/InterOp metric, so it typically
+    arrives absent → its required=True runbook threshold NA-flags → a STRUCTURAL, EXPECTED HOLD on
+    every reads-based run (the pinned demo relies on HG002 → HOLD). A deferred SAV-source policy,
+    not a mapping gap; see ``runbook.py`` cluster_pf.
     """
     reg = registry or default_registry()
+    sm = source if isinstance(source, SampleMetrics) else sample_metrics_from_qcmetrics(source)
     values: list[MetricValue] = []
-    for attr, our_key, raw_unit in _QCMETRICS_MAP:
-        raw = getattr(qc, attr)
-        if raw is None:
-            continue
+    for our_key, obs in sm.raw.items():
         values.append(
             reg.observe(
                 metric_key=our_key,
-                raw_value=raw,
-                raw_unit=raw_unit,
-                sample_id=qc.sample_id,
+                raw_value=obs.raw_value,
+                raw_unit=obs.raw_unit,
+                sample_id=sm.sample_id,
                 analysis_run_id=analysis_run_id,
                 source_artifact_id=source_artifact_id,
-                source_field=attr,
+                source_field=obs.source_field,
             )
         )
     return values
