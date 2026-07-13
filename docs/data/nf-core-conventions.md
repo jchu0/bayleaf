@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-12 (MST) |
+| **Last updated** | 2026-07-12 (MST) — §4 corrected: the "pending real MultiQC parsing" claim was stale; `ingest/nfcore.py` (WS-03) now does it, proven on real HG002, but not yet the production intake path |
 | **Audience** | bioinformatics / software |
-| **Related** | [schemas.md](schemas.md) (the records we derive), [metric_registry.md](metric_registry.md) (the registry §4 argues for), [qc_metrics.md](qc_metrics.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) (this vocabulary now feeds a real DSL2 generator, not only this doc's mapping notes) |
+| **Related** | [schemas.md](schemas.md) (the records we derive), [metric_registry.md](metric_registry.md) (the registry §4 argues for), [qc_metrics.md](qc_metrics.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md), [design/nextflow-codegen.md](../design/nextflow-codegen.md) (this vocabulary now feeds a real DSL2 generator, not only this doc's mapping notes), [audit/gap_analysis/ws-03-ingestion-adapter.md](../../audit/gap_analysis/ws-03-ingestion-adapter.md), [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md) |
 
 ## Framing
 
@@ -114,8 +114,21 @@ MarkDuplicates `PERCENT_DUPLICATION`.
   a canonical registry `our_key → {module, json_key, source_file, unit}` rather than
   trusting General-Stats column names. This also replaces the fixed `QCMetrics` columns.
   **Now implemented** as [`metric_registry.yaml`](../../src/pipeguard/metrics/metric_registry.yaml)
-  + a typed `MetricRegistry`, on the QC critical path (see [metric_registry.md](metric_registry.md));
-  today it still maps the flat `QCMetrics` fields (`mapping.py`) pending real MultiQC parsing.
+  + a typed `MetricRegistry`, on the QC critical path (see [metric_registry.md](metric_registry.md)).
+  **Update (gap-analysis WS-03/WS-06, 2026-07-12): real MultiQC/fastp/mosdepth parsing now
+  exists** — [`src/pipeguard/ingest/nfcore.py`](../../src/pipeguard/ingest/nfcore.py)'s
+  `ingest_results_dir()` parses a published nf-core `results/` dir straight into registry-keyed
+  `SampleMetrics`, and `RunArtifacts.qc: list[QCMetrics | SampleMetrics]` (a transition Union) lets
+  the gate consume either shape byte-identically — proven end-to-end against **real** HG002 output
+  (`tests/test_ingest.py::test_real_nextflow_results_ingest_and_gate`, env-gated on a live run's
+  `results/` dir). **Honest gap, unresolved:** this adapter is not yet what any *production* code
+  path calls — `POST /api/runs` still drives `scripts/run_giab_pipeline.py`'s own bespoke
+  `parse_fastp`/`parse_mosdepth` into the flat `QCMetrics` shape (via the frozen-five
+  `qc_metrics.csv`); the two parsers are proven **equivalent** on the same real output, not yet
+  **unified**. A `POST /api/runs/ingest` endpoint to call `ingest_results_dir` from outside stays
+  deferred. See `CLAUDE.md` code map item 1g and
+  [qc_metrics.md](qc_metrics.md#runbook-resolution--runbookset-ws-05-2026-07-12) for the sibling
+  runbook-side work this landed beside.
 
 ## 5. `nextflow_schema.json` → `RunbookProfile` shape
 

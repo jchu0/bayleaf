@@ -32,13 +32,21 @@ separate, breaking, deferred pass. Commands below work verbatim.
 uv sync --all-extras                        # .venv + deps + dev tools, editable install
 uv run pre-commit install --install-hooks   # ruff/mypy/secret-scan (commit) + pytest (push)
 
-# Run the dashboard (offline; no API key needed)
+# Run the dashboard (offline; no API key needed) — the guaranteed-working demo fallback
 uv run streamlit run app/streamlit_app.py   # http://localhost:8501
+
+# Run the full stack (FastAPI read-API + React; Vite proxies /api -> :8010)
+uv run uvicorn api.main:app --port 8010     # backend
+npm --prefix frontend run dev               # frontend (Vite dev server)
+npm --prefix frontend run build             # tsc -b + vite build (the pre-push tsc gate)
+npm --prefix frontend run lint              # oxlint
 
 # Tests (offline — pins the demo scenario)
 uv run pytest                               # editable install; no PYTHONPATH shim
+uv run pytest tests/test_ingest.py -k name  # a single file / -k a single test
+make check                                  # one-shot gate: ruff + mypy + pytest
 
-# Lint + strict type-check
+# Lint + strict type-check (Python)
 uv run ruff check && uv run mypy
 
 # Ad-hoc run of the core (no UI)
@@ -148,13 +156,37 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
    a. `rules` emits cited, immutable `Finding`s (each derives its gate + a rule-version-independent
       signature + `content_hash`); `synthesis/base.py` aggregates the verdict (**never** the LLM,
       ADR-0001); confidence omitted until grounded (T-019). Fraction QC metrics render as percent
-      via a registry-backed display conversion (no verdict/hash change).
+      via a registry-backed display conversion (no verdict/hash change). **Fail-closed additions
+      (gap-analysis WS-01, 2026-07-12):** `QC-MISSING` (a sheet-declared sample with no QC row →
+      WARN/HOLD, LIVE end-to-end — `aggregate_verdict([])` no longer PROCEEDs on unexamined data)
+      and `_check_expected_metrics` (a `Runbook.expected_metrics` key absent from the sample's
+      metrics → `QC-EXPECTED-<key>` WARN/HOLD, validated at construction against the producible-key
+      set so a typo can't HOLD forever). `rules.compute_check_coverage` → `models.CheckCoverage`
+      (deterministic "N ran / M not examined" over a fixed provenance/metadata/qc/contamination/
+      identity/pipeline catalog, carried un-hashed on `DecisionCard.check_coverage`, never a verdict)
+      replaces the old "all checks passed" stub prose and the RunDetail clean-card panel — both now
+      state plainly when contamination/identity were never examined.
    b. `models` (pydantic data contract), `identifiers` (UUIDv7 ids + content hashing; `PLATFORM_VERSION`
-      from `pyproject.toml`), `runbook` (QC policy).
+      from `pyproject.toml`), `runbook` (QC policy). **Ingestion contract (WS-06·PR1/PR2, 2026-07-12):**
+      `models.RawObservation`/`models.SampleMetrics` (a registry-keyed `sample_id + raw: dict[our_key
+      -> RawObservation]` map, additive to the flat `QCMetrics`) is the shape a real-run adapter emits;
+      `RunArtifacts.qc: list[QCMetrics | SampleMetrics]` (a transition Union, not a hard flip) means the
+      gate consumes EITHER shape byte-identically (`metrics.mapping.metric_values_for` accepts both).
    c. `runbook.QCThreshold.required` (default `True`, T-082): the richer QC report (13 metrics: the
       frozen five + 8 registered) gates 5 **optional** thresholds (score a present value, never
-      NA-flag an absent one) without penalizing a lean real run. Metric catalog = 10 gated / 10
-      ungated of 20 registered `our_key`s (`data/metric_registry.md`).
+      NA-flag an absent one) without penalizing a lean real run. `QCThreshold.kind` (WS-06 Gap 2,
+      2026-07-12) adds a **`target_band`** shape (both-tails PASS/WARN/CRITICAL band, e.g. Ts/Tv) beside
+      the default `one_sided`; `variant.titv` is the first threshold to use it. Metric catalog = **11
+      gated / 9 ungated** of 20 registered `our_key`s (`data/metric_registry.md`; was 10/10 before the
+      Ts/Tv gate). **`runbook.RunbookSet`/`RunbookKey`** (WS-05, 2026-07-12): a per-`(assay,
+      sample_type, platform)` runbook resolver (binary-weight precedence, fail-closed to the full
+      `default` runbook, never `None`) — `rules.evaluate_run` widened to `Runbook | RunbookSet`;
+      `evaluate_sample`/`aggregate_verdict` are UNCHANGED (ADR-0001 preserved). `GERMLINE_PANEL_RUNBOOK`
+      (keyed on `assay="germline-panel"`) is the first production consumer of WS-01's
+      `expected_metrics` — verified end-to-end (a sample PROCEEDs under the plain `DEFAULT_RUNBOOK`,
+      HOLDs under `DEFAULT_RUNBOOK_SET`, driven by `QC-EXPECTED-QC.BREADTH_20X`/`_30X`). **Deferred,
+      labelled:** the Settings→runbook config-apply loop (`api/main.py::_active_runbook` still returns
+      one run-level `Runbook`) and the assay×tissue frontend UI.
    d. `runbook.RouteToHumanPolicy` + `rules._check_route_to_human` (**VAR-RTH-001**, ADR-0018 D2): a
       distinct, off-by-default variant-gate rule — never gates call quality; routes a sample to
       mandatory human review when an operator-armed ClinVar significance is present on an
@@ -172,6 +204,20 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
       ADR-0020; a blank script → `CompileError`). Emits text only — **never runs a tool (compose ≠
       execute, ADR-0001/0003)**; see [design/nextflow-codegen.md](docs/design/nextflow-codegen.md).
    f. `synthetic/` — the failure-mode data generator incl. `scale.py` (`demo/scale/bulk` CLI, T-050).
+   g. `ingest/nfcore.py` (WS-03, 2026-07-12): `ingest_results_dir()` turns a **real, published**
+      nf-core/MultiQC `results/` dir into registry-keyed `SampleMetrics` — parses `fastp.json` +
+      `mosdepth` summary/thresholds (authoritative, structured) and `multiqc_data.json` general-stats
+      (secondary, alias-fed); a drifted MultiQC key still folds to its `our_key`; an unknown key /
+      absent structured file surfaces honestly in `IngestResult.unmapped`, never fabricated.
+      **Proven end-to-end on genuine output** (env-gated real-path test, `tests/test_ingest.py`):
+      real HG002 `results/` → `ingest_results_dir` → `SampleMetrics` → the `RunArtifacts.qc` Union
+      (item 1b) → `run_gate` → the SAME HOLD the production driver's own parse produces. **Honest
+      gap:** this adapter is gate-**wired** (the type is accepted) and gate-**proven** (the real-path
+      test), but it is **not gate-called** by any running code path — `POST /api/runs` (item 4b.i)
+      still drives `scripts/run_giab_pipeline.py`'s own bespoke parser into the frozen-five
+      `qc_metrics.csv` → `QCMetrics`, a separate, unrelated-by-name `SampleMetrics` dataclass local to
+      that script. A `POST /api/runs/ingest` endpoint to call `ingest_results_dir` from outside stays
+      **deferred** — the two ingestion paths are proven equivalent, not yet unified.
 
 2. **Provenance seam (`provenance.py`, ADR-0002).** `run_gate` emits an append-only event trail
    (`analysis_run.started` → per-sample findings/verdict → `completed`) into an `EventLedger`
@@ -190,7 +236,21 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 3. **Swappable AI, OFF by default (ADR-0006 deterministic fallback; ADR-0009/0012 scoping/tiering).**
    Six `stub|claude` seams, all stub-first ($0), lazy `anthropic` import, fall back to the stub on
    any error (incl. a safety refusal); models via `PIPEGUARD_*_MODEL`. Five are one-liners:
-   a. synthesizer (`PIPEGUARD_SYNTHESIZER`); b. QC-triage (`triage/`, `PIPEGUARD_TRIAGE_AGENT`);
+   a. synthesizer (`PIPEGUARD_SYNTHESIZER`) — **honesty fix (WS-07 Q1, 2026-07-12):** the stub no
+      longer emits hardcoded per-verdict `next_steps` boilerplate (dropped `_NEXT_STEPS`; stub
+      `next_steps=[]`, dishonest filler on a $0 default path a stub cannot ground); the live Claude
+      path is unchanged. `api/card_readout.py` now surfaces `qc_reports` (real `fastp.html`/
+      `multiqc_report.html` links off the run dir, sibling-scoped) as the AI-off fallback so the
+      suggestion box degrades to real artifacts, not silence.
+   b. QC-triage (`triage/`, `PIPEGUARD_TRIAGE_AGENT`) — **`ask` (WS-07 Q2, 2026-07-12):**
+      `TriageAgent.ask` + `POST /api/runs/{run_id}/cards/{sample_id}/ask` (`AskRequest`→`AgentReply`,
+      `advisory: Literal[True]`, no verdict/confidence) answers a free-text question about a card,
+      even a clean PROCEED one; the stub retrieves + cites corpus knowledge explicitly framed as
+      retrieval, never fabricated prose; Claude writes only the answer, citations stay deterministic.
+      **Still open (design-only):** richer per-agent artifact/cross-sample context and real semantic
+      retrieval (`design/agents.md`'s `EmbeddingRetriever` seam) — the corpus + `KeywordRetriever`
+      are unchanged; see [audit/gap_analysis/ws-07-ai-earning-its-place.md](audit/gap_analysis/ws-07-ai-earning-its-place.md)
+      Design items 1/2/4.
    c. pipeline-repair (`pipeline_repair/`, `PIPEGUARD_PIPELINE_REPAIR_AGENT`, Opus-high; recurring
    signature → cited `RepairProposal`); d. feedback-categorization (`api/feedback_agent.py`,
    off-gate); e. archivist (`api/archivist.py`, off-gate, Haiku; released runs → `ArchiveDigest`).
@@ -235,11 +295,26 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
          via `PIPEGUARD_BIOCONDA_BIN`). **Verified live on HG002 (local-serial); the multi-sample
          parse is offline-proven vs fixture publish dirs but a live multi-sample run is
          env-gated/unverified (only HG002 has reads); the Slurm profile is config-verified NOT
-         cluster-verified.** Runs an operator-**authored, approved** pipeline when `SubmitRunIn.pipeline`
+         cluster-verified.** **Verification milestone (2026-07-12):** the toolchain (`nextflow`
+         26.04 + a JRE) was installed into the machine-local `hackathon` conda env and the REAL
+         germline pipeline was run end-to-end on real GIAB HG002 (`completed=7 failed=0`, Q30 88.2%,
+         coverage 54.2×, 553 variants) — proving both the driver's own parse path (unchanged) AND,
+         separately, the full alternate ingestion spine (item 1g) against that SAME genuine output.
+         Two HIGH gaps in running a **non-germline** authored pipeline through this endpoint are now
+         closed (WS-09, 2026-07-12) by rejecting rather than by generalizing the parser: `SubmitRunIn`
+         **422s at submit** — before any compute — when the named pipeline can't produce the
+         frozen-five outputs (`authored_pipeline.check_parse_contract`) or needs an input intake can't
+         supply (`check_inputs_suppliable`, parity with Builder-Run's `required_inputs` check) —
+         so a pipeline that used to run to completion in Nextflow then die at parse now fails fast
+         instead. **This does not make intake gate an arbitrary non-germline pipeline** — it still
+         only accepts one whose declared outputs are germline-shaped; it stops the wrong-but-runs and
+         runs-then-dies failure modes, honestly, rather than solving general parsing. Runs an
+         operator-**authored, approved** pipeline when `SubmitRunIn.pipeline`
          names one (else the committed reference, byte-preserved), via the shared
          `api/authored_pipeline.py` approval gate (ADR-0021). Processing gate `SubmitRunIn.mode`:
          `immediate`/`hold`/`schedule` + `POST /api/runs/{id}/release` (reviewer/approver) — **a
-         time-based auto-release scheduler is a DEFERRED seam; release is manual only**.
+         time-based auto-release scheduler is a DEFERRED seam; release is manual only** (frozen by a
+         regression test, WS-09).
          `GET /api/runs/{id}/intake-status` polls `queued|running|held|scheduled|complete|failed|lost`.
       ii. **Builder-Run `POST /api/pipelines/run`** (`api/routers/pipeline_run.py`, reviewer/approver)
          is **approval-gated (W1)**: it NAMES a saved pipeline (never a raw posted graph —
@@ -269,7 +344,13 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
       envelope the compiler NEVER dereferences — byte-identical compile proven) + a scoped,
       **de-identified** node-read endpoint (`GET /api/runs/{id}/nodes/{node}/observations`, `outputs`
       default / `logs` opt-in via `api.deid.scrub_text`; agent-consumption + UI display are labelled
-      deferrals). System agents (pipeline-repair, archivist) moved off the Builder palette →
+      deferrals). **Access-control honesty (WS-08 interim, 2026-07-12):** the `AgentBinding` is a
+      **client-side-only advisory hint — the server does not persist or enforce it** (no server-side
+      binding model, no run→executed-graph linkage); real, server-enforced access is by node scope
+      (real) plus **wire role**, not the binding (`outputs` stays viewer+, the PII-adjacent `logs`
+      grant now requires **reviewer+**, closing a hole where any viewer could read any node's log
+      tail). Full per-agent binding enforcement (persist bindings server-side, link a run to the graph
+      it executed, intersect grants) stays a documented deferral. System agents (pipeline-repair, archivist) moved off the Builder palette →
       Agent-triage; the Builder keeps node-attachable QC-triage + node-authoring. Every Builder port
       now maps to a **real Nextflow channel or is removed** (reserved-port honesty; `fastp adapter_fasta`
       the sole left-reserved). Plus compiler hardening (injection escaping + validators, `is_source`

@@ -110,6 +110,24 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
 > `variant_titv` stay ungated observations. See [qc_metrics.md](qc_metrics.md) for the concrete
 > thresholds.
 >
+> **`SampleMetrics` / `RawObservation` — the registry-keyed ingestion contract (WS-06·PR1/PR2,
+> 2026-07-12).** An alternate, additive shape for `RunArtifacts.qc` entries alongside `QCMetrics`:
+> `models.RawObservation` (frozen: `raw_value` + `raw_unit` + source provenance) and
+> `models.SampleMetrics` (`sample_id` + `raw: dict[our_key -> RawObservation]`) — a generic map
+> over registered metric-registry keys, rather than a fixed set of named fields. **`RunArtifacts.qc:
+> list[QCMetrics | SampleMetrics]`** is a **transition Union, not a hard flip**: every reader of
+> `.qc` (rules, engine, `sample_ids()`, the Claude synthesizer context) already went through
+> `metrics.mapping.metric_values_for` / `.sample_id` / `.model_dump`, which PR1 made accept both
+> shapes — so an ingested run and a frozen-CSV run gate identically, with zero `QCMetrics`
+> field-access anywhere in `src/`/`api/`. `metrics.sample_metrics_from_qcmetrics` is the transition
+> bridge that lowers a `QCMetrics` into the SAME `SampleMetrics` shape internally (byte-identical
+> normalized values either way). The intended producer of a real `SampleMetrics` is
+> [`ingest/nfcore.py`](../../src/pipeguard/ingest/nfcore.py)'s `ingest_results_dir()` (a published
+> nf-core `results/` dir → `SampleMetrics`, WS-03) — proven end-to-end against real HG002 output
+> (`tests/test_ingest.py::test_real_nextflow_results_ingest_and_gate`) but **not yet called from any
+> production code path**; see [nf-core-conventions.md §4](nf-core-conventions.md) and `CLAUDE.md`
+> code map item 1g/1b for the as-built vs. proven-but-unwired distinction.
+>
 > **`TraceRecord`** — one task row of the Nextflow/nf-core **execution trace**, whose on-disk
 > artifact is **`trace.txt`** (matching ArtifactRef `kind=execution_trace`), parsed by
 > `parsers.parse_execution_trace` inside `load_run`. Fields — **all optional (`… | None`,
@@ -185,7 +203,18 @@ projection** (ADR-0002). We adopt nf-core/sarek *vocabulary* and diverge on *sem
     omitted until grounded)* · headline · rationale · next_steps[] · finding_ids[] ·
     gate_results[] (GateResult) · **metric_values[]** *(MetricValue; registry-normalized QC
     metrics for the sample, T-025 — contextual ML/audit metadata surfaced to API/frontend;
-    like `run_id`, excluded from `content_hash` — ADR-0007)* · generated_by · model ·
+    like `run_id`, excluded from `content_hash` — ADR-0007)* · **check_coverage?**
+    *(`models.CheckCoverage` — WS-01 PR2, 2026-07-12: `{checks_expected, checks_ran,
+    not_examined, categories_ran, categories_not_run}` over a fixed
+    provenance/metadata/qc/contamination/identity/pipeline catalog, computed by
+    `rules.compute_check_coverage(artifacts, findings)` — a category counts as "ran" when its
+    artifact is present OR it emitted a finding, so a clean finding-less QC gate still counts as
+    examined. Deterministic, un-hashed contextual metadata like `metric_values[]` — never sets a
+    verdict; contamination/identity honestly read "not examined" until a WS-02 rule (FREEMIX/
+    NGSCheckMate) exists to flip them. Backs the honest "N ran / M not examined" card prose that
+    replaced the old "all checks passed" claim — see
+    [qc_metrics.md](qc_metrics.md#fail-closed-rules--qc-missing--qc-expected-key-ws-01-2026-07-12).)*
+    · generated_by · model ·
     **content_hash** · created_at · supersedes_card_id?. *(`is_current` is a projection, not
     stored truth.)*
 

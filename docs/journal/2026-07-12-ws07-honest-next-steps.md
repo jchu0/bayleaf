@@ -81,5 +81,10 @@ that moved was `test_gate.py::test_stub_card_is_grounded` (`assert s4.next_steps
 
 ## Distilled into
 
-- Pending — canonical distillation deferred to integration (see TODO). This entry is the
-  archive of the WS-07 Q1 change.
+- **Closed 2026-07-12** — the canonical doc sweep this entry deferred landed in
+  [2026-07-12-gap-analysis-remediation-verification.md](2026-07-12-gap-analysis-remediation-verification.md):
+  `CLAUDE.md` code map item 3a (synthesizer/stub honesty), `requirements/functional.md` REQ-F-104
+  (grouped with the WS-07 Q2 ask-endpoint), `quality/evaluation.md` (`test_card_readout`/
+  `test_stub_next_steps` census). The `ReviewQueue.tsx:172` boilerplate-string follow-up and the
+  manual browser check remain open (see that entry's Open questions & TODO). This entry stays the
+  archive of the WS-07 Q1 reasoning.

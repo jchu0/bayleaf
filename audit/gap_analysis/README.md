@@ -10,33 +10,65 @@ what the product *claims* and what the code *wires*.
 
 ## ▶ Current status & next action (resume here)
 
-**Overnight run 2026-07-12** implemented on branch `feat/gap-analysis-remediation` (off `main` @ `8e9658e`;
-NOT merged/pushed — review then merge). Offline suite **640 passed / 8 skipped** (was 627/7); ruff + mypy clean
-at every commit; the pinned demo + HG002 verdicts are byte-identical throughout.
+**Full remediation session, 2026-07-12** on branch `feat/gap-analysis-remediation` (off `main` @ `8e9658e`;
+NOT merged/pushed — review then merge). Offline suite **708 tests / 52 files, 700 passed / 8 skipped**
+(was 634/48, 627/7); ruff + mypy clean at every commit; the pinned demo + HG002 verdicts are byte-identical
+throughout. **Headline: the Nextflow verification pass this tracker used to flag as blocked now happened.**
+`openjdk` 17 was installed into the machine-local `hackathon` conda env (`nextflow` 26.04 + the bioconda
+toolchain now run on this machine); the REAL germline pipeline ran end-to-end on real GIAB HG002
+(`completed=7 failed=0`, Q30 88.2%, coverage 54.2×, 553 variants), and the FULL alternate ingestion spine
+(WS-03 adapter → WS-06 Union → gate) was proven against that SAME genuine output — see WS-03/WS-06 below and
+[journal 2026-07-12-gap-analysis-remediation-verification.md](../../docs/journal/2026-07-12-gap-analysis-remediation-verification.md).
 
-**Landed (each its own commit, test-first):**
-1. ✅ **WS-10** (`efef163`) — fastp promoted-output regression **empirically REFUTED** (ran real fastp on real
-   HG002: unpaired/failed files always created, even empty at zero failures). No code fix needed; added a
-   real-path acceptance guard + an offline stub-consistency guard. *URGENT concern retired.*
-2. ✅ **WS-01·PR1** (`4d6acbf`) — fail-closed gate. `QC-MISSING` (sheet-declared + no QC → HOLD) is LIVE;
-   `expected_metrics` + `_check_expected_metrics` is a MECHANISM (consumer deferred to WS-05, honest in-code).
-   Adversarially reviewed → added a producible-key validator (a typo can't HOLD forever) + an E2E card test.
-3. ✅ **WS-06 metric honesty** (`2033849`, Gaps 4+5) — registry source honesty (mean_coverage + breadth_20x/30x
-   claimed Picard; the driver uses mosdepth → repointed); reads-passing-filter relabel. **Gap 3 (dup-rate)
-   REFUTED** — `0.0057` is the correct percent (fastp HG002 dup = 0.00565%); recommend dropping it from the plan.
-4. ✅ **WS-08 (interim)** (`8c8e2a1`) — closed the log-read access hole (`grants=logs` now reviewer+, was any
+**Landed this session (each its own commit, test-first):**
+1. ✅ **WS-10** (`efef163`) — fastp promoted-output regression **empirically REFUTED**. **RESOLVED.**
+2. ✅ **WS-01** (`4d6acbf`, `118d8a5`, `98aca3d`, `14ea6fa`) — fail-closed gate, all four PRs landed:
+   `QC-MISSING` (LIVE), `expected_metrics` mechanism (validated at construction), `CheckCoverage` (honest
+   "N ran / M not examined" on the card + the RunDetail clean-card panel, replacing "all checks passed"),
+   an HG002 real-data no-spurious-fire guard. **DONE** — the mechanism now has a live consumer (WS-05, below).
+3. ✅ **WS-06** (`7b3f5ad`, `f4444be`, `cb56eb6`, `2033849`, `ce483ca`) — all six gaps closed: PR1 registry-keyed
+   `SampleMetrics` ingestion contract, PR2 `RunArtifacts.qc` Union type flip (the gate consumes ingested
+   metrics), Gap 2 `target_band` gate kind (`variant.titv` now genuinely gated — metric catalog 11/9, was
+   10/10), Gap 3 (dup-rate) **REFUTED** — `0.0057` was already the correct percent, no change, Gaps 4-5 metric
+   source/label honesty (mosdepth, not Picard; "Reads passing filter," not a demux concept), Gap 6 store
+   consolidation (7 off-gate stores → one generic `JsonlStore`/`SqliteStore` base). **DONE.**
+4. ✅ **WS-03** (`b231068`, `6c38ab3`) — `src/pipeguard/ingest/nfcore.py::ingest_results_dir()`, a real
+   nf-core/MultiQC `results/` → `SampleMetrics` adapter, proven end-to-end on genuine HG002 output (zero
+   unmapped keys, matching the driver's own parse, same HOLD verdict). **DONE, but with an honest unresolved
+   gap:** the adapter is gate-wired and gate-proven, but **not gate-called** by any production path — intake
+   still runs the driver's own separate, unrelated-by-name bespoke parser. Unifying them (a
+   `POST /api/runs/ingest` endpoint) is explicitly deferred, not silently dropped.
+5. ✅ **WS-05** (`064bd0d`) — `RunbookSet`/`RunbookKey` per-sample `(assay, sample_type, platform)` resolution;
+   `GERMLINE_PANEL_RUNBOOK` is the first production consumer of WS-01's `expected_metrics`, verified
+   end-to-end (PROCEED under `DEFAULT_RUNBOOK`, HOLD under `DEFAULT_RUNBOOK_SET`, same sample). **DONE.**
+   Deferred, labelled: the Settings→runbook config-apply loop; the assay×tissue frontend UI.
+6. 🟡 **WS-07** (`9ace6ea` Q1, `27289bd` Q2) — honest stub `next_steps` (`[]`, not boilerplate) + real
+   `qc_reports` links; a wired `POST .../ask` endpoint (advisory, stub-grounded/Claude-answers-only-prose).
+   **PARTIAL** — Design items 1 (richer per-agent artifact/cross-sample context), 2 (real semantic retrieval),
+   and 4 (a deliberate live-Claude demo default) from [ws-07-ai-earning-its-place.md](ws-07-ai-earning-its-place.md)
+   remain design-only, not landed this session.
+7. 🟡 **WS-09** (`1c57523`) — submit-time 422 validation (parse-contract + input-parity) so an authored
+   pipeline that can't be gated fails FAST instead of running to completion then dying. **INTERIM BY DESIGN,
+   not the workstream's original ask** — it makes intake honestly REJECT a non-germline pipeline, not GATE
+   one; "actually gate a non-germline pipeline" (dynamic parse off the compiled graph's `emit`s) stays open.
+8. 🟡 **WS-08 (interim)** (`8c8e2a1`) — closed the log-read access hole (`grants=logs` now reviewer+, was any
    viewer) + corrected the "server-enforced binding least-privilege" over-claim to honest labeling. Full
-   per-agent binding enforcement (needs server-side binding persistence + run→graph linkage) stays deferred.
+   per-agent binding enforcement (needs server-side binding persistence + run→graph linkage) stays deferred —
+   **unchanged status from before this session's later commits; still interim.**
 
 **Next action (next session, same branch or a fresh one off it):**
-1. **WS-09** — authored-pipeline execution: parse is hardcoded to germline's 4 outputs (non-germline pipeline
-   dies at parse) + intake never wires the authored graph's inputs. Self-contained, offline-testable (validate
-   at submit + 422; intake input parity with Builder-Run). *Highest-value remaining self-contained fix.*
-2. **WS-06·PR1/PR2** (ingestion contract → registry-driven parser) → **WS-03** (adapter) → **WS-02** (FREEMIX,
-   needs verifybamid2) → **WS-05** (RunbookSet, wires WS-01's `expected_metrics`) → **WS-04** (hap.py) → WS-07.
-3. **Nextflow verification pass (with the maintainer):** the pipeline-level real-run legs (a live `nextflow run`)
-   couldn't run in the sandbox (no nextflow/JRE). WS-01's env-gated HG002 QC-MISSING check + WS-10's fastp
-   real-path guard need a machine with the toolchain to run their env-gated legs green.
+1. **WS-02** — real identity/provenance checks (FREEMIX/NGSCheckMate; needs `verifybamid2` on the toolchain
+   now that it exists on this machine — a much lower bar than before this session). Still **not started**.
+2. **WS-04** — GIAB concordance (hap.py/vcfeval vs the on-disk GIAB truth VCF). Still **not started**.
+3. **WS-07 remainder** — richer agent context, real semantic retrieval, a deliberate demo default (Design
+   items 1/2/4 above).
+4. **WS-08 completion** — server-side `AgentBinding` persistence + run→executed-graph linkage + per-agent
+   grant intersection + one real triage consumer of `gather_node_observations`.
+5. **WS-09 completion** — actually gate a non-germline authored pipeline (dynamic parse off compiled `emit`s),
+   not just reject one at submit; fire a scheduled run at its time (currently inert-by-design).
+6. **Unify the two ingestion paths** (WS-03/06) — wire `POST /api/runs` to `ingest_results_dir` (or a
+   `POST /api/runs/ingest` endpoint) so the proven-equivalent adapter becomes the ONE parser, not a proven
+   parallel one.
 
 **Toolchain** (reusable agents, checked into `.claude/agents/`): `adversarial-reviewer` (find the gap) →
 `test-writer` (freeze it red) → implement → re-run the guard. A workstream is ✅ **done** only when its Test-First
@@ -59,6 +91,8 @@ Contract is green **incl. the real-GIAB leg** (see Definition of Done below).
 
 **Fastest path to "real gate, not scaffold":** WS-01·PR1 → WS-06·PR1 → WS-03 → WS-02 (FREEMIX) — fail-closed
 semantics + real ingestion + one genuine contamination check, landing on a shared contract. See the master doc.
+**Status (2026-07-12): the first three legs are DONE** (WS-01 full, WS-06 full, WS-03 core+proven); **WS-02
+(FREEMIX) is the one remaining leg of this specific path, still not started.**
 
 ## Workstreams
 
@@ -68,15 +102,15 @@ cross-cutting refactors sequence correctly (see the master ordering, filled in o
 
 | # | Workstream | Review § | Plan | Status |
 |---|---|---|---|---|
-| WS-01 | Fail-closed gate semantics (missing-QC→HOLD, "no findings"≠"all passed", expected-metric sets, "not examined" states) | §1 | `ws-01-fail-closed-gate.md` | 🟡 PR1 landed (`4d6acbf`); PR2–4 (CheckCoverage/prose/UI) deferred |
-| WS-02 | Real identity/provenance checks (FREEMIX/NGSCheckMate; PROV-001 → independent-source consistency + honest copy; undetermined-reads) | §2 | `ws-02-identity-provenance.md` | ✅ planned |
-| WS-03 | Real ingestion adapter (MultiQC/fastp/mosdepth `results/` → `RunArtifacts`; live registry keys; real ingress; run-store root) | §3 | `ws-03-ingestion-adapter.md` | ✅ planned |
-| WS-04 | Scientific validation (hap.py/vcfeval concordance vs the on-disk GIAB truth VCF; precision/recall as evidence) | §4 | `ws-04-giab-concordance.md` | ✅ planned |
-| WS-05 | Config loop + multi-dimensional runbook (`RunbookSet(assay×sample_type×platform)`; typed override schema applied in `_active_runbook`; back the assay×tissue UI) | §5a/5c, §6a | `ws-05-config-and-runbook-dimensions.md` | ✅ planned |
-| WS-06 | Registry-driven extensibility + metric correctness (registry-driven ingestion; two-sided/target-band gate type for Ts/Tv & uniformity; store consolidation; dup-rate / mean_coverage / % reads bugs) | §6b/c/d, §9 | `ws-06-registry-extensibility-and-metric-bugs.md` | 🟡 metric honesty Gaps 4–5 landed (`2033849`); ingestion/gate-type/dedup deferred |
-| WS-07 | AI earning its place (agents get raw-artifact context or relabel as lookup; semantic retrieval; wire-or-delete the "Ask agent" chat; deliberate demo default) | §8, §5b | `ws-07-ai-earning-its-place.md` | ✅ planned |
+| WS-01 | Fail-closed gate semantics (missing-QC→HOLD, "no findings"≠"all passed", expected-metric sets, "not examined" states) | §1 | `ws-01-fail-closed-gate.md` | ✅ **DONE** (`4d6acbf`, `118d8a5`, `98aca3d`, `14ea6fa`) — all four PRs landed |
+| WS-02 | Real identity/provenance checks (FREEMIX/NGSCheckMate; PROV-001 → independent-source consistency + honest copy; undetermined-reads) | §2 | `ws-02-identity-provenance.md` | ☐ planned, **not started** |
+| WS-03 | Real ingestion adapter (MultiQC/fastp/mosdepth `results/` → `RunArtifacts`; live registry keys; real ingress; run-store root) | §3 | `ws-03-ingestion-adapter.md` | ✅ **DONE, core + proven** (`b231068`, `6c38ab3`) — real-path acceptance test green on genuine HG002 output; **not yet gate-called by any production path** (deferred: unify with the driver's own parser) |
+| WS-04 | Scientific validation (hap.py/vcfeval concordance vs the on-disk GIAB truth VCF; precision/recall as evidence) | §4 | `ws-04-giab-concordance.md` | ☐ planned, **not started** |
+| WS-05 | Config loop + multi-dimensional runbook (`RunbookSet(assay×sample_type×platform)`; typed override schema applied in `_active_runbook`; back the assay×tissue UI) | §5a/5c, §6a | `ws-05-config-and-runbook-dimensions.md` | ✅ **DONE (resolver half)** (`064bd0d`) — `RunbookSet` + `expected_metrics` production consumer verified end-to-end; the Settings config-apply loop + assay×tissue UI stay deferred |
+| WS-06 | Registry-driven extensibility + metric correctness (registry-driven ingestion; two-sided/target-band gate type for Ts/Tv & uniformity; store consolidation; dup-rate / mean_coverage / % reads bugs) | §6b/c/d, §9 | `ws-06-registry-extensibility-and-metric-bugs.md` | ✅ **DONE, all 6 gaps** (`7b3f5ad`, `f4444be`, `cb56eb6`, `2033849`, `ce483ca`) — Gap 3 (dup-rate) REFUTED, not fixed |
+| WS-07 | AI earning its place (agents get raw-artifact context or relabel as lookup; semantic retrieval; wire-or-delete the "Ask agent" chat; deliberate demo default) | §8, §5b | `ws-07-ai-earning-its-place.md` | 🟡 **Q1/Q2 landed** (`9ace6ea`, `27289bd`) — honest stub `next_steps` + a wired `ask` endpoint; Design items 1 (agent context), 2 (semantic retrieval), 4 (demo default) still design-only |
 | **WS-08** | **Phase-4 observation binding — wire it real** (server-enforce grants [closes an access hole], one real consumer + UI, run→graph linkage, live-path de-id, real test) | delta §2 | [`delta-review-2026-07-12.md`](delta-review-2026-07-12.md) | 🟡 interim (`8c8e2a1`): logs→reviewer+ & honest labels; full enforcement deferred |
-| **WS-09** | **Authored-pipeline execution — gate a *non-germline* pipeline** (parse off the compiled `emit`s or validate-at-submit; intake input-wiring parity with Builder-Run; scheduling) | delta §2, closes §7-tail | [`delta-review-2026-07-12.md`](delta-review-2026-07-12.md) | ✅ planned (delta) |
+| **WS-09** | **Authored-pipeline execution — gate a *non-germline* pipeline** (parse off the compiled `emit`s or validate-at-submit; intake input-wiring parity with Builder-Run; scheduling) | delta §2, closes §7-tail | [`delta-review-2026-07-12.md`](delta-review-2026-07-12.md) | 🟡 **interim** (`1c57523`) — submit-time 422 validation (reject-not-run) landed; dynamic non-germline gating + scheduled auto-release stay open |
 | **WS-10** | **fastp required-output regression — 🔴 URGENT** (`unpaired/failed_fastq` are mandatory outputs → may break the live golden path at step 1; add `Port.optional` or re-verify live) | delta §2 | [`delta-review-2026-07-12.md`](delta-review-2026-07-12.md) | ✅ RESOLVED (`efef163`) — regression refuted + guards |
 
 Scope/over-build (§7) is **acknowledged and sanctioned** — tracked here as posture, not a fix workstream:
@@ -90,17 +124,25 @@ gate" is true but by design, its own value prop. See review §7 context note.
 
 | Priority | What | Workstream | Status |
 |---|---|---|---|
-| **P0** | Fail-closed: `missing-QC → HOLD` + honest "N checks ran / M not examined" prose | WS-01 | ☐ |
-| **P0** | One real identity/contamination check (VerifyBamID2 FREEMIX) end-to-end + "not examined" UI | WS-02 | ☐ |
-| **P0/P1** | MultiQC/fastp/mosdepth ingest adapter — let a real run in | WS-03 | ☐ |
-| **P1** | GIAB concordance (hap.py/vcfeval) → precision/recall on the card | WS-04 | ☐ |
-| **P1** | Metric correctness (dup-rate scale, `mean_coverage`/`% reads` relabel) | WS-06 | ☐ |
-| **P1/P2** | Close (or honestly label) the Settings→runbook loop | WS-05 | ☐ |
-| **P2** | Multi-dimensional `RunbookSet`; registry-driven metric adds; two-sided gate type | WS-05, WS-06 | ☐ |
-| **P2** | AI honesty (more agent input or relabel; demo default) | WS-07 | ☐ |
-| **P3** | Right-size scope; honest governance labels; rebalance toward core | §7 (posture) | ☐ |
+| **P0** | Fail-closed: `missing-QC → HOLD` + honest "N checks ran / M not examined" prose | WS-01 | ✅ done |
+| **P0** | One real identity/contamination check (VerifyBamID2 FREEMIX) end-to-end + "not examined" UI | WS-02 | ☐ not started |
+| **P0/P1** | MultiQC/fastp/mosdepth ingest adapter — let a real run in | WS-03 | ✅ done (core; not yet production-called — see WS-03 status above) |
+| **P1** | GIAB concordance (hap.py/vcfeval) → precision/recall on the card | WS-04 | ☐ not started |
+| **P1** | Metric correctness (dup-rate scale, `mean_coverage`/`% reads` relabel) | WS-06 | ✅ done (dup-rate REFUTED as a non-bug; mean_coverage/% reads fixed) |
+| **P1/P2** | Close (or honestly label) the Settings→runbook loop | WS-05 | 🟡 labelled, not closed — `_active_runbook` still one run-level `Runbook`; `RunbookSet` resolution itself is done |
+| **P2** | Multi-dimensional `RunbookSet`; registry-driven metric adds; two-sided gate type | WS-05, WS-06 | ✅ done |
+| **P2** | AI honesty (more agent input or relabel; demo default) | WS-07 | 🟡 partial — Q1/Q2 done; richer context/retrieval/demo-default open |
+| **P3** | Right-size scope; honest governance labels; rebalance toward core | §7 (posture) | ☐ posture only, not a fix workstream (unchanged) |
 
 ## Parallel execution — wave board
+
+**Status (2026-07-12): this plan is now HISTORICAL, not forward-looking** — Wave 0 (WS-06·PR1,
+WS-05·step1, WS-01·PR1) and most of Wave 1/2 (WS-03, WS-06 remainder, WS-07 Q1/Q2, WS-09 interim)
+landed serially in one session rather than across the fanned-out branches this board describes; the
+actual sequencing is recorded commit-by-commit above and in
+[journal 2026-07-12-gap-analysis-remediation-verification.md](../../docs/journal/2026-07-12-gap-analysis-remediation-verification.md).
+Kept below for the dependency reasoning (still accurate) — WS-02/WS-04 remain unstarted and could
+still use this parallel structure.
 
 Parallelism is bounded by **file-level contention**: nearly every workstream edits
 `rules.py`/`runbook.py`/`models.py`/`parsers.py`, so this runs in **waves**, not a flat 7-way fan-out.
@@ -173,5 +215,7 @@ must also run in pre-push/CI (esp. the env-gated real-GIAB legs), or the anti-sc
 
 ---
 
-_Created 2026-07-11 (MST). Tracker — keep statuses current; a workstream is done only when its Test-First
+_Created 2026-07-11 (MST); statuses last updated 2026-07-12 (MST) — see [journal
+2026-07-12-gap-analysis-remediation-verification.md](../../docs/journal/2026-07-12-gap-analysis-remediation-verification.md).
+Tracker — keep statuses current; a workstream is done only when its Test-First
 Contract (incl. the real-GIAB leg where required) is green, per the Definition of Done above._

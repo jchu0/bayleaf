@@ -82,3 +82,13 @@ QC-MISSING check; WS-10 fastp real-path) on a machine with the toolchain. Full s
 - [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) — the living tracker (statuses updated).
 - [audit/gap_analysis/delta-review-2026-07-12.md](../../audit/gap_analysis/delta-review-2026-07-12.md) — WS-08/09/10 source.
 - ADR-0001 (rules decide / AI narrates), ADR-0012 (least-privilege), ADR-0022 (agent observation binding).
+
+## Distilled into
+
+**Closed 2026-07-12** — the canonical doc sweep for these four commits (and every commit landed
+after them on this branch) is in
+[2026-07-12-gap-analysis-remediation-verification.md](2026-07-12-gap-analysis-remediation-verification.md):
+`CLAUDE.md` code map (items 1a fail-closed additions, 4c WS-08 access-control honesty),
+`docs/data/metric_registry.md`/`qc_metrics.md` (WS-06 metric-honesty + gated-count corrections),
+`docs/planning/tasks.md` (T-145 WS-01, T-147 WS-10, T-148 WS-08, T-149 WS-06),
+`audit/gap_analysis/README.md` (all four workstream statuses updated).

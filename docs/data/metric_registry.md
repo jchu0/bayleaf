@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-10 (MST) |
+| **Last updated** | 2026-07-12 (MST) — WS-06 Gap 2: `variant.titv` gated via a new `target_band` threshold kind, gated/ungated counts 10/10 → 11/9 |
 | **Audience** | bioinformatics / software |
-| **Related** | [schemas.md](schemas.md) (§6 units contract), [provenance.md](provenance.md), [qc_metrics.md](qc_metrics.md), [nf-core-conventions.md](nf-core-conventions.md), [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md) |
+| **Related** | [schemas.md](schemas.md) (§6 units contract), [provenance.md](provenance.md), [qc_metrics.md](qc_metrics.md), [nf-core-conventions.md](nf-core-conventions.md), [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [audit/gap_analysis/ws-06-registry-extensibility-and-metric-bugs.md](../../audit/gap_analysis/ws-06-registry-extensibility-and-metric-bugs.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md) |
 
 ## Overview
 
@@ -93,18 +93,27 @@ metrics:
 
 `GET /api/metrics/registry` exposes the registered metric vocabulary read-only (every type + whether it is **gated** by the runbook today or **registered-but-not-yet-gated**), reading `default_registry()` / `DEFAULT_RUNBOOK`. Surfaced in the Settings "Metric catalog" panel. It never authors or edits a metric/threshold (ADR-0001).
 
-## Wiring status (T-082, 2026-07-10)
+## Wiring status (T-082, 2026-07-10; counts updated 2026-07-12, WS-06 Gap 2)
 
-Of the 20 registered `our_key`s, **10 are gated** by a `runbook.QCThreshold` — the original 5
+Of the 20 registered `our_key`s, **11 are gated** by a `runbook.QCThreshold` — the original 5
 `required=True` (Q30, reads-passing-filter, mean-target-coverage, cluster-PF, duplication) plus
-5 new `required=False` ("optional": `qc.breadth_20x`, `qc.breadth_30x`, `qc.pct_mapped`,
-`qc.on_target`, `variant.dp` — score a value that IS present, never NA-flag one that's absent).
-The other **10 are ungated** (registered, no threshold) — of those, only 3
-(`preflight.phix_aligned`, `variant.gq`, `variant.titv`) are actually wired end-to-end from
+5 `required=False` ("optional": `qc.breadth_20x`, `qc.breadth_30x`, `qc.pct_mapped`,
+`qc.on_target`, `variant.dp` — score a value that IS present, never NA-flag one that's absent)
+plus, as of the gap-analysis WS-06 Gap-2 fix (2026-07-12), a sixth `required=False` threshold on
+**`variant.titv`** — the first threshold to use the new `kind="target_band"` shape (a both-tails
+gate: PASS inside `[target_low, target_high]`, WARN/HOLD inside `[hard_low, hard_high]` but
+outside the target band, CRITICAL/RERUN outside the hard band — a `one_sided` gate can only catch
+one tail, so Ts/Tv could never score before this). The band (target `[2.0, 2.1]`, hard
+`[1.8, 2.8]`) is an **illustrative whole-genome heuristic, operator-configurable, NOT clinical**
+(CLAUDE.md life-science guardrail 3). The other **9 are ungated** (registered, no threshold) — of
+those, only 2 (`preflight.phix_aligned`, `variant.gq`) are actually wired end-to-end from
 `QCMetrics` → `MetricValue` (`metrics/mapping.py`, T-082) and surfaced as observations in the
-card readout via the registry's `display_name` (not the raw `our_key`, T-082 follow-up); the
-remaining 7 (`qc.zero_cov_targets`, `qc.fold_enrichment`, `qc.fold_80`,
+card readout via the registry's `display_name` (not the raw `our_key`, T-082 follow-up) —
+`variant.titv` moved from this "wired-but-ungated" set into the gated set above. The remaining 7
+(`qc.zero_cov_targets`, `qc.fold_enrichment`, `qc.fold_80`,
 `identity.ngscheckmate_match`, `identity.sex_concordance`, `contamination.freemix`,
 `variant.allele_balance`) remain registered-only with **no parser yet** — an honest, unchanged
-gap, not newly introduced by T-082. Verified against `src/pipeguard/metrics/mapping.py`
-`_QCMETRICS_MAP` (13 entries) and `src/pipeguard/runbook.py`'s `qc_thresholds` (10 entries).
+gap, not newly introduced by T-082 or WS-06. Verified against `src/pipeguard/metrics/mapping.py`
+`_QCMETRICS_MAP` (13 entries), `src/pipeguard/runbook.py`'s `qc_thresholds` (11 entries), and
+`tests/test_api.py::test_metric_catalog_lists_registered_metrics_and_gated_flag` (asserts
+`n_gated == 11` and the ungated count `== 9` over `GET /api/metrics/registry`).
