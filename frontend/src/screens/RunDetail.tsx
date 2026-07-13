@@ -22,6 +22,7 @@ import type {
   CardReadout,
   DecisionCard,
   Gate,
+  CheckCoverage,
   QcReportLink,
   RunbookPolicy,
   RunDetail as RunDetailData,
@@ -455,14 +456,30 @@ function QcReports({ reports }: { reports: QcReportLink[] }) {
   )
 }
 
-function CleanPanel({ brief = false }: { brief?: boolean }) {
+function CleanPanel({
+  coverage,
+  brief = false,
+}: {
+  coverage: CheckCoverage | null
+  brief?: boolean
+}) {
+  // Honest clean-card message (WS-01): "no issues in the checks that RAN", never "every check
+  // passed" — contamination/identity have no check today, so name them as not-examined.
+  const notRun = coverage?.not_examined ?? []
   return (
-    <div className="mt-4 flex items-center gap-2.5 rounded-[10px] border border-proceed-bd bg-proceed-bg px-3.5 py-3">
-      <CheckCircle2 size={18} strokeWidth={2} className="shrink-0 text-proceed" />
+    <div className="mt-4 flex items-start gap-2.5 rounded-[10px] border border-proceed-bd bg-proceed-bg px-3.5 py-3">
+      <CheckCircle2 size={18} strokeWidth={2} className="mt-0.5 shrink-0 text-proceed" />
       <span className={`${brief ? 'text-[13.5px]' : 'text-[13px]'} text-proceed-fg`}>
-        {brief
-          ? 'No provenance, metadata, or QC issues found.'
-          : 'No provenance, metadata, or QC issues found. Every runbook check passed with margin.'}
+        {coverage
+          ? `No issues found in the ${coverage.checks_ran} of ${coverage.checks_expected} check categories that ran.`
+          : 'No issues found in the checks that ran.'}
+        {notRun.length > 0 && (
+          <span className="opacity-70">
+            {' '}
+            {notRun.join(', ')} not examined — no check for {notRun.length === 1 ? 'it' : 'them'}{' '}
+            exists yet.
+          </span>
+        )}
       </span>
     </div>
   )
@@ -561,7 +578,7 @@ function CardBody({
                   </div>
                 </>
               ) : clean ? (
-                <CleanPanel />
+                <CleanPanel coverage={card.check_coverage} />
               ) : null}
               <AiNarration rationale={card.rationale} steps={card.next_steps} variant="arrow" />
               <QcReports reports={readout?.qc_reports ?? []} />
@@ -597,7 +614,7 @@ function CardBody({
               </div>
             </>
           ) : clean ? (
-            <CleanPanel brief />
+            <CleanPanel coverage={card.check_coverage} brief />
           ) : null}
           {hasReadout && (
             <>

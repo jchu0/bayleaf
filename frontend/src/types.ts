@@ -61,6 +61,16 @@ export type MetricValue = {
   content_hash: string
 }
 
+// Deterministic 'N ran / M not examined' coverage telemetry (WS-01). Un-hashed contextual
+// metadata; contamination/identity have no check today, so they are honestly not-examined.
+export type CheckCoverage = {
+  checks_expected: number
+  checks_ran: number
+  not_examined: string[]
+  categories_ran: string[]
+  categories_not_run: string[]
+}
+
 export type DecisionCard = {
   sample_id: string
   verdict: Verdict
@@ -74,6 +84,9 @@ export type DecisionCard = {
   // Registry-normalized QC metrics for this sample (T-025). Always emitted (backend
   // `default_factory=list`): an empty array when a sample has no QC row, never absent.
   metric_values: MetricValue[]
+  // Coverage telemetry (WS-01): null on older/partial cards; when present the UI shows the honest
+  // 'N ran / M not examined' story instead of a blanket "all checks passed".
+  check_coverage: CheckCoverage | null
   gate_results: GateResult[]
   content_hash: string
 }
