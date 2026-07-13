@@ -30,6 +30,7 @@ import type {
 } from '../types'
 import { GATE_DOT } from '../verdict'
 import { usePrefs } from '../context/PrefsContext'
+import { useAccess } from '../context/AccessContext'
 
 type Density = 'split' | 'brief' | 'dense'
 type CardFilter = Verdict | 'all' | 'attention'
@@ -59,7 +60,13 @@ export function RunDetail() {
   // user Settings / the profile dialog (UIC-8 removed the per-page Layout control), so this screen
   // reads it but never sets it — default stays 'split' via PrefsContext.
   const { density } = usePrefs()
+  // canSee gates inline cross-links (queue, provenance) so a restricted actor is never invited into
+  // a RequirePage-gated dead-end — mirrors how the nav hides those pages (view-gate, not authz).
+  const { canSee } = useAccess()
   const [reload, setReload] = useState(0)
+  // A released run short-circuits to the released panel and hides its cards. This latch lets the
+  // operator override that terminal-state gate to inspect the per-sample cards/provenance anyway.
+  const [inspectReleased, setInspectReleased] = useState(false)
   // Per-card open overrides + a screen-wide expand/collapse latch. Absent override → the
   // default (first card open, rest collapsed); expand/collapse-all clears the overrides.
   const [override, setOverride] = useState<Record<string, boolean>>({})
@@ -98,6 +105,29 @@ export function RunDetail() {
       cancelled = true
     }
   }, [runId, reload])
+
+  // A released run hides its cards, so the main effect never fetches their QC readouts. When the
+  // operator opts to inspect anyway (inspectReleased), fan out the readout fetch on demand so the
+  // revealed cards carry the same metric hero as any other run — a degraded readout stays honest.
+  useEffect(() => {
+    if (!inspectReleased || !detail || detail.summary.status !== 'released') return
+    let cancelled = false
+    for (const c of detail.cards) {
+      api
+        .qcReadout(runId, c.sample_id)
+        .then((rd) => !cancelled && setReadouts((m) => ({ ...m, [c.sample_id]: rd })))
+        .catch(() => !cancelled && setReadouts((m) => ({ ...m, [c.sample_id]: 'error' })))
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [inspectReleased, detail, runId])
+
+  // Reset the released-inspection latch when the run changes, so switching runs starts fresh at the
+  // released panel rather than carrying a prior run's reveal.
+  useEffect(() => {
+    setInspectReleased(false)
+  }, [runId])
 
   // The runbook is run-independent QC policy — fetch once. It backs the not-measured placeholder;
   // a failure just leaves it null and the readout hero degrades to hiding (the pre-S3 behavior).
@@ -178,7 +208,32 @@ export function RunDetail() {
     if (error) return <ErrorBox message={error} onRetry={() => setReload((r) => r + 1)} />
     if (!detail) return <DecisionLoading />
     if (detail.summary.status === 'running') return <DecisionLoading />
-    if (detail.summary.status === 'released') return <DecisionReleased count={detail.summary.n_samples} />
+    if (detail.summary.status === 'released' && !inspectReleased) {
+      return (
+        <div className="flex flex-col items-center gap-3.5">
+          <DecisionReleased count={detail.summary.n_samples} />
+          {/* Inspection shouldn't be gated by the terminal state — expose the per-sample cards +
+              provenance from here too. Provenance is RequirePage-gated, so only offer that link
+              when this actor can see the page (mirrors how the nav hides it). */}
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            <button
+              onClick={() => setInspectReleased(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3.5 py-2 text-[13px] font-medium text-text transition-colors hover:border-text-3"
+            >
+              <FileText size={14} /> View cards anyway
+            </button>
+            {canSee('provenance') && (
+              <Link
+                to={`/runs/${runId}/provenance`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-card px-3.5 py-2 text-[13px] font-medium text-text transition-colors hover:border-text-3"
+              >
+                <GitBranch size={14} /> Open provenance
+              </Link>
+            )}
+          </div>
+        </div>
+      )
+    }
 
     if (view === 'report') {
       return (
@@ -237,12 +292,16 @@ export function RunDetail() {
             <div className="flex-1 text-[13.5px] text-hold-fg">
               <b>{detail.summary.n_attention} sample(s) need operator attention</b> before this run can be released.
             </div>
-            <Link
-              to="/queue"
-              className="whitespace-nowrap rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-text-3"
-            >
-              Open review queue
-            </Link>
+            {/* The review queue is RequirePage-gated — only invite the actor there when they can
+                see the page, so a restricted user isn't sent into an access-denied dead-end. */}
+            {canSee('queue') && (
+              <Link
+                to="/queue"
+                className="whitespace-nowrap rounded-lg border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-medium text-text hover:border-text-3"
+              >
+                Open review queue
+              </Link>
+            )}
           </div>
         )}
 
@@ -544,6 +603,9 @@ function CardBody({
     return g ? { ...g, blocked_by: blockingGate(gate) } : null
   }).filter((g): g is ReadoutGroup => g !== null)
   const hasReadout = gates.some((g) => g.rows.length > 0 || g.note)
+  // Same canSee gate as the run-level cross-links: never invite a restricted actor into a
+  // RequirePage-gated page (provenance / agent) from a card's rail either.
+  const { canSee } = useAccess()
   const hasFindings = card.findings.length > 0
   const clean = card.verdict === 'proceed'
   const actionable = card.verdict !== 'proceed'
@@ -627,10 +689,12 @@ function CardBody({
           <AiNarration rationale={card.rationale} steps={card.next_steps} variant="numbered" />
           <QcReports reports={readout?.qc_reports ?? []} />
           <div className="mt-3.5 flex gap-2.5">
-            <RailButton to={`/runs/${runId}/provenance`}>
-              <GitBranch size={14} /> View lineage
-            </RailButton>
-            {actionable && (
+            {canSee('provenance') && (
+              <RailButton to={`/runs/${runId}/provenance`}>
+                <GitBranch size={14} /> View lineage
+              </RailButton>
+            )}
+            {actionable && canSee('agent') && (
               <RailButton to={agentTo} accent>
                 <Sparkles size={14} /> Ask agent to triage
               </RailButton>
