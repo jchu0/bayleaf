@@ -239,6 +239,13 @@ def _active_runbook(run_id: str) -> Runbook:
     Route-to-human is off by default in the core (ADR-0018 D2); this is the deployment-config seam
     that arms it, scoped PER RUN via a marker so a single contrived fixture can demonstrate the
     human-review escalation while every real/other run stays disarmed. Empty/absent → disarmed.
+
+    DEFERRED (WS-05 safe stop — authoring only, NOT applied to the gate here): the core now supports
+    a per-``(assay, sample_type, platform)`` ``RunbookSet`` (``pipeguard.runbook.RunbookSet`` /
+    ``DEFAULT_RUNBOOK_SET``) and ``run_gate`` accepts one, but this endpoint still returns a single
+    run-level ``Runbook``; and the Settings typed-override apply loop is not wired. Resolving a
+    ``RunbookSet`` per sample and folding approved Settings overrides into it is a labelled
+    follow-up (WS-05 Gaps B/C/D) — deliberately NOT half-wired.
     """
     marker = _run_dir(run_id) / "route_to_human"
     if not marker.exists():

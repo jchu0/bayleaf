@@ -32,7 +32,7 @@ from .models import (
     VariantCall,
     Verdict,
 )
-from .runbook import DEFAULT_RUNBOOK, QCThreshold, Runbook
+from .runbook import DEFAULT_RUNBOOK, QCThreshold, Runbook, RunbookSet
 
 
 def _combine_index(entry: SampleSheetEntry) -> str | None:
@@ -627,11 +627,37 @@ def evaluate_sample(sid: str, artifacts: RunArtifacts, runbook: Runbook) -> list
     return findings
 
 
+def _resolve_runbook(rset: RunbookSet, artifacts: RunArtifacts, sid: str) -> Runbook:
+    """Resolve the concrete profile for one sample from its metadata (WS-05).
+
+    Reads the sample's ``(assay via extra/library_prep, tissue, run platform)`` and asks the set
+    for the matching profile — or the default when nothing matches. Kept tiny so ``evaluate_sample``
+    always receives a concrete ``Runbook`` (its signature is deliberately unchanged).
+    """
+    sample = next((s for s in artifacts.samples if s.sample_id == sid), None)
+    return rset.resolve(sample, artifacts.platform)
+
+
 def evaluate_run(
-    artifacts: RunArtifacts, runbook: Runbook | None = None
+    artifacts: RunArtifacts, runbook: Runbook | RunbookSet | None = None
 ) -> dict[str, list[Finding]]:
-    """Run every rule against every sample. Returns findings keyed by sample_id."""
-    runbook = runbook or DEFAULT_RUNBOOK
+    """Run every rule against every sample. Returns findings keyed by sample_id.
+
+    ``runbook`` may be a single :class:`~pipeguard.runbook.Runbook` — used AS-IS for every sample,
+    the back-compat path, byte-identical to before — or a :class:`~pipeguard.runbook.RunbookSet`,
+    which resolves the concrete profile PER SAMPLE from that sample's ``(assay, sample_type,
+    platform)`` metadata (WS-05). ``evaluate_sample``'s signature is deliberately UNCHANGED — it
+    always receives one resolved ``Runbook`` — so every rule-level test/edit keeps composing against
+    a single runbook. The verdict still comes only from ``aggregate_verdict`` over the findings
+    (ADR-0001); the set only SELECTS the profile, it never authors a verdict.
+    """
+    if runbook is None:
+        runbook = DEFAULT_RUNBOOK
+    if isinstance(runbook, RunbookSet):
+        return {
+            sid: evaluate_sample(sid, artifacts, _resolve_runbook(runbook, artifacts, sid))
+            for sid in artifacts.sample_ids()
+        }
     return {sid: evaluate_sample(sid, artifacts, runbook) for sid in artifacts.sample_ids()}
 
 

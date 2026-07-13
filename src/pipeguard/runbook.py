@@ -7,11 +7,16 @@ because Q30 84.1 < gate 85.0") and lets the UI show *which rule* fired.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .metrics.mapping import producible_metric_keys
+
+if TYPE_CHECKING:
+    # Only for the `resolve()` annotation — imported lazily so `runbook` never hard-depends on
+    # `models` at import time (resolution reads Sample attributes duck-typed at runtime).
+    from .models import Sample
 
 
 class QCThreshold(BaseModel):
@@ -319,3 +324,170 @@ class Runbook(BaseModel):
 
 
 DEFAULT_RUNBOOK = Runbook()
+
+
+# ── Multi-dimensional runbook profiles (WS-05) ────────────────────────────────────────────────
+def _norm_axis(value: str | None) -> str | None:
+    """Fold a resolution-axis value for matching: strip + lowercase; blank/None → None (wildcard).
+
+    Kept a module function (not only a validator) so the sample-side query and the stored key are
+    normalized by the exact same rule — a key can never miss a match on case/whitespace alone.
+    """
+    if value is None:
+        return None
+    v = value.strip().lower()
+    return v or None
+
+
+class RunbookKey(BaseModel):
+    """A profile selector over the ``(assay, sample_type, platform)`` axes.
+
+    Every axis is optional; a ``None`` axis is a WILDCARD (the profile applies regardless of that
+    axis's value). Values are normalized (strip + lowercase) at construction so a key stored one
+    way still matches a sample value cased/padded another way. Frozen + hashable so it can key a
+    profile and be de-duped during resolution.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    assay: str | None = None
+    sample_type: str | None = None
+    platform: str | None = None
+
+    @field_validator("assay", "sample_type", "platform")
+    @classmethod
+    def _normalize(cls, v: str | None) -> str | None:
+        return _norm_axis(v)
+
+
+class RunbookProfile(BaseModel):
+    """One ``key → runbook`` entry in a :class:`RunbookSet`."""
+
+    key: RunbookKey
+    runbook: Runbook
+
+
+# Binary axis weights (assay=4, sample_type=2, platform=1) encode "assay dominates sample_type
+# dominates platform" and give a TOTAL order over the 7 non-empty axis combinations with NO ties.
+# Candidate keys are tried most-specific first; the first registered profile that matches wins,
+# else the default runbook. This is a documented ceiling — adding axes (kit, reference build) would
+# need re-weighting, but the scheme extends cleanly.
+_RESOLUTION_MASKS: tuple[tuple[bool, bool, bool], ...] = (
+    (True, True, True),  # 7  assay + sample_type + platform (exact)
+    (True, True, False),  # 6  assay + sample_type
+    (True, False, True),  # 5  assay + platform
+    (True, False, False),  # 4  assay
+    (False, True, True),  # 3  sample_type + platform
+    (False, True, False),  # 2  sample_type
+    (False, False, True),  # 1  platform
+)
+
+
+def _sample_assay(sample: Sample | None) -> str | None:
+    """The assay axis for a sample: ``extra['assay']`` (explicit opt-in) else ``library_prep``.
+
+    There is no first-class ``assay`` field on the data contract yet — a real intake/LIMS assay
+    source is deferred (WS-03 / §3d of the WS-05 plan). ``extra['assay']`` is the explicit seam an
+    operator/importer can set; ``library_prep`` (the kit) is a sensible fallback so a run that only
+    carries the kit still routes. Absent both → ``None`` → the sample resolves to the default
+    profile (fail-safe: an unclassifiable sample is gated by the full default runbook, never
+    ungated). Normalization happens in :class:`RunbookKey`, so the raw value is returned here.
+    """
+    if sample is None:
+        return None
+    raw = sample.extra.get("assay")
+    if isinstance(raw, str) and raw.strip():
+        return raw
+    return sample.library_prep
+
+
+class RunbookSet(BaseModel):
+    """A set of :class:`Runbook` PROFILES keyed by ``(assay, sample_type, platform)``, resolved
+    PER SAMPLE (WS-05).
+
+    This is the production consumer of WS-01's ``expected_metrics`` mechanism: a per-``(assay,
+    sample_type, platform)`` profile can carry its own expected-metric set (and thresholds), so a
+    panel sample is gated by the panel profile while a lean run keeps the default — from ONE
+    codebase (ADR-0005). Resolution (:meth:`resolve`) is a PURE, deterministic function of sample
+    metadata + the set: it SELECTS a threshold/expected profile, it never sets or overrides a
+    verdict or confidence (ADR-0001). An unmatched sample always falls back to ``default`` — a
+    fully-populated runbook — so a new axis can never silently drop gating (fail-closed).
+
+    Resolution order (most specific first, first match wins, else ``default``):
+        assay+sample_type+platform → assay+sample_type → assay+platform → assay
+        → sample_type+platform → sample_type → platform → ``default``
+    """
+
+    default: Runbook = Field(default_factory=lambda: DEFAULT_RUNBOOK)
+    profiles: list[RunbookProfile] = Field(default_factory=list)
+
+    @classmethod
+    def of(cls, runbook: Runbook) -> RunbookSet:
+        """Coerce a bare :class:`Runbook` into a set with no profiles.
+
+        :meth:`resolve` then always returns ``runbook`` AS-IS — the back-compat path, so a caller
+        that passes a single runbook keeps its exact behavior (every sample gated by that one
+        runbook). No cloning: ``RunbookSet.of(rb).default is rb``.
+        """
+        return cls(default=runbook, profiles=[])
+
+    def resolve(self, sample: Sample | None, platform: str | None = None) -> Runbook:
+        """Return the profile matching this sample's ``(assay, sample_type, platform)``, else the
+        ``default`` runbook.
+
+        ``assay`` is read via :func:`_sample_assay` (``extra['assay']`` then ``library_prep``),
+        ``sample_type`` from ``sample.tissue``, and ``platform`` from the passed run-level value.
+        Candidate keys are tried most-specific first (see :data:`_RESOLUTION_MASKS`); the first
+        registered profile that matches wins. A ``None`` sample, an empty set, or no match all
+        resolve to ``default`` — never ``None``, never an empty gate (fail-closed).
+        """
+        if not self.profiles:
+            return self.default
+        query = RunbookKey(
+            assay=_sample_assay(sample),
+            sample_type=sample.tissue if sample is not None else None,
+            platform=platform,
+        )
+        seen: set[RunbookKey] = set()
+        empty = RunbookKey()
+        for keep_assay, keep_type, keep_platform in _RESOLUTION_MASKS:
+            candidate = RunbookKey(
+                assay=query.assay if keep_assay else None,
+                sample_type=query.sample_type if keep_type else None,
+                platform=query.platform if keep_platform else None,
+            )
+            # An all-wildcard candidate (every kept axis was None on the query) can never
+            # out-specify the `default` fallback, and re-tried candidates are idempotent — skip
+            # both.
+            if candidate == empty or candidate in seen:
+                continue
+            seen.add(candidate)
+            match = next((p.runbook for p in self.profiles if p.key == candidate), None)
+            if match is not None:
+                return match
+        return self.default
+
+
+# The germline-panel profile — WS-05's production consumer of WS-01's ``expected_metrics``
+# MECHANISM. Identical GATING thresholds to the default (so it never silently re-gates a metric),
+# but it EXPECTS breadth-of-coverage to have been examined: a panel sample that omits
+# ``qc.breadth_20x`` / ``qc.breadth_30x`` now HOLDs on ``QC-EXPECTED`` (rules._check_expected_
+# metrics) instead of silently reading "all clear". Both keys are producible, so the field_validator
+# accepts them; ``pipeline_profile`` names the profile the finding cites.
+GERMLINE_PANEL_RUNBOOK = Runbook(
+    pipeline_profile="germline-panel",
+    expected_metrics=("qc.breadth_20x", "qc.breadth_30x"),
+)
+
+# The default set: the stock DEFAULT_RUNBOOK as the fallback profile, PLUS the germline-panel
+# profile armed for any sample that DECLARES ``assay="germline-panel"`` (via ``extra['assay']`` or
+# a ``germline-panel`` library_prep). Nothing changes by default — no current run declares that
+# assay (mock/GIAB library_preps are TruSeq/Nextera), so every existing sample resolves to
+# DEFAULT_RUNBOOK and the pinned demo is byte-identical. The panel profile is dormant-but-deployed:
+# it fires the moment a real panel sample arrives.
+DEFAULT_RUNBOOK_SET = RunbookSet(
+    default=DEFAULT_RUNBOOK,
+    profiles=[
+        RunbookProfile(key=RunbookKey(assay="germline-panel"), runbook=GERMLINE_PANEL_RUNBOOK),
+    ],
+)
