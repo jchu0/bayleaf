@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-12 (MST) — WS-02/WS-04: `contamination.freemix` (VerifyBamID2) and new key `concordance.snp_f1` (hap.py) gated + parser-wired (not pipeline-produced); registered/gated/ungated counts 20/11/9 → 21/13/8 |
+| **Last updated** | 2026-07-13 (MST) — live-genomics pass (`478d579`): `contamination.freemix`/`concordance.snp_f1` parsers proven against REAL, calibrated VerifyBamID2/hap.py tool output (not just a format-mimicking fixture) — see the honesty note below; the "not pipeline-produced" caveat and the 21/13/8 counts are unchanged. Prior: 2026-07-12 (MST) — WS-02/WS-04: `contamination.freemix` (VerifyBamID2) and new key `concordance.snp_f1` (hap.py) gated + parser-wired (not pipeline-produced); registered/gated/ungated counts 20/11/9 → 21/13/8 |
 | **Audience** | bioinformatics / software |
 | **Related** | [schemas.md](schemas.md) (§6 units contract), [provenance.md](provenance.md), [qc_metrics.md](qc_metrics.md), [nf-core-conventions.md](nf-core-conventions.md), [ADR-0015](../adr/ADR-0015-layered-data-contract.md), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) (never fabricate truth), [audit/gap_analysis/ws-02-identity-provenance.md](../../audit/gap_analysis/ws-02-identity-provenance.md), [audit/gap_analysis/ws-04-giab-concordance.md](../../audit/gap_analysis/ws-04-giab-concordance.md), [audit/gap_analysis/ws-06-registry-extensibility-and-metric-bugs.md](../../audit/gap_analysis/ws-06-registry-extensibility-and-metric-bugs.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md) |
 
@@ -131,6 +131,23 @@ VCF + high-confidence BED — both **labelled pipeline inputs, never fabricated*
 place its output where `ingest_results_dir` looks for it. This is the same "gate-wired but not
 gate-called" honesty pattern already recorded for the WS-03 ingest adapter itself — one layer
 earlier in the pipeline (see [CLAUDE.md](../../CLAUDE.md) code map item 1g).
+
+**Proven on real, calibrated tool output (2026-07-13, `478d579`) — a step up from "parser-wired,
+fixture-tested," the "not pipeline-produced" caveat above unchanged.** The offline WS-02/WS-04
+tests above prove the ingest→gate WIRING against hand-built fixtures that mimic the real file
+*format*; they explicitly deferred "does a real tool's own output parse the same way" to a live
+pass. That pass ran 2026-07-13 (an operator ran the standalone modules by hand, per the gap above):
+VerifyBamID2 2.0.3 **genome-wide** on the full HG002 2×250 BAM produced a FREEMIX that passed the
+marker sanity check **natively** (no `--DisableSanityCheck`, unlike a chromosome-capped heuristic) —
+i.e. a genuinely **calibrated** value, 0.000220096 — and the real germline pipeline (chr20/21/22,
+300,175 variants) produced a hap.py `summary.csv` scored against the GIAB v4.2.1 truth (SNP/PASS
+F1 = 0.989276). The tiny derived outputs (294 B + 893 B) are committed verbatim under
+`tests/fixtures/giab_real/` (origin `real-giab`; the 122 GB BAM stays on the external SSD, never
+committed) and read through the same public `ingest_results_dir → run_gate` path in
+`tests/test_real_giab_calibrated.py` — a permanent, CI-runnable proof, not a one-off manual check.
+This closes the gap between "the parser handles the real *shape*" and "the parser handles a real
+*tool's own* output" — it does **not** close the separate, unrelated gap that no pipeline in this
+repo runs either tool automatically (that gap is exactly as open as before this pass).
 
 The other **8 are ungated** (registered, no threshold) — of those, only 2
 (`preflight.phix_aligned`, `variant.gq`) are actually wired end-to-end from `QCMetrics` →

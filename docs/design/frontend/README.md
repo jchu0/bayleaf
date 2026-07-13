@@ -194,6 +194,12 @@ The pipeline's front door — registers a run + its samples **before processing*
   client-side only, same seam as the pre-existing `sample_metadata.csv` attach above. `lib/csv.ts`
   now holds the one shared `splitCsv`/`colIndex` implementation both screens' parsers import
   (extracted behavior-identically out of this file).
+- **Submit button role-gated in the UI (Shipped 2026-07-13, T-166, commit `b03d1fa`, honesty finding
+  J10).** `canSubmit` used to enable the button for a **viewer** and only 403 after the `POST
+  /api/runs` write. `POST /api/runs` has always required reviewer/approver server-side
+  (`require_role`, unchanged) — this is **view-gate parity, not a new security control**: a viewer
+  now sees a disabled button with "Submitting a run requires a reviewer or approver role" instead of
+  an enabled one that fails only after the round-trip.
 
 ### 5.2 Runs  (`view: 'overview'`)
 Scale-kit list surface:
@@ -213,6 +219,19 @@ Scale-kit list surface:
 - **Canonical geometry (Shipped 2026-07-10, "Wave 9," T-116, commit `3e592d8`, G3).** This bar
   (and every other distribution/meter bar in the app) now renders through the shared
   `components/Bar.tsx` — see §9 Tokens for the full consolidation.
+- **One shared `useRuns()` store (Shipped 2026-07-13, T-167, commit `67099f6`, UX-DUP Runs #6).**
+  `/api/runs` used to be fetched into 3+ independent client copies — this screen's own `runsPage`
+  call, `Layout.tsx` (feeding the Sidebar attention badge + the old top-bar switcher), and
+  `RunSelector`'s self-fetch fallback — so the same collection crossed the wire up to 3× per
+  session and could disagree (a stale Sidebar badge beside a fresh RunOverview facet count). A new
+  `hooks/useRuns.ts` module-level store (session cache + per-key subscribers + in-flight dedup +
+  `refresh()`, modeled on `useApiHealth`/`useRun`) now backs all four consumers; this screen's own
+  client-side search/facet/sort/date/paginate pipeline and its **header-borne, exclusively
+  server-side facet counts** (closing T-072, unchanged this round) are preserved — only the fetch
+  is unified, not the view logic. **The "All" status tab is deliberately KEPT here** (unlike Review
+  queue/Inbox, see [ui-conventions.md UIC-21](../ui-conventions.md#uic-21--partition-facets-never-carry-a-catch-all-all-peer)) —
+  this screen's job is literally "browse every run," so an "All" view is not a redundant catch-all
+  peer the way it was on a triage queue.
 
 ### 5.3 Intake gate  (`view: 'intake'`)
 Preflight sample-admission review. **Collapsible admission rows** (consistent bar lengths,
@@ -283,6 +302,27 @@ Per-sample verdict cards for a run.
   banner and `CardBody`'s "View lineage"/"Ask agent to triage" rail buttons — is now gated on the
   same `useAccess().canSee(page)` the nav uses, so a restricted actor is never sent from an inline
   link into a `RequirePage`-gated access-denied dead-end the nav had otherwise hidden.
+- **One `useRun(runId)` session cache, not three independent fetches (Shipped 2026-07-13, T-167,
+  commit `5daf1a9`, UX-DUP #4).** `RunDetail.tsx` (this screen), `AgentTriage.tsx` (§5.7), and
+  `Provenance.tsx` (§5.6) each fetched `api.run(runId)` independently, so one cards → triage →
+  provenance journey pulled the same multi-hundred-KB run payload three times. `hooks/useRun.ts` is
+  a module-level cache keyed by `runId` (StrictMode-safe in-flight dedup, per-`runId` subscribers,
+  a `refresh()` that fans a re-fetch to every subscriber) all three screens now read from — a run
+  visited a 2nd/3rd time in one journey is a cache hit. Card readouts, error/synthesis retries, and
+  Provenance's after-share refetch are unchanged in behavior, just re-sourced onto the shared cache.
+- **`FacetBar` replaces the triple verdict-count display (Shipped 2026-07-13, T-167, commit
+  `8e95341`, UX-DUP #5/B).** This screen used to render the same verdict counts **three** ways at
+  once — the `DecisionVerdictBar` (§9) + its legend, a separate "N need attention" banner, and a
+  `CardFilter` tab strip repeating every count again — with two overlapping catch-alls (all +
+  attention), so a non-proceed card was a member of three simultaneous tabs. New
+  `components/FacetBar.tsx` collapses this to **one** control: the same grouped tally powers the
+  bar widths, the legend counts, AND the active filter (the legend items themselves are the filter
+  buttons, `aria-pressed`; a zero-count verdict shows disabled, not hidden). "All" is the absence of
+  a filter (no catch-all peer, per [UIC-21](../ui-conventions.md#uic-21--partition-facets-never-carry-a-catch-all-all-peer));
+  the attention roll-up is the bar's header CTA (count + "Open review queue"), not a third count
+  display, and still drives the `?filter=attention` deep-link Monitoring links to. A
+  "Showing N · \<verdict\> · clear" line replaces the old tab strip. `DecisionVerdictBar` itself is
+  unchanged and stays in use on RunReport (§9).
 
 ### 5.5 Review queue  (`view: 'queue'`)
 Cross-run triage. **Reviewer/approver RBAC**, **first-open + Expand/Collapse all**,
@@ -332,6 +372,32 @@ resolve).
   group is now bound by a `border-l-2` left rail (lights accent when the group has a selection)
   with the subheader select-all and every ticket's checkbox aligned in one fixed gutter on the
   rail — a designed grouping, not a convenience placement.
+- **Rerun resolution copy corrected (Shipped 2026-07-13, T-166, commit `b03d1fa`, honesty finding
+  J8).** "Requeue the sample to clear the rerun" implied a one-click requeue control that doesn't
+  exist — both run endpoints 409 on a duplicate id. Reworded to the real next step: "Re-run the
+  sample under a new run id, then resolve this ticket."
+- **"All" status tab dropped; search escapes the facet (Shipped 2026-07-13, T-167, commit
+  `5b45ae1`, UX-DUP, decision A).** The status tabs are a **partition** (a ticket is in exactly one
+  status), so an "All" peer made every ticket a member of two tabs. The queue now defaults to
+  **Open** (unchanged) with In review / Resolved as their own tabs and no "All" peer; a **search**
+  now escapes the status facet (spans every status) so no ticket is hidden by the removal. See
+  [ui-conventions.md UIC-21](../ui-conventions.md#uic-21--partition-facets-never-carry-a-catch-all-all-peer).
+  The deeper `TicketsContext` data-layer unification (eliminating this screen's O(runs) `api.run`
+  fan-out) is a **deliberate deferral** — it needs either a backend flagged-cards endpoint or a
+  careful lazy-load, not attempted this round.
+- **Queue↔Inbox status drift closed via `ticketsBus` (Shipped 2026-07-13, T-167, commits `3140527`,
+  `f6ffbac`, UX-DUP #6/C).** A ticket's status lived in two independent client caches — this
+  screen's own optimistic `ui` overlay and the always-mounted `InboxContext` (§5.11) — both writing
+  the same backend but disagreeing until a manual refresh. New `ticketsBus.ts` is a pure,
+  data-free invalidation singleton (`bumpTickets()`, 250ms trailing-debounced so a batch action
+  triggers one re-fetch not N; `onTicketsChanged()`): this screen calls `bumpTickets()` only after a
+  successful `syncAction`/`assign` write, and `InboxContext` subscribes and refreshes, so a
+  queue-resolve now reflects live in the bell + Inbox instead of drifting. `InboxContext.refresh()`
+  also gained a monotonic request-sequence token so overlapping refreshes commit in issue order, not
+  completion order (a stale fetch can no longer clobber a fresh one). Same round, an unrelated
+  pre-existing bug surfaced by this change: `assign`'s optimistic patch had no rollback on a
+  rejected write (unlike `syncAction`), stranding the wrong owner in the `ui` overlay after a
+  403/409 — now mirrors `syncAction`'s snapshot-before-patch/restore-on-catch.
 
 ### 5.6 Provenance  (`view: 'provenance'`)
 **Rewritten 2026-07-10 ("Wave 8," T-114, commit `0e64fad`, PV1)** from a single left→right stage
@@ -403,6 +469,13 @@ runs via the top switcher never leaves a stale "unknown run" message on screen.
   process/task/ledger id, those are `arun_…`/`evt_…`; the wire field is still `sha256` and its
   value is unchanged) and now shows the full value on hover of the label, in addition to the
   existing "show full" toggle and copy button.
+- **Reads the shared `useRun(runId)` cache, not its own fetch (Shipped 2026-07-13, T-167, commit
+  `5daf1a9`, UX-DUP #4).** This screen's own `api.run(runId)` fetch effect is replaced by a small
+  UI-reset effect over the shared cache (§5.4) — a run already loaded for Decision cards or Agent
+  triage in the same journey is a cache hit here too. This screen's after-share `refresh()` call
+  (re-pulling the run once a de-identified share is recorded, so the new `DATA_EXPORTED` event
+  shows up without a manual reload) now forces the shared cache, fanning the fresh payload to every
+  subscriber, not just this screen.
 
 ### 5.7 Agent triage  (`view: 'agent'`)
 Advisory triage assistant. **Chat composer**: multi-line text window, **Enter** sends,
@@ -443,6 +516,10 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
   doc's own corrected Status field for the gap (no dedicated `system-agents` `PageId`, so Admin
   page-access still can't grant the two views separately) and
   [journal 2026-07-13-audit-fixes-ia.md](../../journal/2026-07-13-audit-fixes-ia.md).
+- **Reads the shared `useRun(runId)` cache on the per-run route (Shipped 2026-07-13, T-167, commit
+  `5daf1a9`, UX-DUP #4).** Same change as Provenance (§5.6) and Decision cards (§5.4): the run
+  fetch is a small UI-reset effect over the one shared cache, not an independent `api.run` call —
+  visiting `/runs/:id/agent` after Decision cards or Provenance in the same session is a cache hit.
 
 ### 5.8 Monitoring  (`view: 'monitoring'`)
 - **Recurring issue signatures**: **searchable**, **collapsible rows** on a fixed 5-column
@@ -492,6 +569,24 @@ toggle. Helper line reinforces "advisory · can't change the verdict."
   each colored to match its stacked-bar segment; the old static swatch legend is now clickable
   `aria-pressed` toggle chips (default: flagged ON, the four verdict lines OFF, so the chart isn't
   cluttered on load).
+- **Corrected — "Cleared" is now a facet, not a second unpaginated list (Shipped 2026-07-13,
+  T-167, commit `6802e9b`, UX-DUP #2).** The "collapsible 'Cleared · N' section" described above
+  used to mount a **second, unpaginated** copy of the signature-row component alongside the
+  paginated active list — clearing 500 signatures and expanding it rendered 500 full rows at once
+  (the one place in the app two copies of the same entity rendered simultaneously). Collapsed to
+  ONE list with an **active | cleared** facet (a `SegmentedControl`, counts inline) — the shared
+  `<Pager>` now paginates whichever side is active, so the cleared side is paginated too. Restoring
+  the last cleared signature auto-falls back to the Active facet so the operator is never stranded
+  on an empty one. The per-row clear/restore behavior (localStorage-persisted, reversible, never a
+  DB purge) is unchanged.
+- **Shared `useApiHealth` singleton + `Pager` ellipsis windowing (Shipped 2026-07-13, T-167, commit
+  `ec89619`, UX-DUP #1).** The recurring-signatures pager (used here) gains **ellipsis windowing**
+  (first + last + current±1 with "…" gaps; ≤7 pages still render in full) so a large signature set
+  no longer emits one button per page (previously up to 80 buttons at 2,000 sigs/25-per-page).
+  Separately, the TopBar health pill and the Runs hero (§5.2) used to each run their own
+  `setInterval` polling `/api/health` every 20s (2× the fetch, and transiently able to disagree); a
+  new `hooks/useApiHealth.ts` module-level poller with subscribers now backs both — one poll, one
+  shared state, same 20s cadence.
 
 ### 5.9 Pipeline builder  (`view: 'builder'`)  — see §6 for the full model
 Node-graph editor that **emits `run_layout.yaml`**. Defaults to **View**; **Edit** unlocks
@@ -549,10 +644,30 @@ notifications are DERIVED, client-side, from the already-off-gate review queue's
   so a re-fetch never clobbers triage and a page change never loses it). `unreadCount` excludes
   the `done` kanban column (the archive) and drives both the Sidebar badge and the top-bar bell
   badge from the same context, so they can never drift apart.
+  - **One `inboxStats` pass, not seven divergent re-scans (Shipped 2026-07-13, T-167, commit
+    `fbc4d5b`, UX-DUP #3).** The stream chips, the KPI tiles, the tab badge, and the bell each used
+    to independently re-derive counts from `items` with slightly different predicates — the flagged
+    chip's **count** (all-flagged) could disagree with what clicking it **showed** (non-done
+    flagged). `InboxContext` now exposes one memoized `inboxStats {unread, flagged, overdue, done,
+    nonDone}` (rule decided once: unread/flagged/overdue count non-done items, matching the filtered
+    views) that every surface reads, so the numbers can no longer disagree.
+  - **Subscribes to `ticketsBus` (Shipped 2026-07-13, T-167, commit `3140527`, UX-DUP #6/C).**
+    `InboxContext` is always-mounted and never remounts on a route change, so it used to show a
+    review-queue ticket's status stale until a manual refresh. It now calls `onTicketsChanged()` →
+    `refresh()` whenever the Review queue (§5.5) writes a successful ticket action, and re-derives
+    its items from the fresh fetch (a resolved ticket drops from open/in-review; a reopened one
+    reappears). `refresh()` also carries a monotonic request-sequence token so an overlapping
+    refresh can't have a stale response clobber a fresher one.
 - **Four tabs:**
-  1. **Inbox** — a filterable stream (All / Unread / Flagged); each row expands to
-     priority / board-column / due-date / note-to-self / "open in queue." **Mark all unread**
-     (2026-07-10, T-113, IB2) sits alongside the existing "Mark all read."
+  1. **Inbox** — a filterable stream. **Unread/Flagged are attribute TOGGLES, with no "All" peer
+     (corrected 2026-07-13, T-167, commit `fbc4d5b`, UX-DUP, decision A)** — the description above
+     originally read "All / Unread / Flagged" as a three-way partition; Unread and Flagged are
+     independent attributes an item either has or doesn't, so clicking the active one clears back
+     to the unfiltered stream instead of needing a separate "All" chip (a catch-all peer was
+     redundant with "no filter active" — see
+     [ui-conventions.md UIC-21](../ui-conventions.md#uic-21--partition-facets-never-carry-a-catch-all-all-peer)).
+     Each row expands to priority / board-column / due-date / note-to-self / "open in queue."
+     **Mark all unread** (2026-07-10, T-113, IB2) sits alongside the existing "Mark all read."
   2. **Board** — a 4-column kanban (Inbox / To do / In progress / Done) with native
      drag-and-drop; moving a card marks it read and drops it from the unread count.
   3. **Calendar** — a month grid dotting due dates + a day-detail panel + an "add reminder"
@@ -906,7 +1021,12 @@ role toggle.
 **Console (bottom, tabbed).** **Validate** (static typed checks; click a finding → focuses
 the node) · **Diff** · **Dry run** (locator resolution → matched / ambiguous / missing;
 resolves paths only, reads no bytes). **Emit / Copy / Download** produce the real
-`run_layout.yaml`.
+`run_layout.yaml`. **Emit writes nothing to disk (corrected 2026-07-13, T-166, commit
+`b03d1fa`, honesty finding J3).** The Emit success panel used to claim it "Wrote
+`src/pipeguard/layout/run_layout.yaml`," but `onEmit` only snapshots the composed YAML into
+React state (a `console.log`, no filesystem/API call) — the copy now reads "Snapshotted the
+config as `run_layout.yaml` — Emit composes only: nothing is written to disk and no tool runs.
+Use Copy / Download to save it."
 - **Real backend wiring once Saved (Shipped 2026-07-10, T-096, commit `4208f0b`, "closes the
   Dry-run/Diff limitation").** Before the graph is Saved, both tabs render the earlier
   client-side-only preview (Diff vs last **Emit** snapshot; Dry-run vs a mock run dir). Once
@@ -1060,11 +1180,15 @@ this, the app carried three bar heights (`h-2`/`h-[11px]`), two corner radii (5/
 segment-gap sizes across its distribution/meter bars. `components/Bar.tsx` now provides the ONE
 geometry (`h-2 · rounded-[5px]`, 2px segment gaps) every bar in the app renders through: **
 `SegmentBar`** (a proportional multi-segment distribution; zero-value segments drop out so a
-strip never lies about the mix) backs the Runs verdict bar (§5.2), the Decision-cards
-`DecisionVerdictBar` (§5.4), and the Review-queue `ReviewStatusBar` (§5.5); **`MeterBar`** (a
+strip never lies about the mix) backs the Runs verdict bar (§5.2), `DecisionVerdictBar` (still used
+on RunReport), and the Review-queue `ReviewStatusBar` (§5.5); **`MeterBar`** (a
 single value against a track) backs the Intake yield bar (§5.3) and the Monitoring gate-pass bars
 (§5.8). Colors are passed as full Tailwind utility classes (not interpolated) so the compiler
-emits them and theming holds in both light and dark.
+emits them and theming holds in both light and dark. **`FacetBar` (new, Shipped 2026-07-13, T-167,
+commit `8e95341`)** is also built on `SegmentBar` — it powers RunDetail's Decision-cards verdict
+control (§5.4), consolidating what `DecisionVerdictBar` + a legend + an attention banner + a
+`CardFilter` tab strip used to render as four separate widgets into one bar that is simultaneously
+the tally display and the filter.
 
 ## 10. Files
 - `PipeGuard.html` — complete self-contained prototype (open in a browser).

@@ -146,7 +146,7 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
 5. **Deployment-agnostic ports & adapters**; Nextflow carries compute portability (ADR-0003).
 6. **Config layer + profiles** serve research (lean) and biotech (granular) from one codebase (ADR-0005).
 
-## Current code map (current state; updated 2026-07-12)
+## Current code map (current state; updated 2026-07-13)
 
 > Dated wave/batch narrative, superseded detail, and per-commit history →
 > [docs/HISTORY.md](docs/HISTORY.md) (git-archived, **not** loaded each session). This is
@@ -165,7 +165,13 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
       (deterministic "N ran / M not examined" over a fixed provenance/metadata/qc/contamination/
       identity/pipeline catalog, carried un-hashed on `DecisionCard.check_coverage`, never a verdict)
       replaces the old "all checks passed" stub prose and the RunDetail clean-card panel — both now
-      state plainly when contamination/identity were never examined.
+      state plainly when contamination/identity were never examined. **Honesty fix (2026-07-13,
+      `b03d1fa`):** contamination/identity now genuinely flip to "ran" when the sample actually
+      carries a metric in that category — `_examined_metric_categories` treats present = examined
+      = ran (pass or fail), closing a sub-gap where an examined-and-passed FREEMIX still read
+      "contamination not examined" (the finding-based flip the original design intended never fired,
+      since every `QCThreshold` finding is tagged `Category.QC`, not `Category.CONTAMINATION`).
+      Identity stays honestly not-examined — no NGSCheckMate parser exists to ever populate it.
    b. `models` (pydantic data contract), `identifiers` (UUIDv7 ids + content hashing; `PLATFORM_VERSION`
       from `pyproject.toml`), `runbook` (QC policy). **Ingestion contract (WS-06·PR1/PR2, 2026-07-12):**
       `models.RawObservation`/`models.SampleMetrics` (a registry-keyed `sample_id + raw: dict[our_key
@@ -182,7 +188,13 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
       `concordance.snp_f1` (hap.py) — real ingest-adapter parsers, but **gated + parser-wired, not
       pipeline-produced**: `verifybamid2.nf`/`happy.nf` are standalone Nextflow modules
       (`pipelines/optional_modules/`) not wired into the drift-locked `pipelines/germline/` reference,
-      see item 1e). **`runbook.RunbookSet`/`RunbookKey`** (WS-05, 2026-07-12): a per-`(assay,
+      see item 1e). **Proven on real, calibrated tool output (2026-07-13, `478d579`):** both parsers
+      now additionally read GENUINE tool output (a genome-wide-calibrated VerifyBamID2 `.selfSM`,
+      FREEMIX 0.000220096; a real hap.py `summary.csv` vs GIAB v4.2.1 truth, SNP-F1 0.989276) —
+      committed as tiny fixtures (`tests/fixtures/giab_real/`) and proven through the public
+      `ingest_results_dir → run_gate` path (`tests/test_real_giab_calibrated.py`), upgrading WS-02/
+      WS-04 from "parser-wired, fixture-tested" to "proven on real calibrated tool output." The
+      "not pipeline-produced" caveat is unchanged — no pipeline in this repo runs either tool. **`runbook.RunbookSet`/`RunbookKey`** (WS-05, 2026-07-12): a per-`(assay,
       sample_type, platform)` runbook resolver (binary-weight precedence, fail-closed to the full
       `default` runbook, never `None`) — `rules.evaluate_run` widened to `Runbook | RunbookSet`;
       `evaluate_sample`/`aggregate_verdict` are UNCHANGED (ADR-0001 preserved). `GERMLINE_PANEL_RUNBOOK`
@@ -338,7 +350,13 @@ uv run python -c "from pipeguard import run_gate_from_dir; \
          (no approved version → **409**, not a silent bypass), then runs it via the same driver. Both
          execution paths share ONE approval gate + ONE compile path (`api/authored_pipeline.py`,
          ADR-0014/0021), distinct from `pipelines_lifecycle.py`'s save→submit→approve flow that mints
-         the approval.
+         the approval. **Parse-contract parity with intake (2026-07-13, `7cef743`, audit G8/WS-09
+         #1):** right after `compile_record`, before the driver launches, this endpoint now also calls
+         `check_parse_contract(graph, name)` — the same structural, tool-free frozen-five check item
+         4b.i's intake uses — so an approved pipeline whose catalogued nodes can't collectively
+         produce the frozen five now 422s at submit instead of running to completion in Nextflow and
+         only then dying at parse (a full compute burn for a `failed` run). Test-first, proven
+         red-before-impl (a stashed-endpoint rerun: 202 without the check, 422 with it).
       iii. `POST /api/pipelines/compile` (`api/routers/nextflow.py`, stateless): the Builder graph →
          the same bundle as JSON or a `.zip`. `scripts/seed_approved_germline.py` seeds the runnable
          `germline-panel` baseline. Feature routers (settings / review-queue / pipelines-lifecycle:

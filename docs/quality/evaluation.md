@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft |
-| **Last updated** | 2026-07-12 (MST) — gap-analysis-remediation census refresh (634/48 → 708/52 → 722/54; WS-01/03/05/06/07/08/09/10, then WS-02/WS-04 + a caught pre-existing drift, `test_card_readout` 17→21, from the un-recounted `61936d1` WS-06 Gap 2 API-wiring commit) |
+| **Last updated** | 2026-07-13 (MST) — census refresh 722/54 → **727/55** (re-derived: `uv run pytest --collect-only -q` → 727; `git ls-files 'tests/*.py' \| wc -l` → 55). One new file, `tests/test_real_giab_calibrated.py` (+3, live-genomics WS-02/WS-04 real-calibrated-data proof), plus one test each in `test_gate.py` (b03d1fa's `CheckCoverage` contamination-flip freeze) and `test_pipeline_run.py` (`7cef743`'s Builder-Run parse-contract-parity red-before-impl guard). `uv run pytest -q` → **719 passed / 8 skipped** (unchanged skip set). Prior: 2026-07-12 (MST) — gap-analysis-remediation census refresh (634/48 → 708/52 → 722/54; WS-01/03/05/06/07/08/09/10, then WS-02/WS-04 + a caught pre-existing drift, `test_card_readout` 17→21, from the un-recounted `61936d1` WS-06 Gap 2 API-wiring commit) |
 | **Audience** | software / all |
 | **Related** | [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) (the workstream tracker this census reflects), [journal/2026-07-12-gap-analysis-remediation-verification.md](../journal/2026-07-12-gap-analysis-remediation-verification.md), [risks.md](risks.md), [requirements/nonfunctional.md](../requirements/nonfunctional.md), [data/strategy.md](../data/strategy.md), [data/metric_registry.md](../data/metric_registry.md), [data/schemas.md](../data/schemas.md), [data/qc_metrics.md](../data/qc_metrics.md), [data/provenance.md](../data/provenance.md), [demo/demo_plan.md](../demo/demo_plan.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md), [ADR-0002](../adr/ADR-0002-event-driven-core-provenance-ledger.md), [ADR-0003](../adr/ADR-0003-deployment-agnostic-ports.md) (Nextflow codegen, EVAL-006, EVAL-009), [ADR-0006](../adr/ADR-0006-ai-off-by-default-fallback.md), [ADR-0010](../adr/ADR-0010-ticketing-notify-read-api.md), [ADR-0016](../adr/ADR-0016-postgres-port.md) (pluggable-store family), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (the W1 approval gate, EVAL-007), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, de-id, share egress, per-variant table EVAL-013), [ADR-0020](../adr/ADR-0020-operator-authored-custom-processes.md) (custom-script processes, EVAL-015; sandboxed file browser, EVAL-016; compiler robustness, EVAL-017), [ADR-0021](../adr/ADR-0021-operator-gated-scheduled-pipeline-processing.md) (authored-pipeline intake + processing gate, EVAL-018), [HISTORY.md](../HISTORY.md) (archived census milestones), [design/nextflow-codegen.md](../design/nextflow-codegen.md), [journal/2026-07-09-frontend-batch3.md](../journal/2026-07-09-frontend-batch3.md), [journal/2026-07-10-provenance-qc-builder-auth.md](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal/2026-07-10-batch5-builder-card-admin-prefs.md](../journal/2026-07-10-batch5-builder-card-admin-prefs.md), [journal/2026-07-10-wave6-route-to-human-deid.md](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal/2026-07-11-d2-d3-share-egress.md](../journal/2026-07-11-d2-d3-share-egress.md), [journal/2026-07-11-share-store-persistence.md](../journal/2026-07-11-share-store-persistence.md), [journal/2026-07-11-nextflow-codegen-execution.md](../journal/2026-07-11-nextflow-codegen-execution.md), [journal/2026-07-11-audit-hardening-w1-w4-e2e.md](../journal/2026-07-11-audit-hardening-w1-w4-e2e.md), [journal/2026-07-11-p3-backlog.md](../journal/2026-07-11-p3-backlog.md) (EVAL-008), [journal/2026-07-11-w-deferrals.md](../journal/2026-07-11-w-deferrals.md) (EVAL-009, EVAL-013), [journal/2026-07-11-fleet.md](../journal/2026-07-11-fleet.md) (EVAL-008 update, EVAL-014), [journal/2026-07-11-custom-script-io.md](../journal/2026-07-11-custom-script-io.md) (EVAL-015, EVAL-016), [design/agent-authoring-contract.md](../design/agent-authoring-contract.md) (EVAL-014), [audit/AUDIT_PLAN.md](../../audit/AUDIT_PLAN.md), [audit/SYNTHESIS.md](../../audit/SYNTHESIS.md) |
 
@@ -19,19 +19,25 @@ default), and **Real-data** (against GIAB truth — Phase 2). Two subsystems on 
 critical path get their own cases: the **metric registry** (unit normalization) and the
 **notify port** (outbound integration).
 
-The suite is **722 tests across 54 files** — re-derived 2026-07-12 (MST) via
-`uv run pytest --collect-only -q` (722 collected) + `git ls-files 'tests/*.py' | wc -l` (54); was
-708/52 after the gap-analysis-remediation sweep, 634/48 before it. **Six** new files have landed
-since that sweep, in total: `test_runbook_set.py` (WS-05), `test_ingest.py` (WS-03/06),
-`test_stores_consolidated.py` (WS-06 Gap 6), `test_stub_next_steps.py` (WS-07 Q1),
-`test_ws02_contamination.py` (WS-02, VerifyBamID2 FREEMIX, 5 cases), `test_ws04_concordance.py`
-(WS-04, hap.py GIAB SNP-F1, 5 cases). This recount also caught a real, pre-existing drift the prior
-sweep missed: `test_card_readout.py` grew from 17 to 21 tests in `61936d1` ("card_readout: render
-target_band thresholds", WS-06 Gap 2 API wiring) — a commit that landed **after** the last doc
-sweep and was never counted until now. Pass/skip depends on whether `nextflow` is on `PATH`:
-verified here via `uv run pytest -q` with `nextflow` absent (this repo's default sandboxed dev/CI
-environment) — **714 pass / 8 skip** (722 collected minus the 8 machine-gated skips below; the
-WS-02/WS-04 additions are pure-offline stub+fixture tests, no new skip).
+The suite is **727 tests across 55 files** — re-derived 2026-07-13 (MST) via
+`uv run pytest --collect-only -q` (727 collected) + `git ls-files 'tests/*.py' | wc -l` (55); was
+722/54 the prior day, 708/52 after the gap-analysis-remediation sweep, 634/48 before it. **One**
+new file has landed since the 722/54 count: `tests/test_real_giab_calibrated.py` (commit `478d579`,
++3 — the WS-02/WS-04 live-genomics pass, reading the REAL committed calibrated VerifyBamID2/hap.py
+tool outputs under `tests/fixtures/giab_real/` through the public `ingest_results_dir → run_gate`
+path). Two existing files each gained one test the same round: `test_gate.py` 49→**50**
+(`test_check_coverage_flips_contamination_when_freemix_is_examined`, commit `b03d1fa` — freezes the
+`CheckCoverage` contamination-flip fix, see [qc_metrics.md](../data/qc_metrics.md#fail-closed-rules--qc-missing--qc-expected-key-ws-01-2026-07-12))
+and `test_pipeline_run.py` 12→**13** (`test_run_rejects_a_non_gateable_approved_pipeline`, commit
+`7cef743` — proven red-before-impl via a stashed-endpoint rerun, freezes Builder-Run's new
+`check_parse_contract` parity with intake). Earlier, the prior-day recount also caught a real,
+pre-existing drift the sweep before that missed: `test_card_readout.py` grew from 17 to 21 tests in
+`61936d1` ("card_readout: render target_band thresholds", WS-06 Gap 2 API wiring) — a commit that
+landed **after** that day's doc sweep and was never counted until the 722/54 recount. Pass/skip
+depends on whether `nextflow` is on `PATH`: verified here via `uv run pytest -q` with `nextflow`
+absent (this repo's default sandboxed dev/CI environment) — **719 pass / 8 skip** (727 collected
+minus the 8 machine-gated skips below; every addition this round is a pure-offline stub/fixture/
+real-fixture-bytes test, no new skip).
 The **8 skips** are machine-gated live-integration checks: **3 `nextflow`-gated** stub-run checks
 (`test_nextflow_compile.py::test_generated_germline_stub_runs`, EVAL-006;
 `test_e2e_pipeline.py::test_approved_germline_pipeline_stub_runs_live`, EVAL-007;
@@ -49,8 +55,9 @@ and `tsc`/`oxlint` (frontend) are clean. Earlier census milestones (585/44 → 4
 archived in [HISTORY.md](../HISTORY.md).
 
 By collected size:
-`test_gate` (49, was 30 — WS-01 QC-MISSING/expected-metrics/CheckCoverage + WS-06 target-band/metric-honesty
-guards), `test_api` (44), `test_notify` (36), `test_synthetic` (33), `test_fetch_giab` (32),
+`test_gate` (50, was 30 → 49 (WS-01 QC-MISSING/expected-metrics/CheckCoverage + WS-06 target-band/
+metric-honesty guards) → 50, `b03d1fa` — the `CheckCoverage` contamination-flip freeze), `test_api`
+(44), `test_notify` (36), `test_synthetic` (33), `test_fetch_giab` (32),
 `test_triage` (23, was 16 — WS-07 Q2 `ask`-endpoint cases), `test_card_readout` (21, was 14 → 17
 (WS-07 Q1 `qc_reports` cases) → 21, `61936d1` — WS-06 Gap 2's API-side target_band rendering: in-band
 pass, out-of-target/out-of-hard tail flags, and an anti-drift guard the readout status mirrors
@@ -69,8 +76,13 @@ per-sample resolution, incl. the `expected_metrics` loop-closes-end-to-end proof
 `test_settings` (13, config-override authoring), `test_node_author_conformance` (13),
 `test_ingest` (13, **new** — WS-03 nf-core/MultiQC `results/` → `SampleMetrics` adapter,
 driver-equivalence + real-path acceptance), `test_auth`
-(13), `test_safe_harbor` (12), `test_pipeline_run` (12, the Pipeline-Builder Run endpoint),
-`test_pipeline_lifecycle` (11, submit/approve/dry-run/diff), `test_route_to_human` (10, the
+(13), `test_safe_harbor` (12),
+`test_real_giab_calibrated` (3, **new** — WS-02/WS-04 live-genomics: the real, committed
+genome-wide-calibrated VerifyBamID2 FREEMIX + real hap.py SNP-F1 vs GIAB v4.2.1 truth flow through
+`ingest_results_dir → run_gate`, proving the parsers on genuine tool output, not just a
+format-mimicking fixture), `test_pipeline_run` (13, was 12 — `7cef743` adds the
+Builder-Run non-gateable-pipeline 422 freeze test), `test_pipeline_lifecycle` (11,
+submit/approve/dry-run/diff), `test_route_to_human` (10, the
 off-by-default route-to-human gate rule VAR-RTH-001, ADR-0018 D2), `test_node_observations` (10,
 was 8 — WS-08 interim's `logs`-grant-requires-reviewer+ access-control tests), `test_files_api` (10,
 the sandboxed `GET /api/files` browser: allowlist, traversal/absolute/symlink-escape rejection, kind

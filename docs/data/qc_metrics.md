@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Last updated** | 2026-07-12 (MST) — gap-analysis WS-01 (`QC-MISSING`/`QC-EXPECTED-<key>` fail-closed rules, `CheckCoverage` honesty), WS-05 (`RunbookSet` per-sample resolution), WS-06 Gap 2 (Ts/Tv `target_band` gate), WS-02/WS-04 (FREEMIX + SNP-F1 gated, parser-wired not pipeline-produced; corrected the `CheckCoverage` contamination-flip claim against a direct code check) |
+| **Last updated** | 2026-07-13 (MST) — the `CheckCoverage` contamination/identity flip is now REAL (`b03d1fa`'s `rules._examined_metric_categories`: present = examined = ran, pass or fail — the "not-examined" claim below was corrected once already on 2026-07-12 when the flip *didn't* land as designed, and is corrected again now that it does); WS-02/WS-04's FREEMIX + SNP-F1 parsers are additionally proven on genuine, calibrated tool output (`478d579`, live-genomics pass) — still parser-wired, NOT pipeline-produced (unchanged). Prior: 2026-07-12 (MST) — gap-analysis WS-01 (`QC-MISSING`/`QC-EXPECTED-<key>` fail-closed rules, `CheckCoverage` honesty), WS-05 (`RunbookSet` per-sample resolution), WS-06 Gap 2 (Ts/Tv `target_band` gate), WS-02/WS-04 (FREEMIX + SNP-F1 gated, parser-wired not pipeline-produced; corrected the `CheckCoverage` contamination-flip claim against a direct code check) |
 | **Audience** | bioinformatics / software |
 | **Related** | [ADR-0013](../adr/ADR-0013-gate-architecture-verdict-policy.md), [ADR-0001](../adr/ADR-0001-deterministic-gate-advisory-ai.md) (compose ≠ execute), [ADR-0018](../adr/ADR-0018-variant-interpretation-advisory-evidence.md) (route-to-human, D2), [ADR-0004](../adr/ADR-0004-vcf-first-giab-substrate.md) (no invented pathogenicity), [ADR-0017](../adr/ADR-0017-identity-rbac-authoring-lifecycle.md) (RBAC review queue), [qc_metrics-sources.md](qc_metrics-sources.md) (field names), [qc_metrics-rare-disease.md](qc_metrics-rare-disease.md) (cited thresholds), [metric_registry.md](metric_registry.md) (unit normalization + wiring status), [schemas.md](schemas.md) (§6 units contract, `VariantCall`, `SampleMetrics`/`RawObservation`), [audit/gap_analysis/README.md](../../audit/gap_analysis/README.md) (the workstream tracker), [audit/gap_analysis/ws-02-identity-provenance.md](../../audit/gap_analysis/ws-02-identity-provenance.md), [audit/gap_analysis/ws-04-giab-concordance.md](../../audit/gap_analysis/ws-04-giab-concordance.md), [journal 2026-07-10](../journal/2026-07-10-provenance-qc-builder-auth.md), [journal 2026-07-10 (wave 6)](../journal/2026-07-10-wave6-route-to-human-deid.md), [journal 2026-07-11](../journal/2026-07-11-d2-d3-share-egress.md), [journal 2026-07-12](../journal/2026-07-12-gap-analysis-remediation-verification.md) |
 
@@ -295,22 +295,35 @@ whose QC was never examined at all:
 now accompanies every `DecisionCard` with a deterministic "N of M check categories ran; X not
 examined" count over a fixed category catalog (provenance/metadata/qc/contamination/identity/
 pipeline) — carried un-hashed, never a verdict — replacing the stub's old "all checks passed"
-prose and the RunDetail clean-card panel's matching claim. Contamination and identity still read
-as honestly **not examined**, even now that WS-02 wires FREEMIX (2026-07-12) — the flip did **not**
-land as originally planned. `compute_check_coverage`'s `artifact_present[Category.CONTAMINATION]`
-stays hardcoded `False` (`rules.py` `_EXPECTED_CATEGORIES` block), and the generic threshold loop
-that scores `contamination.freemix` (`_evaluate_metric`/`_evaluate_target_band`) tags **every**
-`QCThreshold` finding `category=Category.QC` — never `Category.CONTAMINATION` — so a `QC-FREEMIX`
-finding never lands in `found_categories` for that category either. **Verified directly**: a sample
-carrying only a WARN-triggering FREEMIX value (`0.0312`) produces a `QC-FREEMIX` finding but
-`compute_check_coverage` still returns `contamination` in `not_examined`
-(`uv run python` against `rules.evaluate_sample` + `rules.compute_check_coverage` — no fixture
-exercises this combination in `tests/`). The category-flip described in the original WS-01 design
-comment remains **unbuilt** — a real fix needs either a category-aware tag on the contamination/
-identity thresholds or a bespoke rule (the WS-02 design's original `CONTAM-001` proposal), neither
-of which WS-02 implemented (it reused the existing generic QC-scoring loop by design — see
-[metric_registry.md](metric_registry.md) Wiring status). NGSCheckMate identity remains unparsed
-entirely (no `.selfSM`-equivalent parser exists yet), so `identity` stays not-examined regardless.
+prose and the RunDetail clean-card panel's matching claim.
+
+**The contamination/identity flip is now real (fixed 2026-07-13, `b03d1fa`, closing the sub-gap the
+2026-07-12 note below first caught).** WS-02 wiring FREEMIX did NOT itself flip the category (see
+the "originally" paragraph below for the as-shipped state that was true through 2026-07-12) — the
+generic `QCThreshold` loop tags every finding `category=Category.QC`, never `Category.CONTAMINATION`,
+so a `QC-FREEMIX` finding alone never counted. The fix is a **separate mechanism**, not a
+finding-category change: `rules._examined_metric_categories` checks whether the sample's metrics
+map (`SampleMetrics.raw` / `metric_values_for`) actually **carries** a `contamination.*`/`identity.*`
+registry key — present = examined = ran, pass **or** fail, mirroring the existing "a clean
+finding-less QC gate still counts as ran" rule. `compute_check_coverage`'s
+`artifact_present[Category.CONTAMINATION]` is no longer hardcoded `False`; it reads
+`Category.CONTAMINATION in examined_metric_categories`. **Verified directly** (now green, not just
+argued): `tests/test_gate.py::test_check_coverage_flips_contamination_when_freemix_is_examined`
+constructs a sample carrying a **passing** FREEMIX value and asserts `Category.CONTAMINATION` is in
+`categories_ran` and `"contamination"` is NOT in `not_examined` — a category-flip on a clean value,
+not just a finding-triggering one, so "examined" is honestly decoupled from "flagged." **identity
+stays honestly not-examined regardless** — no NGSCheckMate/`.selfSM`-equivalent parser exists yet,
+so no sample can ever carry an `identity.*` metric to flip it. The frozen-five demo driver path
+(`scripts/run_giab_pipeline.py`) still carries no `contamination.*` metric either, so it stays
+honestly not-examined too — only a sample ingested via the WS-03 `ingest.nfcore` adapter (item 6
+below) can carry one.
+
+**As originally shipped (2026-07-12–07-13, superseded by the fix above, kept for the record):**
+contamination and identity read as honestly **not examined**, even with WS-02 wiring FREEMIX — the
+flip did **not** land as originally planned. A sample carrying only a WARN-triggering FREEMIX value
+(`0.0312`) produced a `QC-FREEMIX` finding but `compute_check_coverage` still returned
+`contamination` in `not_examined` (verified `uv run python` against `rules.evaluate_sample` +
+`rules.compute_check_coverage` — no fixture exercised this combination in `tests/` at the time).
 
 **Two data tracks stay honest about depth of coverage:** a **contrived** run (the synthetic
 generator, `mock_run_02/03`/`scale_30`) emits all 8 additional metrics (comfortably passing) for a
@@ -334,7 +347,17 @@ read as more than what runs:
    pipeline-produced, see item 6 above) are thresholds. SNP-F1 is only ever populated for a sample
    with a bound GIAB truth set (HG002-style benchmark runs); every other sample carries no value and
    is never NA-flagged (`required=False`). GQ (`variant.gq`) stays an ungated observation;
-   allele-balance and gnomAD AF are **not computed** (no parser).
+   allele-balance and gnomAD AF are **not computed** (no parser). **Proven on real, calibrated tool
+   output (2026-07-13, `478d579`):** `tests/test_real_giab_calibrated.py` runs the genuine hap.py
+   `summary.csv` (chr20/21/22 germline calls vs the GIAB v4.2.1 truth, SNP/PASS F1 = 0.989276) and
+   the genuine genome-wide-calibrated VerifyBamID2 `.selfSM` (FREEMIX = 0.000220096) through
+   `ingest_results_dir → run_gate`, producing an honest borderline `QC-SNP_F1` WARN (0.9893 under the
+   illustrative 0.99 gate, above the 0.95 hard-fail) and a clean contamination read — real numbers,
+   not a hand-built format-mimicking fixture. This is upstream of, and does not change, the
+   "not pipeline-produced" caveat: no pipeline committed in this repo runs VerifyBamID2/hap.py
+   automatically (see [metric_registry.md](metric_registry.md) Wiring status) — the calibrated
+   values were produced by an operator running the standalone modules by hand, then committed as
+   tiny fixture bytes (`tests/fixtures/giab_real/NOTE.md`, origin `real-giab`).
 3. **cluster_pf HOLD is structural and expected.** `cluster_pf` is `required=True` yet a reads-only
    fastq→BAM path structurally can't produce this run-level SAV/InterOp metric, so every reads-based run
    HOLDs on it — the honest "cluster_pf-missing" signal the pinned demo relies on (HG002 → HOLD), not a
