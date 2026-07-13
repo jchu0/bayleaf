@@ -47,11 +47,15 @@ The MVP core is standing; these in-scope pieces are now built and verified (see
    bwa-mem2 → samtools markdup → {mosdepth, bcftools call}`), landing in the operator UI exactly
    like a mock run (`RUN-2026-07-08-GIAB-HG002`, `origin=real-giab`) — HOLD on the honest
    cluster-PF-missing signal (a run-level SAV metric a fastq→BAM path can't produce). Contamination
-   (verifybamid2) is now **gated + parser-wired** (WS-02, 2026-07-12, `contamination.freemix`) but
-   still **not pipeline-produced** on this or any run — `verifybamid2.nf` is a standalone Nextflow
-   module (`pipelines/optional_modules/`) not wired into the germline reference pipeline, so a live
-   FREEMIX value needs an operator to run it by hand (see [metric_registry.md](../data/metric_registry.md)
-   Wiring status; [tasks.md](../planning/tasks.md) T-153).
+   (verifybamid2) is now **gated + parser-wired** (WS-02, 2026-07-12, `contamination.freemix`) and,
+   as of 2026-07-13 (T-071a), **wired into the germline reference pipeline as a dormant stage** — a
+   new compiler concept (`catalog.OPTIONAL_INPUT_PARAMS`) compiles its `svd_panel` input to a
+   param-gated channel that runs zero tasks unless an operator arms `params.verifybamid_svd`, so
+   the pinned/offline demo is unaffected. Still **not pipeline-produced by default** on this or any
+   run — a live FREEMIX value needs an operator to arm the panel AND something to parse the
+   resulting `.selfSM` (the live driver, `scripts/run_giab_pipeline.py`, still doesn't) — see
+   [metric_registry.md](../data/metric_registry.md) Wiring status; [tasks.md](../planning/tasks.md)
+   T-071/T-153.
 5. **Dashboard — now 11 operator screens** (was documented as "9," a stale count this edit
    corrects: 8 trace to T-022b's 1:1 fidelity pass, Pipeline Builder to T-044, Submit was new in
    the T-062 rebuild, and **Inbox is new as of this batch** — see below), rebuilt to the refreshed
@@ -192,7 +196,7 @@ in isolated feature branches (merge what finishes); the rest are clarified targe
 | W16 | Metric-catalog read-only view | `feat/metric-catalog-view` | T-038 |
 | W13 | ArtifactStore port + Local + S3 adapter **(built ✅ — port + Local + guarded S3)** | `feat/artifact-store-port-s3` | T-039 |
 | W14 | Config-driven de-id export policy ✅ (`api/deid.py` — per-field DROP/HASH/GATE_BY_ORIGIN + origin-gated `include=identity` cohort-key opt-in; demo seam, not HIPAA; no new dep) | `feat/deid-export-policy` | T-040 |
-| W3 | Container deploy slice (+ unapplied Terraform) | `feat/container-deploy-slice` | T-041 |
+| W3 | Container deploy slice ✅ **BUILT, Docker only** (2026-07-13, T-041 — `deploy/Dockerfile.api` multi-stage + `docker-compose.yml`; **Terraform DROPPED per the maintainer**, not shipped even unapplied — the original plan on this row is superseded) | `feat/container-deploy-slice` | T-041 |
 | W12 | In-app user feedback ✅ **BUILT** (T-042) — off-gate telemetry: per-decision agree/disagree thumbs + a global product FAB → `POST /api/feedback` → gitignored JSONL. The app's first write endpoint (read-API stays read-only over the decision domain) | `feat/in-app-feedback` | T-042 |
 
 **SCOPE-ONLY (documented target-state, not built now):** W5 (contaminant-QC, High research),

@@ -214,11 +214,19 @@ read from `RunArtifacts.variant_calls`. **Off by default**; one committed fixtur
    status.
 6. **Contamination (FREEMIX, `contamination.freemix`) and SNP concordance
    (`concordance.snp_f1`) — gated 2026-07-12 (gap-analysis WS-02/WS-04).** A seventh and eighth
-   optional threshold, both `required=False`. **Gated + parser-wired, NOT pipeline-produced**: a
-   real parser reads a present `.selfSM`/hap.py `summary.csv` (`ingest.nfcore._extract_verifybamid`/
-   `_extract_happy`), but no pipeline committed in this repo runs verifybamid2 or hap.py today —
-   both ship only as standalone Nextflow modules (`pipelines/optional_modules/`) outside the
-   drift-locked `pipelines/germline/` reference. See [metric_registry.md](metric_registry.md)
+   optional threshold, both `required=False`. **Gated + parser-wired, NOT pipeline-produced by
+   default**: a real parser reads a present `.selfSM`/hap.py `summary.csv`
+   (`ingest.nfcore._extract_verifybamid`/`_extract_happy`). `hap.py` still ships only as a
+   standalone Nextflow module (`pipelines/optional_modules/happy.nf`) outside the drift-locked
+   `pipelines/germline/` reference — no pipeline in this repo runs it today. **`verifybamid2` is
+   different as of 2026-07-13 (T-071a):** a new compiler concept (`catalog.OPTIONAL_INPUT_PARAMS`,
+   an operator-suppliable-but-not-required input) wires a `VERIFYBAMID2` stage into the
+   drift-locked `pipelines/germline/` reference itself, **dormant** unless an operator arms
+   `params.verifybamid_svd` (unset → the process gets an empty channel and runs zero tasks — the
+   pinned/offline demo is unaffected). So contamination is now pipeline-*producible*, not yet
+   pipeline-*live*: the driver (`scripts/run_giab_pipeline.py`) still doesn't parse `.selfSM`, a
+   live multi-sample run needs the SVD panel staged as a broadcast value channel, and the frontend
+   Builder has no verifybamid2 card yet. See [metric_registry.md](metric_registry.md)
    Wiring status for the full honesty note.
 
 **Ungated observations** (registered + wired, no threshold, never NA-flagged, never a finding):

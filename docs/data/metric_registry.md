@@ -119,18 +119,31 @@ FLOOR, gate 0.99 → WARN/HOLD, hard_fail 0.95 → CRITICAL/RERUN) moved out of 
 `.selfSM` / hap.py `summary.csv` into a genuine `MetricValue`, and each threshold is
 `required=False` because verifybamid2/hap.py are **not in the germline base profile** — an absent
 value is never NA-flagged, only a present one scores. Both are illustrative/operator-configurable,
-not clinical (CLAUDE.md life-science guardrail 3). **But no pipeline committed in this repo
-produces either input today.** `verifybamid2.nf`/`happy.nf` are real, standalone Nextflow modules
-(`pipelines/optional_modules/`, real `script:` + `stub:`) that are **not wired into
-`pipelines/germline/main.nf`** — that reference pipeline is drift-locked byte-for-byte to the
-card-graph compiler's own output (`tests/test_nextflow_compile.py::test_committed_reference_pipeline_matches_the_compiler`),
-and the compiler has no input-gated-conditional concept for an optional add-on tool yet. A live
-FREEMIX or SNP-F1 number therefore requires an operator to run the standalone module by hand
-(verifybamid2 additionally needs an SVD/UD ancestry resource panel; hap.py needs the GIAB truth
-VCF + high-confidence BED — both **labelled pipeline inputs, never fabricated**, ADR-0004) and
-place its output where `ingest_results_dir` looks for it. This is the same "gate-wired but not
-gate-called" honesty pattern already recorded for the WS-03 ingest adapter itself — one layer
-earlier in the pipeline (see [CLAUDE.md](../../CLAUDE.md) code map item 1g).
+not clinical (CLAUDE.md life-science guardrail 3). **`hap.py` is still not pipeline-produced:**
+`happy.nf` remains a real, standalone Nextflow module (`pipelines/optional_modules/`, real
+`script:` + `stub:`) that is **not wired into `pipelines/germline/main.nf`** — a live SNP-F1
+number requires an operator to run the standalone module by hand (needs the GIAB truth VCF +
+high-confidence BED — a **labelled pipeline input, never fabricated**, ADR-0004) and place its
+output where `ingest_results_dir` looks for it.
+
+**`verifybamid2` is different as of 2026-07-13 (T-071a, PR #12, commit `c0d7646`) — the compiler
+now HAS an input-gated-conditional concept.** `catalog.OPTIONAL_INPUT_PARAMS` (kind → params key)
+lets an input be operator-suppliable but not required: it compiles to a param-gated source channel
+(`params.x ? Channel.fromPath(params.x) : Channel.empty()`), deliberately kept out of
+`required_inputs()`. `germline_graph()` (the canonical reference, regenerated —
+`pipelines/germline/` stays drift-locked byte-for-byte to the compiler's output,
+`tests/test_nextflow_compile.py::test_committed_reference_pipeline_matches_the_compiler`) now
+carries a real `VERIFYBAMID2` process wired this way — its `svd_panel` port is the concept's first
+user. **Contamination is therefore now pipeline-*producible*, not yet pipeline-*live*:** unset
+`params.verifybamid_svd` → an empty channel → the process runs **zero tasks** (dormant; the
+pinned/offline demo is byte-unchanged). A live FREEMIX number still requires an operator to (1)
+arm `params.verifybamid_svd` with a real SVD/UD ancestry resource panel (a **labelled pipeline
+input, never fabricated**, ADR-0004), (2) have something parse the resulting `.selfSM` — today
+only the still-not-gate-called `ingest_results_dir` adapter does (`scripts/run_giab_pipeline.py`,
+the LIVE intake driver, does not), and (3) for multi-sample, stage the panel as a broadcast value
+channel (not yet built). This is a step beyond the "gate-wired but not gate-called" pattern
+recorded for the WS-03 ingest adapter itself (see [CLAUDE.md](../../CLAUDE.md) code map item 1g) —
+the *pipeline* stage is now wired too, just still dormant by default.
 
 **Proven on real, calibrated tool output (2026-07-13, `478d579`) — a step up from "parser-wired,
 fixture-tested," the "not pipeline-produced" caveat above unchanged.** The offline WS-02/WS-04
@@ -146,8 +159,10 @@ F1 = 0.989276). The tiny derived outputs (294 B + 893 B) are committed verbatim 
 committed) and read through the same public `ingest_results_dir → run_gate` path in
 `tests/test_real_giab_calibrated.py` — a permanent, CI-runnable proof, not a one-off manual check.
 This closes the gap between "the parser handles the real *shape*" and "the parser handles a real
-*tool's own* output" — it does **not** close the separate, unrelated gap that no pipeline in this
-repo runs either tool automatically (that gap is exactly as open as before this pass).
+*tool's own* output" — it did **not**, at the time, close the separate, unrelated gap that no
+pipeline in this repo runs either tool automatically. **That second gap moved later the same day
+(T-071a, `c0d7646`, 13:18 — after this 02:39 pass): `verifybamid2` is now wired into the reference
+pipeline as a dormant stage** (see above) — `hap.py` remains exactly as open as this pass left it.
 
 The other **8 are ungated** (registered, no threshold) — of those, only 2
 (`preflight.phix_aligned`, `variant.gq`) are actually wired end-to-end from `QCMetrics` →
