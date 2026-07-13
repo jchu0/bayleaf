@@ -332,3 +332,62 @@ def test_run_store_root_is_resolved_at_call_time_not_import(
     assert first.name == "data"
     monkeypatch.setenv("PIPEGUARD_DATA_ROOT", str(tmp_path))
     assert run_store_root() == tmp_path
+
+
+# --------------------------------------------------------------- REAL-PATH acceptance (env-gated)
+# The live leg the fixture tests above deliberately don't cover: a real `nextflow run` publishes a
+# results/ dir, WS-03 ingests it, and the WS-06·PR2 Union lets the gate consume it end-to-end. Runs
+# ONLY where a live run has produced .nf-runs/<run>/nf-out/results (a real toolchain); skips in CI /
+# a fresh checkout (.nf-runs is gitignored). Verified live on real HG002 (2026-07-13).
+
+_REAL_RESULTS = (
+    Path(__file__).resolve().parent.parent
+    / ".nf-runs"
+    / "RUN-2026-07-08-GIAB-HG002"
+    / "nf-out"
+    / "results"
+)
+
+
+def _real_results_present() -> bool:
+    return _REAL_RESULTS.is_dir() and bool(list(_REAL_RESULTS.glob("*.fastp.json")))
+
+
+@pytest.mark.skipif(
+    not _real_results_present(),
+    reason="real-path: needs a produced results/ from a live `nextflow run` (env-gated)",
+)
+def test_real_nextflow_results_ingest_and_gate() -> None:
+    """REAL-PATH acceptance: ingest the results/ a LIVE germline run published (real fastq →
+    nextflow → results/) → SampleMetrics → RunArtifacts.qc (the WS-06·PR2 Union) → run_gate — whole
+    ingestion spine on REAL HG002 output, not a fixture. Zero unmapped keys, real ~88% Q30 / >30x
+    coverage, and the gate HOLDs on the structural cluster_pf-missing exactly as the driver's own
+    parse path does. This is the anti-scaffold complement to the fixture tests above."""
+    from pipeguard import run_gate
+    from pipeguard.models import RunArtifacts, Sample, SampleSheetEntry, Verdict
+    from pipeguard.synthesis import StubSynthesizer
+
+    ing = ingest_results_dir(_REAL_RESULTS)
+    assert [sm.sample_id for sm in ing.samples] == ["HG002"]
+    assert ing.unmapped == []  # every published key resolved to a registry our_key
+    by_key = {mv.metric_key: mv.normalized_value for mv in metric_values_for(ing.samples[0])}
+    assert 0.85 < by_key["qc.q30"] < 0.95  # real HG002 Q30 ~88%
+    assert by_key["qc.mean_target_coverage"] > 30  # real panel coverage
+
+    art = RunArtifacts(
+        run_id="REAL-INGEST",
+        sample_sheet=[SampleSheetEntry(sample_id="HG002")],
+        samples=[
+            Sample(
+                sample_id="HG002",
+                subject_id="HG002",
+                tissue="blood",
+                library_prep="panel",
+                submitted_by="giab",
+            )
+        ],
+        qc=ing.samples,  # SampleMetrics straight from a real run — the WS-06·PR2 Union
+    )
+    card = {c.sample_id: c for c in run_gate(art, synthesizer=StubSynthesizer())}["HG002"]
+    assert card.verdict is Verdict.HOLD  # structural cluster_pf-missing HOLD, from ingested metrics
+    assert any(f.rule_id == "QC-CLUSTER_PF-NA" for f in card.findings)
