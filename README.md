@@ -186,3 +186,9 @@ not required reading.
 - **[Claude Code](https://claude.com/claude-code)** (Anthropic · Opus 4.8) — AI pair programmer
   across design, implementation, tests, and docs; co-author on commits
   (`Co-Authored-By` trailer).
+
+---
+
+## License
+
+[MIT](LICENSE) © 2026 James Hu.

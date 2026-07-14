@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]  # >=77 for PEP 639 SPDX `license` + `license-files`
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "bayleaf"
 version = "0.1.0"
 description = "AI-assisted provenance and QC decision gate for genomics runs"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.6",
