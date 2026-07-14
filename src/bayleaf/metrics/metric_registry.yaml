@@ -89,7 +89,7 @@ metrics:
   # produce, so it typically arrives absent → its required=True runbook threshold NA-flags → an
   # expected HOLD on every reads-based run (the pinned demo relies on HG002 → HOLD). SAV source deferred.
   qc.cluster_pf:
-    display_name: Cluster PF
+    display_name: Cluster PF (run-level)
     gate: qc
     category: yield
     canonical_unit: fraction

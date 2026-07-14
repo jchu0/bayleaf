@@ -186,7 +186,13 @@ class Runbook(BaseModel):
             QCThreshold(
                 metric="cluster_pf",
                 our_key="qc.cluster_pf",
-                label="Cluster PF",
+                # "(run-level)" disambiguates this run-level Illumina %PF-CLUSTERS
+                # (SAV/InterOp) metric from the per-sample "Reads passing filter" (fastp):
+                # both read as "passing filter", so a card that showed Reads passing filter
+                # present AND Cluster PF missing looked self-contradictory. Labels are
+                # display-only (not in the verdict/signature); the structural
+                # cluster_pf-missing HOLD is unchanged (see the required=True note above).
+                label="Cluster PF (run-level)",
                 gate=0.80,
                 hard_fail=0.60,
                 unit="%",
